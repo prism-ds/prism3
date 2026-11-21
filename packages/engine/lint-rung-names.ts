@@ -394,6 +394,7 @@ const NO_SIZE_AXIS: Record<string, string> = {
   'menu-group': 'one size: a heading over the items, one type role (`type.label.sm.emphasis`), with no size ladder (#4007)',
   'menu-item': 'one size (#4007, Q-FL2 on OD-M3 A: Compact density gives the dense menu): its floor is one rung (`size.md.min-height`), its glyphs one rung (`icon.size.sm`), its label and secondary text one role each',
   'popover': 'one size: the proposal names none and the owner approved one member (#4008, Q-FL2 on OD-P2 A). It is built 320 wide as a literal (`placementWidth`), its title and body are one role each, and its nested close button is fixed at small; there is no size ladder to compare against the tier',
+  'tooltip': 'one size: the brief names none and the owner approved one set of numbers (#4009 OD-T6). Its type is one role (`type.body.sm.default`), its padding two space steps, its arrow a literal 8px (`glyphPx`), and its max width a code-side literal, so no binding is keyed by size.',
   'button-group': 'a layout of Buttons has no size RUNG of its own — its axis is `layout`, its gaps are `space.*` steps, and each nested Button is medium and measured under its own name; a size axis for smaller actions is held for the owner (#2661)',
   'divider': 'a rule has no size RUNG — its axis is `orientation`, its thickness is one border-width role (`border-width.hairline`), and its length is a NOMINAL standalone placeholder (`container.narrow` across, `size.md.height` tall) a host stretches; there is no size ladder to compare against the tier (#2455)',
 };

@@ -113,7 +113,7 @@ console.log('\nImport errors name their line (S7)\n');
     ['a surface the ramp lacks', '---\nid: x\nprimary: { l: 0.5, c: 0.1, h: 200 }\nneutral: { hue: 1, chroma: 0.01 }\nsurfaces:\n  light:\n    base: banana\n---\n', 7, /is not a surface/],
     ['a bad namespace', '---\nid: x\nroot: "a b"\nprimary: { l: 0.5, c: 0.1, h: 200 }\nneutral: { hue: 1, chroma: 0.01 }\n---\n', 3, /root namespace/],
     // A JavaScript error out of the engine names no line, and none is guessed.
-    ['no primary at all', '---\nid: x\nneutral: { hue: 1, chroma: 0.01 }\n---\n', null, /engine rejected it/],
+    ['no primary at all', '---\nid: x\nneutral: { hue: 1, chroma: 0.01 }\n---\n', null, /engine refused it/],
     ['an unclosed front matter', '---\nid: x\n', null, /not closed/],
   ];
   for (const [what, text, line, says] of cases) {
@@ -188,6 +188,16 @@ for (const hx of ['#808080', '#333333']) {
   const seed = S.seedFromColor('#3366cc');
   ok(seed.neutral.chroma === 0.006 && Math.abs(seed.neutral.hue - seed.primary.h) < 1e-9 && seed.primary.h > 0,
     `#2241 starting from a real color (#3366cc), the neutral still leans to its hue (got ${JSON.stringify(seed.neutral)}, primary hue ${seed.primary.h})`);
+}
+
+// #3076 — a brief with a brand icon map imports whole: Studio has no control for it yet (Q7 A), so the import must not drop
+// it on the way to the plugin, which builds with it.
+{
+  const brief = '---\nid: icons3076\nprimary: { l: 0.55, c: 0.15, h: 260 }\nneutral: { hue: 260, chroma: 0.01 }\n' +
+    'icons: { map: { plus: add, check: checkmark }, glyphs: { add: { path: "M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z" }, checkmark: { path: "M9.5 15.6 5.4 11.5 4 12.9l5.5 5.5L20 7.9z" } } }\n---\n';
+  const imp = S.validateDesignMd(brief) as { input?: BrandInput; error?: unknown };
+  ok(imp.input?.icons?.map?.plus === 'add' && imp.input?.icons?.glyphs?.add?.path === 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z',
+    `#3076 a design.md with an icon map imports with the map and its art (got ${JSON.stringify(imp.input?.icons ?? imp.error)})`);
 }
 
 console.log(`\n${executed - failed}/${executed} passed.`);

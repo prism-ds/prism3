@@ -763,9 +763,11 @@ export const CONTRACT_VERSION = '15.2.0';
  * 1.6.0 (the schema, MINOR): #4099's `prism3-component-defs/1.6`, the `docs.implementation` field added.
  * 2.1.0 (the contract, MINOR): `skeleton` added (#4295).
  * 2.2.0 (the contract, MINOR): `menu`, `menu-item` and `menu-group` added (#4260).
+ * 2.3.0 (the contract, MINOR): `tooltip` added (#4251).
+ * 1.7.0 (the schema, MINOR): #4096's `prism3-component-defs/1.7`, the optional brand `icons` map added.
  */
-export const COMPONENT_SCHEMA_VERSION = '1.6.0';
-export const COMPONENT_CONTRACT_VERSION = '2.2.0';
+export const COMPONENT_SCHEMA_VERSION = '1.7.0';
+export const COMPONENT_CONTRACT_VERSION = '2.3.0';
 
 /** A guaranteed path that was removed, and where its consumers should point instead. */
 export type Deprecation = {
