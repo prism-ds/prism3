@@ -24,7 +24,7 @@ import { clearInput, persistInput, restoreSession, type LocalStore } from './per
 import { glyph, h, hook } from './shell/dom';
 import { initTheme } from './shell/theme';
 import { BRANDS, BOOT_BRAND, brandState, initSession, rebuild, setPersist, setPath, subscribe } from './state/store';
-import { commit, handleHostMessage, mountApp, installStyles, mountResizeGrip, build } from './main';
+import { commit, handleHostMessage, mountApp, installStyles, mountResizeGrip, build, syncLeaving } from './main';
 // The chrome stylesheet, as TEXT rather than as a separate emitted asset (#769) — see step 4 below for
 // what that buys and what it costs.
 import STYLE from './styles.css';
@@ -80,6 +80,9 @@ const bootBrand = (): { input: BrandInput; origin: Origin; baseline?: BrandInput
 };
 const boot = bootBrand();
 initSession(boot.input, boot.origin, boot.baseline);
+// #3982: `initSession` publishes no topic, so the leave prompt reads the booted provenance here. A reload that kept
+// unsaved edits (#3880) asks before leaving at once, as the replace confirm does.
+syncLeaving();
 // Every successful rebuild persists the last-good brand, and the provenance beside it (#3880) — on web only. The
 // plugin injects nothing: its brand is written to the file by the main thread on Apply. Statically dead in the plugin
 // bundle.
@@ -166,7 +169,7 @@ if (refused) {
   const row = h('div', 'p3-confirm-row');
   row.append(btn('Export saved brand', 'refused-brand-export', exportIt), btn('Clear saved brand', 'refused-brand-clear', clearIt));
   text.append(
-    line("The saved brand didn't open, so the studio started without it."),
+    line("The saved brand didn't open, so Studio started without it."),
     line(refused.message),
     line('Choosing a brand replaces the saved one. Export it first to keep a copy as design.md.'),
     row,
