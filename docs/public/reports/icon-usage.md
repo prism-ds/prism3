@@ -41,6 +41,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | trailingVisual | `close-filled` | icon set | swap default | always |
 | select | chevronGlyph | `chevron-down` | icon set | drawn | always |
 | spinner | ringGlyph | `spinner` | component-owned | drawn | always |
+| step-item | checkGlyph | `check` | icon set | drawn | status: complete |
+|  | errorGlyph | `error-circle` | icon set | drawn | status: error |
 | switch-control | offGlyph | `close` | icon set | drawn | selection: off |
 |  | onGlyph | `check` | icon set | drawn | selection: on |
 | tag | checkGlyph | `check` | icon set | drawn | selection: selected |
@@ -83,7 +85,7 @@ Parts that take any icon from the set. The file nominates the default unless the
 
 | Glyph | Drawn by |
 |---|---|
-| `check` | checkbox-control, list-item, menu-item, switch-control, tag |
+| `check` | checkbox-control, list-item, menu-item, step-item, switch-control, tag |
 | `check-circle` | banner, field-message, toast |
 | `chevron-down` | _accordion-indicator, select |
 | `chevron-left` | breadcrumbs, pagination-item |
@@ -91,7 +93,7 @@ Parts that take any icon from the set. The file nominates the default unless the
 | `chevron-up` | _accordion-indicator |
 | `close` | switch-control, tag |
 | `close-filled` | search-field |
-| `error-circle` | banner, field-message |
+| `error-circle` | banner, field-message, step-item |
 | `image` | image-placeholder |
 | `info-circle` | banner |
 | `minus` | _accordion-indicator, checkbox-control |

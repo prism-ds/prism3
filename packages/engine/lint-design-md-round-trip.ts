@@ -81,6 +81,9 @@ const STRING_CANDIDATES = [
   'color.surface-a',
   'white',
   'Inter',
+  // #4312 review: a hex anchor (`$defs.hexColor`). Appended, because candidate 0 is what a pattern-free string gets;
+  // `#` starts a YAML comment, so this witness is what proves a hex survives toDesignMd → parseDesignMd.
+  '#2f6b4f',
   // #3076: an icon glyph's art, one filled SVG path on the 24×24 artboard (`icons.glyphs.*.path`).
   'M2 2h20v20H2z',
 ];
