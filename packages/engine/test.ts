@@ -100,6 +100,7 @@ import { makeTextField } from './components/text-field';
 import { canonicalShape, GlyphPathError } from './glyph-shape';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { hexToAnchor, formatAnchor, HEX_ANCHOR } from './hex-anchors';
 import { spawnSync } from 'node:child_process';
 import { readListing } from './files-listing';
 import { isDeepStrictEqual } from 'node:util';
@@ -4407,6 +4408,9 @@ for (const b of brands) {
       breadcrumbs: { bare: ['back-gap'], keys: ['gap'], sizes: ['small', 'medium'] },
       // Page navigation (#3345): the gap between items, Breadcrumbs' two sizes.
       'page-nav': { keys: ['gap'], sizes: ['small', 'medium'] },
+      // Steps (#3055, DRAFT): the gap between a step's disc, name and line, and the same gap between steps.
+      'step-item': { keys: ['gap'], sizes: ['small', 'medium'] },
+      steps: { keys: ['gap'], sizes: ['small', 'medium'] },
     };
     const BTN = { compact: 'small 12/8/4/6 · medium 12/8/6/6 · large 20/12/6/8', comfortable: 'small 16/12/6/8 · medium 16/12/8/8 · large 24/16/8/12', spacious: 'small 20/16/8/12 · medium 20/16/12/12 · large 32/20/12/16' };
     // Rows: block padding (the per-size minimum, #2894) / control-to-label gap (8/12/12 since #3173, owner Q3173 A).
@@ -4460,6 +4464,9 @@ for (const b of brands) {
       'breadcrumb-item': { compact: 'small 4 · medium 6', comfortable: 'small 4 · medium 8', spacious: 'small 6 · medium 12' },
       breadcrumbs: { compact: 'bare 4 · small 4 · medium 6', comfortable: 'bare 4 · small 4 · medium 8', spacious: 'bare 6 · small 6 · medium 12' },
       'page-nav': { compact: 'small 12 · medium 20', comfortable: 'small 16 · medium 24', spacious: 'small 20 · medium 32' },
+      // Steps (#3055, DRAFT): comfortable is the build's space.075 / space.100, one ladder step each way.
+      'step-item': { compact: 'small 4 · medium 6', comfortable: 'small 6 · medium 8', spacious: 'small 8 · medium 12' },
+      steps: { compact: 'small 4 · medium 6', comfortable: 'small 6 · medium 8', spacious: 'small 8 · medium 12' },
     };
     const wrong: string[] = [];
     for (const [id, spec] of Object.entries(SPECS)) {
@@ -4519,6 +4526,9 @@ for (const b of brands) {
       'breadcrumb-item': ['size.small.gap', 'size.medium.gap'],
       breadcrumbs: ['size.small.gap', 'size.medium.gap'],
       'page-nav': ['size.small.gap', 'size.medium.gap'],
+      // #3055: the gap between a step's disc, name and line, and between steps.
+      'step-item': ['size.small.gap', 'size.medium.gap'],
+      steps: ['size.small.gap', 'size.medium.gap'],
       tag: ['small', 'medium', 'large'].flatMap((v) => [
         `size.${v}.select.gap+size.${v}.select.label-inset`, `size.${v}.dismissible.gap+size.${v}.dismissible.label-inset`, `size.${v}.check-gap`]),
     };
@@ -10697,7 +10707,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
   // one floor before the build path runs, and accepts two. BY-NAME MUTATION: drop `minItems` from the schema →
   // this arm fails.
   ok(validateBrandInput({ id: 'bpS1', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 }, layout: { breakpoints: [0] } })
-      .some((e) => /layout\.breakpoints.*1 item\(s\) < minItems 2/.test(e))
+      .some((e) => /layout\.breakpoints has 1 item\(s\); it takes at least 2/.test(e))
     && validateBrandInput({ id: 'bpS2', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 }, layout: { breakpoints: [0, 768] } }).length === 0,
     '[#3698 R2] the schema refuses one breakpoint (minItems 2) and accepts two');
   // #2198 — more than seven breakpoints are refused (owner decision 2026-10-06, Q43 A). `bpNames` names seven
@@ -16674,8 +16684,10 @@ arm: {
       }
     };
     for (const k of fileRequired) reach((brandSchema as any).properties?.[k]);
-    ok(fileRequired.size > 0 && [...reachedDefs].sort().join(',') === 'oklch',
-      `MCP: the required fields reach exactly the oklch $defs entry, the one whose prose stays inline with them (got: ${[...reachedDefs].sort().join(',') || 'none'})`);
+    // #4312 (merged with #4464): `primary` takes a hex or an OKLCH object, so a required field reaches `colorAnchor`,
+    // and through it `hexColor` and `oklch`.
+    ok(fileRequired.size > 0 && [...reachedDefs].sort().join(',') === 'colorAnchor,hexColor,oklch',
+      `MCP: the required fields reach exactly the colorAnchor, hexColor and oklch $defs entries, whose prose stays inline with them (got: ${[...reachedDefs].sort().join(',') || 'none'})`);
     const DATA = new Set(['default', 'enum', 'const', 'examples']);
     const drift: string[] = [], notPrefix: string[] = [], tooLong: string[] = [], midSentence: string[] = [];
     const notDropped: string[] = [];
@@ -21421,6 +21433,8 @@ arm: {
       'tab-item': 9, 'list-item': 9, 'segmented-control-segment': 9, '_accordion-indicator': 9, 'code-input-cell': 9, 'radio-row': 9, 'pagination-item': 9, '_slider-thumb': 9,
       // Breadcrumbs (#2666): the trail is placed on its own; its step and separator are parts its host places.
       breadcrumbs: 2, 'breadcrumb-item': 9, '_breadcrumb-separator': 9,
+      // Steps (#3055): the indicator is placed on its own; its step is a part the indicator places.
+      steps: 2, 'step-item': 9,
       'page-nav': 2, 'page-nav-item': 9,
       // Provider logo (#2343): a glyph other components carry, placed alone only in a row of accepted cards.
       'provider-logo': 3,
@@ -22164,6 +22178,8 @@ arm: {
       // Q-CC1 A (#3554): the cell carries [default, error] only, its danger edge one flat role at every state but disabled.
       'code-input-cell': 'a code input cell: status is [default, error] only (Q354, Q-CC1 A), the danger edge is one flat `color.border.danger` at every state but disabled, so there is no status hover step to measure; the #2428 contrast arm holds that border to 3:1 against the page',
       // #2670: Progress's `error` status colors a fill, not a border, and its message is a nested FieldMessage.
+      // #3055: a step's `error` status shows a glyph in the danger icon role in place of its disc, with no stroke.
+      'step-item': 'a step in a Steps indicator: no state axis and no stroked boundary at error; its error status swaps the disc for the danger error glyph and keeps the name, and the #3055 block holds that glyph to 3:1 against the page',
       progress: 'a progress bar or ring: no state axis and no stroked boundary; its error status colors the fill and shows in the nested FieldMessage\'s text and glyph, and its contrast is held by the #2670 block',
     };
     const SH_STATUSES = ['error', 'warning', 'success'];
@@ -23351,6 +23367,155 @@ arm: {
     }
   }
 
+  // ---- #3055: STEPS, the approved proposal (owner decisions 2026-11-19, all nine as recommended) — each held against a literal ----
+  // EXPECTED is typed here from the proposal and the decisions on #3055, never read from `steps.ts` or `step-item.ts`.
+  // ACTUAL is the real projection (`figmaAnatomySet`), node by node, and the def's shipped fields. Contrast is measured
+  // from the COMMITTED emission, every brand in its four modes, as the #2666 block does. Mutations, each failing the arm
+  // named:
+  //   the status order, a size or orientation reordered, or a state axis → `#3055 steps/members`;
+  //   the disc's fill, outline, number, check or error glyph at the wrong status (decisions 2, 4) → `#3055 steps/marker`;
+  //   a link at a status other than complete, or a text name on a complete step (decision 3) → `#3055 steps/name`;
+  //   a chevron or a missing line, or the line in the wrong color (decision 7) → `#3055 steps/connector`;
+  //   the slot's minimum, preferred item, default statuses, the discs' numbers or direction → `#3055 steps/slot`;
+  //   the names, aliases, the hidden status words or aria-current (decisions 1, 8) → `#3055 steps/identity`;
+  //   a painted role under its floor in any committed cell → `#3055 steps/contrast`.
+  {
+    const itemDef = componentDefs.find((d) => d.id === 'step-item');
+    const stepsDef = componentDefs.find((d) => d.id === 'steps');
+    ok(!!itemDef && !!stepsDef, '#3055 steps: Steps and StepItem are registered');
+    if (itemDef && stepsDef) {
+      type SN = { name: string; type: string; layoutMode?: string; nestTarget?: string; nestVariant?: Record<string, string>; nestExpose?: string[]; descendantFills?: string; textStyle?: string; characters?: string; paints?: { fills?: string; strokes?: string }; bound?: Record<string, string>; slotSettings?: Record<string, unknown>; slotPreferred?: string[]; children: SN[] };
+      const all = (n: SN): SN[] => [n, ...n.children.flatMap(all)];
+      const find = (n: SN, name: string): SN | undefined => all(n).find((x) => x.name === name);
+      const co = (p: { coord: unknown }, k: string) => String((p.coord as Record<string, string>)[k]);
+      const itemPlans = figmaAnatomySet(itemDef, { swapTarget: 'FPO-default-icon' }).map((p) => ({ status: co(p, 'status'), orient: co(p, 'orientation'), size: String(p.size), root: p.root as unknown as SN }));
+      const stepsPlans = figmaAnatomySet(stepsDef, { swapTarget: 'FPO-default-icon' }).map((p) => ({ orient: co(p, 'orientation'), size: String(p.size), root: p.root as unknown as SN }));
+      const DISC: Record<string, string> = { medium: 'icon/size/md', small: 'icon/size/sm' };
+
+      // MEMBERS: status [upcoming, current, complete, error] × orientation × size = 16, Steps orientation × size = 4, the
+      // first member the code default on every axis, no state axis on either.
+      const ITEM_MEMBERS = ['upcoming', 'current', 'complete', 'error'].flatMap((s) => ['horizontal', 'vertical'].flatMap((o) => ['medium', 'small'].map((z) => `${s}/${o}/${z}`)));
+      const STEPS_MEMBERS = ['horizontal', 'vertical'].flatMap((o) => ['medium', 'small'].map((z) => `${o}/${z}`));
+      ok(JSON.stringify(itemPlans.map((p) => `${p.status}/${p.orient}/${p.size}`)) === JSON.stringify(ITEM_MEMBERS)
+        && JSON.stringify(stepsPlans.map((p) => `${p.orient}/${p.size}`)) === JSON.stringify(STEPS_MEMBERS)
+        && itemDef.props.find((p) => p.name === 'status')?.default === 'upcoming'
+        && [itemDef, stepsDef].every((d) => d.props.find((p) => p.name === 'orientation')?.default === 'horizontal' && d.props.find((p) => p.name === 'size')?.default === 'medium')
+        && itemDef.states.length === 0 && stepsDef.states.length === 0 && !itemDef.figmaProperties?.stateAxis && !stepsDef.figmaProperties?.stateAxis,
+        `#3055 steps/members: StepItem status [upcoming, current, complete, error] × orientation [horizontal, vertical] × size [medium, small] = 16, Steps orientation × size = 4, upcoming / horizontal / medium first, no state axis (got ${itemPlans.length} / ${stepsPlans.length})`);
+
+      // THE MARKER (decisions 2, 4): a round disc one icon rung square; the current step's filled with the number in on-fill
+      // ink, the upcoming step's outlined in the 3:1 edge with the number in secondary text, the complete step's filled with
+      // a check, and an errored step's bare behind the error-circle glyph in the danger icon role.
+      const WANT: Record<string, { fill?: string; stroke?: string; number?: string; glyph?: [string, string] }> = {
+        upcoming: { stroke: 'color/border/tertiary', number: 'color/text/secondary' },
+        current: { fill: 'color/interactive/primary/fill/rest', number: 'color/interactive/primary/on-fill' },
+        complete: { fill: 'color/interactive/primary/fill/rest', glyph: ['icon/check', 'color/interactive/primary/on-fill'] },
+        error: { glyph: ['icon/error-circle', 'color/icon/danger'] },
+      };
+      const markOff = itemPlans.filter((p) => {
+        const m = find(p.root, 'marker'), w = WANT[p.status];
+        if (!m) return true;
+        const num = m.children.filter((c) => c.type === 'TEXT'), glyphs = m.children.filter((c) => c.type !== 'TEXT');
+        return !(m.bound?.width === DISC[p.size] && m.bound?.height === DISC[p.size] && m.bound?.topLeftRadius === 'radius/round'
+          && m.paints?.fills === w.fill && m.paints?.strokes === w.stroke
+          && (w.number ? num.length === 1 && num[0].paints?.fills === w.number && num[0].characters === '1' : num.length === 0)
+          && (w.glyph ? glyphs.length === 1 && glyphs[0].nestTarget === w.glyph[0] && glyphs[0].descendantFills === w.glyph[1] : glyphs.length === 0));
+      });
+      ok(markOff.length === 0, `#3055 steps/marker (decisions 2, 4): a 24 / 20px round disc, filled with the number at current, outlined with the number at upcoming, filled with a check at complete, bare behind the danger error-circle at error${markOff.length ? ` — OFF: ${markOff.map((p) => `${p.status}/${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // THE NAME (decision 3): a complete step's name is Link, inline, default weight, at the step's size, its state
+      // exposed; every other step's name is text, never a link, in primary text (current, error) or secondary (upcoming).
+      const INK: Record<string, string> = { upcoming: 'color/text/secondary', current: 'color/text/primary', error: 'color/text/primary' };
+      const nameOff = itemPlans.filter((p) => {
+        const links = all(p.root).filter((n) => n.nestTarget === 'link'), t = find(p.root, 'label');
+        if (p.status === 'complete') return !(links.length === 1 && !t && JSON.stringify(links[0].nestVariant) === JSON.stringify({ style: 'inline', weight: 'default', size: p.size, surface: 'default', selection: 'unselected', state: 'rest' }) && JSON.stringify(links[0].nestExpose) === '["state"]');
+        return !(links.length === 0 && t && t.type === 'TEXT' && t.paints?.fills === INK[p.status] && t.textStyle === `body/${p.size === 'medium' ? 'md' : 'sm'}/default`);
+      });
+      ok(nameOff.length === 0, `#3055 steps/name (decision 3): only a complete step's name is a Link (inline, default weight, state exposed); every other name is body text, primary at current and error, secondary at upcoming${nameOff.length ? ` — OFF: ${nameOff.map((p) => `${p.status}/${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // THE CONNECTOR (decision 7): a line, never a glyph. Across a row it is the last cell, a hairline in a cell one disc
+      // tall; down a column it sits under the disc in the rail. Every line, at every status, in the neutral secondary icon
+      // role, the Breadcrumbs chevron's gray (owner decision 2026-11-20 on #4341, option 3): a complete step's line too.
+      const LINE = (_s: string) => 'color/icon/secondary';
+      const lineOff = itemPlans.filter((p) => {
+        const h = find(p.root, 'connectorH'), v = find(p.root, 'connectorV'), cell = find(p.root, 'connectorCell'), rail = find(p.root, 'rail');
+        const line = p.orient === 'horizontal' ? h : v;
+        const placed = p.orient === 'horizontal'
+          ? !v && !!cell && p.root.children[p.root.children.length - 1] === cell && cell.bound?.height === DISC[p.size] && line?.bound?.height === 'border-width/hairline'
+          : !h && !cell && !!rail && rail.children[1] === v && line?.bound?.width === 'border-width/hairline';
+        return !(placed && line && line.children.length === 0 && line.paints?.fills === LINE(p.status) && !all(p.root).some((n) => /chevron/.test(n.nestTarget ?? '')));
+      });
+      ok(lineOff.length === 0, `#3055 steps/connector (decision 7): one hairline line per step, across in a disc-tall end cell or down under the disc, in color/icon/secondary at every status (a complete step's line too), and no chevron${lineOff.length ? ` — OFF: ${lineOff.map((p) => `${p.status}/${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // THE ITEMS SLOT: at least two, StepItem only, complete / current / upcoming by default at the indicator's orientation
+      // and size, running across or down with the orientation.
+      const slotOff = stepsPlans.filter((p) => {
+        const s = find(p.root, 'items');
+        return !(s && s.type === 'CONTENT_SLOT' && s.layoutMode === (p.orient === 'horizontal' ? 'HORIZONTAL' : 'VERTICAL')
+          && JSON.stringify(s.slotSettings) === '{"minChildren":2,"allowPreferredValuesOnly":true}' && JSON.stringify(s.slotPreferred) === '["step-item"]'
+          && JSON.stringify(s.children.map((c) => [c.nestTarget, c.nestVariant?.status, c.nestVariant?.orientation, c.nestVariant?.size])) === JSON.stringify(['complete', 'current', 'upcoming'].map((st) => ['step-item', st, p.orient, p.size]))
+          // The discs read 2 and 3 (the complete step shows a check): StepItem's own default is "1" (#3055 review).
+          && JSON.stringify(s.children.map((c) => c.nestTexts?.number ?? null)) === JSON.stringify([null, '2', '3']));
+      });
+      ok(slotOff.length === 0, `#3055 steps/slot: Steps holds a native items slot, at least 2, StepItem only, defaulting to complete, current, upcoming at its own orientation and size, the discs numbered 2 and 3 after the check, a row across and a column down${slotOff.length ? ` — OFF: ${slotOff.map((p) => `${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // IDENTITY AND WORDING (decisions 1, 8): the names and aliases, a navigation landmark around a list, aria-current
+      // "step", and the four hidden status words (DRAFT copy, typed here so a rewording fails by name).
+      const aria = `${stepsDef.accessibility.aria} ${itemDef.accessibility.aria}`;
+      ok(stepsDef.name === 'Steps' && itemDef.name === 'StepItem' && stepsDef.category === 'navigation' && itemDef.category === 'navigation'
+        && JSON.stringify(stepsDef.aliases) === '["stepper","step-indicator","progress-steps"]' && !stepsDef.aliases?.includes('progress-indicator')
+        && ['"Completed"', '"Current step"', '"Not started"', '"Error"'].every((w) => itemDef.accessibility.aria.includes(w))
+        && (aria.match(/aria-current="step"/g) ?? []).length >= 2 && stepsDef.accessibility.aria.includes('<nav>')
+        && stepsDef.props.find((p) => p.name === 'label')?.required === true && itemDef.props.find((p) => p.name === 'href')?.required === false,
+        `#3055 steps/identity (decisions 1, 8): Steps and StepItem, navigation, aliases stepper / step-indicator / progress-steps, a named <nav> with a required label, aria-current="step", the hidden words "Completed", "Current step", "Not started", "Error", and an optional href`);
+
+      // CONTRAST over every committed brand × mode: the names 4.5:1 on the page, the number 4.5:1 on its disc (on-fill on
+      // the primary fill) and on the page (secondary text), the outlined disc and the error glyph 3:1 on the page
+      // (SC 1.4.11). The filled disc is held at 3:1 on the page too. The line is decorative and held to no floor.
+      const treeFiles = readdirSync(resolve(HERE, 'out')).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f));
+      const MODES = ['light', 'dark', 'hc-light', 'hc-dark'];
+      const colorOf = (tree: Record<string, any>, root: string, path: string, mode: string, depth = 0): string | null => {
+        let n: any = tree[root];
+        for (const k of path.split('.')) n = n?.[k];
+        if (!n || depth > 8) return null;
+        const v = mode === 'light' ? n.$value : (n.$extensions?.prism3?.modes?.[mode]?.$value ?? n.$value);
+        if (typeof v !== 'string') return null;
+        const ref = /^\{([^}]+)\}$/.exec(v);
+        if (ref) { const [r0, ...rest] = ref[1].split('.'); return colorOf(tree, r0, rest.join('.'), mode, depth + 1); }
+        const rgb = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(v);
+        if (rgb) return rgb[4] !== undefined && Number(rgb[4]) < 1 ? null : '#' + [rgb[1], rgb[2], rgb[3]].map((x) => Number(x).toString(16).padStart(2, '0')).join('');
+        return /^#[0-9a-f]{6}$/i.test(v) ? v : null;
+      };
+      const PAIRS: [string, string, number][] = [
+        ['color.text.primary', 'color.background.primary', 4.5], ['color.text.secondary', 'color.background.primary', 4.5],
+        ['color.interactive.primary.on-fill', 'color.interactive.primary.fill.rest', 4.5],
+        ['color.border.tertiary', 'color.background.primary', 3], ['color.icon.danger', 'color.background.primary', 3],
+        ['color.interactive.primary.fill.rest', 'color.background.primary', 3],
+      ];
+      const painted = new Set(itemPlans.flatMap((p) => all(p.root)).flatMap((n) => [n.paints?.fills, n.paints?.strokes, n.descendantFills]).filter(Boolean).map((v) => String(v).replace(/\//g, '.')));
+      const CELLS = 20;
+      const lows: string[] = [];
+      for (const [fg, bg, floor] of PAIRS) {
+        let measured = 0;
+        for (const f of treeFiles) {
+          const tree = JSON.parse(readFileSync(resolve(HERE, 'out', f), 'utf8'));
+          const root = Object.keys(tree)[0];
+          for (const m of MODES) {
+            const a = colorOf(tree, root, fg, m), b = colorOf(tree, root, bg, m);
+            if (!a || !b) { lows.push(`${f}/${m}: ${!a ? fg : bg} unresolved`); continue; }
+            const r = contrast(hexToRgb(a), hexToRgb(b));
+            measured++;
+            if (r < floor) lows.push(`${fg} on ${bg} ${f}/${m} ${r.toFixed(2)}`);
+          }
+        }
+        if (measured !== CELLS) lows.push(`${fg} on ${bg}: ${measured} of ${CELLS} cells measured`);
+      }
+      const unpainted = PAIRS.map(([fg]) => fg).filter((r) => !painted.has(r));
+      ok(lows.length === 0 && unpainted.length === 0 && treeFiles.length === 5,
+        `#3055 steps/contrast: the step names 4.5:1 on the page, the number 4.5:1 on its filled disc and on the page, the outlined disc, the error glyph and the filled disc 3:1 on the page, in all ${CELLS} committed brand × mode cells (${treeFiles.length} brands)${unpainted.length ? ` — the projection no longer paints ${unpainted.join(', ')}` : ''}${lows.length ? ` — LOW: ${lows.slice(0, 8).join('; ')}` : ''}`);
+    }
+  }
+
   // ---- #1339: disabled is ONE mechanism (the STATE), not a state axis + a prop ----
   // The label dims when its field is disabled, carried by the `disabled` STATE (a paint change projected as a
   // Figma variant), with NO duplicating `disabled` prop. EXPECTED is the authored contract; ACTUAL is the
@@ -24043,6 +24208,8 @@ arm: {
       // BREADCRUMBS (#2666, call 4 A): the current page binds the two default body rungs. It exists only on a current
       // member.
       { def: componentDefs.find((d) => d.id === 'breadcrumb-item')!, part: 'label', axes: { size: 2 }, at: { kind: 'current' } },
+      // STEPS (#3055): a text step's name binds the two default body rungs. A complete step's name is the nested Link.
+      { def: componentDefs.find((d) => d.id === 'step-item')!, part: 'label', axes: { size: 2 }, at: { status: 'current' } },
       // Pagination (#2665): the item's number by selection (the current page's emphasis weight) and size, its bold reserve
       // by size alone, and the compact text by size. The ellipsis is an icon (Q404 A), so it binds no type.
       { def: componentDefs.find((d) => d.id === 'pagination-item')!, part: 'label', axes: { selection: 2, size: 3 } },
@@ -32911,7 +33078,7 @@ arm: {
   // between an agent that can fix its input and one that only knows it failed.
   const badPayload = JSON.parse(badRes.content[0].text) as { error?: string; errors?: string[] };
   ok(badPayload.error === 'the brand input fails the schema' && (badPayload.errors?.length ?? 0) >= 3
-     && badPayload.errors!.some((e) => /missing required 'id'/.test(e)),
+     && badPayload.errors!.some((e) => /^id is missing; the brand input requires it/.test(e)),
     'export_theme: the failure is a NAMED schema error list, not an incidental throw');
 }
 
@@ -34244,7 +34411,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'menu-item', 'tooltip'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'step-item', 'menu-item', 'tooltip'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -34391,7 +34558,7 @@ arm: {
   // variables: a fixed column one line tall.
   // Pagination.Item's balance (Q537) binds a zero width under its 2px height: the frame above the underlined number that
   // must not set the label box's width. Two different variables, so it joins on the rule's own terms.
-  const WIDTH_EXPECTED = ['text-field', 'textarea', 'switch-control', 'divider', 'list-item', 'password-field', 'search-field', 'card-number-field', 'code-input-cell', 'pagination-item'];
+  const WIDTH_EXPECTED = ['text-field', 'textarea', 'switch-control', 'divider', 'list-item', 'password-field', 'search-field', 'card-number-field', 'code-input-cell', 'pagination-item', 'step-item'];
   ok(WIDTH_EXPECTED.every((n) => widthDefs.some((d) => d.id === n)) && widthDefs.length === WIDTH_EXPECTED.length,
     `#990 the width projection rule below covers exactly [${WIDTH_EXPECTED.join(', ')}] — a def gaining a deliberately non-square box must be represented here, and a def losing one is a stale claim (found: ${widthDefs.map((d) => d.id).join(', ') || 'none'})`);
   const grownWidth: string[] = [];
@@ -35915,6 +36082,10 @@ arm: {
     // (the provider's own words), so the glyph centers against the only line, as Button's icon does.
     'sign-in-button.container':
       "a sign-in button is one fixed height and its label is the provider's one-line wording, which never wraps, so the glyph centers against the only line, as on Button.",
+    // `step-item` (#3055): the disc centers its one number (or the check, or the error glyph; gated on status, never two
+    // at once) inside a fixed square, so there is no wrapping block to float against.
+    'step-item.marker':
+      "the disc is a fixed square holding one short number, or a single glyph in its place (gated on status, never two at once), so centring places the only line in the middle of the disc.",
     'tag.labelCheck':
       "the tag's height is fixed at one line in Figma and its label is one line there, so the check mark (and, one row out, the leading icon) center against the only line; in code a wrapped label centers them on the label block, which is held for the owner (tag.ts notes.contested).",
   };
@@ -45063,7 +45234,7 @@ arm: {
     const msg = refusal(() => brandTheme(withMotion(mp)));
     ok(want.test(msg), `#2857 refused by name: ${label} (got ${JSON.stringify(msg)})`);
   }
-  ok(validateBrandInput(withMotion({ presets: { fade: 'huge' } }) as never).some((e) => /motionPersonality\.presets\.fade: "huge" not in/.test(String(e))),
+  ok(validateBrandInput(withMotion({ presets: { fade: 'huge' } }) as never).some((e) => /motionPersonality\.presets\.fade is "huge"; it takes one of/.test(String(e))),
     '#2857 refused by name: the schema refuses an unknown step too');
 
   // (4) THE BRAND-ONLY GROUP STAYS OUT OF THE CONTRACT. A brand that sets it gets custom-typed leaves under
@@ -45297,7 +45468,7 @@ const MIN_ASSERTIONS = 1800;
   ok(edge.stats.broken.length === 0, `#3871 whole weights 1/450/1000 build with every alias resolving (broken: ${edge.stats.broken.slice(0, 3).map((b: any) => b.ref).join(', ')})`);
   // The schema says the same, so a file-driven brief fails at the schema before the engine.
   const schemaErrs = validateBrandInput(withRoles({ default: 450.5, strong: 2000 }));
-  ok(schemaErrs.some((e) => e.includes('weightRoles.default') && e.includes('not an integer')) && schemaErrs.some((e) => e.includes('weightRoles.strong')),
+  ok(schemaErrs.some((e) => e.includes('weightRoles.default') && e.includes('a whole number')) && schemaErrs.some((e) => e.includes('weightRoles.strong')),
     `#3871 the schema refuses a fractional and an out-of-range weight role (errors: ${JSON.stringify(schemaErrs)})`);
 }
 
@@ -45521,7 +45692,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   // a file-driven brief passed the schema and failed later. The two layers now agree, both ways, over the same ids.
   for (const [id, refused] of [['.', true], ['..', true], ['   ', true], ['\t', true], [' ', true], ['\0', true], ['a\0b', true],
     ['Has Space', false], ['...', false], [' ..', false], ['.hidden', false], ['aurora', false]] as const) {
-    const errs = validateBrandInput({ ...base, id } as unknown as BrandInput).filter((e) => e.startsWith('id:'));
+    const errs = validateBrandInput({ ...base, id } as unknown as BrandInput).filter((e) => e.startsWith('id is '));
     const engine = refusal(() => brandTheme({ ...base, id } as unknown as BrandInput)) !== '';
     ok(engine === refused && (errs.length > 0) === refused,
       `#3875 the schema and brandTheme agree on the id ${JSON.stringify(id)}: ${refused ? 'both refuse it' : 'both accept it'} (brandTheme ${engine ? 'refused' : 'accepted'}; schema ${JSON.stringify(errs)})`);
@@ -45929,7 +46100,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const withLinks = (links: string[]) => ({ ...base, typography: { links } }) as unknown as BrandInput;
   const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
   const schemaErrs = validateBrandInput(withLinks([]) as never).map(String);
-  ok(schemaErrs.some((e) => /typography\.links: 0 item\(s\) < minItems 1/.test(e)),
+  ok(schemaErrs.some((e) => /typography\.links has 0 item\(s\); it takes at least 1/.test(e)),
     `#3707 the schema refuses an empty typography.links (got ${JSON.stringify(schemaErrs)})`);
   const msg = refusal(() => brandTheme(withLinks([])));
   ok(msg === 'Link styles must name at least one text type: typography.links is empty.',
@@ -45975,6 +46146,111 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const cell = componentDefs.find((d) => d.id === 'code-input-cell');
   const ladder = ['small', 'medium', 'large', 'x-large'].map((s) => (cell?.tokens as Record<string, string> | undefined)?.[`size.${s}.radius`]);
   ok(JSON.stringify(ladder) === JSON.stringify(['radius.sm', 'radius.sm', 'radius.sm', 'radius.lg']), `#3551 the code input cell's corner ladder is sm, sm, sm, lg, as decided (got ${JSON.stringify(ladder)})`);
+}
+
+// #4133 (owner decision A, 2026-11-19) — a hex color is accepted wherever the brand input takes an OKLCH anchor
+// (`primary`, `neutral.anchor`, `brandColors[].oklch`), converted at the top of `brandTheme`, with a note naming the
+// converted value. Before, `primary: "#3355ff"` failed with "primary: expected object". A hex brand builds the same
+// tree as the same brand written in the converted OKLCH, so the conversion is the only thing the hex changes.
+{
+  const base = { id: 'hex4133', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 } };
+  const asHex = { ...base, primary: '#2f6b4f', neutral: { hue: 262, chroma: 0.01, anchor: '#6b6e72' }, brandColors: [{ name: 'accent', oklch: '#c8102e' }] };
+  const asOklch = { ...base, primary: hexToAnchor('#2f6b4f'), neutral: { hue: 262, chroma: 0.01, anchor: hexToAnchor('#6b6e72') }, brandColors: [{ name: 'accent', oklch: hexToAnchor('#c8102e') }] };
+  const schemaErrs = validateBrandInput(asHex);
+  ok(schemaErrs.length === 0, `#4133 the schema accepts a hex anchor at primary, neutral.anchor and brandColors[].oklch (got ${JSON.stringify(schemaErrs)})`);
+  const built = (b: object): Theme | string => { try { return brandTheme(b as unknown as BrandInput); } catch (e) { return (e as Error).message; } };
+  const hexOrErr = built(asHex), tOk = brandTheme(asOklch as unknown as BrandInput);
+  ok(typeof hexOrErr !== 'string', `#4133 brandTheme builds a hex-anchored brand (got ${JSON.stringify(typeof hexOrErr === 'string' ? hexOrErr : 'a theme')})`);
+  const tHex = typeof hexOrErr === 'string' ? tOk : hexOrErr;
+  // The trees differ only in the decisions log, which carries the conversion notes: compared with it set aside.
+  const noLog = (t: Theme): string => { const tr = buildTree(t).tree as any; tr.$extensions.prism3.decisions = []; return JSON.stringify(tr); };
+  ok(typeof hexOrErr !== 'string' && noLog(tHex) === noLog(tOk),
+    '#4133 a hex-anchored brand builds the same tree as the same brand written in the converted OKLCH');
+  for (const [at, h] of [['primary', '#2f6b4f'], ['neutral.anchor', '#6b6e72'], ["brandColors 'accent'", '#c8102e']] as const) {
+    const line = `${at}: the hex ${h}, converted to OKLCH ${formatAnchor(hexToAnchor(h))}.`;
+    ok(tHex.notes.includes(line), `#4133 the notes record the ${at} conversion (want ${JSON.stringify(line)}; got ${JSON.stringify(tHex.notes.filter((n) => n.includes('hex')))})`);
+  }
+  ok(!tOk.notes.some((n) => n.includes('converted to OKLCH')), '#4133 an OKLCH brand gets no conversion note');
+  // #4312 review (docs/34): the arms above build their EXPECTED with `hexToAnchor`, the function under test, so they
+  // cannot see the conversion itself change. These pin it to typed literals: a saturated green, a tinted gray (chroma
+  // 0.0072, which keeps its hue) and a pure gray (hue 0, #2280).
+  for (const [h, l, c, hue] of [['#2f6b4f', 0.4794, 0.078, 161.08], ['#6b6e72', 0.537, 0.0072, 255.51], ['#808080', 0.5999, 0, 0]] as const) {
+    const o = hexToAnchor(h);
+    ok(Math.abs(o.l - l) < 5e-5 && Math.abs(o.c - c) < 5e-5 && Math.abs(o.h - hue) < 5e-3,
+      `#4312 ${h} converts to the literal OKLCH { l: ${l}, c: ${c}, h: ${hue} } (got ${formatAnchor(o)})`);
+  }
+  const bad = validateBrandInput({ ...base, primary: '#zz0000' });
+  ok(bad.length === 1 && /OKLCH object/.test(bad[0]) && /hex color/.test(bad[0]), `#4133 a malformed hex is refused, naming both forms the anchor takes (got ${JSON.stringify(bad)})`);
+}
+
+// #4312 (owner decision B, 2026-11-20) — an 8- or 4-digit hex anchor is taken too, its alpha dropped, as the standard
+// dialect drops it. EXPECTED is typed literals (docs/34), never `hexToAnchor` of the 6-digit form: the 8- and 4-digit
+// spellings land on the same OKLCH as their opaque twins, in the schema, in `brandTheme` and on the command line.
+{
+  const base = { id: 'alpha4312', neutral: { hue: 262, chroma: 0.01 } };
+  for (const [h, want] of [['#2f6b4fcc', '{ l: 0.4794, c: 0.078, h: 161.08 }'], ['#2F6B4F00', '{ l: 0.4794, c: 0.078, h: 161.08 }'],
+    ['#808080ff', '{ l: 0.5999, c: 0, h: 0 }'], ['#888f', '{ l: 0.6268, c: 0, h: 0 }'], ['#36a8', '{ l: 0.5095, c: 0.1216, h: 256.41 }']] as const) {
+    const errs = validateBrandInput({ ...base, primary: h });
+    ok(errs.length === 0, `#4312 the schema accepts the alpha hex anchor ${h} (got ${JSON.stringify(errs)})`);
+    let t: Theme | string;
+    try { t = brandTheme({ ...base, primary: h } as unknown as BrandInput); } catch (e) { t = (e as Error).message; }
+    const line = `primary: the hex ${h}, converted to OKLCH ${want}.`;
+    ok(typeof t !== 'string' && t.notes.includes(line),
+      `#4312 brandTheme drops the alpha of ${h} (want the note ${JSON.stringify(line)}; got ${typeof t === 'string' ? t : JSON.stringify(t.notes.filter((n) => n.includes('hex')))})`);
+  }
+  // The schema's pattern and HEX_ANCHOR are two spellings of one rule; each sample is judged by both.
+  const pattern = new RegExp(JSON.parse(readFileSync(resolve(HERE, 'schema', 'theme-schema.json'), 'utf8')).$defs.hexColor.pattern);
+  const takes = ['#abc', '#ABCD', '#a1b2c3', '#A1B2C3D4', '#000', '#ffff', '#000000', '#ffffffff'];
+  const refuses = ['#ab', '#abcde', '#abcdefa', '#abcdefabc', 'abc', '#ggg', '#12345g', '# abc', '#abc ', ''];
+  const split = [...takes.filter((s) => !(pattern.test(s) && HEX_ANCHOR.test(s))), ...refuses.filter((s) => pattern.test(s) || HEX_ANCHOR.test(s))];
+  ok(split.length === 0, `#4312 the schema's hexColor pattern and HEX_ANCHOR take #rgb, #rgba, #rrggbb and #rrggbbaa and refuse every other length (misjudged: ${JSON.stringify(split)})`);
+  for (const h of ['#2f6b4', '#2f6b4fc']) {
+    const errs = validateBrandInput({ ...base, primary: h });
+    ok(errs.length === 1 && /#rrggbb, #rgb, #rrggbbaa or #rgba/.test(errs[0]), `#4312 a ${h.length - 1}-digit hex is refused, naming the four hex forms (got ${JSON.stringify(errs)})`);
+  }
+  const r = spawnSync('npx', ['tsx', resolve(HERE, 'oklch.ts'), '#2f6b4fcc'], { cwd: HERE, encoding: 'utf8' });
+  ok(r.status === 0 && r.stdout.trim() === '#2f6b4fcc  →  { l: 0.4794, c: 0.078, h: 161.08 }',
+    `#4312 oklch.ts prints an 8-digit hex as its opaque anchor (status ${r.status}, got ${JSON.stringify(r.stdout.trim() || r.stderr.trim())})`);
+}
+
+// #4133 / #4200 A (owner decisions 2026-11-19) — the schema validator's messages say what the field takes, in the voice
+// standard's "X is …; it takes …" pattern, for each row of #4133's table: no "expected object", no "matches none of
+// oneOf", no raw regex, and a near-miss key gets "did you mean".
+{
+  const base = { id: 'msg4133', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 } };
+  const errs = (extra: object): string => validateBrandInput({ ...base, ...extra }).join(' | ');
+  for (const [label, extra, want] of [
+    ['primary "blue"', { primary: 'blue' }, /^primary is "blue"; it takes an OKLCH object \{ l, c, h \}.* or a hex color/],
+    ['primary.l 2', { primary: { l: 2, c: 0.1, h: 3 } }, /^primary\.l is 2; it takes a number from 0 to 1$/],
+    ['radiusScale "roundish"', { radiusScale: 'roundish' }, /^radiusScale is "roundish"; it takes a number.* or one of sharp, modest, standard, soft or round$/],
+    ['id "a/b"', { id: 'a/b' }, /^id is "a\/b"; it takes a name with no slash or backslash/],
+    ['root "a.b"', { root: 'a.b' }, /^root is "a\.b"; it takes one lowercase segment/],
+    ['desnity', { desnity: 'compact' }, /^desnity is not a field of the brand input; did you mean density\?$/],
+  ] as const) {
+    const got = errs(extra);
+    ok(want.test(got) && !/expected object|matches none of oneOf|does not match \/|not in contract/.test(got),
+      `#4133 ${label}: the message says what the field takes (got ${JSON.stringify(got)})`);
+  }
+}
+
+// #4176 (owner decision b, 2026-11-19) — `oklch.ts <hex>` prints the anchor a design.md takes, so prism3-theme's step 1
+// has a command. The printed precision round-trips: each printed OKLCH converts back to the hex it came from.
+{
+  const r = spawnSync('npx', ['tsx', resolve(HERE, 'oklch.ts'), '#2F6B4F'], { cwd: HERE, encoding: 'utf8' });
+  ok(r.status === 0 && r.stdout.trim() === `#2F6B4F  →  ${formatAnchor(hexToAnchor('#2F6B4F'))}`,
+    `#4176 oklch.ts prints the hex as an OKLCH anchor (status ${r.status}, got ${JSON.stringify(r.stdout.trim() || r.stderr.trim())})`);
+  const refused = spawnSync('npx', ['tsx', resolve(HERE, 'oklch.ts'), 'blue'], { cwd: HERE, encoding: 'utf8' });
+  ok(refused.status === 1 && /"blue" is not a hex color/.test(refused.stderr), `#4176 oklch.ts refuses a non-hex by name (got ${JSON.stringify(refused.stderr.trim())})`);
+  const drift: string[] = [];
+  for (let v = 0; v < 4096; v += 7) {
+    const h = '#' + [v >> 8, (v >> 4) & 15, v & 15].map((n) => (n * 17).toString(16).padStart(2, '0')).join('');
+    const printed = formatAnchor(hexToAnchor(h)).match(/l: ([\d.]+), c: ([\d.]+), h: ([\d.]+)/)!;
+    const back = hex(oklchToRgb({ l: +printed[1], c: +printed[2], h: +printed[3] }));
+    if (back !== h) drift.push(`${h}→${back}`);
+  }
+  ok(drift.length === 0, `#4176 every printed anchor converts back to its hex (drifted: ${drift.slice(0, 8).join(', ') || 'none'})`);
+  const skill = readFileSync(resolve(HERE, '../../skills/prism3-theme/SKILL.md'), 'utf8');
+  ok(skill.includes('npx tsx packages/engine/oklch.ts'), '#4176 prism3-theme names the oklch.ts command in its authoring steps');
 }
 
 // #4200 (owner decisions 3 and 4, 2026-11-19) — score_consumption says when its rate measured nothing (`vacuous: true`,
@@ -46090,6 +46366,38 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(files.get('./e/acme.base.tokens.json') === JSON.stringify(projected.base, null, 2) + '\n'
     && files.get('./e/acme.dark.overlay.tokens.json') === JSON.stringify(projected.overlays.find((o) => o.mode === 'dark')?.tree, null, 2) + '\n',
     '#4144 the base + overlay files are the projection of the tree written beside them, as the CLI writes it');
+}
+
+// #4193 decision 1 (owner, 2026-11-19): each lever's ⓘ in the UI is one line of at most 90 characters (voice standard
+// §4), its `tip`; the long `description` stays for agents. Read from the EMITTED manifest on disk, so the arm also holds
+// the emission to carrying the tip. The 90 is the standard's number, typed here. Mutations that fail BY NAME: a tip
+// lengthened past 90 → `#4193 every lever's UI line …`; a tip dropped from a long lever → `#4193 a lever has a tip …`.
+{
+  const manifest = JSON.parse(readFileSync(new URL('./schema/lever-manifest.json', import.meta.url), 'utf8')) as { levers: { key: string; description: string; tip?: string }[] };
+  const long = manifest.levers.filter((l) => (l.tip ?? l.description).length > 90).map((l) => `${l.key} (${(l.tip ?? l.description).length})`);
+  ok(manifest.levers.length > 40 && long.length === 0, `#4193 every lever's UI line (its tip, or a short description) is at most 90 characters (over: ${long.join(', ') || 'none'})`);
+  const mismatched = manifest.levers.filter((l) => (l.description.length > 90) !== (l.tip !== undefined)).map((l) => l.key);
+  ok(mismatched.length === 0, `#4193 a lever has a tip exactly when its description runs past 90 characters (mismatched: ${mismatched.join(', ') || 'none'})`);
+  const notShorter = manifest.levers.filter((l) => l.tip !== undefined && !(l.tip.length < l.description.length && l.tip.trim() === l.tip && l.tip.length > 20)).map((l) => l.key);
+  ok(notShorter.length === 0, `#4193 each tip is a real line, shorter than its description (${notShorter.join(', ') || 'none'})`);
+  // #4367 review: a rewrite left Strict interactive contrast saying "so every state clears AA — every state clears AA
+  // over brand color". A run of four words said again within two words of where it ended is a doubled clause, never
+  // emphasis. Mutation that fails BY NAME: restore the doubled clause → `#4193 no lever text says a clause twice …`.
+  const doubled: string[] = [];
+  for (const l of manifest.levers) for (const [field, text] of [['description', l.description], ['tip', l.tip]] as const) {
+    if (!text) continue;
+    const w = text.toLowerCase().split(/[^a-z0-9:.]+/).filter(Boolean);
+    const gram = (i: number): string => w.slice(i, i + 4).join(' ');
+    let hit = false;
+    for (let i = 0; i + 8 <= w.length && !hit; i++) for (let j = i + 4; j <= i + 6 && j + 4 <= w.length; j++) if (gram(i) === gram(j)) { doubled.push(`${l.key} ${field}: "${gram(i)}"`); hit = true; break; }
+  }
+  ok(doubled.length === 0, `#4193 no lever text says a clause twice, back to back (${doubled.join('; ') || 'none'})`);
+  // #4367 owner decision (2026-11-20, Outline hover → A): the tip names the four hover treatments, in the owner's
+  // words. The expected line is the decision's text, typed here; the actual is the EMITTED manifest. Mutation that
+  // fails BY NAME: any other tip on outlineInteraction → `#4367 the Outline hover tip is the owner's line …`.
+  const OUTLINE_HOVER_TIP = 'How outline and text controls show hover: a neutral wash, a tinted wash, a fill, or none.';
+  const outlineTip = manifest.levers.find((l) => l.key === 'outlineInteraction')?.tip;
+  ok(outlineTip === OUTLINE_HOVER_TIP && OUTLINE_HOVER_TIP.length <= 90, `#4367 the Outline hover tip is the owner's line, at most 90 characters (tip: ${JSON.stringify(outlineTip)})`);
 }
 
 // #2997: the shadcn contrast gate holds an accepted pair to the ratio the owner accepted. The regression fixture's pair

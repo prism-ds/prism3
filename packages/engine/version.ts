@@ -765,9 +765,10 @@ export const CONTRACT_VERSION = '15.2.0';
  * 2.2.0 (the contract, MINOR): `menu`, `menu-item` and `menu-group` added (#4260).
  * 2.3.0 (the contract, MINOR): `tooltip` added (#4251).
  * 1.7.0 (the schema, MINOR): #4096's `prism3-component-defs/1.7`, the optional brand `icons` map added.
+ * 2.4.0 (the contract, MINOR): `steps` and `step-item` added (#4341).
  */
 export const COMPONENT_SCHEMA_VERSION = '1.7.0';
-export const COMPONENT_CONTRACT_VERSION = '2.3.0';
+export const COMPONENT_CONTRACT_VERSION = '2.4.0';
 
 /** A guaranteed path that was removed, and where its consumers should point instead. */
 export type Deprecation = {

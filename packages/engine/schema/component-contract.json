@@ -1,5 +1,5 @@
 {
-  "componentContractVersion": "2.3.0",
+  "componentContractVersion": "2.4.0",
   "componentSchemaVersion": "1.7.0",
   "note": "Written by packages/engine/component-contract.ts --accept alone; do not hand-edit, and never regenerate it. `components` is the component-contract surface: per component, its name and status, its props (type, required, default, values), states, variant axes and values, and slots. `schema.shape` is the component schema: the shape of one published entry, read from the JSON schema named in `schema.source`, with its prose left out. Removing or renaming a name is a MAJOR change, adding one is MINOR, and moving a default is a PATCH; docs/30 has the full table.",
   "schema": {
@@ -5281,6 +5281,117 @@
           "medium",
           "small",
           "x-small"
+        ]
+      },
+      "slots": []
+    },
+    "step-item": {
+      "name": "StepItem",
+      "status": "draft",
+      "props": {
+        "connector": {
+          "type": "boolean",
+          "default": true
+        },
+        "href": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "required": true
+        },
+        "orientation": {
+          "type": "enum",
+          "default": "horizontal",
+          "values": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        "size": {
+          "type": "enum",
+          "default": "medium",
+          "values": [
+            "medium",
+            "small"
+          ]
+        },
+        "status": {
+          "type": "enum",
+          "default": "upcoming",
+          "values": [
+            "complete",
+            "current",
+            "error",
+            "upcoming"
+          ]
+        }
+      },
+      "states": [],
+      "variants": {
+        "orientation": [
+          "horizontal",
+          "vertical"
+        ],
+        "size": [
+          "medium",
+          "small"
+        ],
+        "status": [
+          "complete",
+          "current",
+          "error",
+          "upcoming"
+        ]
+      },
+      "slots": []
+    },
+    "steps": {
+      "name": "Steps",
+      "status": "draft",
+      "props": {
+        "items": {
+          "type": "slot",
+          "required": true,
+          "anyOf": [
+            "step-item"
+          ],
+          "minItems": 2
+        },
+        "label": {
+          "type": "string",
+          "required": true
+        },
+        "orientation": {
+          "type": "enum",
+          "default": "horizontal",
+          "values": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        "responsive": {
+          "type": "boolean",
+          "default": true
+        },
+        "size": {
+          "type": "enum",
+          "default": "medium",
+          "values": [
+            "medium",
+            "small"
+          ]
+        }
+      },
+      "states": [],
+      "variants": {
+        "orientation": [
+          "horizontal",
+          "vertical"
+        ],
+        "size": [
+          "medium",
+          "small"
         ]
       },
       "slots": []
