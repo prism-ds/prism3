@@ -4390,6 +4390,8 @@ for (const b of brands) {
       // Toast (#2668): no size axis, so every key is bare. block / inline start / inline end / message-to-controls gap /
       // glyph-to-message gap. The action-to-close 4px is not listed: it stays at the floor.
       toast: { keys: [], sizes: [], bare: ['pad-y', 'pad-x', 'pad-end', 'gap', 'glyph-gap'] },
+      // #4007: the menu item's inline padding and gap, one size.
+      'menu-item': { keys: [], sizes: [], bare: ['padding-x', 'gap'] },
       tooltip: { keys: [], sizes: [], bare: ['pad-y', 'pad-x'] },
       // Divider (#3051, #3143): the labeled divider's label-to-line gap, across a row and down a column.
       divider: { keys: [], sizes: [], bare: ['horizontal.gap', 'vertical.gap'] },
@@ -4439,6 +4441,7 @@ for (const b of brands) {
       banner: { compact: 'bare 12/8/8', comfortable: 'bare 16/12/12', spacious: 'bare 20/16/16' },
       // Toast (#2668, the proposal's §8 approved by call 13 A): comfortable is 8/16/8 padding, 8 to the controls, 12 glyph to message.
       toast: { compact: 'bare 6/12/6/6/8', comfortable: 'bare 8/16/8/8/12', spacious: 'bare 12/20/12/12/16' },
+      'menu-item': { compact: 'bare 8/6', comfortable: 'bare 12/8', spacious: 'bare 16/12' },
       tooltip: { compact: 'bare 2/6', comfortable: 'bare 4/8', spacious: 'bare 6/12' },
       // Divider (#3051, Q3051.4 A; #3143, Q3143.3 A): the label-to-line gap, horizontal / vertical. Comfortable is the
       // owner's space.300, 24px, across a row and space.150, 12px, down a column; the vertical one moves 8/12/16.
@@ -4492,6 +4495,7 @@ for (const b of brands) {
       // Banner (#2579): the glyph→content gap and the fixed title→body gap (one action since Q533.1, so no action gap).
       banner: ['gap', 'content-gap'],
       toast: ['gap', 'glyph-gap', 'controls-gap'],
+      'menu-item': ['gap'],
       // #3051, #3143: the labeled divider's label-to-line gap, each orientation's own key.
       divider: ['horizontal.gap', 'vertical.gap'],
       // #2709: the three defs with a density-following gap that joined after this list was written.
@@ -4571,6 +4575,8 @@ for (const b of brands) {
       toast: { prefix: 'bare', lt: [['gap', 'pad-x'], ['glyph-gap', 'pad-x']] },
       // #4008: the header, body and footer gap is tighter than the panel padding around them.
       popover: { prefix: 'bare', lt: [['gap', 'pad']] },
+      // #4007: the item's gap is tighter than its inline padding.
+      'menu-item': { prefix: 'bare', lt: [['gap', 'padding-x']] },
     };
     const GAP_TAILS = ['gap', 'check-gap'];
     // `pad` (#2579): Banner's one padding, block and inline alike.
@@ -19244,6 +19250,62 @@ arm: {
       // OD-P1 A: the role is a non-modal dialog.
       ok(/role="dialog"/.test(pop.accessibility?.role ?? '') && /no `aria-modal`/.test(pop.accessibility?.role ?? ''), '#4008 popover role (OD-P1 A): role="dialog" with no aria-modal');
     }
+    // ---- #4007 Menu: OD-X1 A, K2 measured, and the item's decisions, each against a literal or an emitted value ----
+    {
+      const pop = componentDefs.find((x) => x.id === 'popover')!;
+      const mnu = componentDefs.find((x) => x.id === 'menu')!;
+      const item = componentDefs.find((x) => x.id === 'menu-item')!;
+      // OD-X1 A: Menu's panel binds Popover's five raised-surface roles. Two defs compared, each authored on its own.
+      const SURFACE = ['fill', 'border', 'border-width', 'shadow', 'radius'];
+      const unequal = SURFACE.filter((k) => !mnu.tokens[k] || mnu.tokens[k] !== pop.tokens[k]);
+      ok(unequal.length === 0, `#4007 OD-X1: Menu and Popover bind the same raised-surface roles (${SURFACE.join(', ')})${unequal.length ? ` — differ: ${unequal.map((k) => `${k} ${mnu.tokens[k]} vs ${pop.tokens[k]}`).join('; ')}` : ''}`);
+      const mp = mnu.anatomy.parts.panel, pp = pop.anatomy.parts.panel;
+      ok(mp.kind === 'box' && pp.kind === 'box' && mp.paintSlots?.join() === pp.paintSlots?.join() && mp.strokeWidth === pp.strokeWidth && mp.elevation === pp.elevation && mp.radius === pp.radius,
+        '#4007 OD-X1: the two panels paint, stroke, cast and round from the same keys');
+      // K2: the highlight against the panel, recomputed from the emitted trees (never from the def's own claim). It does
+      // not clear 3:1 in any committed brand and mode, so K2 is A: a focus-visible item draws the FocusRing as well.
+      const OUT = join(HERE, 'out');
+      const rgb = (v: string): number[] => {
+        const m = /^rgba?\(([^)]*)\)$/.exec(v);
+        if (m) { const q = m[1].split(',').map(Number); return [q[0] / 255, q[1] / 255, q[2] / 255, q.length > 3 ? q[3] : 1]; }
+        const h = v.replace('#', '');
+        return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).concat(h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1);
+      };
+      const lum = (c: number[]) => [0, 1, 2].map((i) => (c[i] <= 0.04045 ? c[i] / 12.92 : ((c[i] + 0.055) / 1.055) ** 2.4)).reduce((a, x, i) => a + x * [0.2126, 0.7152, 0.0722][i], 0);
+      let best = 0, cells = 0;
+      for (const f of readdirSync(OUT).filter((n) => n.endsWith('.base.tokens.json'))) {
+        const brand = f.split('.')[0];
+        const base = JSON.parse(readFileSync(join(OUT, f), 'utf8'));
+        const root = Object.keys(base).find((k) => !k.startsWith('$'))!;
+        const modes = ['light', ...readdirSync(OUT).filter((n) => n.startsWith(`${brand}.`) && n.endsWith('.overlay.tokens.json')).map((n) => n.split('.')[1])];
+        for (const m of modes) {
+          const ov = m === 'light' ? {} : JSON.parse(readFileSync(join(OUT, `${brand}.${m}.overlay.tokens.json`), 'utf8'));
+          const at = (t: any, p: string) => p.split('.').reduce((o, k) => o?.[k], t?.[root])?.$value;
+          const res = (p: string): string => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
+          const panel = rgb(res('color.foreground.raised'));
+          const wash = rgb(res('color.interactive.neutral.overlay.hover'));
+          const comp = [0, 1, 2].map((i) => wash[i] * wash[3] + panel[i] * (1 - wash[3]));
+          const a = lum(comp), b = lum(panel);
+          best = Math.max(best, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)); cells++;
+        }
+      }
+      ok(cells >= 20 && best < 3, `#4007 K2: the item highlight (neutral hover wash over the raised panel) stays under 3:1 against the panel in every brand and mode, so the ring is drawn (best ${best.toFixed(2)}:1 over ${cells} cells)`);
+      const ring = item.anatomy.parts.focusRing;
+      ok(ring?.kind === 'absolute' && ring.nests === 'focus-ring' && ring.when === 'focus-visible' && item.tokens['default.overlay.focus-visible'] === 'color.interactive.neutral.overlay.hover',
+        '#4007 K2 A: a focus-visible item shows the highlight and the shared focus ring');
+      // OD-M3 A: 15 members, one size.
+      const members = figmaAnatomySet(item, { swapTarget: 'FPO-default-icon' });
+      ok(members.length === 15 && !item.variants?.size, `#4007 OD-M3: Menu.Item is 15 members and one size (${members.length})`);
+      // K1 B: menubar kept as an alias.
+      ok(mnu.aliases?.includes('menubar') === true, '#4007 K1 B: Menu keeps menubar as an alias');
+      // Owner direction (2026-11-18): two-line items align to the first line.
+      const row = item.anatomy.parts.row;
+      ok(row.kind === 'box' && row.layout?.align === 'start' && row.firstLine?.glyphCell === 'leadCell' && row.firstLine?.textCell === 'textCell',
+        '#4007 first line: the item row is top-aligned and centers its leading cell on the label\'s first line');
+      // K3 B: checkable items never close the menu.
+      ok(item.anatomy.codeOnly.some((e) => /checkbox or radio item toggles and the menu stays open, whatever the key/.test(e.description)),
+        '#4007 K3 B: the activation contract keeps the menu open for a checkbox or radio item, whatever the key');
+    }
     // ---- #3163: `PartDef.scroll`, the scroll region, and its two refusal arms, each pinned BY NAME (docs/34) ----
     // SUBJECT: Dialog's body as committed, then mutated. EXPECTED: the projection Q3130.8 A asks for (the body clips and
     // scrolls vertically on every member) and the authored refusal shapes. Delete either refusal from `anatomyErrors`
@@ -21255,8 +21317,8 @@ arm: {
       button: 1,
       'button-destructive': 2, 'button-neutral': 2, 'wallet-button': 2, 'sign-in-button': 2, 'icon-button': 2, 'icon-button-neutral': 2, icon: 2,
       'text-field': 2, textarea: 2, 'password-field': 2, 'code-input': 2, 'search-field': 2, 'card-number-field': 2, select: 2, 'checkbox-row': 2, 'checkbox-group': 2, 'tag-group': 2,
-      'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, banner: 2, toast: 2, pagination: 2, slider: 2,
-      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, veil: 3, 'image-placeholder': 3,
+      'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, menu: 2, 'menu-item': 9, 'menu-group': 3, banner: 2, toast: 2, pagination: 2, slider: 2,
+      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, skeleton: 3, veil: 3, 'image-placeholder': 3,
       // Tooltip (#4009, generation priority 3, decided in Q-FL2): supports another component, as Badge does.
       tooltip: 3,
       'flush-icon-button-neutral': 4, 'flush-icon-button': 5, 'flush-icon-button-destructive': 5,
@@ -23432,9 +23494,10 @@ arm: {
     // `segmented-control-segment` joins (#2418, Q269.4): an unselected option's hover and pressed are the neutral wash,
     // and its selected tint is the subtle-fill Tag binds, so a solid-tint or no-hover brand reaches it as it reaches a tag.
     // `pagination-item` joins (#2665): a page cell's hover and pressed are IconButton.Neutral ghost's neutral wash.
+    // `menu-item` joins (#4007): its highlight is the neutral wash, so the brand's wash steps reach it.
     // `code-input-cell` joined with #2428 and every field (text-field, password-field, search-field, select, textarea) left
     // with #2926: a field binds no wash, so the lever has nothing to reach on it.
-    ok(JSON.stringify(binders) === JSON.stringify(['button', 'button-destructive', 'button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral', 'pagination-item', 'segmented-control-segment', 'tag']),
+    ok(JSON.stringify(binders) === JSON.stringify(['button', 'button-destructive', 'button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral', 'menu-item', 'pagination-item', 'segmented-control-segment', 'tag']),
       `#1608 the wash binders the lever reaches: button ×3, flush-icon-button ×3 (round), icon-button ×3, pagination-item, segmented-control-segment, tag, and no field (${binders.join(', ')})`);
     // #3071 (owner Q3071.4 A): the opaque fill reaches Button, Icon button and Flush icon button only. Tag, Segmented
     // control and Pagination keep the neutral wash: a fill on an unselected item reads as selected.
@@ -34086,7 +34149,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'tooltip'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'menu-item', 'tooltip'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -35671,6 +35734,9 @@ arm: {
     + 'block and centring cannot float the icon mid-paragraph. Fixed on its counter axis as well, which is '
     + 'the mechanical half of the same fact: the row has no room to grow into a second line.';
   const CENTRE_OK: Record<string, string> = {
+    // #4007: the shortcut is one short line that never wraps; centered in the 20px trailing cell, it sits on the chevron's
+    // middle, which the top-aligned row keeps on the label's first line.
+    'menu-item.trailCell': 'a one-line shortcut beside a 20px chevron, inside a top-aligned row',
     'button.container': buttonCentreReason,
     // #1223 split the semantic intents into sibling components that share Button's exact anatomy, so the
     // same design fact exempts them — a Destructive or Neutral button label is the same short action phrase.
@@ -40585,6 +40651,49 @@ arm: {
   ok(missing.length === 0, `#2501: the axis order rule read every def it was raised on, each with values to order${missing.length ? ` — not read: ${missing.join(', ')}` : ''}`);
 }
 
+// ------------------------------------------------------------------- #4109: Skeleton
+// Each owner decision (OD-S1 to OD-S7, all A, 2026-11-19) held against a literal typed here from the proposal; ACTUAL is
+// the def and its projected plans, so a def that moves a member, a binding, a width or the announcement model fails by name.
+{
+  const def = componentDefs.find((d) => d.id === 'skeleton')!;
+  const set = figmaAnatomySet(def, {});
+  const at = (name: string) => set.find((p) => planComponentName(p) === name);
+  const findIn = (n: AnatomyPlan['root'], name: string): AnatomyPlan['root'] | undefined => n.name === name ? n : n.children.map((k) => findIn(k, name)).find(Boolean);
+  // OD-S6 A: four members, text at both sizes, circle and rect at medium only; text leads (the code default).
+  const NAMES = ['shape=text, size=medium', 'shape=text, size=small', 'shape=circle, size=medium', 'shape=rect, size=medium'];
+  ok(JSON.stringify(set.map(planComponentName)) === JSON.stringify(NAMES),
+    `#4109 skeleton (OD-S6 A): the set is text × [medium, small], circle and rect, text medium first (${set.map(planComponentName).join(' | ')})`);
+  // OD-S1 A: no `ghost` alias. OD-S2 A: one primitive with a shape axis, states [] (one visible condition).
+  ok(!def.aliases.includes('ghost') && JSON.stringify(def.variants.shape) === JSON.stringify(['text', 'circle', 'rect']) && def.states.length === 0,
+    `#4109 skeleton (OD-S1 A, OD-S2 A): no ghost alias, one def with shape [text, circle, rect], and no states`);
+  // OD-S4 A: every painted node takes the recessed neutral, nothing else.
+  const paints = set.flatMap((p) => planPaintVars(p.root));
+  ok(paints.length === 8 && paints.every((v) => v === 'color/background/tertiary'),
+    `#4109 skeleton (OD-S4 A): the 8 painted nodes (3 bars × 2 text members, the circle, the rect) all take color/background/tertiary (${[...new Set(paints)].join(', ')}; ${paints.length})`);
+  // The line row is one body line box tall (brief: bind to the type line height); OD-S5 A: the bar is inset by space.050
+  // above and below, so it is about two thirds of the line.
+  const LINE: Record<string, string> = { medium: 'type/body/md/line-box', small: 'type/body/sm/line-box' };
+  const lineOff = (['medium', 'small'] as const).filter((sz) => {
+    const r = at(`shape=text, size=${sz}`)?.root;
+    return !r || ['firstLine', 'middleLine', 'lastLine'].some((l) => { const b = findIn(r, l)?.bound ?? {}; return b.height !== LINE[sz] || b.paddingTop !== 'space/050' || b.paddingBottom !== 'space/050'; });
+  });
+  ok(lineOff.length === 0, `#4109 skeleton (OD-S5 A): every text line is one body line box tall with the bar inset space.050 above and below (off: ${lineOff.join(', ') || 'none'})`);
+  // The stepped ragged-right widths: 100 / 80 / 40% of the 320 build width.
+  const text = at('shape=text, size=medium')?.root;
+  ok(!!text && text.placementWidth === 320 && findIn(text, 'firstBar')?.layoutGrow === 1 && findIn(text, 'middleBar')?.minWidth === 256 && findIn(text, 'lastBar')?.minWidth === 128,
+    `#4109 skeleton: the text member is built 320 wide and its bars step 100 / 80 / 40% (firstBar grows, middleBar 256, lastBar 128)`);
+  // Corners: radius.sm on the bars, radius.md on the rect, radius.round on the circle; rect built 320×180, circle 40×40.
+  const corner = (name: string, part: string) => findIn(at(name)!.root, part)?.bound.topLeftRadius;
+  const rect = at('shape=rect, size=medium')?.root, circle = at('shape=circle, size=medium')?.root;
+  ok(corner('shape=text, size=medium', 'firstBar') === 'radius/sm' && corner('shape=rect, size=medium', 'block') === 'radius/md' && corner('shape=circle, size=medium', 'block') === 'radius/round'
+    && rect?.placementWidth === 320 && rect.placementHeight === 180 && circle?.placementWidth === 40 && circle.placementHeight === 40,
+    `#4109 skeleton: bars radius.sm, rect radius.md at 320×180, circle radius.round at 40×40`);
+  // OD-S3 A: the pulse period is motion.duration.sweep (no new token); OD-S7 A: Skeleton never speaks.
+  const announce = def.anatomy?.codeOnly.find((c) => c.class === 'announcement')?.description ?? '';
+  ok(def.tokens['motion.pulse'] === 'motion.duration.sweep' && /never speaks/.test(announce) && /aria-busy/.test(def.accessibility.aria) && /aria-hidden="true"/.test(def.accessibility.aria) && !def.props.some((p) => p.name === 'label'),
+    `#4109 skeleton (OD-S3 A, OD-S7 A): the pulse runs on motion.duration.sweep, every shape is aria-hidden, the region owns aria-busy and the status, and there is no label prop`);
+}
+
 // ------------------------------------------------------------------- #2428: Code input and its cell
 // Each owner decision held against a literal typed here from the decision (Q321, Q329, Q330, Q344, Q346, Q347/Q359);
 // ACTUAL is the projected plan, so a def that moves a size, a binding, the slot or a default fails the arm by name.
@@ -40844,6 +40953,9 @@ arm: {
     'pagination-item.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'the current page is marked by `current`, rendering aria-current="page", as Link does (#2665, #3554 Q-CC15 A)' },
     'page-nav-item.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'a page navigation item marks the current page by `current`, as Link does (#3345)' },
     'link.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'a link marks the current page by `current`, rendering aria-current="page" (#2872, Q507.3 A)' },
+    // #4007 (held for the owner): one member, so the group carries a one-value `type` the engine needs to project a set.
+    // Code has no type prop: every group is a section, with or without its heading, and a radio set is a section too.
+    'menu-group.type': { prop: 'heading', map: { undefined: 'section' }, reason: 'code has no type prop; a group is a section whether or not it sets `heading` (#4007: the one-value axis is how the engine projects one member)' },
     'accordion.expansion': { prop: 'defaultExpanded', map: off('collapsed', 'expanded'), reason: 'an accordion opens by `defaultExpanded`' },
     // #2666 (owner call 11 A): code has no path prop. `responsive` (default true) swaps the trail for the parent link
     // below 480px by a container query, and either value renders the trail at every wider width, so the code default
@@ -44698,6 +44810,26 @@ arm: {
   const expandEasing = stockPresets.expand?.easing;
   ok(expandEasing === 'motion.easing-role.default' && leafOf(expandEasing)?.$value === '{pds3.motion.easing.standard}',
     `#2857 owner 2026-11-20: expand takes the in-place default curve (motion.easing-role.default → standard; got ${expandEasing} → ${leafOf(expandEasing)?.$value})`);
+  // OWNER DECISION 2026-11-20 on #4332 (Accordion recipe → A): the prism3-motion skill's Accordion recipe plays the
+  // panel's height on the `expand` preset, both ways, instead of hand-picking the enter and exit transitions. The
+  // SUBJECT is the hand-written skill; the ORACLE is the emitted sidecar, so the recipe's preset must exist and every
+  // name it says `expand` resolves to must be the one prism3 emits. Every "`<name>` preset" the skill cites must be an
+  // emitted preset too. Mutations: the panel row back to `motion.transition.enter` / `.exit`, or the recipe naming a
+  // preset prism3 doesn't emit, fail this arm by name.
+  {
+    const motionSkill = readFileSync(resolve(HERE, '../../skills/prism3-motion/SKILL.md'), 'utf8');
+    const accordion = /\n### Accordion\n([\s\S]*?)(?=\n### )/.exec(motionSkill)?.[1] ?? '';
+    const panelRow = accordion.split('\n').find((l) => l.startsWith('| Panel height')) ?? '';
+    const cells = panelRow.split('|').slice(2, 4).map((c) => c.trim());
+    const rowOk = cells.length === 2 && cells.every((c) => c === 'the `expand` preset');
+    const cited = [...motionSkill.matchAll(/`([a-z][a-z-]*)` preset\b/g)].map((m) => m[1]);
+    const unknown = cited.filter((n) => !(n in stockPresets));
+    const exp = stockPresets.expand ?? {};
+    const resolvesTo = [exp.duration, exp.easing, exp.reduced_duration];
+    const missing = resolvesTo.filter((n) => !n || !accordion.includes(`\`${n}\``));
+    ok(rowOk && cited.includes('expand') && unknown.length === 0 && missing.length === 0,
+      `#4332 owner 2026-11-20: the prism3-motion Accordion recipe plays the panel on the \`expand\` preset both ways, and every preset and name it cites is emitted (panel row: ${JSON.stringify(cells)}; presets cited: ${cited.join(', ') || 'none'}${unknown.length ? `; not emitted: ${unknown.join(', ')}` : ''}${missing.length ? `; expand resolves to names the recipe doesn't cite: ${missing.join(', ')}` : ''})`);
+  }
   // The owner's own examples (Q-MP7 option 3) name `crossfade` and `surface`: a brand can map both.
   const mapped = sidecar({ ...prism3Input, motionPersonality: { ...(prism3Input.motionPersonality ?? {}), presets: { crossfade: 'long', surface: 'longest' } } } as BrandInput).motion_presets ?? {};
   ok(mapped.crossfade?.duration === 'motion.duration.long' && mapped.surface?.duration === 'motion.duration.longest',
@@ -45293,7 +45425,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
 // defs is written out here by hand, not read from the defs, so a def that drops the note fails by its id (docs/34 shape 1).
 {
   const DECIDED = 'Plain HTML/CSS: wire this behavior contract up in your framework. The web component includes it.';
-  const INTERACTIVE = ['breadcrumb-item', 'breadcrumbs', 'code-input', 'dialog', 'link', 'page-nav-item', 'page-nav', 'pagination', 'popover', 'segmented-control-segment', 'segmented-control', 'slider', 'tab-item', 'tabs'];
+  const INTERACTIVE = ['breadcrumb-item', 'breadcrumbs', 'code-input', 'dialog', 'link', 'page-nav-item', 'page-nav', 'pagination', 'popover', 'segmented-control-segment', 'segmented-control', 'slider', 'tab-item', 'tabs', 'menu-item', 'menu'];
   const all = componentDefs;
   for (const id of INTERACTIVE) {
     const d = all.find((x) => x.id === id);
@@ -45580,6 +45712,58 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(files.get('./e/acme.base.tokens.json') === JSON.stringify(projected.base, null, 2) + '\n'
     && files.get('./e/acme.dark.overlay.tokens.json') === JSON.stringify(projected.overlays.find((o) => o.mode === 'dark')?.tree, null, 2) + '\n',
     '#4144 the base + overlay files are the projection of the tree written beside them, as the CLI writes it');
+}
+
+// #811 — the engine README names only roles the engine emits. `foreground.danger.<state>` was retired (the
+// interactive-family arm above asserts it gone), and the README still taught `.default` and `.pressed`. ACTUAL is
+// read off a freshly resolved theme, never off the README or a list kept beside it, so a renamed role fails here
+// the day the README stops matching.
+{
+  const t = brandTheme({ id: 'acme', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 }, modes: ['light'] } as BrandInput);
+  const keys = Object.keys(resolveAllModes(t).find((m) => m.mode === 'light')!.roles);
+  const md = readFileSync(resolve(HERE, './README.md'), 'utf8');
+  const named = [...new Set([...md.matchAll(/`((?:foreground|interactive|background|text|border|inverse|disabled|overlay)(?:\.[a-z0-9-]+)+)`/g)].map((m) => m[1]))];
+  const unknown = named.filter((n) => !keys.includes(n) && !keys.some((k) => k.startsWith(`${n}.`)));
+  ok(named.length >= 10, `#811 the README scan finds the role names it teaches (found ${named.length})`);
+  ok(unknown.length === 0, `#811 every role the engine README names is one the engine emits (not emitted: ${unknown.join(', ') || 'none'})`);
+}
+
+// #1754 — the selection controls' shipped prose names the ROLE their selected ink takes, never "brand". The checked
+// ring binds `interactive.primary.indicator.*`, and a brand that points its action at the neutral palette (the
+// nb-redesign example) draws that ring gray. The arm first proves the claim is false in a shipped example, from the
+// def's own binding resolved in that brand, so the prose rule rests on a measured fact and not on taste.
+{
+  const nb = exampleTheme('nb-redesign', () => brandTheme(parseDesignMd(readFileSync(resolve(HERE, './examples/nb-redesign.design.md'), 'utf8')).input));
+  const ring = String((radioControl.tokens as Record<string, string>)['checked.border']).replace(/^color\./, '');
+  const path = nb ? String((resolveAllModes(nb).find((m) => m.mode === 'light')!.roles as Record<string, { path?: string }>)[ring]?.path) : '';
+  ok(/\.palette\.neutral\./.test(path), `#1754 nb-redesign's checked radio ring (${ring}) resolves to a neutral step, so "brand-colored" is untrue there (got ${path || 'nothing'})`);
+  const shipped = (d: ComponentDef): string[] => [d.summary ?? '', d.description ?? '', ...(d.docs?.do ?? []), ...(d.docs?.dont ?? []), ...(d.docs?.implementation ?? []),
+    ...(d.props ?? []).map((p) => p.description ?? '')];
+  const claim = /\bbrand(?:-colou?red| colou?r| ring| edge)\b|\bring to brand\b/i;
+  const hits = componentDefs.filter((d) => /^(checkbox|radio|switch)-/.test(d.id))
+    .flatMap((d) => shipped(d).filter((s) => claim.test(s)).map((s) => `${d.id}: "${s.match(claim)![0]}"`));
+  ok(hits.length === 0, `#1754 no selection control's shipped prose says its selected ink is the brand color (found: ${hits.join('; ') || 'none'})`);
+  // #4389 owner decision (2026-11-20, Radio wording → A): one thing, one name. The role is "action color", the term the
+  // Action palette setting uses, never "primary action color". The term is the decision's, typed here. Mutation that
+  // fails BY NAME: "primary action color" back in any shipped field → `#4389 the selection controls call the role …`.
+  const misnamed = componentDefs.filter((d) => /^(checkbox|radio|switch)-/.test(d.id))
+    .flatMap((d) => shipped(d).filter((s) => /\bprimary action colou?r\b/i.test(s)).map(() => d.id));
+  const radioNames = shipped(radioControl as ComponentDef).filter((s) => /\baction color\b/.test(s)).length;
+  ok(misnamed.length === 0 && radioNames >= 4, `#4389 the selection controls call the role "action color", never "primary action color" (misnamed in: ${misnamed.join(', ') || 'none'}; Radio.Control fields naming it: ${radioNames} of at least 4)`);
+}
+
+// #1819 — the prism3-theme skill's `actionPalette` row lists every built-in palette the engine accepts there, as the
+// `linkPalette` row beside it does. ACTUAL: the engine compiles a brand with each value; the row is read as text.
+{
+  const skill = readFileSync(resolve(HERE, '../../skills/prism3-theme/SKILL.md'), 'utf8');
+  const row = skill.split('\n').find((l) => l.startsWith('| `actionPalette` |')) ?? '';
+  const values = row.split(/(?<!\\)\|/)[2] ?? ''; // a `\|` inside a cell is the table's escaped pipe, not a column break
+  const base = { id: 'acme', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 }, modes: ['light'] };
+  for (const v of ['primary', 'neutral']) {
+    let compiles = true;
+    try { brandTheme({ ...base, actionPalette: v } as BrandInput); } catch { compiles = false; }
+    ok(compiles && values.includes(`\`${v}\``), `#1819 the prism3-theme actionPalette row lists \`${v}\`, which the engine accepts (compiles: ${compiles}; row: ${values.trim() || 'MISSING'})`);
+  }
 }
 
 // #1716 — `notes.contested` refuses a decided entry by the verbs decided entries USE, not by four opening words.

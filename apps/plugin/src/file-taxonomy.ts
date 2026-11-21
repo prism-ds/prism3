@@ -150,6 +150,9 @@ export const TAXONOMY: Taxonomy = {
         // Popover (#4008, owner Q-FL2) — its own page under Components, beside Dialog (owner decision 5 on #4252,
         // 2026-11-19). It nests FlushIconButton.Neutral and the Button group.
         { page: 'Popover', defs: ['popover'] },
+        // Menu (#4007, owner Q-FL2) — its own page under Components, its item and group beside it (Q656 A: a part only its
+        // family nests shares that family's page). The item builds first, then the group, so both slots resolve on the page.
+        { page: 'Menu', defs: ['menu-item', 'menu-group', 'menu'], lead: 'menu' },
         // Banner (#2579, Q327) — its own page under Components. The proposal named a feedback section; none exists, so the
         // section is held as an owner item in the PR, as Link's was. It nests Button.Neutral and FlushIconButton.Neutral.
         { page: 'Banner', defs: ['banner'] },
@@ -199,6 +202,9 @@ export const TAXONOMY: Taxonomy = {
         // #1670 — owner-decided 2026-09-26: the spinner sits under Subcomponents, beside the other parts a
         // host swaps or nests in (the button's pending state swaps it into its icon slot).
         { page: 'Spinner', defs: ['spinner'] },
+        // #4109 — PROVISIONAL, held for the owner (the proposal left the page open): beside Spinner, the loading part a
+        // host nests, and Image placeholder, whose loading state nests it next (#4113).
+        { page: 'Skeleton', defs: ['skeleton'] },
       ],
     },
     {
