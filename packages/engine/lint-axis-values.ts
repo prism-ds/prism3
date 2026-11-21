@@ -373,6 +373,26 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       + 'separator type a glyph, and no value would mean the same thing on both defs. The item picks it by its own '
       + '`separator` axis, which holds the same two values.',
   },
+  {
+    axis: 'type',
+    values: ['action', 'submenu'],
+    defs: ['menu-item'],
+    relation: 'disjoint',
+    reason:
+      'What a menu row does when chosen (#4007, owner decision Q-FL2 on OD-M3 A): runs an action, or opens a submenu, '
+      + 'which adds the arrow and its space. Checkbox and radio items are action members with the check toggles on, so '
+      + 'they are not values. `action` LEADS because it is the code default and Figma\'s default member. DISJOINT from '
+      + 'Badge\'s canonical set: no value would mean the same thing on both defs.',
+  },
+  {
+    axis: 'type',
+    values: ['section'],
+    defs: ['menu-group'],
+    relation: 'disjoint',
+    reason:
+      'One value (#4007, held for the owner): the engine projects no set without an axis, so Menu.Group\'s one member '
+      + 'carries `section`. A radio set draws the same. DISJOINT from Badge\'s canonical set.',
+  },
   // field-label's `indicator` axis left the register (#1338). It carried a three-way `[none/required/optional]`
   // axis whose most important value was ABSENCE, which is exactly why it never projected to Figma. The owner
   // decision (2026-09-13) reconciled it into Prism 2's `Required` BOOLEAN (default true) — a node-visibility toggle,
@@ -1025,19 +1045,33 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       'Where a layer sits over the page (#2609, owner decision Q303.1): centered, attached to the bottom edge as a bottom '
       + 'sheet, filling a small screen, or attached to the end edge as a side sheet (#2877, Q483 A, named `end` by Q488 A: '
       + 'the writing direction\'s end, so it mirrors in right-to-left text and a `start` can join it with no rename). `center` LEADS because it is the code '
-      + 'default on every screen and Figma\'s default member. Canonical since Popover joined the axis with its one '
-      + 'side (#4008), described against this set. Distinct from `alignment` and `direction`, argued in `VARIANT_AXES`.',
+      + 'default on every screen and Figma\'s default member. Canonical since Popover\'s one side (#4008) and Tooltip\'s side '
+      + 'placement (#4009) joined the axis, each described against this set. Distinct from `alignment` and `direction`, '
+      + 'argued in `VARIANT_AXES`.',
   },
   {
     axis: 'placement',
     values: ['bottom'],
-    defs: ['popover'],
+    defs: ['popover', 'menu'],
     relation: 'subset',
     reason:
       'The side of its trigger a popover opens on (#4008, owner decision Q-FL2 on OD-P2 A and OD-X2 A): Dialog\'s word for '
       + 'where a layer sits, and its `bottom` means the same edge. Code takes top, bottom, start or end; with no arrow the '
       + 'panel draws the same on every side, so the set is one member at the default side, and a one-value axis is how '
       + 'the engine projects one member (owner decision 1 on #4252, 2026-11-19). Same vocabulary, shorter.',
+  },
+  {
+    axis: 'placement',
+    values: ['top', 'bottom', 'start', 'end'],
+    defs: ['tooltip'],
+    relation: 'overlapping',
+    reason:
+      'Which side of its trigger a tooltip sits on (#4009, owner OD-X2 A): above, below, at the start or at the end, in '
+      + 'writing-direction terms, so `start` and `end` swap sides in right-to-left text with no rename. `top` LEADS because '
+      + 'it is the code default and Figma\'s default member. OVERLAPPING with Dialog\'s canonical set by design: both use '
+      + '`end` for the writing direction\'s end edge (Q488 A) and `bottom` for the bottom edge, and each adds what its layer '
+      + 'needs. A dialog is placed against the viewport (centered, or full screen), a tooltip against its trigger, which is '
+      + 'why it has `top` and `start` and no `center` or `full`. The two words they share mean the same edge.',
   },
   {
     axis: 'kind',
@@ -1076,13 +1110,23 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
     axis: 'intent',
     values: ['neutral', 'success'],
     defs: ['toast'],
-    relation: 'sole',
+    relation: 'canonical',
     reason:
       'What a toast confirms (#2668, owner call 2 A): a plain confirmation, or a completed action with a circled check. '
       + 'No danger, warning or info: a message the user must see goes to a banner (call 1 A). `neutral` LEADS because it '
       + 'is the code default and Figma\'s default member. The axis returns here as a variant axis after #1225 retired it '
       + 'from the button families (where intent became the component): a toast\'s two intents differ in one glyph and its '
       + 'ink, not in a family of interactive colors, so they are members of one set. One def carries it.',
+  },
+  {
+    axis: 'intent',
+    values: ['default', 'destructive'],
+    defs: ['menu-item'],
+    relation: 'disjoint',
+    reason:
+      'What a menu action does (#4007, owner decision Q-FL2 on OD-M3 A): a plain action, or one that deletes or cannot '
+      + 'be undone, in the destructive ink. Disjoint from Toast\'s [neutral, success]: a toast reports, a menu item acts, '
+      + 'and neither has the other\'s values. `default` LEADS because it is the code default and Figma\'s default member.',
   },
   {
     axis: 'footer',
