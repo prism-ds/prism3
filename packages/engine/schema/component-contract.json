@@ -1,5 +1,5 @@
 {
-  "componentContractVersion": "2.1.0",
+  "componentContractVersion": "2.2.0",
   "componentSchemaVersion": "1.6.0",
   "note": "Written by packages/engine/component-contract.ts --accept alone; do not hand-edit, and never regenerate it. `components` is the component-contract surface: per component, its name and status, its props (type, required, default, values), states, variant axes and values, and slots. `schema.shape` is the component schema: the shape of one published entry, read from the JSON schema named in `schema.source`, with its prose left out. Removing or renaming a name is a MAJOR change, adding one is MINOR, and moving a default is a PATCH; docs/30 has the full table.",
   "schema": {
@@ -3507,6 +3507,170 @@
       },
       "slots": [
         "icon"
+      ]
+    },
+    "menu": {
+      "name": "Menu",
+      "status": "draft",
+      "props": {
+        "align": {
+          "type": "enum",
+          "default": "start",
+          "values": [
+            "center",
+            "end",
+            "start"
+          ]
+        },
+        "defaultOpen": {
+          "type": "boolean",
+          "default": false
+        },
+        "items": {
+          "type": "slot",
+          "required": true,
+          "anyOf": [
+            "divider",
+            "menu-group",
+            "menu-item"
+          ],
+          "minItems": 1
+        },
+        "loop": {
+          "type": "boolean",
+          "default": true
+        },
+        "onOpenChange": {
+          "type": "function"
+        },
+        "open": {
+          "type": "boolean",
+          "default": false
+        },
+        "placement": {
+          "type": "enum",
+          "default": "bottom",
+          "values": [
+            "bottom",
+            "end",
+            "start",
+            "top"
+          ]
+        }
+      },
+      "states": [],
+      "variants": {
+        "placement": [
+          "bottom"
+        ]
+      },
+      "slots": []
+    },
+    "menu-group": {
+      "name": "Menu.Group",
+      "status": "draft",
+      "props": {
+        "heading": {
+          "type": "string"
+        },
+        "items": {
+          "type": "slot",
+          "required": true,
+          "anyOf": [
+            "menu-item"
+          ],
+          "minItems": 1
+        },
+        "onValueChange": {
+          "type": "function"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "states": [],
+      "variants": {
+        "type": [
+          "section"
+        ]
+      },
+      "slots": []
+    },
+    "menu-item": {
+      "name": "Menu.Item",
+      "status": "draft",
+      "props": {
+        "checked": {
+          "type": "boolean",
+          "default": false
+        },
+        "closeOnSelect": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "href": {
+          "type": "string"
+        },
+        "intent": {
+          "type": "enum",
+          "default": "default",
+          "values": [
+            "default",
+            "destructive"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "required": true
+        },
+        "leadingIcon": {
+          "type": "slot"
+        },
+        "onSelect": {
+          "type": "function"
+        },
+        "shortcut": {
+          "type": "string"
+        },
+        "textValue": {
+          "type": "string"
+        },
+        "type": {
+          "type": "enum",
+          "default": "action",
+          "values": [
+            "action",
+            "checkbox",
+            "radio",
+            "submenu"
+          ]
+        }
+      },
+      "states": [
+        "disabled",
+        "focus-visible",
+        "hover",
+        "pressed",
+        "rest"
+      ],
+      "variants": {
+        "intent": [
+          "default",
+          "destructive"
+        ],
+        "type": [
+          "action",
+          "submenu"
+        ]
+      },
+      "slots": [
+        "leadingVisual"
       ]
     },
     "page-nav": {
