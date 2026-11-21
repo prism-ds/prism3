@@ -601,12 +601,18 @@ apps/studio/test-chrome.mjs #4185
 apps/studio/test-chrome.mjs #4188
 apps/studio/test-chrome.mjs #4192
 apps/studio/test-chrome.mjs #4206
+apps/studio/test-chrome.mjs #4216
+apps/studio/test-chrome.mjs #4217
+apps/studio/test-chrome.mjs #4218
 apps/studio/test-chrome.mjs #4219
 apps/studio/test-chrome.mjs #4220
 apps/studio/test-chrome.mjs #4221
 apps/studio/test-chrome.mjs #4222
 apps/studio/test-chrome.mjs #4223
 apps/studio/test-chrome.mjs #4224
+apps/studio/test-chrome.mjs #4225
+apps/studio/test-chrome.mjs #4226
+apps/studio/test-chrome.mjs #4228
 apps/studio/test-chrome.mjs #4235
 apps/studio/test-chrome.mjs #533
 apps/studio/test-chrome.mjs #574
@@ -645,6 +651,7 @@ apps/studio/test-component-groups.ts #3199
 apps/studio/test-component-groups.ts #3226
 apps/studio/test-component-groups.ts #3345
 apps/studio/test-component-groups.ts #3392
+apps/studio/test-component-groups.ts #4007
 apps/studio/test-component-groups.ts #4008
 apps/studio/test-component-groups.ts #4109
 apps/studio/test-export-settings.ts #3425
@@ -1240,6 +1247,7 @@ packages/engine/test.ts #3977
 packages/engine/test.ts #3984
 packages/engine/test.ts #3985
 packages/engine/test.ts #3986
+packages/engine/test.ts #4007
 packages/engine/test.ts #4008
 packages/engine/test.ts #4019
 packages/engine/test.ts #4045
@@ -1283,6 +1291,7 @@ packages/engine/test.ts #4242
 packages/engine/test.ts #4332
 packages/engine/test.ts #4371
 packages/engine/test.ts #4389
+packages/engine/test.ts #4428
 packages/engine/test.ts #479
 packages/engine/test.ts #480
 packages/engine/test.ts #482
