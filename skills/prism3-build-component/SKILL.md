@@ -130,7 +130,8 @@ identity (`id`, `name`, `aliases`, `category`, `status`), `inherits` where the d
 (`paintKeys`, `densitySpacing`, `visibleGaps`), `tokens`, `anatomy`, `figmaProperties`, `accessibility`, `content`, `docs`, `ai`,
 `composition`, `motion` and `notes`. `summary` comes before `description`. Button's factory and the Icon
 button factory write them the other way round; do not copy that (#2712). Which keys to write empty is still open there; the one empty
-value that is already a statement is `figmaProperties.booleans` (§6).
+value that is already a statement is `figmaProperties.booleans` (§6). Never write `brandGlyphs`: `applyIconMap`
+attaches it from the brand input's icon art (#3076).
 
 ### What ships, and who reads it
 
@@ -525,7 +526,7 @@ library. Its `ai.whenToUse` opens with one of two wordings: "Only as a child of 
 (Q394): a designer inserts it from the assets panel, which works only for a published set, so it stays
 unprefixed even where its `ai.whenToUse` says "Only as a child of …". The slot items are `tab-item`,
 `list-item`, `segmented-control-segment`, `breadcrumb-item`, `pagination-item`, `page-nav-item`,
-`code-input-cell` and `radio-row`. The checkbox and radio controls (`checkbox-control`,
+`code-input-cell`, `radio-row` and `menu-item`. The checkbox and radio controls (`checkbox-control`,
 `radio-control`) stay unprefixed because they may be used on their own.
 
 **Figma property names are lowercase (owner decision Q345).** Every name a designer reads in the

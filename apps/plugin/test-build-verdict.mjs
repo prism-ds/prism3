@@ -640,16 +640,16 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
   await post(page, { type: 'component-progress', phase: 'wire', done: 600, total: 648, chunkMs: 40 });
   await page.waitForFunction(() => /600 of 648/.test(document.body.textContent ?? ''), null, { timeout: 4000 }).catch(() => {});
   const away = await readSurfaces(page);
-  ok(away.barPending.some((t) => /Wiring references… 600 of 648/.test(t ?? '')), `away from the page, the Activity row still reports progress — read ${JSON.stringify(away.barPending)}`);
+  ok(away.barPending.some((t) => /Linking nested sets… 600 of 648/.test(t ?? '')), `away from the page, the Activity row still reports progress — read ${JSON.stringify(away.barPending)}`);
 
   // #1679: the reference back-off's wait names itself (owner's wording), with no fraction, instead of the
   // pill freezing on the last wire reading for the whole pause. Through the real bridge validator, so a
   // `retry` phase the adapter drops fails here by name rather than leaving "600 of 648" on screen.
   await post(page, { type: 'component-progress', phase: 'retry', done: 2, total: 6, chunkMs: 0 });
-  await page.waitForFunction(() => /Retrying property links…/.test(document.body.textContent ?? ''), null, { timeout: 4000 }).catch(() => {});
+  await page.waitForFunction(() => /Linking properties again…/.test(document.body.textContent ?? ''), null, { timeout: 4000 }).catch(() => {});
   const retrying = await readSurfaces(page);
-  ok(retrying.barPending.some((t) => (t ?? '') === 'Retrying property links…'),
-    `#1679 while the reference back-off waits, the pill reads exactly "Retrying property links…" — read ${JSON.stringify(retrying.barPending)}`);
+  ok(retrying.barPending.some((t) => (t ?? '') === 'Linking properties again…'),
+    `#1679 while the reference back-off waits, the pill reads exactly "Linking properties again…" (#4193) — read ${JSON.stringify(retrying.barPending)}`);
 
   await post(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built 648', summary: "set 'Button': 648 variants" });
   // #3326 PR 2: the build is Update file's To add step, so its words land on that step of the run's row.
@@ -737,7 +737,7 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
     await hooks.need(page, '[data-p3="clean-prune-summary"]', { timeout: 5000 });
     const s = await readPrune(page);
     ok(s.summary === PRUNE_SUMMARY, `#1663 control: the panel's preview shows in Clean up, in the host's words — read ${JSON.stringify(s.summary)}`);
-    ok(s.deleteCta.includes('Delete 4 items'), `#1663 control: Clean up's Delete reads "Delete 4 items" — read ${JSON.stringify(s.deleteCta)}`);
+    ok(s.deleteCta.includes('Remove 4 items'), `#1663 control: Clean up's Delete reads "Remove 4 items" (#4193) — read ${JSON.stringify(s.deleteCta)}`);
     control = s;
     // #2124 review (findings 1 and 2), re-hosted: the overlay is modal. Focus is inside it, Tab and Shift+Tab stay
     // inside, and Close returns focus to its opener, Update file.
@@ -765,7 +765,7 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
     const landed = s.summaries.includes(`Agent preview: ${PRUNE_SUMMARY}`);
     hooks.absent(ok, { seen: control.summary === PRUNE_SUMMARY && landed, state: 'the preview in Clean up in the control arm, and the agent preview landing in this one' },
       !s.overlay && s.summary === null, '#1663 an agent prune preview opens nothing on the owner\'s screen and is not the panel\'s preview');
-    hooks.absent(ok, { seen: control.deleteCta.includes('Delete 4 items') && landed, state: 'the Delete CTA in the control arm, and the agent preview landing in this one' },
+    hooks.absent(ok, { seen: control.deleteCta.includes('Remove 4 items') && landed, state: 'the Delete CTA in the control arm, and the agent preview landing in this one' },
       s.deleteCta.length === 0, `#1663 an agent prune preview offers no Delete — found ${JSON.stringify(s.deleteCta)}`);
     ok(s.pills.includes('4 stale') && landed,
       `#1663 an agent prune preview reads "4 stale" in the Activity drawer, "Agent preview: ${PRUNE_SUMMARY}" in its details — read ${JSON.stringify(s.pills)}, ${JSON.stringify(s.summaries)}`);
@@ -975,7 +975,7 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
     `S11 an agent's Apply Theme run opens the Activity drawer on the Apply Theme row — state ${running.state}, drawer open ${running.drawerOpen}`);
   ok(running.agent && running.verdict === 'Running' && running.phase.some((t) => (t ?? '').includes('Writing to Figma…')),
     `S11 the running row is tagged Agent, reads "Running", phase "Writing to Figma…" — agent ${running.agent}, verdict ${JSON.stringify(running.verdict)}, phase ${JSON.stringify(running.phase)}`);
-  ok(running.statusRole === 'status' && running.status === 'Theme, Writing to Figma…',
+  ok(running.statusRole === 'status' && running.status === 'Apply theme, Writing to Figma…',
     `S11 the start is announced once through the drawer's polite status line — role ${running.statusRole}, read ${JSON.stringify(running.status)}`);
   // #2909: the panel's theme write is Update file's Theme step. Started while the agent's Apply runs, it posts nothing,
   // and the run ends rather than waiting on a verdict that is not coming.
@@ -1036,7 +1036,7 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
   await post(page, { type: 'agent-progress', id: 'b1', progress: { phase: 'build', done: 24, total: 648 } });
   await page.waitForFunction(() => [...document.querySelectorAll('[data-p3="activity-op"][data-op="components"] [data-p3="op-progress"]')].some((n) => /24 of 648/.test(n.textContent ?? '')), null, { timeout: 5000 }).catch(() => {});
   const build = await readOp('components');
-  ok(build.state === 'running' && build.agent && build.phase.some((t) => /Building members… 24 of 648/.test(t ?? '')),
+  ok(build.state === 'running' && build.agent && build.phase.some((t) => /Building variants… 24 of 648/.test(t ?? '')),
     `S11 an agent's build shows its live progress on the Build set row — state ${build.state}, agent ${build.agent}, phase ${JSON.stringify(build.phase)}`);
   // Positive control for the no-post check: nothing runs Apply now, so the same run does post.
   await openUpdate(page);
@@ -1083,18 +1083,18 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
   };
 
   const clean = await run('f1', { ok: true, headline: '✓ 42 roles written', summary: '42 roles written' }, 'ok');
-  ok(clean.started.text === 'Theme, Writing to Figma…' && clean.done.text === 'Theme finished.' && clean.done.role === 'status' && clean.done.live !== 'assertive',
+  ok(clean.started.text === 'Apply theme, Writing to Figma…' && clean.done.text === 'Apply theme finished.' && clean.done.role === 'status' && clean.done.live !== 'assertive',
     `Q194 a clean Apply Theme run is announced as finished, politely, on the status line that announced its start — start ${JSON.stringify(clean.started.text)}, finish ${JSON.stringify(clean.done.text)}, role ${clean.done.role}, aria-live ${clean.done.live}`);
-  ok(clean.after.text === 'Theme finished.',
+  ok(clean.after.text === 'Apply theme finished.',
     `Q194 the finish stands after the run closes, until the next start — read ${JSON.stringify(clean.after.text)}`);
 
   const REASON = 'The variable collection is read-only in this file';
   const failed = await run('f2', { ok: false, headline: '✗ Apply failed', summary: `${REASON}.`, lines: [`${REASON}.`] }, 'bad');
-  ok(failed.started.text === 'Theme, Writing to Figma…' && failed.done.text === `Theme failed: ${REASON}.` && failed.done.role === 'status',
+  ok(failed.started.text === 'Apply theme, Writing to Figma…' && failed.done.text === `Apply theme failed: ${REASON}.` && failed.done.role === 'status',
     `Q194 a failed Apply Theme run is announced with its reason — start ${JSON.stringify(failed.started.text)}, finish ${JSON.stringify(failed.done.text)}, role ${failed.done.role}`);
 
   const warned = await run('f3', { ok: false, headline: '⚠ 40 of 42 roles written', summary: '2 roles were skipped', lines: ['2 roles were skipped'] }, 'bad');
-  ok(warned.done.text === 'Theme finished with a warning: 2 roles were skipped.',
+  ok(warned.done.text === 'Apply theme finished with a warning: 2 roles were skipped.',
     `Q194 a run that finishes with a warning is announced with its reason, as finished — read ${JSON.stringify(warned.done.text)}`);
   ok(errors.length === 0, `Q194: no console errors (${errors.slice(0, 2).join(' · ')})`);
   await page.close();
@@ -1120,12 +1120,12 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
   await page.waitForFunction(() => !document.querySelector('[data-p3="activity-op"][data-op="apply"][data-state="running"]'), null, { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(100);
   const ended = await line();
-  ok(ran && started === 'Theme, Writing to Figma…' && ended === '',
+  ok(ran && started === 'Apply theme, Writing to Figma…' && ended === '',
     `#2507 a run that ends with no verdict empties the status line, so it claims no run still going — start ${JSON.stringify(started)}, after ${JSON.stringify(ended)}`);
   await post(page, { type: 'agent-started', id: 'n2', cmd: 'apply-theme' });
   await applyIs('running');
   const again = await line();
-  ok(again === 'Theme, Writing to Figma…', `#2507 the next start is announced again, a change from the empty line — read ${JSON.stringify(again)}`);
+  ok(again === 'Apply theme, Writing to Figma…', `#2507 the next start is announced again, a change from the empty line — read ${JSON.stringify(again)}`);
   await post(page, { type: 'agent-finished', id: 'n2', cmd: 'apply-theme' });
   ok(errors.length === 0, `#2507: no console errors (${errors.slice(0, 2).join(' · ')})`);
   await page.close();
@@ -1308,7 +1308,7 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
     `#1957 a declined second Apply goes into Earlier results as "Refused", with the busy message — ${JSON.stringify(read.history)}, ${JSON.stringify(read.items)}`);
   ok(!/attention/.test(read.count), `#1957 a declined request is not counted as needing attention — count ${JSON.stringify(read.count)}`);
   ok(read.open === 'false', `#1957 a declined request does not open the drawer — open ${read.open}`);
-  ok(read.status === 'Theme already running; the second request was declined.',
+  ok(read.status === 'Apply theme already running; the second request was declined.',
     `#1957 the live line says the second request was declined — read ${JSON.stringify(read.status)}`);
   // The running write still lands as its own result, and the refusal stays in the history.
   await post(page, { type: 'apply-result', ok: true, headline: '✓ 42 roles written', summary: '42 roles written' });
@@ -1442,7 +1442,7 @@ for (const how of ['pointer', 'focus']) {
     await post(page, { type: 'prune-result', ok: true, applied: true, count: 3, summary: 'Removed 3 stale variables' });
     await until(page, 'prune', 'Removed 3');
     ok((await readOp(page, 'prune')).verdict === 'Removed 3', `#1990 a prune delete reads "Removed 3" — ${JSON.stringify((await readOp(page, 'prune')).verdict)}`);
-    await post(page, { type: 'prune-result', ok: false, applied: true, count: 0, summary: 'prune failed: host threw' });
+    await post(page, { type: 'prune-result', ok: false, applied: true, count: 0, summary: 'Clean up failed: host threw' });
     await until(page, 'prune', 'Failed');
     ok((await readOp(page, 'prune')).verdict === 'Failed', `#1990 a failed prune reads "Failed" — ${JSON.stringify((await readOp(page, 'prune')).verdict)}`);
     await post(page, { type: 'prune-result', ok: true, applied: false, count: 0, summary: 'Nothing stale' });
@@ -1988,8 +1988,8 @@ const OFF_HINT = "Off until a brand loads. This file's saved brand didn't open, 
   /** Choose an example from the brand menu, answering the overwrite confirm when edits are at risk. */
   const chooseExample = async (page) => {
     await hooks.click(page.locator('[data-p3="brand-switcher"]'), { timeout: 4000 }).catch(() => {});
-    // The name, not the item: since #3977 the item also carries the example's few words under it.
-    const name = await page.locator('[data-p3="brand-menu-example"] .p3-menu-label').first().textContent().catch(() => null);
+    // #4191 T3: the item shows the brand's name; the example's id, which Update file posts, is its data.
+    const name = await page.locator('[data-p3="brand-menu-example"]').first().getAttribute('data-example').catch(() => null);
     await hooks.click(page.locator('[data-p3="brand-menu-example"]').first(), { timeout: 4000 }).catch(() => {});
     // After a demo edit there are edits to lose, so the choice asks first (#1033); answering it is the load.
     if (await page.locator('[data-p3="overwrite-replace"]').count()) await hooks.click(page.locator('[data-p3="overwrite-replace"]'), { timeout: 4000 }).catch(() => {});
@@ -2184,7 +2184,7 @@ const OFF_HINT = "Off until a brand loads. This file's saved brand didn't open, 
       ['', 'palette 118 (+0)'], [', ', 'color 412 (+3)'], [', ', 'dims/layout 4 collections (+0)'],
       [', ', 'styles 6 effects (+0) / 2 gradients (+0, 4 stops bound) / 3 grid styles (+0)'],
       [', ', 'type 9 fonts loaded / 40 font vars (+0) / 22 text styles (+0)'], [', ', '1630 bindings'], [', ', '4 misses'],
-      [', ', '⚠ 2 orphaned variables not in the plan (color: 2) — likely renames; nothing was deleted'], ['. ', BUILT],
+      [', ', '⚠ 2 variables the brand no longer writes (color: 2) — likely renames; nothing was deleted'], ['. ', BUILT],
     ] },
     { op: 'components', type: 'component-result', extra: { completed: true }, headline: '⚠ 648, 4 missed', items: [
       ['', "set 'Button': 648 variants (+0 built, 648 already present), grid 24×27, 2210×1890px, axes size/variant/state/icon, properties label/leading-icon/trailing-icon, 1296 refs across 648 members"],
@@ -2445,9 +2445,9 @@ const OFF_HINT = "Off until a brand loads. This file's saved brand didn't open, 
     headline: 'Would change 2 of 3',
     lines: [
       'button: 648 members, 12 to update, 636 up to date.',
-      'button / label: font weight is 600 in the plan and 500 in the file (12 members).',
+      'button / label: font weight is 600 in the plan and 500 in the file (12 variants).',
       'tag: 96 members, 4 to update, 92 up to date.',
-      'tag / container: corner radius is 999 in the plan and 4 in the file (4 members).',
+      'tag / container: corner radius is 999 in the plan and 4 in the file (4 variants).',
       'switch-row: 48 members, all up to date.',
       '2 sets to move, so the sets on each page sit as a new build spaces them.',
       'This was a check only. Nothing in the file changed.',

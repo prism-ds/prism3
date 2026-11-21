@@ -30,6 +30,7 @@
  */
 import { brandTheme, typefaceSlug, derivedRungFor, shiftRung, REQUIRED_WEIGHT_ROLES, PER_MODE_SIZE_GROUPS, LINE_HEIGHT_KEYS, LETTER_SPACING_KEYS, TRACKING_SHIFT_KEYS, DISPLAY_VARIANTS, TYPE_LINK_DEFAULT, TYPE_LINK_ALWAYS, UNDERLINE_ON_DEFAULT, UNDERLINE_BOUNDS, type BrandInput, type Theme, type TypographyInput, type PerModeSizeGroup, type FacePin } from '@prism3/engine';
 import { brandState, theme, getPath, setPath, setModeLever } from './store';
+import { must } from '../must';
 
 /** The seven text categories, in the order every Type table lists them. `as const` keeps the literal union
  *  so these stay assignable to the engine's `TypeGroup`. (Moved from `main.ts`.) Declared as a bare `const`
@@ -111,7 +112,7 @@ export const toggleCategoryWeight = (g: string, role: string, roleOrder: readonl
  *  category's required role, or its last shipped one. The engine refuses both. */
 export const categoryWeightLock = (g: string, role: string, shipped: ReadonlySet<string>): string | undefined => {
   const required = (REQUIRED_WEIGHT_ROLES as Record<string, { role: string; why: string } | undefined>)[g];
-  if (shipped.has(role) && required?.role === role) return `${g[0].toUpperCase()}${g.slice(1)} always ships ${role} — ${required.why}.`;
+  if (shipped.has(role) && required?.role === role) return `${g.charAt(0).toUpperCase()}${g.slice(1)} always ships ${role} — ${required.why}.`;
   if (shipped.has(role) && shipped.size === 1) return 'Every text type ships at least one weight. Tick another before clearing this one.';
   return undefined;
 };
@@ -292,7 +293,8 @@ export const ceilingBlocked = (): Map<string, string> => {
     for (const v of Object.keys(lev?.typeSizes?.display ?? {})) set.add(v);
   const order: readonly string[] = DISPLAY_VARIANTS;
   const top = Math.max(-1, ...[...set].map((v) => order.indexOf(v)));
-  return new Map(top < 0 ? [] : order.slice(0, top).map((c) => [c, order[top]]));
+  const ceiling = order[top];
+  return new Map(top < 0 || ceiling === undefined ? [] : order.slice(0, top).map((c) => [c, ceiling]));
 };
 /** Whether the 18px title floor is refused because title 2xs is set individually (#2054). Only the 16px floor
  *  makes title 2xs, and the engine refuses a size set on a rung the brand does not make. It counts as set
@@ -530,7 +532,7 @@ export const spacingMenu = (g: string, kind: SpacingKind, ty: Typography = theme
   const pin = (brandState.typography?.[spec.pin] as Record<string, string> | undefined)?.[g];
   const shift = (brandState.typography?.[spec.shift] as Record<string, number> | undefined)?.[g] ?? 0;
   const distinct = [...new Set(now.map((r) => r.rung))];
-  const selected = pin ?? (!shift ? 'default' : distinct.length === 1 ? distinct[0] : 'current');
+  const selected = pin ?? (!shift ? 'default' : distinct.length === 1 ? must(distinct[0], 'the one rung every size shares') : 'current');
   return { selected, now, derived, ...(pin ? { pin } : {}), shift };
 };
 /** A menu pick. A rung writes the pin and removes the nudge; `null` (Default) removes both. Brand-wide. The Current
