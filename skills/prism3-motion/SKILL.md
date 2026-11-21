@@ -38,7 +38,7 @@ picks the value.
 
 | Family | Roles | Use it for |
 |---|---|---|
-| `motion.duration.*` | `instant`, `fast`, `normal`, `moderate`, `slow`, `slower` | How long a change takes, shortest to longest. Scaled by the brand's tempo. |
+| `motion.duration.*` | `instant`, `fast`, `normal`, `moderate`, `slow`, `slower`, `long`, `longer`, `longest` | How long a change takes, shortest to longest. Scaled by the brand's tempo. |
 | | `spin`, `sweep` | Loop periods: one spinner turn, one pass of an indeterminate progress bar. Not tempo-scaled. |
 | `motion.duration-reduced.*` | the same role names | The twin of each duration under `prefers-reduced-motion`. |
 | `motion.easing-role.*` | `default`, `enter`, `exit`, `emphasized` | The curve, named by what the change does. |
@@ -86,13 +86,14 @@ effects split.
 
 **R5. Animate transform and opacity.** Position, scale and opacity move without reflowing the
 page. Animate size or layout only where the size change is the information: the accordion panel
-opening, a banner collapsing as it's dismissed, toasts closing ranks. Those run on
-`motion.transition.enter` and `motion.transition.exit` like any other change.
+opening, a banner collapsing as it's dismissed, toasts closing ranks. The accordion panel takes the
+`expand` preset (its recipe below); the others run on `motion.transition.enter` and
+`motion.transition.exit` like any other change.
 *Grounding:* KB `18-motion-foundations`, "May this animate layout?".
 
 **R6. Chrome stays quick.** A state change on a control (hover, press, check, select) takes
 `motion.duration.instant` or `motion.duration.fast`. An entrance or exit stays at or under
-`motion.duration.moderate`. Keep `motion.duration.slow` and `motion.duration.slower` for moments that
+`motion.duration.moderate`. Keep `motion.duration.slow` and the steps above it for moments that
 replace the whole screen. Motion a person sees dozens of times a session gets in the way when it's
 slow.
 *Grounding:* KB `18-motion-foundations`, duration roles.
@@ -156,11 +157,17 @@ Move focus into the dialog when it opens, without waiting for the enter to finis
 
 | Track | Open | Close |
 |---|---|---|
-| Panel height (the R5 exception) and opacity | `motion.transition.enter` | `motion.transition.exit` |
+| Panel height (the R5 exception) and opacity | the `expand` preset | the `expand` preset |
 | Indicator glyph turn | `motion.transition.default` | `motion.transition.default` |
 
+The panel grows and shrinks where it already is, so it opens and closes on one preset, `expand`, on
+the in-place curve (R2). A preset isn't a token: find `expand` in the `motion_presets` block of the
+brand's `.ai.json`, and bind the `duration`, `easing` and `reduced_duration` it names. A brand can
+move the step it plays on. By default it plays on `motion.duration.normal` with
+`motion.easing-role.default`.
+
 **Reduced:** the height changes at once; the panel's fade stays, on `motion.duration-reduced.normal`
-both ways (R3). The indicator swaps without turning.
+both ways (R3), the `expand` preset's reduced duration. The indicator swaps without turning.
 
 ### Tabs indicator
 
