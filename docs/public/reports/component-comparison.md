@@ -10,7 +10,7 @@ Peers come from three groupings, each derived from the definitions:
 
 Generated from the component definitions and the emission by `packages/engine/emit-analysis-reports.ts`; `regen.ts --check` fails when this page is stale. The same data for agents: [component-comparison.json](component-comparison.json). All reports: [index](index.md).
 
-## Findings (131)
+## Findings (133)
 
 ### axis values
 
@@ -22,8 +22,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 - **axis provider** — the provider axis takes 2 value sets — [apple, facebook, google] in sign-in-button; [apple-pay, google-pay, paypal, shop-pay] in wallet-button
 - **axis selection** — the selection axis takes 4 value sets — [selected, unselected] in link, page-nav-item, pagination-item, segmented-control-segment, tab-item, tag; [checked, indeterminate, unchecked] in checkbox-control; [checked, unchecked] in radio-control; [off, on] in switch-control
 - **axis shape** — the shape axis takes 4 value sets — [circular, square] in icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circle, rect, text] in skeleton; [circular, linear] in progress
-- **axis size** — the size axis takes 4 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell
-- **axis status** — the status axis takes 3 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress
+- **axis size** — the size axis takes 4 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, step-item, steps, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell
+- **axis status** — the status axis takes 4 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item
 - **axis style** — the style axis takes 6 value sets — [outline] in card-number-field, code-input-cell, password-field, search-field, select, text-field, textarea; [border, underline] in pagination, pagination-item; [any, black, blue, gold, purple, silver, white, white-outline] in wallet-button; [black, blue, dark, light, neutral, outline, white] in sign-in-button; [contained, inline] in badge; [inline, standalone] in link
 - **axis tone** — the tone axis takes 2 value sets — [danger, info, neutral, success, warning] in badge, banner; [brand, danger, info, inherit, primary, secondary, success, tertiary, warning] in icon
 - **axis type** — the type axis takes 10 value sets — [icon, ordered, unordered] in list, list-item; [action, submenu] in menu-item; [chevron, slash] in _breadcrumb-separator; [compact, numbered, simple] in pagination; [count, dot, status] in badge; [determinate, indeterminate] in progress; [dismissible, select] in tag; [ellipsis, next, page, previous] in pagination-item; [range, single] in slider; [section] in menu-group
@@ -75,7 +75,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 
 ### size default
 
-- **field-label** — field-label defaults size to small; 51 of 52 sized components default to medium
+- **field-label** — field-label defaults size to small; 53 of 54 sized components default to medium
 
 ### size order
 
@@ -120,6 +120,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 - **sign-in-button** — sign-in-button declares its sizes as [medium, small, large], not smallest first
 - **skeleton** — skeleton declares its sizes as [medium, small], not smallest first
 - **slider** — slider declares its sizes as [medium, small, large], not smallest first
+- **step-item** — step-item declares its sizes as [medium, small], not smallest first
+- **steps** — steps declares its sizes as [medium, small], not smallest first
 - **switch-control** — switch-control declares its sizes as [medium, small], not smallest first
 - **switch-row** — switch-row declares its sizes as [medium, small], not smallest first
 - **tab-item** — tab-item declares its sizes as [medium, small, large], not smallest first
@@ -246,6 +248,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 | skeleton | foundations | — | — |
 | slider | form | rest, hover, pressed, focus-visible, disabled | rest, hover, pressed, focus-visible, disabled |
 | spinner | foundations | — | — |
+| step-item | navigation | — | — |
+| steps | navigation | — | — |
 | switch-control | form | rest, hover, pressed, focus-visible, disabled | rest, hover, pressed, focus-visible, disabled |
 | switch-row | form | rest, hover, pressed, pending, focus-visible, disabled, read-only | — |
 | tab-item | navigation | rest, hover, pressed, focus-visible, disabled | rest, hover, pressed, focus-visible, disabled |
@@ -301,7 +305,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | labeled | false, true | divider, pagination-item |
 | layout | fill, inline, stacked | button-group |
 | offset | control, field | focus-ring |
-| orientation | horizontal, vertical | divider |
+| orientation | horizontal, vertical | divider, step-item, steps |
 | path | full, parent | breadcrumbs |
 | placement | bottom | menu, popover |
 |  | bottom, center, end, full | dialog |
@@ -319,12 +323,13 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | circle, rect, text | skeleton |
 |  | circular, linear | progress |
 | size | large, medium, small | _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button |
-|  | medium, small | badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, switch-control, switch-row |
+|  | medium, small | badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, step-item, steps, switch-control, switch-row |
 |  | large, medium, small, x-small | link, list, list-item, spinner |
 |  | large, medium, small, x-large | code-input, code-input-cell |
 | status | default, error | checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row |
 |  | default, error, success, warning | card-number-field, field-message, password-field, search-field, select, text-field, textarea |
 |  | active, complete, error | progress |
+|  | complete, current, error, upcoming | step-item |
 | style | outline | card-number-field, code-input-cell, password-field, search-field, select, text-field, textarea |
 |  | border, underline | pagination, pagination-item |
 |  | any, black, blue, gold, purple, silver, white, white-outline | wallet-button |
@@ -398,6 +403,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 | skeleton | medium, small | medium |
 | slider | medium, small, large | medium |
 | spinner | x-small, small, medium, large | medium |
+| step-item | medium, small | medium |
+| steps | medium, small | medium |
 | switch-control | medium, small | medium |
 | switch-row | medium, small | medium |
 | tab-item | medium, small, large | medium |
@@ -554,6 +561,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | menu-item | — | — |
 |  | page-nav-item | — | — |
 |  | pagination-item | — | — |
+|  | step-item | — | — |
 | icon | banner | — | — |
 |  | field-message | — | — |
 |  | flush-icon-button | — | — |
@@ -617,6 +625,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | page-nav | — | — |
 |  | radio-group | — | — |
 |  | segmented-control | — | — |
+|  | steps | — | — |
 |  | tabs | — | — |
 |  | tag-group | — | — |
 | kind | breadcrumb-item | ancestor | ancestor, current, overflow |
@@ -652,6 +661,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | select | — | — |
 |  | slider | — | — |
 |  | spinner | Loading | — |
+|  | step-item | — | — |
+|  | steps | — | — |
 |  | switch-row | — | — |
 |  | tab-item | — | — |
 |  | tabs | — | — |
@@ -734,6 +745,9 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | menu | false | — |
 |  | popover | false | — |
 |  | tooltip | — | — |
+| orientation | divider | horizontal | horizontal, vertical |
+|  | step-item | horizontal | horizontal, vertical |
+|  | steps | horizontal | horizontal, vertical |
 | page | pagination | — | — |
 |  | pagination-item | — | — |
 | placeholder | card-number-field | — | — |
@@ -772,6 +786,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | slider | false | — |
 |  | text-field | false | — |
 |  | textarea | false | — |
+| responsive | breadcrumbs | true | — |
+|  | steps | true | — |
 | selected | segmented-control-segment | false | — |
 |  | tab-item | false | — |
 |  | tag | false | — |
@@ -844,6 +860,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | skeleton | medium | small, medium |
 |  | slider | medium | small, medium, large |
 |  | spinner | medium | x-small, small, medium, large |
+|  | step-item | medium | small, medium |
+|  | steps | medium | small, medium |
 |  | switch-control | medium | small, medium |
 |  | switch-row | medium | small, medium |
 |  | tab-item | medium | small, medium, large |
@@ -855,6 +873,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | wallet-button | medium | small, medium, large |
 | status | field-message | default | default, error, warning, success |
 |  | progress | active | active, complete, error |
+|  | step-item | upcoming | upcoming, current, complete, error |
 | step | counter | 1 | — |
 |  | slider | 1 | — |
 | style | badge | contained | contained, inline |
