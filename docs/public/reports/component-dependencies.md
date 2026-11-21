@@ -13,7 +13,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | _accordion-indicator | accordion | accordion |
 | _breadcrumb-separator | breadcrumb-item | breadcrumb-item, breadcrumbs |
 | _slider-thumb | slider | slider |
-| badge | tab-item | tab-item, tabs |
+| badge | avatar, tab-item | avatar, tab-item, tabs |
 | breadcrumb-item | breadcrumbs | breadcrumbs |
 | button | banner, button-group, password-field, toast | banner, button-group, dialog, password-field, popover, toast |
 | button-group | dialog, popover | dialog, popover |
@@ -24,9 +24,10 @@ Generated from the component definitions and the emission by `packages/engine/em
 | field-label | card-number-field, checkbox-group, code-input, counter, password-field, radio-group, search-field, segmented-control, select, slider, text-field, textarea | card-number-field, checkbox-group, code-input, counter, password-field, radio-group, search-field, segmented-control, select, slider, text-field, textarea |
 | field-message | card-number-field, checkbox-group, code-input, counter, password-field, progress, radio-group, search-field, select, slider, text-field, textarea | card-number-field, checkbox-group, code-input, counter, password-field, progress, radio-group, search-field, select, slider, text-field, textarea |
 | flush-icon-button-neutral | banner, breadcrumb-item, counter, dialog, popover, toast | banner, breadcrumb-item, breadcrumbs, counter, dialog, popover, toast |
-| focus-ring | _slider-thumb, accordion, button, button-destructive, button-neutral, checkbox-control, counter, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, link, pagination-item, radio-control, segmented-control-segment, sign-in-button, switch-control, tab-item, tag, wallet-button | _slider-thumb, accordion, banner, breadcrumb-item, breadcrumbs, button, button-destructive, button-group, button-neutral, checkbox-control, checkbox-group, checkbox-row, counter, dialog, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, link, page-nav, page-nav-item, pagination, pagination-item, password-field, popover, radio-control, radio-group, radio-row, segmented-control, segmented-control-segment, sign-in-button, slider, switch-control, switch-row, tab-item, tabs, tag, tag-group, toast, wallet-button |
-| link | banner, breadcrumb-item, breadcrumbs, page-nav-item | banner, breadcrumb-item, breadcrumbs, page-nav, page-nav-item |
+| focus-ring | _slider-thumb, accordion, button, button-destructive, button-neutral, checkbox-control, counter, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, link, menu-item, pagination-item, radio-control, segmented-control-segment, sign-in-button, switch-control, tab-item, tag, wallet-button | _slider-thumb, accordion, banner, breadcrumb-item, breadcrumbs, button, button-destructive, button-group, button-neutral, checkbox-control, checkbox-group, checkbox-row, counter, dialog, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, link, menu, menu-group, menu-item, page-nav, page-nav-item, pagination, pagination-item, password-field, popover, radio-control, radio-group, radio-row, segmented-control, segmented-control-segment, sign-in-button, slider, step-item, steps, switch-control, switch-row, tab-item, tabs, tag, tag-group, toast, wallet-button |
+| link | banner, breadcrumb-item, breadcrumbs, page-nav-item, step-item | banner, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, step-item, steps |
 | list-item | list | list |
+| menu-item | menu, menu-group | menu, menu-group |
 | page-nav-item | page-nav | page-nav |
 | pagination-item | pagination | pagination |
 | provider-logo | sign-in-button, wallet-button | sign-in-button, wallet-button |
@@ -34,6 +35,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | radio-row | radio-group | radio-group |
 | segmented-control-segment | segmented-control | segmented-control |
 | spinner | button, button-destructive, button-neutral, icon-button, icon-button-destructive, icon-button-neutral | banner, button, button-destructive, button-group, button-neutral, dialog, icon-button, icon-button-destructive, icon-button-neutral, password-field, popover, toast |
+| step-item | steps | steps |
 | switch-control | switch-row | switch-row |
 | tab-item | tabs | tabs |
 | tag | tag-group | tag-group |
@@ -49,6 +51,7 @@ A component not in this table is nested by nothing; a change to it reaches only 
 | _breadcrumb-separator | 0 | — | — |
 | _slider-thumb | 1 | focus-ring | focus-ring |
 | accordion | 1 | _accordion-indicator, divider, focus-ring | _accordion-indicator, divider, focus-ring |
+| avatar | 1 | badge | badge |
 | badge | 0 | — | — |
 | banner | 2 | button, flush-icon-button-neutral, link | button, flush-icon-button-neutral, focus-ring, link, spinner |
 | breadcrumb-item | 2 | _breadcrumb-separator, flush-icon-button-neutral, link | _breadcrumb-separator, flush-icon-button-neutral, focus-ring, link |
@@ -80,6 +83,9 @@ A component not in this table is nested by nothing; a change to it reaches only 
 | link | 1 | focus-ring | focus-ring |
 | list | 1 | list-item | list-item |
 | list-item | 0 | — | — |
+| menu | 2 | menu-item | focus-ring, menu-item |
+| menu-group | 2 | menu-item | focus-ring, menu-item |
+| menu-item | 1 | focus-ring | focus-ring |
 | page-nav | 3 | page-nav-item | focus-ring, link, page-nav-item |
 | page-nav-item | 2 | link | focus-ring, link |
 | pagination | 2 | pagination-item | focus-ring, pagination-item |
@@ -99,6 +105,8 @@ A component not in this table is nested by nothing; a change to it reaches only 
 | skeleton | 0 | — | — |
 | slider | 2 | _slider-thumb, field-label, field-message, text-field | _slider-thumb, field-label, field-message, focus-ring, text-field |
 | spinner | 0 | — | — |
+| step-item | 2 | link | focus-ring, link |
+| steps | 3 | step-item | focus-ring, link, step-item |
 | switch-control | 1 | focus-ring | focus-ring |
 | switch-row | 2 | switch-control | focus-ring, switch-control |
 | tab-item | 1 | badge, focus-ring | badge, focus-ring |
@@ -108,6 +116,7 @@ A component not in this table is nested by nothing; a change to it reaches only 
 | text-field | 1 | field-label, field-message | field-label, field-message |
 | textarea | 1 | field-label, field-message | field-label, field-message |
 | toast | 2 | button, flush-icon-button-neutral | button, flush-icon-button-neutral, focus-ring, spinner |
+| tooltip | 0 | — | — |
 | veil | 0 | — | — |
 | wallet-button | 1 | focus-ring, provider-logo | focus-ring, provider-logo |
 
@@ -122,6 +131,7 @@ Depth is 0 for a component that nests nothing, and one more than its deepest chi
 | accordion | focusRing | absolute | focus-ring | nest-fixed | surface=default | — | — |
 | accordion | leadingGlyph | nest | _accordion-indicator | nest-fixed | indicator=chevron, expansion=collapsed, size=medium | indicator, expansion, size | — |
 | accordion | trailingGlyph | nest | _accordion-indicator | nest-fixed | indicator=chevron, expansion=collapsed, size=medium | indicator, expansion, size | — |
+| avatar | presenceDot | nest | badge | nest-exposed | type=dot, style=contained, size=medium, emphasis=bold, tone=success | — | tone |
 | banner | action | nest | button | nest-fixed | appearance=text, size=small, surface=default, inset=default, state=rest, leading icon=false, trailing icon=false | — | — |
 | banner | close | nest | flush-icon-button-neutral | nest-fixed | shape=flush, size=small, surface=default, state=rest | — | — |
 | banner | link | nest | link | nest-fixed | style=inline, weight=default, size=medium, surface=default, selection=unselected, state=rest | — | — |
@@ -186,6 +196,13 @@ Depth is 0 for a component that nests nothing, and one more than its deepest chi
 | list | item1 | nest | list-item | nest-fixed | type=unordered, size=medium | type, size | — |
 | list | item2 | nest | list-item | nest-fixed | type=unordered, size=medium | type, size | — |
 | list | item3 | nest | list-item | nest-fixed | type=unordered, size=medium | type, size | — |
+| menu | item1 | nest | menu-item | nest-fixed | type=action, intent=default, state=rest | — | — |
+| menu | item2 | nest | menu-item | nest-fixed | type=action, intent=default, state=rest | — | — |
+| menu | item3 | nest | menu-item | nest-fixed | type=action, intent=default, state=rest | — | — |
+| menu-group | item1 | nest | menu-item | nest-fixed | type=action, intent=default, state=rest | — | — |
+| menu-group | item2 | nest | menu-item | nest-fixed | type=action, intent=default, state=rest | — | — |
+| menu-group | item3 | nest | menu-item | nest-fixed | type=action, intent=default, state=rest | — | — |
+| menu-item | focusRing | absolute | focus-ring | nest-fixed | surface=default | — | — |
 | page-nav | item1 | nest | page-nav-item | nest-fixed | selection=selected, size=medium | size | — |
 | page-nav | item2 | nest | page-nav-item | nest-fixed | selection=unselected, size=medium | size | — |
 | page-nav | item3 | nest | page-nav-item | nest-fixed | selection=unselected, size=medium | size | — |
@@ -234,6 +251,10 @@ Depth is 0 for a component that nests nothing, and one more than its deepest chi
 | slider | message | nest | field-message | nest-fixed | status=default | — | — |
 | slider | thumb | nest | _slider-thumb | nest-fixed | size=medium, state=rest | size | — |
 | slider | thumbMin | nest | _slider-thumb | nest-fixed | size=medium, state=rest | size | — |
+| step-item | link | nest | link | nest-exposed | style=inline, weight=default, size=medium, surface=default, selection=unselected, state=rest | size | state |
+| steps | step1 | nest | step-item | nest-fixed | status=complete, orientation=horizontal, size=medium | orientation, size | — |
+| steps | step2 | nest | step-item | nest-fixed | status=current, orientation=horizontal, size=medium | orientation, size | — |
+| steps | step3 | nest | step-item | nest-fixed | status=upcoming, orientation=horizontal, size=medium | orientation, size | — |
 | switch-control | focusRing | absolute | focus-ring | nest-fixed | surface=default | — | — |
 | switch-row | control | nest | switch-control | nest-exposed | selection=off, state=rest, status=default | size, status | selection, state, showStateLabel |
 | tab-item | count | nest | badge | nest-fixed | type=count, style=contained, size=medium, emphasis=bold, tone=neutral | — | — |

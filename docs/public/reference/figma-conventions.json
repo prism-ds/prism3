@@ -151,6 +151,12 @@
             ]
           },
           {
+            "name": "↳ Avatar",
+            "components": [
+              "avatar"
+            ]
+          },
+          {
             "name": "↳ Tag",
             "components": [
               "tag",
@@ -215,6 +221,15 @@
             ]
           },
           {
+            "name": "↳ Menu",
+            "components": [
+              "menu-item",
+              "menu-group",
+              "menu"
+            ],
+            "usagePanelLead": "menu"
+          },
+          {
             "name": "↳ Banner",
             "components": [
               "banner"
@@ -238,9 +253,23 @@
             "usagePanelLead": "page-nav"
           },
           {
+            "name": "↳ Steps",
+            "components": [
+              "step-item",
+              "steps"
+            ],
+            "usagePanelLead": "steps"
+          },
+          {
             "name": "↳ Toast",
             "components": [
               "toast"
+            ]
+          },
+          {
+            "name": "↳ Tooltip",
+            "components": [
+              "tooltip"
             ]
           },
           {
@@ -360,7 +389,7 @@
         "kind": "component set",
         "page": "↳ Icons & assets",
         "section": "Foundations",
-        "members": 46,
+        "members": 48,
         "variantProperties": [
           {
             "name": "name",
@@ -400,7 +429,9 @@
               "minus-filled",
               "more-horizontal-filled",
               "more-vertical-filled",
+              "organization",
               "pause-circle",
+              "person",
               "play-circle",
               "plus",
               "plus-circle",
@@ -2019,6 +2050,53 @@
         "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/badge.md"
       },
       {
+        "id": "avatar",
+        "name": "Avatar",
+        "figmaName": "avatar",
+        "kind": "component set",
+        "page": "↳ Avatar",
+        "section": "Components",
+        "members": 30,
+        "variantProperties": [
+          {
+            "name": "shape",
+            "values": [
+              "circular",
+              "square"
+            ]
+          },
+          {
+            "name": "type",
+            "values": [
+              "initials",
+              "icon",
+              "image"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "x-small",
+              "small",
+              "large",
+              "x-large"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "initials",
+            "type": "TEXT"
+          },
+          {
+            "name": "presence",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/avatar.md"
+      },
+      {
         "id": "tag",
         "name": "Tag",
         "figmaName": "tag",
@@ -3592,6 +3670,234 @@
           }
         ],
         "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/popover.md"
+      },
+      {
+        "id": "step-item",
+        "name": "StepItem",
+        "figmaName": "step-item",
+        "kind": "component set",
+        "page": "↳ Steps",
+        "section": "Components",
+        "members": 16,
+        "variantProperties": [
+          {
+            "name": "status",
+            "values": [
+              "upcoming",
+              "current",
+              "complete",
+              "error"
+            ]
+          },
+          {
+            "name": "orientation",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "number",
+            "type": "TEXT"
+          },
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "connector",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/step-item.md"
+      },
+      {
+        "id": "steps",
+        "name": "Steps",
+        "figmaName": "steps",
+        "kind": "component set",
+        "page": "↳ Steps",
+        "section": "Components",
+        "members": 4,
+        "variantProperties": [
+          {
+            "name": "orientation",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/steps.md"
+      },
+      {
+        "id": "menu-item",
+        "name": "Menu.Item",
+        "figmaName": "menu-item",
+        "kind": "component set",
+        "page": "↳ Menu",
+        "section": "Components",
+        "members": 15,
+        "variantProperties": [
+          {
+            "name": "type",
+            "values": [
+              "action",
+              "submenu"
+            ]
+          },
+          {
+            "name": "intent",
+            "values": [
+              "default",
+              "destructive"
+            ]
+          },
+          {
+            "name": "state",
+            "values": [
+              "rest",
+              "hover",
+              "pressed",
+              "focus-visible",
+              "disabled"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "description text",
+            "type": "TEXT"
+          },
+          {
+            "name": "shortcut text",
+            "type": "TEXT"
+          },
+          {
+            "name": "leading",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "indicator",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "checked",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "leading icon",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "description",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "shortcut",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/menu-item.md"
+      },
+      {
+        "id": "menu-group",
+        "name": "Menu.Group",
+        "figmaName": "menu-group",
+        "kind": "component set",
+        "page": "↳ Menu",
+        "section": "Components",
+        "members": 1,
+        "variantProperties": [
+          {
+            "name": "type",
+            "values": [
+              "section"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "heading text",
+            "type": "TEXT"
+          },
+          {
+            "name": "heading",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/menu-group.md"
+      },
+      {
+        "id": "menu",
+        "name": "Menu",
+        "figmaName": "menu",
+        "kind": "component set",
+        "page": "↳ Menu",
+        "section": "Components",
+        "members": 1,
+        "variantProperties": [
+          {
+            "name": "placement",
+            "values": [
+              "bottom"
+            ]
+          }
+        ],
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/menu.md"
+      },
+      {
+        "id": "tooltip",
+        "name": "Tooltip",
+        "figmaName": "tooltip",
+        "kind": "component set",
+        "page": "↳ Tooltip",
+        "section": "Components",
+        "members": 4,
+        "variantProperties": [
+          {
+            "name": "placement",
+            "values": [
+              "top",
+              "bottom",
+              "start",
+              "end"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "arrow",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/tooltip.md"
       }
     ]
   },
@@ -3637,7 +3943,9 @@
       "minus-filled",
       "more-horizontal-filled",
       "more-vertical-filled",
+      "organization",
       "pause-circle",
+      "person",
       "play-circle",
       "plus",
       "plus-circle",
@@ -3795,6 +4103,39 @@
       {
         "component": "popover",
         "property": "body"
+      },
+      {
+        "component": "steps",
+        "property": "items",
+        "settings": {
+          "minChildren": 2,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "step-item"
+        ]
+      },
+      {
+        "component": "menu-group",
+        "property": "items",
+        "settings": {
+          "minChildren": 1,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "menu-item"
+        ]
+      },
+      {
+        "component": "menu",
+        "property": "items",
+        "settings": {
+          "minChildren": 1,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "menu-item"
+        ]
       }
     ]
   },
@@ -3948,6 +4289,7 @@
       "veil",
       "image-placeholder",
       "badge",
+      "avatar",
       "tag",
       "tag-group",
       "tab-item",
@@ -3985,7 +4327,11 @@
       "sign-in-button",
       "page-nav-item",
       "page-nav",
-      "skeleton"
+      "step-item",
+      "steps",
+      "skeleton",
+      "menu-item",
+      "tooltip"
     ],
     "templates": [
       {

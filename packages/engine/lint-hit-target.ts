@@ -197,6 +197,8 @@ const INTERACTIVE: Record<string, Binding> = {
   // #2669: the control row around the track is the click-to-jump target, on the interactive floor `size.md.min-height`
   // at every size (owner Q550 e: the size axis moves the thumb and the track, never the row). Each thumb is its own
   // code-side target below (CODE_SIDE_TARGETS).
+  // #4007: the whole menu row is the target, on the interactive floor at its one size.
+  'menu-item': { key: () => 'min-height', why: 'the menu row\'s min-height floor, the whole row being the target', single: true },
   'slider': { key: () => 'control-height', why: 'the control row around the track, the click-to-jump target, the same at every size' },
 };
 
@@ -346,8 +348,11 @@ const EXCLUDED: Record<string, string> = {
   'banner': 'a message in the page flow, never itself a pointer target: its one text action is a Button (Button.Neutral when the file has it) and its dismiss a FlushIconButton.Neutral, each measured under its own name (#2579, Q533.1)',
   'button-group': 'a layout of one to three Buttons, never itself a pointer target: each Button is measured under its own name (#2661)',
   'dialog': 'a modal panel, never itself a pointer target: its close button and footer buttons are a FlushIconButton.Neutral and Buttons, each measured under its own name (#2609, Q385 A)',
+  'menu': 'a panel of Menu.Items, never itself a pointer target: each item is measured under its own name (#4007)',
+  'menu-group': 'a heading over Menu.Items, never itself a pointer target: each item is measured under its own name (#4007)',
   'popover': 'a non-modal panel, never itself a pointer target: its close button and footer buttons are a FlushIconButton.Neutral and Buttons, each measured under its own name (#4008)',
   'toast': 'a status message over the page, never itself a pointer target: its action and close button are a Button and a FlushIconButton.Neutral, each measured under its own name; the small close button\'s 44×44 hit area is extended in code, as IconButton records (#2668)',
+  'tooltip': 'a label shown on hover and focus, never itself a pointer target: it takes no focus and holds nothing interactive, and its trigger is measured under its own name (#4009)',
   'list': 'a read list of text items, never interactive and never focusable; a link inside an item is its own control (#2319)',
   'list-item': 'one item of a read list, never interactive and never focusable; a link inside it is its own control (#2319)',
   '_accordion-indicator': 'a decorative glyph inside an Accordion header; the tap target is the header row, gated as accordion',
@@ -355,6 +360,7 @@ const EXCLUDED: Record<string, string> = {
   'progress': 'a progress bar or ring shows system work and is never interactive (#2670) — a retry after an error is the host\'s own control, placed beside it, which is gated',
   'skeleton': 'a decorative loading placeholder hidden from assistive technology, never interactive; nothing in it takes a pointer or focus',
   'spinner': 'a decorative loading indicator on the icon ladder, never interactive — the tap target is the host control it sits in (a pending button), which is gated',
+  'avatar': 'a picture of who something belongs to, never interactive (#4110): an avatar that opens a menu sits inside a Button or IconButton, whose target is gated',
   'badge': 'a static marker, never interactive (owner decision, 2026-09-27) — a count or dot on an icon button relies on the host\'s target, which is gated',
   'checkbox-control': 'a nested-only atom — the tap target is the labeled row (checkbox-row), gated here',
   'radio-control': 'a nested-only atom — the tap target is the labeled row (radio-row), gated here',
@@ -378,6 +384,10 @@ const EXCLUDED: Record<string, string> = {
   // #3345: neither is a control of its own. The targets are the nested Links (one text line each, code-side 24px, stated
   // under `link`), the current page's link included: it stays a link.
   'page-nav': 'a navigation container — its targets are the nested items\' Links, each a control of its own',
+  // #3055: neither is a control of its own. The target is a complete step's nested Link (one text line, code-side 24px,
+  // stated under `link`); no other step is focusable.
+  'steps': 'a navigation container — its targets are the nested steps\' Links, each a control of its own',
+  'step-item': 'one step of a Steps indicator — its one target is a complete step\'s nested Link (one text line, code-side 24px, as `link`); no other step is focusable',
   'page-nav-item': 'one page in a page navigation — its target is the nested Link (one text line, code-side 24px, as `link`), the current page\'s included',
   'textarea': 'a multi-line field whose height is rows/auto-grow (fluid); it binds no single-line height, so there is no fixed hit-target dimension to measure',
 };

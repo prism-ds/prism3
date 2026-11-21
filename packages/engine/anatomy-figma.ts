@@ -820,11 +820,13 @@ export const figmaEffectStyleName = (ref: string): string => {
  * typo and a set swap (`icon-set.ts`'s whole purpose is that a client's branded set replaces ours), and
  * both are answered by seeing what the vocabulary actually holds.
  */
-const glyphPath = (defId: string, part: string, glyph: string | undefined): string => {
+const glyphPath = (defId: string, part: string, glyph: string | undefined, brand?: ComponentDef['brandGlyphs']): string => {
   // Unreachable through `validateComponentDef`, which refuses a vector part with no glyph — this is the
   // backstop for a caller that skipped it, the same relationship every other throw in this file has.
   if (!glyph) throw new Error(`${defId}: anatomy part '${part}' is kind 'vector' and names no glyph`);
-  const path = ICON_PATHS[glyph as keyof typeof ICON_PATHS];
+  // THE BRAND'S ART FIRST (#3076): a glyph the brand input carries, whether a name of its own or a Prism3 name it
+  // redraws (Q5 A), is drawn from `brandGlyphs`, which only `applyIconMap` writes.
+  const path = brand?.[glyph]?.path ?? ICON_PATHS[glyph as keyof typeof ICON_PATHS];
   if (!path) {
     // Nearest by shared prefix, which is what a typo and a renamed glyph both produce. Not a full edit
     // distance: this is an error message, and the cheap heuristic answers both realistic causes.
@@ -932,7 +934,7 @@ const glyphDocument = (path: string, fillRule?: string): string => {
 
 /** `glyphDocument` for a resolved glyph NAME — looks its path and (sparse) winding rule up together, so
  *  the two lookups stay in one place and the caller passes a name rather than re-deriving both (#1012). */
-const glyphSvgFor = (defId: string, part: string, glyph: string | undefined): string => {
+const glyphSvgFor = (defId: string, part: string, glyph: string | undefined, brand?: ComponentDef['brandGlyphs']): string => {
   // A COMPONENT-OWNED glyph (#1670) is looked up first: geometry a component draws that is deliberately not
   // in the icon set (the spinner), composed of several filled layers, each carrying its own layer opacity.
   // Same artboard, same `fill="currentColor"` convention, one `<path>` per layer in drawing order; `id`
@@ -944,7 +946,8 @@ const glyphSvgFor = (defId: string, part: string, glyph: string | undefined): st
       layers.map((l) => `<path id="${l.id}" ${l.fillRule ? `fill-rule="${l.fillRule}" ` : ''}${l.opacity !== undefined ? `opacity="${l.opacity}" ` : ''}d="${l.d}" fill="currentColor"/>`).join('') +
       '</svg>';
   }
-  return glyphDocument(glyphPath(defId, part, glyph), glyph ? ICON_FILL_RULES[glyph as keyof typeof ICON_PATHS] : undefined);
+  const own = glyph ? brand?.[glyph] : undefined;
+  return glyphDocument(glyphPath(defId, part, glyph, brand), own ? own.fillRule : glyph ? ICON_FILL_RULES[glyph as keyof typeof ICON_PATHS] : undefined);
 };
 
 /** The def whose emitted components ARE the provider logos (#2343): `provider-logo`, `emitAsComponents` like `icon`, each
@@ -990,7 +993,7 @@ export type NestOverride = { property: string; type: 'TEXT' | 'INSTANCE_SWAP'; v
  * set's component. THROWS on a key the nested def does not declare and on a glyph the icon set does not draw, so a
  * misspelled override fails the projection rather than building an instance that silently keeps its default.
  */
-export const nestOverridesOf = (defId: string, partName: string, p: PartDef): NestOverride[] | undefined => {
+export const nestOverridesOf = (defId: string, partName: string, p: PartDef, brand?: ComponentDef['brandGlyphs']): NestOverride[] | undefined => {
   if (!p.overrides) return undefined;
   const nested = componentDefs.find((d) => d.id === p.nests);
   const fp = nested?.figmaProperties;
@@ -1004,7 +1007,7 @@ export const nestOverridesOf = (defId: string, partName: string, p: PartDef): Ne
   for (const [key, glyph] of Object.entries(p.overrides.swaps ?? {})) {
     const v = fp.swaps?.[key];
     if (!v) throw new Error(`${defId}: anatomy part '${partName}' overrides swap '${key}', which '${nested.id}' does not declare — its swaps are [${Object.keys(fp.swaps ?? {}).join(', ') || 'none'}] (#2645)`);
-    if (!(ICON_NAMES as readonly string[]).includes(glyph)) throw new Error(`${defId}: anatomy part '${partName}' swaps '${key}' to '${glyph}', which is no glyph the icon set draws (#2645)`);
+    if (!(ICON_NAMES as readonly string[]).includes(glyph) && !brand?.[glyph]) throw new Error(`${defId}: anatomy part '${partName}' swaps '${key}' to '${glyph}', which is no glyph the icon set draws (#2645)`);
     out.push({ property: swapFigmaName(key, v), type: 'INSTANCE_SWAP', value: iconComponentName(glyph) });
   }
   return out;
@@ -2280,7 +2283,7 @@ export const figmaAnatomyPlan = (
         providerLogoGlyph(def.id, name, p.swapDefault);
         slotDefault = providerLogoComponentName(p.swapDefault);
       } else {
-        glyphPath(def.id, name, p.swapDefault);
+        glyphPath(def.id, name, p.swapDefault, def.brandGlyphs);
         slotDefault = iconComponentName(p.swapDefault);
       }
     }
@@ -2299,7 +2302,7 @@ export const figmaAnatomyPlan = (
     // here. `glyphPath` runs first so a name outside the vocabulary still throws with its own message.
     const glyphName = p.kind === 'vector' ? resolveGlyph(def.id, name, p.glyph, paintCoord) : undefined;
     const iconTarget = glyphName !== undefined && !COMPONENT_GLYPHS[glyphName] && def.id !== ICON_DEF_ID && def.id !== PROVIDER_LOGO_DEF_ID
-      ? (glyphPath(def.id, name, glyphName), iconComponentName(glyphName))
+      ? (glyphPath(def.id, name, glyphName, def.brandGlyphs), iconComponentName(glyphName))
       : undefined;
     // The provider-logo def's own glyph is drawn inline from the MARK vocabulary, on the mark's own artboard (#2343).
     const markGlyph = p.kind === 'vector' && def.id === PROVIDER_LOGO_DEF_ID ? providerLogoGlyph(def.id, name, glyphName) : undefined;
@@ -2344,7 +2347,7 @@ export const figmaAnatomyPlan = (
         ? markGlyph
           ? { glyphSvg: markGlyph.svg, glyphViewBox: markGlyph.dims }
           : {
-              glyphSvg: glyphSvgFor(def.id, name, glyphName),
+              glyphSvg: glyphSvgFor(def.id, name, glyphName, def.brandGlyphs),
               glyphViewBox: glyphArtboard().dims,
             }
         : {}),
@@ -2460,7 +2463,7 @@ export const figmaAnatomyPlan = (
       // These surface as Figma exposed nested-instance properties; the executors mark the instance exposed.
       ...((p.kind === 'absolute' || p.kind === 'nest') && p.nesting?.kind === 'nest-exposed' ? { nestExpose: p.nesting.expose } : {}),
       // The per-instance overrides (#2645), ONLY on a part that declares them, so every other plan is byte-identical.
-      ...((p.kind === 'absolute' || p.kind === 'nest') && p.overrides ? { nestOverrides: nestOverridesOf(def.id, name, p) } : {}),
+      ...((p.kind === 'absolute' || p.kind === 'nest') && p.overrides ? { nestOverrides: nestOverridesOf(def.id, name, p, def.brandGlyphs) } : {}),
       ...(p.kind === 'nest' && p.nestTexts ? { nestTexts: p.nestTexts } : {}),
       ...(p.kind === 'absolute' && p.inset ? { absoluteInset: varOf(p.inset) } : {}),
       // The stroke to compensate for (#801), projected only alongside an inset — on its own it has
@@ -2468,7 +2471,8 @@ export const figmaAnatomyPlan = (
       ...(p.kind === 'absolute' && p.inset && p.strokeInset ? { absoluteStrokeInset: varOf(p.strokeInset) } : {}),
       // THE CORNER PIN (textarea's resize grip): a glyph lifted out of the flow into its parent's corner.
       // Only on a pinned vector, so every other plan is byte-identical; the schema requires the inset.
-      ...(p.kind === 'vector' && p.corner && p.inset ? { cornerInset: varOf(p.inset) } : {}),
+      // A pinned BOX (#4110, Avatar's presence ring) takes the same field: the executors' corner pass reads any node.
+      ...((p.kind === 'vector' || p.kind === 'box') && p.corner && p.inset ? { cornerInset: varOf(p.inset) } : {}),
       // THE FOOT PIN (#2872, Link's current-page bar): a box lifted out of the flow across its parent's bottom edge.
       // Only on such a box, so every other plan is byte-identical.
       ...(p.kind === 'box' && p.foot ? { footPin: true } : {}),
@@ -5732,7 +5736,7 @@ for(const [name,key] of bare)if(!referenced.has(key))propMiss.push('property '+n
 export const CANVAS_FURNITURE: ReadonlySet<string> = new Set([
   'focus-ring', 'button', 'button-destructive', 'button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral',
   'field-label', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-row', 'checkbox-group', 'radio-control',
-  'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil', 'image-placeholder', 'badge', 'tag', 'tag-group', 'tab-item', 'tabs',
+  'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil', 'image-placeholder', 'badge', 'avatar', 'tag', 'tag-group', 'tab-item', 'tabs',
   'divider', '_accordion-indicator', 'accordion', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'list-item',
   'list', 'segmented-control-segment', 'segmented-control', 'link',
   'button-group', 'dialog', 'password-field', 'counter', 'pagination-item', 'pagination', 'progress', 'search-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', '_slider-thumb', 'slider',
@@ -5746,8 +5750,14 @@ export const CANVAS_FURNITURE: ReadonlySet<string> = new Set([
   'sign-in-button',
   // #3345: Page navigation and its item, Breadcrumbs' shape.
   'page-nav-item', 'page-nav',
+  // #3055: Steps and its step, Breadcrumbs' shape.
+  'step-item', 'steps',
   // #4109: Skeleton, a set with headers like every other.
   'skeleton',
+  // #4007: Menu.Item, a set of 15 with state columns. Menu and Menu.Group build one member each, so they have no grid.
+  'menu-item',
+  // #4009: Tooltip, a set of four placements with headers.
+  'tooltip',
 ]);
 
 export const planSetLayout = (plans: AnatomyPlan[], fn: string) => {

@@ -741,10 +741,13 @@ const overlapsBox = (p: { x: number; y: number; width: number; height: number },
   p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height;
 const overlap = (a: N, b: N): boolean => { const p = boxOf(a), q = boxOf(b); return p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h; };
 const names = (id: string) => componentDefs.find((d) => d.id === id)?.name ?? id;
-const withSets = componentDefs.filter((d) => CANVAS_FURNITURE.has(d.id));
+// #4008, #4007: a set of one member (Popover, Menu, Menu.Group) builds a set but has no canvas furniture, so "builds a
+// set" is read off the def, not off the furniture list.
+const buildsSet = (id: string): boolean => { const d = componentDefs.find((x) => x.id === id); return !!d?.figmaProperties && !d.figmaProperties.emitAsComponents; };
+const withSets = componentDefs.filter((d) => buildsSet(d.id));
 /** THE FAMILIES, as the oracle reads them (#2927): each taxonomy page's defs that build a set, and its lead, the page's
  *  `lead` or its one def. Read off the taxonomy data, not through `panelFamily`. */
-const FAMILIES = TAXONOMY.sections.flatMap((s) => s.leaves).map((l) => ({ page: l.page, lead: l.lead ?? (l.defs.length === 1 ? l.defs[0] : ''), members: l.defs.filter((d) => CANVAS_FURNITURE.has(d)) })).filter((f) => f.members.length);
+const FAMILIES = TAXONOMY.sections.flatMap((s) => s.leaves).map((l) => ({ page: l.page, lead: l.lead ?? (l.defs.length === 1 ? l.defs[0] : ''), members: l.defs.filter(buildsSet) })).filter((f) => f.members.length);
 const familyOf = (id: string) => FAMILIES.find((f) => f.members.includes(id))!;
 const leads = withSets.filter((d) => familyOf(d.id).lead === d.id);
 
@@ -1575,7 +1578,7 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
     .flatMap((b) => (b.type === 'Links' && b.label !== 'Replaces' ? [`${b.label}: ${b.items.map((i) => `${i.name}>${i.def}`).join(' / ')}`] : []));
   // #3555 Q-MD10 A: `alternativeTo` is symmetric, so Checkbox gains TextField (which names it) and Button gains Tag and Link.
   const cb = ['Instead, consider: Switch>switch-row / Radio>radio-row / TextField>text-field', 'Often used with: FieldLabel>field-label / FieldMessage>field-message / FocusRing>focus-ring / Buttons>button'];
-  const bt = ['Built from: FocusRing>focus-ring / Spinner>spinner', 'Instead, consider: Icon button>icon-button / Switch>switch-row / Tag>tag / Link>link', 'Often used with: Icon>icon / Popover>popover'];
+  const bt = ['Built from: FocusRing>focus-ring / Spinner>spinner', 'Instead, consider: Icon button>icon-button / Switch>switch-row / Tag>tag / Link>link', 'Often used with: Icon>icon / Popover>popover / Menu>menu / Tooltip>tooltip'];
   ok(related('checkbox-row').join('\n') === cb.join('\n'), 'family/related: Checkbox names families, its own parts dropped, Built from gone', related('checkbox-row').join(' | '));
   ok(related('button').join('\n') === bt.join('\n'), 'family/related buttons: Buttons as the wireframe has it', related('button').join(' | '));
   // A list naming one family twice, through two members: one entry.
@@ -1588,7 +1591,7 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
   // Tag names Badge, Checkbox.Group and Radio.Group as alternatives and as partners, so they stay under Instead, consider. Then over every lead: no family or component in two lists.
   ok(related('dialog').join('\n') === ['Built from: Flush Icon Button>flush-icon-button / Divider>divider / Buttons>button', 'Instead, consider: Accordion>accordion / Toast>toast / Banner>banner / Popover>popover',
     'Often used with: TextField>text-field / Select>select / Checkbox>checkbox-row / Radio>radio-row'].join('\n'), 'related/dialog: Buttons once, under Built from', related('dialog').join(' | '));
-  ok(related('tag').join('\n') === ['Built from: FocusRing>focus-ring', 'Instead, consider: Badge>badge / Buttons>button / Checkbox>checkbox-row / Radio>radio-row', 'Often used with: Icon>icon / Popover>popover'].join('\n'),
+  ok(related('tag').join('\n') === ['Built from: FocusRing>focus-ring', 'Instead, consider: Badge>badge / Buttons>button / Checkbox>checkbox-row / Radio>radio-row', 'Often used with: Icon>icon / Avatar>avatar / Popover>popover'].join('\n'),
     'related/tag: Badge, Checkbox and Radio once, under Instead, consider', related('tag').join(' | '));
   const twiceIn: string[] = [];
   for (const d of componentDefs.filter((x) => leadsPanel(x.id))) {
@@ -2577,7 +2580,7 @@ section('qa/… — usage panels QA round 1 (#2970): titles, the space above Do 
   ok(lists.join('\n') === [
     'Built from: FocusRing',
     'Instead, consider: Badge / Buttons / Checkbox / Radio',
-    'Often used with: Icon / Popover',
+    'Often used with: Icon / Avatar / Popover',
     'Replaces: a removable token list built as a listbox / a clickable div styled as a pill / a bare × glyph with no accessible name',
   ].join('\n'), 'qa/related lists: 4 lists, one line per name, no chips', lists.join(' | '));
   ok(!related.children.some((b) => walk(b).some((c) => /^chip\d/.test(String(c.name)))) && rows.every((x) => JSON.stringify(x.text._lists) === `[{"s":0,"e":${String(x.text.characters).length},"o":{"type":"UNORDERED"}}]`),

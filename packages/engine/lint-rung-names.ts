@@ -324,6 +324,12 @@ const PINNED_LADDER_DEFS: Record<string, { families: string[]; why: string }> = 
     families: ['type.body.*.default', 'type.body.*.line-box'],
     why: 'Q852, as Checkbox.Row: a 14px medium label and a cell on its line box',
   },
+  // #4110 (owner OD-A4 A): the initials take the nearest existing label rung to 40% of the box, 12px at the 32px
+  // medium, one label step below md.
+  avatar: {
+    families: ['type.label.*.emphasis'],
+    why: 'OD-A4 A sets the medium avatar\'s initials on the nearest label rung to 40% of its 32px box, the 12px `label.sm`',
+  },
   'switch-row': {
     families: ['type.body.*.default', 'type.body.*.line-box'],
     why: 'Q852 and Q3153.2 A: Switch.Row takes the option rows\' 14px medium label and its line box',
@@ -342,6 +348,18 @@ const RING_OFFSET_UP_TWO_DEFS: Record<string, string> = {
   progress: 'icon.size.*',
 };
 const RING_DEFAULT_RUNG = RUNG_ORDER[RUNG_ORDER.indexOf(DEFAULT_RUNG) + 2];
+
+/**
+ * THE OWNER-SANCTIONED ONE-RUNG-UP BOX (#4110, owner decision OD-A3 A, 2026-11-19). Avatar's five sizes are the brief's
+ * 20 / 24 / 32 / 40 / 64 scale, and the first four bind the icon ladder, so the 32px medium default is `icon.size.lg`,
+ * one rung ABOVE `md`, in the icon family only. Same guarantees as RING_OFFSET_UP_TWO_DEFS: the expectation is the RULE
+ * (`md` plus one), so a revert to `md` and a slip to `xl` both fail BY NAME, and the admission is checked both
+ * directions below.
+ */
+const BOX_OFFSET_UP_ONE_DEFS: Record<string, string> = {
+  avatar: 'icon.size.*',
+};
+const BOX_UP_ONE_RUNG = RUNG_ORDER[RUNG_ORDER.indexOf(DEFAULT_RUNG) + 1];
 
 /**
  * THE SANCTIONED MID-TIER REPEATS (#3374): two sizes on one rung where the tier has a rung on both sides. Arm 2D
@@ -375,6 +393,7 @@ const expectedDefaultRung = (defId: string, family: string): string =>
     : (PINNED_LADDER_DEFS[defId]?.families ?? []).includes(family) ? OFFSET_DEFAULT_RUNG
     : ICON_OFFSET_TWO_DEFS[defId] === family ? LABEL_DEFAULT_RUNG
     : RING_OFFSET_UP_TWO_DEFS[defId] === family ? RING_DEFAULT_RUNG
+    : BOX_OFFSET_UP_ONE_DEFS[defId] === family ? BOX_UP_ONE_RUNG
     : DEFAULT_RUNG;
 
 /**
@@ -390,7 +409,11 @@ const NO_SIZE_AXIS: Record<string, string> = {
   'banner': 'a banner has no size RUNG — its axes are `tone` and `edge` (contained or full-bleed), and the brief names no size; density moves its padding and gaps (`densitySpacing`), and the nested buttons carry their own small rung (#2579)',
   '_breadcrumb-separator': 'one 16px mark (`icon.size.xs`) at both breadcrumb sizes (#2666, owner call 6 A, kept by Q382 A), bound under a non-`size.*` key; its axis is `type`, chevron or slash, so there is no ladder to compare. The item it sits in carries the size',
   'toast': 'one size: the brief names none and the owner approved one (#2668 call 11 A). It is built 360 wide as a literal (`placementWidth`), its type is one role (`type.body.sm.default`, #3165), its floor one rung (`size.md.height`, Q3165.1 A), its glyph one rung (`icon.size.sm`), and its nested Button and IconButton.Neutral are fixed at small; there is no size ladder to compare against the tier',
+  'menu': 'one size: the panel takes its items\' one size (#4007, Q-FL2 on OD-M3 A); built 240 wide as a literal (`placementWidth`), with no size ladder to compare against the tier',
+  'menu-group': 'one size: a heading over the items, one type role (`type.label.sm.emphasis`), with no size ladder (#4007)',
+  'menu-item': 'one size (#4007, Q-FL2 on OD-M3 A: Compact density gives the dense menu): its floor is one rung (`size.md.min-height`), its glyphs one rung (`icon.size.sm`), its label and secondary text one role each',
   'popover': 'one size: the proposal names none and the owner approved one member (#4008, Q-FL2 on OD-P2 A). It is built 320 wide as a literal (`placementWidth`), its title and body are one role each, and its nested close button is fixed at small; there is no size ladder to compare against the tier',
+  'tooltip': 'one size: the brief names none and the owner approved one set of numbers (#4009 OD-T6). Its type is one role (`type.body.sm.default`), its padding two space steps, its arrow a literal 8px (`glyphPx`), and its max width a code-side literal, so no binding is keyed by size.',
   'button-group': 'a layout of Buttons has no size RUNG of its own — its axis is `layout`, its gaps are `space.*` steps, and each nested Button is medium and measured under its own name; a size axis for smaller actions is held for the owner (#2661)',
   'divider': 'a rule has no size RUNG — its axis is `orientation`, its thickness is one border-width role (`border-width.hairline`), and its length is a NOMINAL standalone placeholder (`container.narrow` across, `size.md.height` tall) a host stretches; there is no size ladder to compare against the tier (#2455)',
 };
@@ -448,6 +471,9 @@ const SPACING_ONLY_LADDER: Record<string, string> = {
   // #3345: as Breadcrumbs — the row's gap between items is its own size binding; the links are sized by the nested
   // PageNav.Item and Link, each checked under its own name.
   'page-nav': 'its only size-keyed binding is the gap between items (`space.200` / `300`); the links are sized by the nested PageNav.Item and Link, checked under their own names',
+  // #3055: as Breadcrumbs — the gap between steps is its own size binding; the discs, names and lines are sized by the
+  // nested StepItem and Link, each checked under its own name.
+  steps: 'its only size-keyed binding is the gap between steps (`space.075` / `100`); the steps are sized by the nested StepItem and Link, checked under their own names',
   // #2669 (owner Q550 e): the Slider's own size binding is its track, a border-width step per size.
   slider: 'its only size-keyed binding is the track (`border-width.thick` / `heavy` / `x-heavy`, 2 / 4 / 6px), a stroke step with no `md`; the thumb is sized by the nested Slider.Thumb (`control.size.*.thumb`), checked under its own name',
 };
@@ -472,6 +498,7 @@ const DEFAULT_FIRST: Record<string, string> = {
   'search-field': 'the Figma default is `medium`, the field family\'s order from the shared field factory (#2888)',
   'card-number-field': 'the Figma default is `medium`, the field family\'s order from the shared field factory (#2343 PR 4, #2429 Q4 b)',
   // #2752 (owner decision Q1 B, 2026-10-16): every size ladder leads with medium, so Figma inserts the code default.
+  avatar: Q1B,
   button: Q1B,
   'button-destructive': Q1B,
   'button-neutral': Q1B,
@@ -515,6 +542,9 @@ const DEFAULT_FIRST: Record<string, string> = {
   // #3345: Breadcrumbs' pair, medium first (Q1 B), DRAFT for the owner.
   'page-nav': Q1B,
   'page-nav-item': Q1B,
+  // #3055: Breadcrumbs' pair, medium first (Q1 B).
+  steps: Q1B,
+  'step-item': Q1B,
   // #2669: owner Q550 e ("medium first") agrees with Q1 B.
   slider: Q1B,
   '_slider-thumb': Q1B,
@@ -568,7 +598,7 @@ const SIZE_IN_PROSE: Record<string, string> = {
  * this list whole — the forward half alone let nine size-axis defs sit unlisted, each droppable in silence.
  */
 const MUST_COVER = [
-  'icon', 'provider-logo', 'spinner', 'progress', 'skeleton',
+  'icon', 'provider-logo', 'spinner', 'progress', 'avatar', 'skeleton',
   'button', 'button-destructive', 'button-neutral', 'wallet-button', 'sign-in-button',
   'icon-button', 'icon-button-destructive', 'icon-button-neutral',
   'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral',
@@ -586,6 +616,7 @@ const MUST_COVER = [
   'breadcrumb-item', 'breadcrumbs',
   'code-input-cell', 'code-input',
   'page-nav-item', 'page-nav',
+  'step-item', 'steps',
 ];
 
 /** Every token path in a brand's canonical tree, below the root — `icon.size.md`, `size.lg.height`. */
@@ -888,7 +919,10 @@ for (const def of componentDefs) {
       const sanctionedTwo = ICON_OFFSET_TWO_DEFS[def.id] === family;
       const pinned = (PINNED_LADDER_DEFS[def.id]?.families ?? []).includes(family);
       const ringUp = RING_OFFSET_UP_TWO_DEFS[def.id] === family;
-      failures.push(pinned
+      const boxUp = BOX_OFFSET_UP_ONE_DEFS[def.id] === family;
+      failures.push(boxUp
+        ? `${def.id}: size defaults to '${dflt}', whose OWNER-SANCTIONED box family '${family}' reaches tier rung(s) ${wrong.map((r) => `'${r}'`).join(', ')} — OD-A3 A (#4110) sets the medium avatar at 32px, '${want}', exactly one rung above '${DEFAULT_RUNG}'. A revert to '${DEFAULT_RUNG}' or any other rung breaks it.`
+        : pinned
         ? `${def.id}: size defaults to '${dflt}', whose OWNER-PINNED family '${family}' reaches tier rung(s) ${wrong.map((r) => `'${r}'`).join(', ')} — ${PINNED_LADDER_DEFS[def.id].why}, so it resolves to '${want}'. A revert to '${DEFAULT_RUNG}' or any other rung breaks the pinned ladder.`
         : ringUp
         ? `${def.id}: size defaults to '${dflt}', whose OWNER-SANCTIONED ring family '${family}' reaches tier rung(s) ${wrong.map((r) => `'${r}'`).join(', ')} — the approved proposal (#2670) sets the ring at '${want}', exactly two rungs above '${DEFAULT_RUNG}' (40px). A revert to '${DEFAULT_RUNG}' or any other rung breaks it.`
@@ -974,6 +1008,18 @@ for (const [id, family] of Object.entries(ICON_OFFSET_TWO_DEFS)) {
   const seen = defaultFamiliesByDef.get(id);
   if (!seen || !seen.has(family))
     failures.push(`STALE ADMISSION: ICON_OFFSET_TWO_DEFS sanctions '${id}' offsetting family '${family}' at its default, but that family is not bound at the default size '${enumOf(def).default}'. Remove the admission or restore the binding.`);
+}
+
+// The #4110 box admission, both directions (docs/34).
+for (const [id, family] of Object.entries(BOX_OFFSET_UP_ONE_DEFS)) {
+  const def = componentDefs.find((d) => d.id === id);
+  if (!def) {
+    failures.push(`STALE ADMISSION: BOX_OFFSET_UP_ONE_DEFS names '${id}', which is not a def any more. Remove it.`);
+    continue;
+  }
+  const seen = defaultFamiliesByDef.get(id);
+  if (!seen || !seen.has(family))
+    failures.push(`STALE ADMISSION: BOX_OFFSET_UP_ONE_DEFS sanctions '${id}' offsetting family '${family}' at its default, but that family is not bound at the default size '${enumOf(def).default}'. Remove the admission or restore the binding.`);
 }
 
 // The #2670 ring admission, both directions (docs/34).

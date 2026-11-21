@@ -32,12 +32,12 @@ import { announces, agentStartLine, agentDoneNotice } from './agent-run-notice';
 import type { WriteCmd } from './run-guard';
 import { strandedCollections, ownedModeIds } from './write-figma';
 import { classifyFile, libraryFileOf, outcomeOf, probeFile, type FileKindApi } from './file-kind';
-import { computePrunePlan, orphanStyles, styleOrphanNote, prunePlanCount, applyPrunePlan, prunePreviewSummary, pruneAppliedSummary, emptyPruneResult, prunePreviewHashOf, pruneConfirmRefusal, PRUNE_COPY } from './prune-figma';
+import { computePrunePlan, orphanStyles, unlessRenamedPlanned, styleOrphanNote, prunePlanCount, applyPrunePlan, prunePreviewSummary, pruneAppliedSummary, emptyPruneResult, prunePreviewHashOf, pruneConfirmRefusal, PRUNE_COPY } from './prune-figma';
 import type { PruneInput, PruneApi, FileStyles } from './prune-figma';
 import { isRefusal, rootOf, buildFigmaColor, buildWritePlan, buildFloatWritePlan, buildStylesPlan, buildGridStylePlan, buildFontVarPlan, buildMotionVarPlan, buildTextStylePlan, verifyReadback } from '@prism3/engine/figma';
 import { conflictSummary, modeLimitLine } from './preflight';
 import { conflictKey, choiceNote, isChoices, type CollisionChoices } from './collision-choice';
-import { APPLY_STAGES, runApplyTheme, themePlans, type ApplyStage, type ThemePace } from './apply-theme';
+import { APPLY_STAGES, runApplyTheme, themePlans, type ApplyStage, type ThemePace, type ThemePlans } from './apply-theme';
 import { emissionOf, themeDue } from './theme-emission';
 import { fieldStyleNote, searchFieldStyleNote } from './field-style-note';
 import { tagStyleNote } from './tag-style-note';
@@ -382,6 +382,15 @@ const localStyles = async (): Promise<FileStyles> => ({
   grid: (await figma.getLocalGridStylesAsync()).map((s) => ({ name: s.name, description: s.description })),
 });
 
+/** Every variable name the plans write, as built: what Prune's variable arm calls planned, and what Apply Theme's orphan
+ *  note reads a Rename's `… (Prism3)` name against (#3869), so the two read one list. */
+const plannedVariableNamesOf = (p: Pick<ThemePlans, 'colorPlan' | 'floatPlan' | 'fontPlan' | 'motionPlan'>): string[] => [
+  ...p.colorPlan.palette.map((r) => r.name),
+  ...p.colorPlan.color.create.map((r) => r.name),
+  ...p.floatPlan.flatMap((q) => q.create.map((r) => r.name)),
+  ...[...p.fontPlan, ...p.motionPlan].flatMap((q) => q.rows.map((r) => r.name)),
+];
+
 /**
  * Materialise a brand into `figma.variables` (#108) — the theme now comes LIVE from the shared UI's
  * knobs (a `BrandInput`), not a bundled fixture. Same pure core, same executor: only the source of
@@ -441,12 +450,14 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
     // those variables still alias into the renamed value collection — but the stale collection is
     // unreported. Filed separately rather than papered over with a hardcoded name, which is the mistake
     // #1089 fixed here twice: the label a designer reads must come from something that knows.
+    // A variable a collision Rename wrote (`<planned> (Prism3)`) is the plan's own, not an orphan: Prune's rule (#3869).
+    const plannedVariables = plannedVariableNamesOf(plans);
     const allOrphans = [
       ...r.orphans,
       ...f.collections.map((c) => ({ name: c.name, names: c.orphans })),
       ...tv.collections.map((c) => ({ name: c.name, names: c.orphans })),
       ...mv.collections.map((c) => ({ name: c.name, names: c.orphans })), { name: `${names.core ?? 'core'}/other`, names: uc }, // #1109, DRAFT label
-    ].filter((o) => o.names.length);
+    ].map((o) => ({ ...o, names: unlessRenamedPlanned(o.names, plannedVariables) })).filter((o) => o.names.length);
     const orphanCount = allOrphans.reduce((n, o) => n + o.names.length, 0);
     const orphanNote = orphanCount
       ? `⚠ ${orphanCount} variables the brand no longer writes (${allOrphans.map((o) => `${o.name}: ${o.names.length}`).join(', ')}). Nothing was deleted — Update file › Clean up lists them`
@@ -455,7 +466,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
     // brand's `body/md/emphasis` stays in the picker. Counted with Prune's own rule (`orphanStyles`: inside a group the
     // plan emits, or carrying the engine's description), so a designer's hand-made group is not named. Planned names are
     // the plans as built AND as a collision choice wrote them (#1909): neither a skipped collision nor a renamed style is
-    // an orphan here, though Prune, passing the plans only, still offers a renamed one (#3860).
+    // an orphan here. Prune passes the plans only, and spares a renamed one by `orphanStyles`' own rule (#3860).
     // Reported, never deleted: Prune is the delete path.
     const plannedStyleNames = {
       text: [...plans.textPlan, ...exec.text].map((x) => x.name),
@@ -625,12 +636,7 @@ const prune = async (input: BrandInput, confirm: boolean, previewHash: string | 
     const motionPlan = buildMotionVarPlan(theme);
     const varPlans = [...fontPlan, ...motionPlan];
     const textPlan = buildTextStylePlan(theme);
-    const plannedVariables = [
-      ...wp.palette.map((r) => r.name),
-      ...wp.color.create.map((r) => r.name),
-      ...floatPlan.flatMap((p) => p.create.map((r) => r.name)),
-      ...varPlans.flatMap((p) => p.rows.map((r) => r.name)),
-    ];
+    const plannedVariables = plannedVariableNamesOf({ colorPlan: wp, floatPlan, fontPlan, motionPlan });
     // Spelled with `$collection` / `plan.name` (what Figma holds), not the axis labels the orphan report
     // uses — the same set `applyTheme` assembles for its stranded-collection report.
     const plannedCollections = [
@@ -2301,6 +2307,8 @@ const styleGuideCleanup = async (ids: string[], sink: ActionSink): Promise<void>
 const guard = createRunGuard();
 /** `cmd` is the write asked for; `held`, the one holding the file (#3697 R7: they can differ). */
 const refusal = (cmd: WriteCmd, agent: boolean, held: WriteCmd): MainToUi => ({ type: 'refused', code: 'busy', cmd, agent, message: busyMessage(held), held });
+/** #4158: close the undo step the plugin's earlier actions are in. A host without it (a Node shim) has nothing to close. */
+const commitUndo = (): void => { try { (figma as { commitUndo?: () => void }).commitUndo?.(); } catch { /* no undo history to close */ } };
 const guarded = <A extends unknown[]>(cmd: WriteCmd, fn: (...a: A) => Promise<void>, confirm?: (...a: A) => boolean) =>
   (...a: A): Promise<void> => {
     if (!writes(cmd, confirm ? confirm(...a) : undefined)) return fn(...a);
@@ -2311,7 +2319,10 @@ const guarded = <A extends unknown[]>(cmd: WriteCmd, fn: (...a: A) => Promise<vo
     // #3081: a write may add or remove sets, so the live recount reads the file again after it (`presentCache`). It is
     // cleared as the write starts too: the write's verdict posts before the write's promise settles.
     presentCache = null; panelCache = null; offCache = null; presentRead = null; presentGen++; dropViews();
-    return guard.run(cmd, () => fn(...a)).finally(() => { presentCache = null; panelCache = null; offCache = null; presentRead = null; presentGen++; dropViews(); if (handPassOwed) void handEditsPass(); }); // #3804: a hand-edit pass this write ended runs again, over the file it left.
+    // #4158: Figma keeps a plugin's actions in one undo step until `commitUndo`, so with the panel open across runs (or an
+    // agent's command after one) a single undo would also take back the run before. Committing as a write starts closes
+    // what came before it as its own step, and the run itself stays one step, as `write-components.ts` intends.
+    return guard.run(cmd, () => { commitUndo(); return fn(...a); }).finally(() => { presentCache = null; panelCache = null; offCache = null; presentRead = null; presentGen++; dropViews(); if (handPassOwed) void handEditsPass(); }); // #3804: a hand-edit pass this write ended runs again, over the file it left.
   };
 
 /**

@@ -152,7 +152,7 @@ export const select: ComponentDef = {
     { name: 'placeholder', type: 'string', required: false, description: 'The null state shown before a choice is made — plainly the thing to choose ("Country"), not an instruction ("Select a country from the list"), and omittable when the label suffices. Muted, and never load-bearing — it is not the label, not a real option, and it vanishes once a value is chosen.' },
     { name: 'options', type: 'array', required: false, description: 'The bounded set of choices. The select band is 8 to about 15 familiar options: at 7 or fewer an always-visible Radio.Group reads better, and past about 15 a filtering combobox (not built yet) scans better.' },
     { name: 'onChange', type: 'function', required: false, description: 'Fires with the newly chosen value (also onBlur / onFocus). A controlled value with no onChange is read-only by accident.' },
-    { name: 'helpText', type: 'string | node', required: false, description: 'Persistent guidance, rendered as the nested FieldMessage in its default status; wired via aria-describedby. Show the constraint before failure.' },
+    { name: 'helpText', type: 'string | node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the field as the nested FieldMessage in its default status. Show the constraint before failure.' },
     // The UI reads "Validation"; the Figma variant axis is `status` so it drives the nested message's own
     // `status` by name (see the header). Values match field-message's status values exactly.
     { name: 'validation', type: "enum: 'default' | 'error' | 'warning' | 'success'", values: ['default', 'error', 'warning', 'success'], default: 'default', required: false, description: 'The validation state. Each non-default status swaps the control border to its own boundary (border-only — error → danger, warning → warning, success → success) and sets the nested message to the matching status; default is neutral. The values align with FieldMessage\'s status axis, so this drives the nested message directly.' },
@@ -711,12 +711,12 @@ export const select: ComponentDef = {
   composition: {
     // What the anatomy nests (#1700). The leading glyph and the chevron are partners, not parts.
     composesWith: ['field-label', 'field-message'],
-    alternativeTo: ['text-field', 'radio-group', 'checkbox-group', 'segmented-control', 'textarea', 'radio-row', 'tabs', 'counter'],
+    alternativeTo: ['text-field', 'radio-group', 'checkbox-group', 'segmented-control', 'textarea', 'radio-row', 'tabs', 'counter', 'menu'],
     replacesPatterns: ['a bare `<select>` with no label wiring', 'placeholder-as-label'],
     // Nothing supersedes the select — combobox / radio / text-field are sibling alternatives chosen by
     // intent and scale, not replacements.
     supersededBy: [],
-    planned: ['form', 'menu', 'combobox'],
+    planned: ['form', 'combobox'],
   },
 
   // KB select brief §8. The signature motion is the open list's, which this def does not model; what the closed
