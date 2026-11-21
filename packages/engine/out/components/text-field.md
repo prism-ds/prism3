@@ -48,9 +48,7 @@ Use for free-form, non-enumerable single-line input — names, titles, SKUs, ide
 
 - Always render a visible, associated label (FieldLabel) — visually-hidden only for search
 - Distinguish `readOnly` (copyable, submitted, full-contrast) from disabled (silent, exempt)
-- Emit a real `<input name>` so it works uncontrolled, in a native form, with Server Actions
 - Separate a decorative glyph (`aria-hidden`) from an interactive trailing action (a labeled button)
-- Follow the error-timing contract: validate on blur, re-validate on input after the first error, move focus to the first invalid field on submit, and show an error summary on a long form (the form library runs it; the field renders it)
 
 ### Don't
 
@@ -95,13 +93,16 @@ Label = noun phrase, sentence case, no trailing colon. Placeholder = example onl
 
 - **Built from:** `field-label`, `field-message`
 - **Instead, consider:** `textarea`, `select`, `checkbox-row`, `switch-row`, `password-field`, `search-field`, `counter`, `card-number-field`, `slider`, `code-input`
-- **Often used with:** `icon`, `button`, `spinner`
+- **Often used with:** `icon`, `button`, `spinner`, `tooltip`
 - **Replaces:**
   - bare input without label wiring
   - placeholder-as-label
   - `type=number` for formatted numeric
 
 ## Building it in code
+
+- Emit a real `<input name>` so it works uncontrolled, in a native form, with Server Actions
+- Follow the error-timing contract: validate on blur, re-validate on input after the first error, move focus to the first invalid field on submit, and show an error summary on a long form (the form library runs it; the field renders it)
 
 ### Props
 

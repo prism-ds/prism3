@@ -225,6 +225,25 @@ ok(store.brandState.scrimStrength === 'standard' && scrimReads() === 'black-alph
 reset();
 ok(F.brandScrimStrength() === 'standard', `#3050: a brand without the lever reads as Standard (${F.brandScrimStrength()})`);
 
+// #3339 (owner C): Controls sit on. "The page only" writes `interactiveGround: 'page'` and nothing else, and the light
+// field border reads one step lighter, measured on the page (neutral.450 → neutral.400 for this brand, the step the
+// build PR measured, typed here); "Every surface" writes 'floor' and reads today's step; an unset brand reads as floor.
+const fieldStep = (m: string): string => String(F.rolesIn(m)['field.border.rest']?.path ?? 'none').split('.').slice(-2).join('.');
+reset();
+F.setInteractiveGround('page');
+store.rebuild();
+ok(JSON.stringify(store.brandState) === JSON.stringify({ ...prism3, interactiveGround: 'page' }) && F.brandInteractiveGround() === 'page',
+  `#3339: The page only writes interactiveGround "page" and nothing else (${JSON.stringify(store.brandState.interactiveGround)})`);
+const hcPage = `${fieldStep('hc-light')} ${fieldStep('hc-dark')}`;
+ok(fieldStep('light') === 'neutral.400', `#3339: under The page only the light field border reads neutral.400 (read ${fieldStep('light')})`);
+F.setInteractiveGround('floor');
+store.rebuild();
+ok(store.brandState.interactiveGround === 'floor' && fieldStep('light') === 'neutral.450',
+  `#3339: Every surface writes "floor" and the light field border reads neutral.450 (read ${fieldStep('light')})`);
+ok(`${fieldStep('hc-light')} ${fieldStep('hc-dark')}` === hcPage, `#3339: high contrast reads the same field border under either setting (page ${hcPage}, floor ${fieldStep('hc-light')} ${fieldStep('hc-dark')})`);
+reset();
+ok(F.brandInteractiveGround() === 'floor', `#3339: a brand without the setting reads as Every surface (${F.brandInteractiveGround()})`);
+
 
 // ── 4. S4d: every Surfaces & fills role has a home (owner decisions Q20, Q49, Q50) ─────────────────────
 console.log('\n4. Every Surfaces & fills role is a row, a lever, or read-only by a declared reason (oracle: the emission)');
@@ -450,7 +469,7 @@ F.pairIcons();
 ok(JSON.stringify(store.brandState) === JSON.stringify(prism3), `re-pair clearing the only overrides leaves the brand byte-identical to the one loaded (overrides ${JSON.stringify(store.brandState.overrides)})`);
 // The confirm's words, APPROVED verbatim (owner decision Q52, 2026-10-02). Literal.
 ok(F.PAIR_ICONS_CONFIRM.title === 'Pair icons with text?' && F.PAIR_ICONS_CONFIRM.body(3) === 'This removes 3 custom icon colors. Icons will follow their text color again.'
-  && F.PAIR_ICONS_CONFIRM.action === 'Pair icons', `the re-pair confirm's title, body and action are the approved copy (${JSON.stringify([F.PAIR_ICONS_CONFIRM.title, F.PAIR_ICONS_CONFIRM.body(3), F.PAIR_ICONS_CONFIRM.action])})`);
+  && F.PAIR_ICONS_CONFIRM.action(3) === 'Remove 3 icon colors', `the re-pair confirm's title, body and action are the approved copy (${JSON.stringify([F.PAIR_ICONS_CONFIRM.title, F.PAIR_ICONS_CONFIRM.body(3), F.PAIR_ICONS_CONFIRM.action])})`);
 // The singular for one override (owner decision Q60, APPROVED 2026-10-02), the plural for two. Literal.
 ok(F.PAIR_ICONS_CONFIRM.body(1) === 'This removes 1 custom icon color. Icons will follow their text color again.',
   `the re-pair confirm's body for 1 override is the approved singular (Q60) — read ${JSON.stringify(F.PAIR_ICONS_CONFIRM.body(1))}`);
@@ -757,7 +776,7 @@ for (const c of REFUSAL_CASES) {
   ok(!ENGINE_WORDS.test(store.lastError ?? '') && !/floorStep/.test(store.lastError ?? ''), `#2250 ${c.what}: the error bar's message carries none of the engine's sentence, nor its key`);
   const imp = validateDesignMd(toDesignMd(c.input));
   const text = 'error' in imp ? importErrorText(imp.error) : null;
-  ok(!!text && text.includes(`Parsed, but the engine rejected it: ${c.wantImport}`) && 'error' in imp && imp.error.line != null,
+  ok(!!text && text.includes(`This design.md loaded, but the engine refused it: ${c.wantImport}`) && 'error' in imp && imp.error.line != null,
     `#2250 ${c.what}: a design.md import is refused with the studio sentence, on its line (read ${JSON.stringify(text)})`);
   ok(!ENGINE_WORDS.test(text ?? ''), `#2250 ${c.what}: the import's message carries none of the engine's sentence`);
 }

@@ -53,7 +53,9 @@ export const leverBlock = (key: string, opts: { label?: string; group?: boolean;
   // manifest description, so its page hands one in (concept v6's words) or shows no info button. A page may
   // also hand one in over a manifest lever's (Surfaces & fills' Background fills, S4c): the Studio's words
   // for that page, while the engine's description stays what MCP, the manifest and the emission read.
-  const desc = opts.desc ?? L?.description ?? '';
+  // #4193 decision 1: the ⓘ shows the lever's short `tip` (≤ 90 characters) where it has one; search still reads the
+  // full description, through `manifestWords` below.
+  const desc = opts.desc ?? L?.tip ?? L?.description ?? '';
   const el = hook(h(opts.group ? 'fieldset' : 'div', 'p3-lever'), leverHook(key));
   el.id = `p3-lv-${slug(key)}`;
   const head = h(opts.group ? 'legend' : 'div', 'p3-lever-head');
@@ -230,6 +232,15 @@ export const infoTip = (id: string, label: string, text: string): { button: HTML
   tip.id = id;
   tip.hidden = true;
   button.onclick = () => { const open = tip.hidden; tip.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
+  // Escape closes an open tip and keeps focus on the ⓘ, as every other opener in the chrome does (#4225). Only while
+  // open, and it stops there, so an enclosing dialog's Escape waits for the next press.
+  button.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || tip.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tip.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  });
   return { button, tip };
 };
 
@@ -411,9 +422,14 @@ export const colorField = (id: string, label: string, role: string, onPick: (hex
   };
 };
 
+/** #4190 V4 A: the advanced fold's button, with its noun: "Show 4 advanced settings", "Hide 1 advanced setting". One
+ *  string for every page's fold, so the pages cannot drift apart. */
+export const advancedLabel = (open: boolean, n: number): string => `${open ? 'Hide' : 'Show'} ${n} advanced setting${n === 1 ? '' : 's'}`;
+
 /** The readout a slider shows: its value, unit and the named stop it sits on (the manifest's stops). */
 export const sliderReadout = (L: Lever, v: number): string => {
-  const unit = L.unit ? (L.unit === '°' ? '°' : ` ${L.unit}`) : '';
+  // #4189: a length reads "1440px", the form every other px value in Studio uses; other units keep their space.
+  const unit = L.unit ? (L.unit === '°' || L.unit === 'px' ? L.unit : ` ${L.unit}`) : '';
   const dp = String(L.step ?? 1).includes('.') ? String(L.step).split('.')[1].length : 0;
   const stop = Object.entries(L.stops ?? {}).find(([, x]) => Math.abs(x - v) < (L.step ?? 1e-6) / 2)?.[0];
   return `${Number(v).toFixed(dp)}${unit}${stop ? ` · ${stop}` : ''}`;

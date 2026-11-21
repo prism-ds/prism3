@@ -8,7 +8,9 @@ import { radiusScale, componentSizes, type RadiusStep, type SizeStep, controlSiz
 import { inGamut, maxChroma, deltaE2000, ACHROMATIC_C } from './color';
 import type { ModeName } from './modes';
 import { resolveVocabulary } from './vocabulary';
-import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
+import { resolveHexAnchors } from './hex-anchors';
+import { iconMapErrors } from './icon-map';
+import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, INTERACTIVE_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
 import { PALETTE_NAME_RE, RESERVED_PALETTES, STATUS_DEFAULTS, statusRamp, inRedTerritory, hueDist, RED_CHROMA_FLOOR, normalizeDisabledStrategy, normalizeDisabledMin } from './theme-color';
 import { buildDims } from './theme-dims';
 import { buildMotion, type MotionAxis } from './theme-motion';
@@ -42,7 +44,11 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // numbers; `personality` traits fill levers the brief left absent, never one it set. Each
   // inference lands in `notes` alongside the engine's own defaults — the whole point is that a
   // choice made FOR the author is as visible as one they made themselves.
-  const resolved = resolveVocabulary(brandInput);
+  // #4133 (owner decision A, 2026-11-19): a hex anchor becomes OKLCH first, with a note naming the converted value,
+  // so nothing past this line sees a string where an anchor goes.
+  const hexed = resolveHexAnchors(brandInput);
+  notes.push(...hexed.notes);
+  const resolved = resolveVocabulary(hexed.input);
   const input = resolved.input as BrandInput;
   notes.push(...resolved.notes);
   // #3875: the id names every file the CLI writes (`<id>.tokens.json` and the rest, `emit-dtcg.ts`), so a separator in
@@ -284,12 +290,16 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     { path: 'raisedSurface', value: input.raisedSurface, options: RAISED_SURFACE_VALUES },
     { path: 'scrimStrength', value: input.scrimStrength, options: SCRIM_STRENGTH_VALUES },
     { path: 'secondaryTextGround', value: input.secondaryTextGround, options: SECONDARY_TEXT_GROUND_VALUES },
+    { path: 'interactiveGround', value: input.interactiveGround, options: INTERACTIVE_GROUND_VALUES },
     { path: 'radioDot', value: input.radioDot, options: RADIO_DOT_SHARES },
   ];
   for (const { path, value, options } of enumLevers) {
     if (value !== undefined && !(options as readonly unknown[]).includes(value))
       throw new Error(`${path}: ${JSON.stringify(value)} is invalid — must be one of ${options.join('/')}`);
   }
+  // The brand icon map (#3076): every rule, by name (`icon-map.ts`). The first broken one stops the build.
+  const iconErrors = iconMapErrors(input.icons);
+  if (iconErrors.length) throw new Error(iconErrors.join('; '));
   const glassRoles = validGlassRoles(input.glassRoles);
   const rangeLevers: { path: string; value: unknown; min: number; max: number }[] = [
     { path: 'radiusScale', value: input.radiusScale, min: 0, max: 2 },
@@ -1053,6 +1063,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   return {
     id: input.id, root, namespace: `${root}.${CORE_TIER}.palette`, colorFormat: 'hex', modes: modesAll, palettes, roleToPalette, notes,
     ...(customModes.length ? { customModes } : {}),
+    ...(input.icons && (Object.keys(input.icons.map ?? {}).length || Object.keys(input.icons.glyphs ?? {}).length) ? { icons: input.icons } : {}),
     ...(Object.keys(radiusByMode).length || Object.keys(familiesByMode).length || Object.keys(weightRolesByMode).length || Object.keys(lineHeightRepointByMode).length || Object.keys(letterSpacingRepointByMode).length || Object.keys(motionByMode).length || Object.keys(easingRolesByMode).length || Object.keys(shadowByMode).length || Object.keys(sizesByMode).length ? { modeLevers } : {}),
     roleAnchorStep: { brand: anchorStep, neutral: 500, success: 500, warning: 500, danger: 500, info: 500, action: actionAnchorStep },
     linkPalette, linkAnchorStep,
@@ -1069,6 +1080,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     ...(input.raisedSurface ? { raisedSurface: input.raisedSurface } : {}),
     ...(input.scrimStrength ? { scrimStrength: input.scrimStrength } : {}),
     ...(input.secondaryTextGround ? { secondaryTextGround: input.secondaryTextGround } : {}),
+    ...(input.interactiveGround ? { interactiveGround: input.interactiveGround } : {}),
     ...(glassRoles ? { glassRoles } : {}),
     ...(radioDot !== RADIO_DOT_DEFAULT ? { radioDot } : {}),
     actionAnchorStep: input.actionAnchorStep, destructiveAnchorStep: input.destructiveAnchorStep,

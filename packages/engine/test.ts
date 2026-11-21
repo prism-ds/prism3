@@ -23,24 +23,28 @@ import { groundsOf } from './grounds';
 import { INVERSE_GAPS, INVERSE_GAP_PATHS } from './inverse-coverage';
 import { isInverseRole } from './inverse-roles';
 import { parseDesignMd, parseYamlSubset, toDesignMd } from './design-md';
+import { applyIconMap } from './icon-map';
+import { iconArtDuplicates } from './icon-art';
 import { parseStandardDesignMd, standardToBrandInput, applyXPrism3, isStandardDesignMd, xPrism3Warnings } from './standard-design-md';
 import { classifyColors } from './classify-colors';
 import { SLIDER_STOPS, TRAITS, TRAIT_OPPOSITES, resolveVocabulary } from './vocabulary';
 import { leverManifest, leverGroups, buildLeverManifest, identityFields } from './levers';
 import { previewSpec, previewTokenRefs, buildPreviewSpec } from './preview';
 import { resolvePreview } from './resolve-preview';
-import { exampleBrands, exampleBrandsJson, EXAMPLE_IDS } from './emit-brandinput';
+import { exampleBrands, exampleBrandsJson, EXAMPLE_DESCRIPTIONS, EXAMPLE_IDS } from './emit-brandinput';
 import { exportComponentDefs } from './component-defs-export';
 import { buildIdentity } from './build-identity';
 import { buildFigmaColor, buildFigmaFont, buildFigmaFontFluid, buildFigmaTextStyles, buildFigmaDims, buildFigmaLayout, buildFigmaShadow, buildFigmaGradient, buildFigmaGridStyles, fontStyleName, figName, parseColor, figmaArtifacts, COLOR_MODES, FONT_FLUID_MODES, LAYOUT_MODES } from './emit-figma';
 import type { FigmaCollectionFile } from './emit-figma';
 import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
+import { judgeBelowFloor, KNOWN_PENDING } from './lint-shadcn-contrast';
+import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES } from './emit-dtcg-overlay';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme } from './emit-dtcg';
 import { buildAiMetadata } from './ai-metadata';
 import { validate as validateJsonSchema } from './json-schema-lite';
-import { handleRpc, callTool, toolDefs, manifestRootKeys, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
+import { handleRpc, callTool, toolDefs, manifestRootKeys, summarizeDescription, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
 import { ENGINE_VERSION, CONTRACT_VERSION, classify, contractVersionDrift, satisfiesBump, DEPRECATIONS } from './version';
 import { renameMap, validateRenameMap, planVariableRenames, planCollectionRenames, composeVariableRenames, projectionsOf, PROJECTED_ROOTS, isRefusal, COLLECTION_RENAMES, type RenameMap } from './rename-map';
 import {
@@ -96,6 +100,7 @@ import { makeTextField } from './components/text-field';
 import { canonicalShape, GlyphPathError } from './glyph-shape';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { hexToAnchor, formatAnchor, HEX_ANCHOR } from './hex-anchors';
 import { spawnSync } from 'node:child_process';
 import { readListing } from './files-listing';
 import { isDeepStrictEqual } from 'node:util';
@@ -153,10 +158,93 @@ if (!import.meta.url.endsWith('?cov')) {
   await session.post('Profiler.enable');
   await session.post('Profiler.startPreciseCoverage', { callCount: false, detailed: true });
   await import(`${import.meta.url}?cov`);
+  // #1870's fixture, measured by the same session: a `break`-skipped block with sites after a nested range.
+  const fixtureDir = mkdtempSync(join(tmpdir(), 'prism3-1870-'));
+  const fixtureFile = join(fixtureDir, 'fixture.mjs');
+  writeFileSync(fixtureFile, [
+    'const chk = () => {};', 'const x = false, a = 1, b = 2, c = 3;',
+    'lab: {', '  if (!x) break lab;', "  chk(a && b, 'S1');", "  chk(c, 'S2');", "  chk(c ? a : b, 'S3');", "  chk(c, 'S4');", '}',
+    "chk(c, 'R1');", "chk(x && b, 'R2');", "chk(c, 'R3');", "if (x) { chk(c, 'T1'); }", "chk(c, 'R4');", '',
+  ].join('\n'));
+  await import(pathToFileURL(fixtureFile).href);
   const { result } = await session.post('Profiler.takePreciseCoverage') as { result: { scriptId: string; url: string; functions: { ranges: { startOffset: number; endOffset: number; count: number }[] }[] }[] };
   const covered = result.find((r) => r.url === `${import.meta.url}?cov`);
   const siteFails: string[] = [];
   let sites = 0; let controls = 0; let controlZeros = 0;
+  type CovRange = { startOffset: number; endOffset: number; count: number };
+  // #1870: V8 CUTS A ZERO-COUNT CONTINUATION SHORT AT THE NEXT NESTED RANGE. In `lab: { if (!x) break lab;
+  // ok(a && b); ok(c) }`, the range after the `if` (count 0, nothing after it ran) ends where `&&`'s right
+  // operand begins, and `ok(c)` falls back to the enclosing function's count, so it reads as run. Only the
+  // first skipped site of a block left by `break` was ever listed. A continuation is a zero-count range that
+  // starts right after a statement (`;` or `}` before it) and not with a token no statement starts with; nothing after it in
+  // the same block ran, so it is extended to the block's closing brace. A site is read as unrun there only
+  // when its count comes from an ANCESTOR of that range, so a nested range that did run still says so.
+  const blockEnd = (src: string, from: number): number => {
+    const stack: ('{' | '${')[] = [];
+    let prev = ';';
+    for (let i = from; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); if (i < 0) return -1; continue; }
+      if (ch === '/' && src[i + 1] === '*') { i = src.indexOf('*/', i + 2) + 1; if (i <= 0) return -1; continue; }
+      if (ch === "'" || ch === '"') { for (i++; i < src.length && src[i] !== ch; i++) if (src[i] === '\\') i++; prev = ch; continue; }
+      if (ch === '/' && (/[(,=:[!&|?{};+\-*%<>~^]/.test(prev) || /\b(?:return|typeof|case|else|in|of|void|yield|await)\s*$/.test(src.slice(Math.max(0, i - 12), i)))) {
+        let cls = false;
+        for (i++; i < src.length; i++) { const c = src[i]; if (c === '\\') i++; else if (c === '[') cls = true; else if (c === ']') cls = false; else if (c === '/' && !cls) break; }
+        prev = 'x'; continue;
+      }
+      if (ch === '`' || (ch === '}' && stack[stack.length - 1] === '${')) {
+        if (ch === '}') stack.pop();
+        for (i++; i < src.length; i++) {
+          if (src[i] === '\\') { i++; continue; }
+          if (src[i] === '`') break;
+          if (src[i] === '$' && src[i + 1] === '{') { stack.push('${'); i++; break; }
+        }
+        prev = 'x'; continue;
+      }
+      if (ch === '{') stack.push('{');
+      else if (ch === '}') { if (!stack.length) return i; stack.pop(); }
+      if (!/\s/.test(ch)) prev = ch;
+    }
+    return -1;
+  };
+  const makeCountAt = (src: string, ranges: CovRange[]): ((off: number) => number) => {
+    const dead: { from: number; to: number; z: CovRange }[] = [];
+    for (const z of ranges) {
+      if (z.count !== 0) continue;
+      // V8 opens a continuation at the very next character, so no whitespace is skipped here. Other ranges open
+      // right after a `}` too, and none of them starts a statement: a block's `{`, an `else`/`catch`/`finally`
+      // clause, and in tsx's compact output a ternary's alternate (`m?{…}:void 0` opens one at the `:`).
+      if (!/[;}]/.test(src[z.startOffset - 1] ?? '')
+        || /^\s*(?:[{:?),.\]=&|<>*%^]|else\b|catch\b|finally\b|while\b)/.test(src.slice(z.startOffset, z.startOffset + 40))) continue;
+      const end = blockEnd(src, z.startOffset);
+      if (end > z.endOffset) dead.push({ from: z.endOffset, to: end, z });
+    }
+    // The innermost range containing an offset carries its count — V8 nests block ranges in functions.
+    return (off: number): number => {
+      let best = Infinity; let hit: CovRange | undefined;
+      for (const r of ranges) if (r.startOffset <= off && off < r.endOffset && r.endOffset - r.startOffset < best) { best = r.endOffset - r.startOffset; hit = r; }
+      if (!hit) return -1;
+      if (hit.count > 0 && dead.some((d) => d.from <= off && off < d.to && hit!.startOffset <= d.z.startOffset && d.z.endOffset <= hit!.endOffset)) return 0;
+      return hit.count;
+    };
+  };
+  {
+    // #1870 SELF-CHECK, every run: the fixture's four skipped sites read 0 and its four controls read as run —
+    // R3 after an unevaluated `x && b` (a nested zero range that is not a continuation), R4 after a skipped
+    // `{ }` then-block. Without the extension, S2, S3 and S4 read as run.
+    const fx = result.find((r) => r.url === pathToFileURL(fixtureFile).href);
+    const fxSrc = readFileSync(fixtureFile, 'utf8');
+    rmSync(fixtureDir, { recursive: true, force: true });
+    if (!fx) siteFails.push('#1870 the coverage fixture reported no coverage — the self-check measured nothing');
+    else {
+      const fxCount = makeCountAt(fxSrc, fx.functions.flatMap((fn) => fn.ranges));
+      const wrong = [...fxSrc.matchAll(/chk\([^']*'(\w+)'\)/g)].flatMap((m) => {
+        const n = fxCount(m.index!); const skipped = /^[ST]/.test(m[1]);
+        return (skipped ? n === 0 : n > 0) ? [] : [`${m[1]} reads ${n}`];
+      });
+      if (wrong.length) siteFails.push(`#1870 the coverage probe misreads the \`break\`-skipped fixture (S* and T1 never ran, R* ran): ${wrong.join(', ')}`);
+    }
+  }
   if (!covered) siteFails.push(`no coverage was reported for ${import.meta.url}?cov — the probe measured nothing`);
   else {
     await session.post('Debugger.enable');
@@ -189,13 +277,7 @@ if (!import.meta.url.endsWith('?cov')) {
           }
         }
       });
-      const ranges = covered.functions.flatMap((fn) => fn.ranges);
-      // The innermost range containing an offset carries its count — V8 nests block ranges in functions.
-      const countAt = (off: number): number => {
-        let best = Infinity; let count = -1;
-        for (const r of ranges) if (r.startOffset <= off && off < r.endOffset && r.endOffset - r.startOffset < best) { best = r.endOffset - r.startOffset; count = r.count; }
-        return count;
-      };
+      const countAt = makeCountAt(scriptSource, covered.functions.flatMap((fn) => fn.ranges));
       const unexecuted: string[] = [];
       const source = readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n');
       // #3985: a span this run SKIPPED (by its label, recorded at runtime by `skip`) is exempt, every site in it
@@ -315,6 +397,15 @@ const exampleTheme = <T = Theme,>(name: string, build: () => T): T | undefined =
     if (!exampleLoadFailed.has(name)) { exampleLoadFailed.add(name); ok(false, `example brand ${name} resolves — the engine threw: ${(e as Error).message}`); }
     return undefined;
   }
+};
+/**
+ * #1889: a build a LEVER-LEVEL refusal can reach, outside the example brands. A throw records one named failure
+ * and yields `undefined`, so the arms after it still run and fail by their own names. Unguarded, one refusal at a
+ * legal input crashed the suite: the uncaught-exception handler names what failed so far, and nothing after the
+ * throw runs. Measured: a radius lever refused at a legal scale stopped the run after 892 assertions, at #1015.
+ */
+const refusable = <T,>(name: string, build: () => T): T | undefined => {
+  try { return build(); } catch (e) { ok(false, `${name} builds — the engine threw: ${(e as Error).message}`); return undefined; }
 };
 /**
  * The contract corpus, which `token-contract.ts` builds itself: aurora, harbor and wendys among the
@@ -535,7 +626,10 @@ const nbFixName = (n: string): string => nbVar(CORE_GROUPS.has(n.split('/')[0]) 
     const text = readFileSync(resolve(HERE, `./examples/${file}`), 'utf8');
     const std = parseStandardDesignMd(text);
     const input: BrandInput = isStandardDesignMd(std) ? standardToBrandInput(std).input : parseDesignMd(text).input;
-    const steps = brandTheme(input).palettes.find((p) => p.role === 'neutral')!.steps.map((s) => s.num);
+    // #1889: through `exampleTheme`, so a refused brief is one named failure and the next brief still runs.
+    const exampleT = exampleTheme(file.replace(/\.design\.md$/, ''), () => brandTheme(input));
+    if (!exampleT) continue;
+    const steps = exampleT.palettes.find((p) => p.role === 'neutral')!.steps.map((s) => s.num);
     for (const mode of ['light', 'dark'] as const) {
       const thrown: string[] = [], misnamed: string[] = [];
       let built = 0, firstError = '';
@@ -750,7 +844,8 @@ const nbFixName = (n: string): string => nbVar(CORE_GROUPS.has(n.split('/')[0]) 
     const text = readFileSync(resolve(HERE, `./examples/${file}`), 'utf8');
     const std = parseStandardDesignMd(text);
     const input: BrandInput = isStandardDesignMd(std) ? standardToBrandInput(std).input : parseDesignMd(text).input;
-    const plain = brandTheme(input);
+    const plain = exampleTheme(file.replace(/\.design\.md$/, ''), () => brandTheme(input)); // #1889
+    if (!plain) continue;
     const neutralPal = plain.palettes.find((p) => p.role === 'neutral')!;
     const steps = neutralPal.steps.map((st) => st.num);
     const plainModes = resolveAllModes(plain);
@@ -902,7 +997,7 @@ const nbFixName = (n: string): string => nbVar(CORE_GROUPS.has(n.split('/')[0]) 
     const t = ['background.secondary', 'background.primary', 'background.tertiary'].find((k) => roles[k]?.path.endsWith(`.${pal}.${step}`));
     return t ? roles[t].hex : null;
   };
-  const brands = [...contractCorpus().map(({ id, theme }) => ({ id: id.split(' ')[0], theme })), { id: 'prism3', theme: brandTheme(exampleBrands()['prism3'] as BrandInput) }];
+  const brands = [...corpus().map(({ id, theme }) => ({ id: id.split(' ')[0], theme })), { id: 'prism3', theme: brandTheme(exampleBrands()['prism3'] as BrandInput) }];
   ok(brands.length >= 11, `Q689 floor promise: the corpus and the default example are all swept (found ${brands.length})`);
   for (const { id, theme } of brands) {
     const modes = resolveAllModes(theme).map((m) => m.mode);
@@ -1106,6 +1201,8 @@ for (const hx of ['#000000', '#333333', '#7f7f7f', '#808080', '#ffffff']) {
     'color.ts': [/fmt === 'hex' \? Math\.round\(a \* 255\) \/ 255 : Math\.round\(a \* 100\) \/ 100/],
     // A dark-mode shadow layer's alpha, not a ratio.
     'theme-shadow.ts': [/const darkAlpha = .*Math\.round\(a \* \(0\.3 \+ 0\.09 \* i\) \* 100\) \/ 100/],
+    // #4128: a type style's tracking in px, to 0.01px, not a ratio.
+    'emit-dtcg-overlay.ts': [/const r = Math\.round\(mult \* sizePx \* 100\) \/ 100;/],
   };
   const engineSrc = readdirSync(HERE).filter((n) => n.endsWith('.ts') && n !== 'test.ts' && !n.endsWith('-test.ts') && !n.startsWith('lint-'));
   const engineRolled = engineSrc.flatMap((n) => readFileSync(resolve(HERE, n), 'utf8').split('\n').flatMap((text, i) =>
@@ -1582,7 +1679,8 @@ for (const b of brands) {
   const misses: string[] = [];
   let checked = 0, pins = 0;
   for (const [id, inp] of brands) {
-    const base = brandTheme(inp);
+    const base = exampleTheme(id, () => brandTheme(inp)); // #1889
+    if (!base) continue;
     const pal = base.linkPalette;
     const steps = base.palettes.find((p) => p.palette === pal)?.steps ?? [];
     for (const mode of ['light', 'dark']) for (const st of steps) {
@@ -4089,8 +4187,8 @@ for (const b of brands) {
     //
     // (b1) `modeLevers: { dark: { radius: 0 } }` — the ramp goes sharp in one mode, so the corner must
     // follow it to 0 there. The clamp's FIRST input moving.
-    const sharp = (buildTree(controlBrand('comfortable', { modeLevers: { dark: { radius: 0 } } })).tree as any).prism.control.size;
-    const notSharp = CONTROL_RUNG_NAMES.filter((n) => sharp[n]?.radius?.$extensions?.prism3?.modes?.dark?.px !== 0);
+    const sharp = refusable('#1015 (b1) a `modeLevers.radius: 0` control brand', () => (buildTree(controlBrand('comfortable', { modeLevers: { dark: { radius: 0 } } })).tree as any).prism.control.size);
+    const notSharp = CONTROL_RUNG_NAMES.filter((n) => sharp?.[n]?.radius?.$extensions?.prism3?.modes?.dark?.px !== 0);
     ok(notSharp.length === 0, '#1015 a `modeLevers.radius: 0` mode re-derives the corner from THAT mode\'s ramp, so the control goes sharp with everything else — a 2px corner in a mode whose every radius is 0 is a wrong value that resolves (#708)'
       + (notSharp.length ? ` — NOT SHARP: ${notSharp.join(', ')}` : ''));
     // (b2) wireframe, which zeroes radius WITHOUT a `modeLevers` entry (it refuses one — see D(c)), so
@@ -4299,12 +4397,18 @@ for (const b of brands) {
       // Toast (#2668): no size axis, so every key is bare. block / inline start / inline end / message-to-controls gap /
       // glyph-to-message gap. The action-to-close 4px is not listed: it stays at the floor.
       toast: { keys: [], sizes: [], bare: ['pad-y', 'pad-x', 'pad-end', 'gap', 'glyph-gap'] },
+      // #4007: the menu item's inline padding and gap, one size.
+      'menu-item': { keys: [], sizes: [], bare: ['padding-x', 'gap'] },
+      tooltip: { keys: [], sizes: [], bare: ['pad-y', 'pad-x'] },
       // Divider (#3051, #3143): the labeled divider's label-to-line gap, across a row and down a column.
       divider: { keys: [], sizes: [], bare: ['horizontal.gap', 'vertical.gap'] },
       'breadcrumb-item': { keys: ['gap'], sizes: ['small', 'medium'] },
       breadcrumbs: { bare: ['back-gap'], keys: ['gap'], sizes: ['small', 'medium'] },
       // Page navigation (#3345): the gap between items, Breadcrumbs' two sizes.
       'page-nav': { keys: ['gap'], sizes: ['small', 'medium'] },
+      // Steps (#3055, DRAFT): the gap between a step's disc, name and line, and the same gap between steps.
+      'step-item': { keys: ['gap'], sizes: ['small', 'medium'] },
+      steps: { keys: ['gap'], sizes: ['small', 'medium'] },
     };
     const BTN = { compact: 'small 12/8/4/6 · medium 12/8/6/6 · large 20/12/6/8', comfortable: 'small 16/12/6/8 · medium 16/12/8/8 · large 24/16/8/12', spacious: 'small 20/16/8/12 · medium 20/16/12/12 · large 32/20/12/16' };
     // Rows: block padding (the per-size minimum, #2894) / control-to-label gap (8/12/12 since #3173, owner Q3173 A).
@@ -4347,6 +4451,8 @@ for (const b of brands) {
       banner: { compact: 'bare 12/8/8', comfortable: 'bare 16/12/12', spacious: 'bare 20/16/16' },
       // Toast (#2668, the proposal's §8 approved by call 13 A): comfortable is 8/16/8 padding, 8 to the controls, 12 glyph to message.
       toast: { compact: 'bare 6/12/6/6/8', comfortable: 'bare 8/16/8/8/12', spacious: 'bare 12/20/12/12/16' },
+      'menu-item': { compact: 'bare 8/6', comfortable: 'bare 12/8', spacious: 'bare 16/12' },
+      tooltip: { compact: 'bare 2/6', comfortable: 'bare 4/8', spacious: 'bare 6/12' },
       // Divider (#3051, Q3051.4 A; #3143, Q3143.3 A): the label-to-line gap, horizontal / vertical. Comfortable is the
       // owner's space.300, 24px, across a row and space.150, 12px, down a column; the vertical one moves 8/12/16.
       divider: { compact: 'bare 20/8', comfortable: 'bare 24/12', spacious: 'bare 32/16' },
@@ -4356,6 +4462,9 @@ for (const b of brands) {
       'breadcrumb-item': { compact: 'small 4 · medium 6', comfortable: 'small 4 · medium 8', spacious: 'small 6 · medium 12' },
       breadcrumbs: { compact: 'bare 4 · small 4 · medium 6', comfortable: 'bare 4 · small 4 · medium 8', spacious: 'bare 6 · small 6 · medium 12' },
       'page-nav': { compact: 'small 12 · medium 20', comfortable: 'small 16 · medium 24', spacious: 'small 20 · medium 32' },
+      // Steps (#3055, DRAFT): comfortable is the build's space.075 / space.100, one ladder step each way.
+      'step-item': { compact: 'small 4 · medium 6', comfortable: 'small 6 · medium 8', spacious: 'small 8 · medium 12' },
+      steps: { compact: 'small 4 · medium 6', comfortable: 'small 6 · medium 8', spacious: 'small 8 · medium 12' },
     };
     const wrong: string[] = [];
     for (const [id, spec] of Object.entries(SPECS)) {
@@ -4399,6 +4508,7 @@ for (const b of brands) {
       // Banner (#2579): the glyph→content gap and the fixed title→body gap (one action since Q533.1, so no action gap).
       banner: ['gap', 'content-gap'],
       toast: ['gap', 'glyph-gap', 'controls-gap'],
+      'menu-item': ['gap'],
       // #3051, #3143: the labeled divider's label-to-line gap, each orientation's own key.
       divider: ['horizontal.gap', 'vertical.gap'],
       // #2709: the three defs with a density-following gap that joined after this list was written.
@@ -4414,6 +4524,9 @@ for (const b of brands) {
       'breadcrumb-item': ['size.small.gap', 'size.medium.gap'],
       breadcrumbs: ['size.small.gap', 'size.medium.gap'],
       'page-nav': ['size.small.gap', 'size.medium.gap'],
+      // #3055: the gap between a step's disc, name and line, and between steps.
+      'step-item': ['size.small.gap', 'size.medium.gap'],
+      steps: ['size.small.gap', 'size.medium.gap'],
       tag: ['small', 'medium', 'large'].flatMap((v) => [
         `size.${v}.select.gap+size.${v}.select.label-inset`, `size.${v}.dismissible.gap+size.${v}.dismissible.label-inset`, `size.${v}.check-gap`]),
     };
@@ -4478,6 +4591,8 @@ for (const b of brands) {
       toast: { prefix: 'bare', lt: [['gap', 'pad-x'], ['glyph-gap', 'pad-x']] },
       // #4008: the header, body and footer gap is tighter than the panel padding around them.
       popover: { prefix: 'bare', lt: [['gap', 'pad']] },
+      // #4007: the item's gap is tighter than its inline padding.
+      'menu-item': { prefix: 'bare', lt: [['gap', 'padding-x']] },
     };
     const GAP_TAILS = ['gap', 'check-gap'];
     // `pad` (#2579): Banner's one padding, block and inline alike.
@@ -5716,7 +5831,8 @@ arm: {
 
       for (const brand of EXAMPLE_IDS) {
         const input = exampleBrands()[brand] as BrandInput;
-        const base = brandTheme(input);
+        const base = exampleTheme(brand, () => brandTheme(input)); // #1889
+        if (!base) continue;
         const baseModes = resolveAllModes(base);
         for (const family of ['light', 'dark'] as const) {
           const baseM = baseModes.find((m) => m.mode === family)!;
@@ -5753,8 +5869,9 @@ arm: {
 
       // HIGH CONTRAST FOLLOWS THE STANDARD FLOOR (owner): HC's page is flat, but its floor is the standard
       // mode's, as it already is for `base`. So hc-light's floor-gated roles measure against LIGHT's tier.
-      {
+      hcFloor: {
         const input = exampleBrands()['aurora'] as BrandInput;
+        if (!exampleTheme('aurora', () => brandTheme(input))) break hcFloor; // #1889
         const baseHc = resolveAllModes(brandTheme(input)).find((m) => m.mode === 'hc-light')!.roles as Roles;
         const baseLight = resolveAllModes(brandTheme(input)).find((m) => m.mode === 'light')!.roles as Roles;
         const floorName = shortPath(baseLight['background.secondary'].path);
@@ -5768,8 +5885,9 @@ arm: {
       }
 
       // AN EXPLICIT floorStep STILL WINS, and may differ from the tier (owner: allowed, not refused).
-      {
+      explicitFloor: {
         const input = exampleBrands()['aurora'] as BrandInput;
+        if (!exampleTheme('aurora', () => brandTheme(input))) break explicitFloor; // #1889
         const theme = brandTheme(withTier(input, 'light', { secondary: 200, floorStep: 100 }));
         const light = resolveAllModes(theme).find((m) => m.mode === 'light')!;
         const r = (light.roles as Roles)['text.secondary'];
@@ -6565,12 +6683,12 @@ arm: {
   //     light's canonical $value is untouched, and radius.none (already 0) carries no override.
   const sharpDark = { ...base, modeLevers: { dark: { radius: 0 } } } as unknown as BrandInput;
   const baseRadius = buildTree(brandTheme(base)).tree[root].radius;
-  const dRadius = buildTree(brandTheme(sharpDark)).tree[root].radius;
-  ok(baseRadius.md.px !== 0 && dRadius.md.$extensions.prism3.modes.dark.$value === `{${root}.core.dimension.0}`,
-    `D(a): dark radius:0 → radius.md carries a modes.dark override aliasing dimension.0 (got ${dRadius.md.$extensions.prism3.modes?.dark?.$value})`);
-  ok(dRadius.md.$extensions.prism3.modes.dark.px === 0, 'D(a): the dark override records px 0');
-  ok(dRadius.md.$value === baseRadius.md.$value, `D(a): light canonical radius.md $value is unchanged by the dark lever (${dRadius.md.$value})`);
-  ok(dRadius.none.$extensions?.prism3?.modes === undefined, 'D(a): radius.none (already 0) carries no override (px equal → no diff)');
+  const dRadius = refusable('D(a) a dark `radius: 0` brand', () => buildTree(brandTheme(sharpDark)).tree[root].radius);
+  ok(baseRadius.md.px !== 0 && dRadius?.md.$extensions.prism3.modes?.dark?.$value === `{${root}.core.dimension.0}`,
+    `D(a): dark radius:0 → radius.md carries a modes.dark override aliasing dimension.0 (got ${dRadius?.md.$extensions.prism3.modes?.dark?.$value})`);
+  ok(dRadius?.md.$extensions.prism3.modes?.dark?.px === 0, 'D(a): the dark override records px 0');
+  ok(dRadius?.md.$value === baseRadius.md.$value, `D(a): light canonical radius.md $value is unchanged by the dark lever (${dRadius?.md.$value})`);
+  ok(!!dRadius && dRadius.none.$extensions?.prism3?.modes === undefined, 'D(a): radius.none (already 0) carries no override (px equal → no diff)');
 
   // (a′) a lever equal to the default scale (radius:1) produces NO leaf override — every rung px equals
   //      light, so the DTCG radius tree is byte-identical to the baseline.
@@ -6580,11 +6698,11 @@ arm: {
 
   // (a″) a custom mode can carry a radius lever too (customizable modes only).
   const custom = { ...base, customModes: [{ name: 'marketing', base: 'light' }], modeLevers: { marketing: { radius: 2 } } } as unknown as BrandInput;
-  const cMd = buildTree(brandTheme(custom)).tree[root].radius.md.$extensions.prism3.modes.marketing;
+  const cMd = refusable('D(a″) a custom-mode radius lever brand', () => buildTree(brandTheme(custom)).tree[root].radius.md.$extensions.prism3.modes.marketing);
   ok(!!cMd && cMd.px === 8, `D(a): a custom mode carries a radius lever (marketing radius:2 → md ${cMd?.px}px)`);
 
   // (b) the Figma radius emit produces a dark radius mode/file with the override materialised.
-  const figRadius = buildFigmaDims(brandTheme(sharpDark)).radius;
+  const figRadius = refusable('D(b) the Figma radius emit of a dark `radius: 0` brand', () => buildFigmaDims(brandTheme(sharpDark)).radius) ?? [];
   const figDark = figRadius.find((f) => f.$mode === 'dark');
   // ROOTED (#1097) — this is an emitted Figma variable, and the alias target on the next line has carried
   // the root for as long as this arm has existed, so an unrooted lookup here would have been the only half
@@ -8400,7 +8518,7 @@ arm: {
   const codeOnly = codeOnlyText(spinner.anatomy!.codeOnly).join('\n');
   ok(/motion\.duration\.spin/.test(spinner.motion?.reduceMotion ?? '') && /motion\.duration-reduced\.spin/.test(spinner.motion?.reduceMotion ?? '') && !/\d\s?ms\b/.test(spinner.motion?.reduceMotion ?? ''),
     '#1670 spinner: the motion field names both turn tokens and no millisecond value (#4174 a: the token, never its number)');
-  ok(/linear infinite/.test(codeOnly) && /prefers-reduced-motion: reduce/.test(codeOnly) && /--motion-duration-reduced-spin/.test(codeOnly),
+  ok(/var\(--motion-easing-linear\) infinite/.test(codeOnly) && /prefers-reduced-motion: reduce/.test(codeOnly) && /--motion-duration-reduced-spin/.test(codeOnly),
     '#1670 spinner: the code rule spins linear and infinite and slows under prefers-reduced-motion');
 
   // ---- THE OWNER'S DECISIONS OF 2026-09-27 (the brief carry-forward) ----------------------------------------
@@ -9126,7 +9244,7 @@ arm: {
     prism3: { xl: 8, '2xl': 12, '3xl': 16 },
   };
   const brands1852 = [
-    ...contractCorpus().map(({ id, theme }) => ({ id: id.split(' ')[0], theme })),
+    ...corpus().map(({ id, theme }) => ({ id: id.split(' ')[0], theme })),
     { id: 'prism3', theme: brandTheme(exampleBrands()['prism3'] as BrandInput) },
   ];
   ok(brands1852.length === Object.keys(BRAND_1852).length && brands1852.every((b) => b.id in BRAND_1852),
@@ -9157,20 +9275,20 @@ arm: {
 
   // (c) EVERY mode, through the per-mode seams no corpus brand exercises: a `modeLevers` radius on dark
   //     re-derives both rungs there, and wireframe zeroes them — in the DTCG leaf and in each Figma mode file.
-  const modal = brandTheme({ id: 'r1852', primary: { l: 0.55, c: 0.18, h: 285 }, neutral: { hue: 285, chroma: 0.01 },
-    modes: ['light', 'dark', 'wireframe'], modeLevers: { dark: { radius: 2 } } } as unknown as BrandInput);
-  const mRadius = (buildTree(modal).tree as any)[modal.root].radius;
+  const modal = refusable('#1852 container rung: the dark `radius: 2` lever brand', () => brandTheme({ id: 'r1852', primary: { l: 0.55, c: 0.18, h: 285 }, neutral: { hue: 285, chroma: 0.01 },
+    modes: ['light', 'dark', 'wireframe'], modeLevers: { dark: { radius: 2 } } } as unknown as BrandInput));
+  const mRadius = modal ? (buildTree(modal).tree as any)[modal.root].radius : {};
   const MODE_1852: Record<string, Rungs1852> = { Default: { xl: 8, '2xl': 12, '3xl': 16 }, dark: { xl: 16, '2xl': 24, '3xl': 32 }, wireframe: { xl: 0, '2xl': 0, '3xl': 0 } };
   for (const rung of ['xl', '2xl', '3xl'] as const) {
     const modes = mRadius[rung]?.$extensions?.prism3?.modes ?? {};
     ok(modes.dark?.px === MODE_1852.dark[rung] && modes.wireframe?.px === 0,
       `#1852 container rung: radius.${rung} carries dark ${MODE_1852.dark[rung]}px and wireframe 0px overrides (got dark ${modes.dark?.px}, wireframe ${modes.wireframe?.px})`);
   }
-  const mFiles = buildFigmaDims(modal).radius;
+  const mFiles = modal ? buildFigmaDims(modal).radius : [];
   ok(mFiles.map((f) => f.$mode).sort().join(',') === 'Default,dark,wireframe',
     `#1852 container rung: the lever brand emits Default, dark and wireframe radius modes (got ${mFiles.map((f) => f.$mode).join(',')})`);
   for (const f of mFiles) for (const rung of ['xl', '2xl', '3xl'] as const) {
-    const v = f.variables.find((x) => x.name === `${modal.root}/radius/${rung}`);
+    const v = f.variables.find((x) => x.name === `${modal!.root}/radius/${rung}`);
     ok(v?.value === MODE_1852[f.$mode]?.[rung],
       `#1852 container rung: Figma radius/${rung} in mode ${f.$mode} is ${MODE_1852[f.$mode]?.[rung]}px (got ${v?.value})`);
   }
@@ -10587,7 +10705,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
   // one floor before the build path runs, and accepts two. BY-NAME MUTATION: drop `minItems` from the schema →
   // this arm fails.
   ok(validateBrandInput({ id: 'bpS1', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 }, layout: { breakpoints: [0] } })
-      .some((e) => /layout\.breakpoints.*1 item\(s\) < minItems 2/.test(e))
+      .some((e) => /layout\.breakpoints has 1 item\(s\); it takes at least 2/.test(e))
     && validateBrandInput({ id: 'bpS2', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 }, layout: { breakpoints: [0, 768] } }).length === 0,
     '[#3698 R2] the schema refuses one breakpoint (minItems 2) and accepts two');
   // #2198 — more than seven breakpoints are refused (owner decision 2026-10-06, Q43 A). `bpNames` names seven
@@ -12040,7 +12158,7 @@ arm: {
     { re: /^prism\.shadow\./, group: 'shadow', why: '#301 — terminal composite; no consumer resolves nested aliases' },
   ];
   const KNOWN_VIOLATIONS = TERMINAL_COMPOSITE_EXEMPTIONS.map((e) => e.re);
-  const t: any = brandTheme({
+  const t: any = refusable('#301 the every-lever-at-once ledger brand', () => brandTheme({
     id: 'inv', root: 'prism', modes: ['light', 'dark'],
     primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.006, auto: true },
     // Every per-mode axis engaged at once, so the walk sees the full violation surface.
@@ -12050,8 +12168,8 @@ arm: {
       lineHeights: { normal: 'relaxed' }, letterSpacings: { normal: 'wide' },
       shadow: { softness: 2, tint: { hue: 10, amount: 0.4 } },
     } },
-  } as any);
-  const built: any = buildTree(t);
+  } as any));
+  const built: any = t ? buildTree(t) : { tree: {} };
   const tree = built.tree ?? built;
 
   const offenders: string[] = [];
@@ -12145,7 +12263,7 @@ arm: {
   // And the axes we HAVE tiered must stay TIERED — the real regression risk. Re-walk each one in
   // isolation with the ledger disabled, so a future change that turns an alias back into a literal
   // fails here even though the global check above would have excused nothing.
-  const root = tree.prism;
+  const root = tree.prism ?? {};
   const literalModeLeaves = (sub: any, base: string): string[] => {
     const hits: string[] = [];
     const rec = (node: any, path: string): void => {
@@ -12696,6 +12814,13 @@ arm: {
     ok(broken.length === 0, `example brand '${id}': every preview contract holds (all 4 modes)` + (broken.length ? ` — FAIL: ${broken.join('; ')}` : ''));
     ok(rp.unresolvedType.length === 0, `example brand '${id}': emits every type style the preview spec binds` + (rp.unresolvedType.length ? ` — UNRESOLVED: ${rp.unresolvedType.join(', ')}` : ''));
   }
+  // #3977: every example the hosts list (the committed JSON's keys, read from the file, not from the registry) has the
+  // few words the hosts show under its name. The approved copy itself is held in the studio's chrome arm.
+  for (const id of Object.keys(JSON.parse(committed))) {
+    const line = EXAMPLE_DESCRIPTIONS[id];
+    ok(typeof line === 'string' && line.trim().length > 0 && line.length <= 60,
+      `#3977 example brand '${id}' has a description of a few words for the hosts' examples list — has ${JSON.stringify(line ?? null)}`);
+  }
 }
 // (10a) #1720 — a type binding the brand does not emit is NAMED, never resolved to a default. The read
 // was `node?.$value ?? {}`, and every accessor after it fell through to its own default, so a missing
@@ -12806,7 +12931,7 @@ arm: {
     'nb-redesign': { light: '#767576 #767576 #828282' },
   };
   const others: Array<[string, Theme | undefined]> = [
-    ...contractCorpus().filter(({ id }) => id.split(' ')[0] !== 'nb').map(({ id, theme }) => [id.split(' ')[0], theme] as [string, Theme]),
+    ...corpus().filter(({ id }) => id.split(' ')[0] !== 'nb').map(({ id, theme }) => [id.split(' ')[0], theme] as [string, Theme]),
     ['prism3', exampleTheme('prism3 (Q-TXT1)', () => brandTheme(exampleBrands()['prism3'] as BrandInput))],
     ['nb-redesign', exampleTheme('nb-redesign (Q-TXT1)', () => brandTheme(readExampleBrand('./examples/nb-redesign.design.md')))],
   ];
@@ -12835,6 +12960,137 @@ arm: {
     `Q-TXT1 A: no other brand's secondary ink moved — text, icon and inverse text match origin/main in every corpus brand and prism3, and the redesign seed holds its page fit (#3219) (${compared} brand × mode cells${moved.length ? `; MOVED: ${moved.slice(0, 4).join('; ')}` : ''})`);
 }
 
+// ── #3339 (owner C, 2026-11-18) — THE INTERACTIVE GROUND: A BRAND DECLARES THE DARKEST GROUND ITS CONTROLS SIT ON ──────
+// `interactiveGround: 'floor' | 'page'` (the name and values are a DRAFT for the owner). SUBJECT = `resolveAllModes`.
+// ORACLE = the rule, typed here: the in-scope role lists are literals (never read from `modes.ts`), each ratio is
+// recomputed from the emitted hex against the ground's emitted hex, and "the lightest" is a scan of the neutral ramp.
+// Arms: (a) unset is byte-identical to 'floor' in every corpus brand; (b) under 'page' each in-scope role names the page
+// (or the inverse page), clears its bar there, and the neutral ones are the lightest step that does; (c) high contrast
+// is identical under either value; (d) out-of-scope roles do not move; (e) nothing fails under 'page' that passes under
+// 'floor'; (f) the setting moves the field border in the two brands the PR measured (450 → 400 in light); (g) an
+// override's flag reads the declared ground; (h) the input is validated and the schema lists the same values;
+// (i) it survives the design.md round trip; (j) under 'page' the field status borders only get lighter, and do in the default brand.
+// MUTATIONS, each failing by name: measure `field.border` on `background.secondary` while it names the page → (b);
+// drop the page-under-wash ground from `fieldStatusGrounds` under 'page' → (b); let `fieldStatusGrounds` ignore
+// `pageControls`, keeping the inset grounds under 'page' → (j);
+// drop `!hc` from `pageControls` → (c); let the setting reach the links → (d); drop the enum entry in `theme-brand.ts` → (h).
+{
+  // `disabled.border` and its inverse twin share the disabled inks' pick and ground since #2750 (#4085), so they are in scope.
+  const IN_PAGE = ['field.border.rest', 'field.border.hover', 'disabled.text', 'disabled.icon', 'disabled.border', 'interactive.primary.fill.rest',
+    'interactive.destructive.fill.rest', 'interactive.destructive.text.rest', 'interactive.destructive.border.rest'];
+  const IN_INV = ['inverse.field.border.rest', 'inverse.field.border.hover', 'inverse.disabled.text', 'inverse.disabled.icon', 'inverse.disabled.border',
+    'inverse.interactive.destructive.text.rest', 'inverse.interactive.destructive.border.rest'];
+  const LIGHTEST = ['field.border.rest', 'disabled.text', 'inverse.field.border.rest', 'inverse.disabled.text'];
+  const STATUS = ['border.danger', 'border.warning', 'border.success'];
+  const OUT = ['text.primary', 'text.secondary', 'text.tertiary', 'field.placeholder', 'text.link.default', 'icon.link.default', 'border.focus',
+    'interactive.neutral.border.rest', 'interactive.primary.border.rest', 'interactive.primary.text.rest', 'interactive.neutral.text.rest',
+    'foreground.danger', 'border.tertiary', 'background.secondary', 'foreground.primary'];
+  const brands: Array<[string, Theme]> = [
+    ...contractCorpus().map(({ id, theme }) => [id.split(' ')[0], theme] as [string, Theme]),
+    ['prism3', brandTheme(exampleBrands()['prism3'] as BrandInput)],
+  ];
+  type R = Record<string, { path: string; hex: string; against: string; min: number; ratio: number }>;
+  const offA: string[] = [], offB: string[] = [], offC: string[] = [], offD: string[] = [], offE: string[] = [];
+  let cellsB = 0, cellsBW = 0, cellsD = 0, cellsJ = 0;
+  const offJ: string[] = [], strictJ: string[] = [];
+  for (const [id, t] of brands) {
+    const unset = resolveAllModes({ ...t, interactiveGround: undefined } as Theme);
+    const floor = resolveAllModes({ ...t, interactiveGround: 'floor' } as Theme);
+    const page = resolveAllModes({ ...t, interactiveGround: 'page' } as Theme);
+    if (JSON.stringify(unset) !== JSON.stringify(floor)) offA.push(id);
+    const steps = (t.palettes.find((p) => p.palette === t.roleToPalette.neutral)!.steps as Array<{ rgb: RGB }>).map((x) => x.rgb);
+    for (const pm of page) {
+      const fm = floor.find((m) => m.mode === pm.mode)!;
+      const P = pm.roles as R, F = fm.roles as R;
+      if (pm.mode.startsWith('hc')) { if (JSON.stringify(P) !== JSON.stringify(F)) offC.push(`${id} ${pm.mode}`); continue; }
+      for (const [keys, ground] of [[IN_PAGE, 'background.primary'], [IN_INV, 'inverse.background.primary']] as [string[], string][]) {
+        const g = hexToRgb(P[ground].hex);
+        for (const k of keys) {
+          const r = P[k]; cellsB++;
+          if (!r) { offB.push(`${id} ${pm.mode} ${k}: missing`); continue; }
+          if (r.against !== ground) offB.push(`${id} ${pm.mode} ${k}: against ${r.against}, want ${ground}`);
+          const x = contrast(hexToRgb(r.hex), g);
+          if (x < r.min - 1e-9) offB.push(`${id} ${pm.mode} ${k}: ${x.toFixed(2)} < ${r.min} on ${ground}`);
+          if (LIGHTEST.includes(k) && !(t as any).overrides?.[pm.mode]?.[k]) {
+            const lighter = steps.filter((s) => { const y = contrast(s, g); return y >= r.min - 1e-9 && y < x - 1e-9; });
+            if (lighter.length) offB.push(`${id} ${pm.mode} ${k}: ${r.hex} ${x.toFixed(2)} is not the lightest step clearing ${r.min} on ${ground} (${lighter.map(hex).join(', ')})`);
+          }
+        }
+      }
+      // The field status borders (#4077 review M2): under 'page' they drop the inset grounds and keep the page and the
+      // page under the hover wash. Both grounds are recomputed here from emitted hex, the wash at the alpha its dialect
+      // ships (rounded here, not by the engine's `emittedAlpha`), so dropping the washed ground fails this by name.
+      {
+        const pageRgb = hexToRgb(P['background.primary'].hex);
+        const wash = P['interactive.neutral.overlay.hover'] as (R[string] & { alpha?: number }) | undefined;
+        const shipped = wash?.alpha === undefined ? undefined
+          : t.colorFormat === 'hex' ? Math.round(wash.alpha * 255) / 255 : Math.round(wash.alpha * 100) / 100;
+        const washed = shipped === undefined ? undefined : composite(pageRgb, hexToRgb(wash!.hex), shipped);
+        for (const k of STATUS) {
+          const r = P[k]; cellsB++;
+          if (!r) { offB.push(`${id} ${pm.mode} ${k}: missing`); continue; }
+          if (r.against !== 'background.primary') offB.push(`${id} ${pm.mode} ${k}: against ${r.against}, want background.primary`);
+          const x = contrast(hexToRgb(r.hex), pageRgb);
+          if (x < r.min - 1e-9) offB.push(`${id} ${pm.mode} ${k}: ${x.toFixed(2)} < ${r.min} on background.primary`);
+          if (washed) {
+            cellsBW++;
+            const y = contrast(hexToRgb(r.hex), washed);
+            if (y < r.min - 1e-9) offB.push(`${id} ${pm.mode} ${k}: ${r.hex} ${y.toFixed(2)} < ${r.min} on background.primary under the hover wash (${hex({ r: Math.round(washed.r), g: Math.round(washed.g), b: Math.round(washed.b) })})`);
+          }
+          // (j) The other direction (#4077 delta review M-B): 'page' only relaxes the status borders, so on the page they
+          // carry no more contrast than under 'floor', and in the default brand's light mode strictly less.
+          const fr = F[k];
+          if (fr) {
+            cellsJ++;
+            const xf = contrast(hexToRgb(fr.hex), pageRgb);
+            if (x > xf + 1e-9) offJ.push(`${id} ${pm.mode} ${k}: ${x.toFixed(2)} under 'page' > ${xf.toFixed(2)} under 'floor' on background.primary`);
+            if (id === 'prism3' && pm.mode === 'light' && x < xf - 1e-9) strictJ.push(k);
+          }
+        }
+      }
+      for (const k of OUT) { if (!F[k]) continue; cellsD++; if (P[k]?.path !== F[k].path || P[k]?.against !== F[k].against) offD.push(`${id} ${pm.mode} ${k}: ${F[k].path} → ${P[k]?.path}`); }
+      const failing = (rs: R) => new Set(Object.entries(rs).filter(([, r]) => r.min > 0 && r.ratio < r.min - 1e-9).map(([k]) => k));
+      const ff = failing(F);
+      for (const k of failing(P)) if (!ff.has(k)) offE.push(`${id} ${pm.mode} ${k}`);
+      if ((pm.warnings?.length ?? 0) > (fm.warnings?.length ?? 0)) offE.push(`${id} ${pm.mode}: ${pm.warnings!.length} warnings vs ${fm.warnings?.length ?? 0}`);
+    }
+  }
+  ok(brands.length >= 6 && offA.length === 0, `#3339 (a) interactiveGround unset is identical to 'floor' in every corpus brand (${brands.length} brands${offA.length ? `; differ: ${offA.join(', ')}` : ''})`);
+  ok(cellsB >= 100 && cellsBW >= 10 && offB.length === 0, `#3339 (b) under 'page' every in-scope interactive role names the page (inverse page on the band), clears its bar there, the field status borders also clear it under the hover wash, and the neutral ones are the lightest step that does (${cellsB} cells, ${cellsBW} washed${offB.length ? ` — ${offB.slice(0, 3).join('; ')}` : ''})`);
+  ok(offC.length === 0, `#3339 (c) high contrast is identical under 'floor' and 'page'${offC.length ? ` — moved: ${offC.slice(0, 4).join(', ')}` : ''}`);
+  ok(cellsD >= 100 && offD.length === 0, `#3339 (d) out-of-scope roles (text, links, focus, the button borders that follow their label, surfaces) do not move under 'page' (${cellsD} cells${offD.length ? ` — ${offD.slice(0, 3).join('; ')}` : ''})`);
+  ok(offE.length === 0, `#3339 (e) nothing fails under 'page' that passes under 'floor' (${offE.length ? offE.slice(0, 4).join('; ') : 'none'})`);
+  ok(cellsJ >= 30 && offJ.length === 0 && strictJ.length === STATUS.length,
+    `#3339 (j) under 'page' the field status borders carry no more contrast on the page than under 'floor', and in the default brand's light mode all three carry less (${cellsJ} cells; lighter in prism3 light: ${strictJ.join(', ') || 'none'}${offJ.length ? ` — ${offJ.slice(0, 3).join('; ')}` : ''})`);
+
+  // (f) It does something: the field border in light, measured by the build PR, typed here.
+  const fieldStep = (t: Theme, g?: 'page') => String((resolveAllModes({ ...t, interactiveGround: g } as Theme).find((m) => m.mode === 'light')!.roles as R)['field.border.rest'].path).split('.').slice(-1)[0];
+  const p3 = brandTheme(exampleBrands()['prism3'] as BrandInput), ref = nbTheme();
+  const moved = `${fieldStep(p3)}→${fieldStep(p3, 'page')} ${fieldStep(ref)}→${fieldStep(ref, 'page')}`;
+  ok(moved === '450→400 450→400', `#3339 (f) 'page' moves the light field border one step lighter in the default brand and the reference brand (read ${moved}, want 450→400 450→400)`);
+
+  // (g) A Studio override is flagged against the ground its role names: a hand-picked lighter field border is a
+  // warning under 'floor' and is not under 'page'.
+  const lighter = { palette: p3.roleToPalette.neutral, step: '400' };
+  const warned = (g?: 'page') => (resolveAllModes(brandTheme({ ...(exampleBrands()['prism3'] as BrandInput), ...(g ? { interactiveGround: g } : {}), overrides: { light: { 'field.border.rest': lighter } } } as any))
+    .find((m) => m.mode === 'light')!.warnings ?? []).filter((w) => w.role === 'field.border.rest').length;
+  ok(warned() === 1 && warned('page') === 0, `#3339 (g) an override of field.border.rest to neutral.400 is flagged under 'floor' and not under 'page' (${warned()} / ${warned('page')})`);
+
+  // (h) Validation and the schema: the same two values, typed here.
+  let refused = '';
+  try { brandTheme({ ...MINIMAL_BRAND, interactiveGround: 'card' } as unknown as BrandInput); } catch (e) { refused = String((e as Error).message); }
+  const sch = JSON.parse(readFileSync(resolve(HERE, './schema/theme-schema.json'), 'utf8')).properties?.interactiveGround ?? {};
+  ok(/^interactiveGround: "card" is invalid — must be one of floor\/page/.test(refused) && JSON.stringify(sch.enum) === '["floor","page"]' && sch.default === 'floor',
+    `#3339 (h) interactiveGround refuses a value outside floor/page by name, and theme-schema.json lists floor/page with floor the default (refused "${refused.slice(0, 80)}"; schema ${JSON.stringify(sch.enum)} default ${sch.default})`);
+
+  // (i) The design.md round trip: written out and read back, the brand keeps the setting and resolves the same.
+  const withPage = { ...(exampleBrands()['prism3'] as BrandInput), interactiveGround: 'page' } as BrandInput;
+  const back = parseDesignMd(toDesignMd(withPage)).input as BrandInput;
+  const fb = (b: BrandInput) => (resolveAllModes(brandTheme(b)).find((m) => m.mode === 'light')!.roles as R)['field.border.rest'].path;
+  ok((back as any).interactiveGround === 'page' && fb(back) === fb(withPage),
+    `#3339 (i) interactiveGround survives the design.md round trip (read back ${(back as any).interactiveGround}; field border ${fb(back)})`);
+}
+
 // ── Q3212.5 A — ONE PLACEHOLDER INK: `field.placeholder` IS `text.secondary`, IN EVERY MODE (#3220) ──────────────────
 // The field hosts bind `text.secondary` for the placeholder, and the style guide draws `field.placeholder`. They are one
 // ink: the placeholder takes `text.secondary`'s own fit, so under `secondaryTextGround: page` it moves with it, and in HC
@@ -12847,7 +13103,7 @@ arm: {
 {
   const brands: Array<[string, Theme | undefined]> = [
     ['nb', nbTheme()],
-    ...contractCorpus().filter(({ id }) => id.split(' ')[0] !== 'nb').map(({ id, theme }) => [id, theme] as [string, Theme]),
+    ...corpus().filter(({ id }) => id.split(' ')[0] !== 'nb').map(({ id, theme }) => [id, theme] as [string, Theme]),
     ['prism3', exampleTheme('prism3 (Q3212.5)', () => brandTheme(exampleBrands()['prism3'] as BrandInput))],
     ['nb-redesign', exampleTheme('nb-redesign (Q3212.5)', () => brandTheme(readExampleBrand('./examples/nb-redesign.design.md')))],
   ];
@@ -16392,6 +16648,11 @@ arm: {
   // compacted top-level field measured a median ~220 characters, so 5,000 is room for ~20 more levers
   // at ~250 each. When this fails, the list is 5,000 short of the wall and still passes the hard
   // limit, so there is time to scale again rather than trim.
+  //
+  // It came close (2026-11-21): 54,509, 491 under the alarm, with two approved PRs each pushing it over.
+  // The owner chose to scale again, not to move the alarm, so the ceiling and the margin are unchanged and
+  // the inline copy dropped the descriptions beneath every OPTIONAL field (the required fields and the
+  // `$defs` they reach keep theirs), which took the list from 54,897 to 41,731. The arms below hold where prose stays.
   const listChars = JSON.stringify(tools).length;
   ok(listChars <= 55_000,
     `MCP: tools/list keeps 5,000 chars of headroom under its 60,000 ceiling, room for ~20 more levers (${listChars.toLocaleString()} chars; fails above 55,000)`);
@@ -16401,33 +16662,99 @@ arm: {
   // description must be a non-empty PREFIX of the file's (a summary truncates, never rewrites), at most
   // 200 characters. The cap is what makes the headroom above hold: a lever's inline cost is its
   // structure plus one sentence, however long its full description grows.
+  //
+  // 2026-11-21: and WHERE a description stays is the second step's rule, restated here from the file, not
+  // read from mcp.ts: the schema's own, every top-level field's own, everything beneath a REQUIRED field,
+  // and everything in a `$defs` entry a required field reaches through `$ref`. Every other description
+  // must be absent from the inline copy, and must come back, word for word, from `list_levers describe`.
   {
     const inline = tools.find((t) => t.name === 'theme_brand')?.inputSchema?.properties?.brand;
+    const fileRequired = new Set<string>((brandSchema as any).required ?? []);
+    const fileDefs0: Record<string, any> = (brandSchema as any).$defs ?? {};
+    const reachedDefs = new Set<string>();
+    const reach = (o: any): void => {
+      if (Array.isArray(o)) { o.forEach(reach); return; }
+      if (!o || typeof o !== 'object') return;
+      for (const [k, v] of Object.entries(o)) {
+        const name = k === '$ref' && typeof v === 'string' && v.startsWith('#/$defs/') ? v.slice('#/$defs/'.length) : null;
+        if (name !== null && name in fileDefs0 && !reachedDefs.has(name)) { reachedDefs.add(name); reach(fileDefs0[name]); }
+        else reach(v);
+      }
+    };
+    for (const k of fileRequired) reach((brandSchema as any).properties?.[k]);
+    // #4312 (merged with #4464): `primary` takes a hex or an OKLCH object, so a required field reaches `colorAnchor`,
+    // and through it `hexColor` and `oklch`.
+    ok(fileRequired.size > 0 && [...reachedDefs].sort().join(',') === 'colorAnchor,hexColor,oklch',
+      `MCP: the required fields reach exactly the colorAnchor, hexColor and oklch $defs entries, whose prose stays inline with them (got: ${[...reachedDefs].sort().join(',') || 'none'})`);
+    const DATA = new Set(['default', 'enum', 'const', 'examples']);
     const drift: string[] = [], notPrefix: string[] = [], tooLong: string[] = [], midSentence: string[] = [];
-    const walk = (a: any, b: any, path: string): void => {
+    const notDropped: string[] = [];
+    const dropped: { path: string[]; text: string }[] = [];
+    // `keep`: may this node's description stay? `segs`: the JSON path from the schema root.
+    const walk = (a: any, b: any, path: string, segs: string[], keep: boolean): void => {
       if (Array.isArray(b)) {
         if (!Array.isArray(a) || a.length !== b.length) { drift.push(path); return; }
-        b.forEach((x, i) => walk(a[i], x, `${path}/${i}`));
+        b.forEach((x, i) => walk(a[i], x, `${path}/${i}`, [...segs, String(i)], keep));
         return;
       }
       if (b && typeof b === 'object') {
         if (!a || typeof a !== 'object' || Array.isArray(a)) { drift.push(path); return; }
-        if (Object.keys(a).sort().join(',') !== Object.keys(b).sort().join(',')) drift.push(`${path} (keys)`);
+        const dropsHere = !keep && typeof b.description === 'string';
+        const want = Object.keys(b).filter((k) => !(dropsHere && k === 'description')).sort().join(',');
+        if (Object.keys(a).sort().join(',') !== want) drift.push(`${path} (keys)`);
         for (const k of Object.keys(b)) {
           if (k === 'description' && typeof b[k] === 'string') {
+            if (!keep) {
+              if ('description' in a) notDropped.push(`${path}/description`);
+              dropped.push({ path: [...segs, k], text: b[k] });
+              continue;
+            }
             const sum = a[k];
             if (typeof sum !== 'string' || !sum.trim() || !b[k].startsWith(sum)) notPrefix.push(`${path}/description`);
             else if (sum.length > 200) tooLong.push(`${path} (${sum.length})`);
             // Where the cut falls, checked without mcp.ts's sentence splitter: a summary is the whole
             // text, or it ends in "." and the full text goes on with whitespace (never mid-word).
             if (typeof sum === 'string' && sum !== b[k] && !(sum.endsWith('.') && /^\s/.test(b[k].slice(sum.length)))) midSentence.push(`${path}/description`);
-          } else walk(a[k], b[k], `${path}/${k}`);
+          } else if (segs.length > 0 && (k === 'properties' || k === '$defs' || k === 'patternProperties') && b[k] && typeof b[k] === 'object' && !Array.isArray(b[k])) {
+            // A map of NAMES to schemas: a field called `default` or `description` is a schema, not data.
+            const am = a[k] ?? {};
+            if (!am || typeof am !== 'object' || Object.keys(am).sort().join(',') !== Object.keys(b[k]).sort().join(',')) { drift.push(`${path}/${k} (keys)`); continue; }
+            for (const name of Object.keys(b[k])) walk(am[name], b[k][name], `${path}/${k}/${name}`, [...segs, k, name], keep);
+          } else if (DATA.has(k)) {
+            if (!isDeepStrictEqual(a[k], b[k])) drift.push(`${path}/${k}`);
+          } else if (segs.length === 0 && (k === 'properties' || k === '$defs') && b[k] && typeof b[k] === 'object') {
+            // The two places the rule changes: a top-level field keeps its own summary and, if required,
+            // everything beneath; a $defs entry keeps its prose if a required field reaches it.
+            const am = a[k] ?? {};
+            if (Object.keys(am).sort().join(',') !== Object.keys(b[k]).sort().join(',')) drift.push(`${path}/${k} (keys)`);
+            for (const name of Object.keys(b[k])) {
+              const fieldKeep = k === 'properties' ? fileRequired.has(name) : reachedDefs.has(name);
+              const fa = am[name], fb = b[k][name];
+              if (k === 'properties' && fb && typeof fb === 'object' && typeof fb.description === 'string' && !fieldKeep) {
+                // Its own summary stays; walk the rest with prose dropped.
+                const { description: fdA, ...restA } = fa ?? {};
+                const { description: fdB, ...restB } = fb;
+                walk({ description: fdA }, { description: fdB }, `${path}/${k}/${name}`, [k, name], true);
+                walk(restA, restB, `${path}/${k}/${name}`, [k, name], false);
+              } else walk(fa, fb, `${path}/${k}/${name}`, [k, name], fieldKeep);
+            }
+          } else walk(a[k], b[k], `${path}/${k}`, [...segs, k], keep);
         }
         return;
       }
       if (a !== b) drift.push(path);
     };
-    walk(inline, brandSchema, '#');
+    walk(inline, brandSchema, '#', [], true);
+    ok(notDropped.length === 0, `MCP: tools/list drops every description beneath an optional field and in every $defs entry no required field reaches (still inline: ${notDropped.slice(0, 5).join(', ') || 'none'})`);
+    // Each dropped description, looked up at its own path in `describe`'s answer: a field's under
+    // described.properties, a $defs entry's under described.$defs. Non-vacuous: the step drops something.
+    {
+      const everyField = callTool('list_levers', { describe: Object.keys((brandSchema as any).properties) }, brandSchema);
+      const got = everyField.isError ? {} : (everyField.structuredContent as any)?.described ?? {};
+      const lost = dropped.filter(({ path, text }) => path.reduce((o: any, seg) => (o == null ? o : o[seg]), got) !== text).map(({ path }) => path.join('/'));
+      ok(dropped.length >= 100 && lost.length === 0,
+        `MCP: every description tools/list drops comes back word for word from list_levers describe, at its own path (${dropped.length} dropped; not returned: ${lost.slice(0, 5).join(', ') || 'none'})`);
+    }
     ok(drift.length === 0, `MCP: the inline brand schema matches the file in every keyword but description — types, enums, ranges, defaults, $defs, $ref, $id (drift: ${drift.slice(0, 5).join(', ') || 'none'})`);
     ok(notPrefix.length === 0, `MCP: every inline schema description is a non-empty prefix of the file's full text (not: ${notPrefix.slice(0, 5).join(', ') || 'none'})`);
     ok(midSentence.length === 0, `MCP: every inline schema summary is the full text or ends at a "." the full text follows with whitespace — never cut mid-word (cut: ${midSentence.slice(0, 5).join(', ') || 'none'})`);
@@ -16440,8 +16767,11 @@ arm: {
       `MCP: strictInteractiveContrast's inline summary is its tag plus first sentence (got: ${inline?.properties?.strictInteractiveContrast?.description})`);
     ok(inline?.properties?.id?.description === "Brand identifier (e.g. 'aurora').",
       `MCP: an \`e.g.\` does not end a summary (got: ${inline?.properties?.id?.description})`);
-    ok(inline?.properties?.typography?.properties?.sizeOverrides?.description === 'OPTIONAL. Opt-in per-rung DESKTOP/MOBILE size override (#1587): group -> rung -> { desktop?, mobile? }.',
-      `MCP: a \`?\` inside an optional-key shape does not end a summary (got: ${inline?.properties?.typography?.properties?.sizeOverrides?.description})`);
+    // sizeOverrides sits under optional `typography`, so since 2026-11-21 its description is no longer inline;
+    // the splitter it exercised still cuts every summary that is, so the case is held on the function itself.
+    const sizeOverridesSummary = summarizeDescription((brandSchema as any).properties?.typography?.properties?.sizeOverrides?.description ?? '');
+    ok(sizeOverridesSummary === 'OPTIONAL. Opt-in per-rung DESKTOP/MOBILE size override (#1587): group -> rung -> { desktop?, mobile? }.',
+      `MCP: a \`?\` inside an optional-key shape does not end a summary (got: ${sizeOverridesSummary})`);
     ok(/list_levers with `describe`/.test(tools.find((t) => t.name === 'theme_brand')?.description ?? ''),
       'MCP: theme_brand says its field descriptions are summaries and names where the full text is');
 
@@ -17356,10 +17686,13 @@ arm: {
     // exemption keyed by def and path, not a loosened pattern: every other string in these three defs is still
     // scanned. It is live: each exempt path must still carry a hit, so the exemption cannot outlive the hold.
     // Items 5, 8 and 12 left the list with Q-UG2b A (#3552): every span they carry is code, so they pass unexempted.
-    const HELD_Q362: Record<string, number[]> = Object.fromEntries(
-      ['button', 'button-destructive', 'button-neutral'].map((id) => [id, [3, 4, 6, 7, 9, 10, 11]]));
+    // #2778 (Q362 decided A) moved the build rules to `docs.implementation`, wording unchanged, so the same seven lines
+    // are held at their new paths: six build rules, and the flush line, which serves both readers and stays in `docs.do`.
+    const HELD_Q362: Record<string, string[]> = Object.fromEntries(
+      ['button', 'button-destructive', 'button-neutral'].map((id) => [id, [
+        ...[0, 1, 3, 4, 6, 7].map((i) => `docs.implementation[${i}]`), 'docs.do[3]']]));
     const heldHits = new Set<string>(); const heldKeys: string[] = [];
-    for (const [id, idx] of Object.entries(HELD_Q362)) for (const i of idx) heldKeys.push(`${id} docs.do[${i}]`);
+    for (const [id, paths] of Object.entries(HELD_Q362)) for (const p of paths) heldKeys.push(`${id} ${p}`);
     const CODE_FIELD = /^(?:accessibility|content|docs|ai)\./;
     const CODE_WORDS = new Set(['href', 'alt', 'tabindex', 'autocomplete', 'true', 'false', 'mixed']);
     const isCode = (c: string): boolean =>
@@ -19007,6 +19340,77 @@ arm: {
       // OD-P1 A: the role is a non-modal dialog.
       ok(/role="dialog"/.test(pop.accessibility?.role ?? '') && /no `aria-modal`/.test(pop.accessibility?.role ?? ''), '#4008 popover role (OD-P1 A): role="dialog" with no aria-modal');
     }
+    // ---- #4007 Menu: OD-X1 A, K2 measured, and the item's decisions, each against a literal or an emitted value ----
+    {
+      const pop = componentDefs.find((x) => x.id === 'popover')!;
+      const mnu = componentDefs.find((x) => x.id === 'menu')!;
+      const item = componentDefs.find((x) => x.id === 'menu-item')!;
+      // OD-X1 A: Menu's panel binds Popover's five raised-surface roles. Two defs compared, each authored on its own.
+      const SURFACE = ['fill', 'border', 'border-width', 'shadow', 'radius'];
+      const unequal = SURFACE.filter((k) => !mnu.tokens[k] || mnu.tokens[k] !== pop.tokens[k]);
+      ok(unequal.length === 0, `#4007 OD-X1: Menu and Popover bind the same raised-surface roles (${SURFACE.join(', ')})${unequal.length ? ` — differ: ${unequal.map((k) => `${k} ${mnu.tokens[k]} vs ${pop.tokens[k]}`).join('; ')}` : ''}`);
+      const mp = mnu.anatomy.parts.panel, pp = pop.anatomy.parts.panel;
+      ok(mp.kind === 'box' && pp.kind === 'box' && mp.paintSlots?.join() === pp.paintSlots?.join() && mp.strokeWidth === pp.strokeWidth && mp.elevation === pp.elevation && mp.radius === pp.radius,
+        '#4007 OD-X1: the two panels paint, stroke, cast and round from the same keys');
+      // K2: the highlight against the panel, recomputed from the emitted trees (never from the def's own claim). It does
+      // not clear 3:1 in any committed brand and mode, so K2 is A: a focus-visible item draws the FocusRing as well.
+      const OUT = join(HERE, 'out');
+      // The handoff writes a literal color as a DTCG 2025.10 Color-module object (#4123): read its sRGB `components`
+      // and `alpha` (absent = 1). Never its `hex`, which drops alpha; any other colorSpace is refused by name. A string
+      // (an older handoff) is still read as `#hex` / `rgb()`.
+      let objectReads = 0;
+      const rgb = (v: string | { colorSpace?: string; components?: number[]; alpha?: number }): number[] => {
+        if (v && typeof v === 'object') {
+          if (v.colorSpace !== 'srgb' || !Array.isArray(v.components) || v.components.length !== 3) throw new Error(`#4007 K2: a color object outside srgb [r,g,b] is not read: ${JSON.stringify(v)}`);
+          objectReads++;
+          return [...v.components, v.alpha ?? 1];
+        }
+        const m = /^rgba?\(([^)]*)\)$/.exec(v);
+        if (m) { const q = m[1].split(',').map(Number); return [q[0] / 255, q[1] / 255, q[2] / 255, q.length > 3 ? q[3] : 1]; }
+        const h = v.replace('#', '');
+        return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).concat(h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1);
+      };
+      const lum = (c: number[]) => [0, 1, 2].map((i) => (c[i] <= 0.04045 ? c[i] / 12.92 : ((c[i] + 0.055) / 1.055) ** 2.4)).reduce((a, x, i) => a + x * [0.2126, 0.7152, 0.0722][i], 0);
+      let best = 0, cells = 0;
+      for (const f of readdirSync(OUT).filter((n) => n.endsWith('.base.tokens.json'))) {
+        const brand = f.split('.')[0];
+        const base = JSON.parse(readFileSync(join(OUT, f), 'utf8'));
+        const root = Object.keys(base).find((k) => !k.startsWith('$'))!;
+        const modes = ['light', ...readdirSync(OUT).filter((n) => n.startsWith(`${brand}.`) && n.endsWith('.overlay.tokens.json')).map((n) => n.split('.')[1])];
+        for (const m of modes) {
+          const ov = m === 'light' ? {} : JSON.parse(readFileSync(join(OUT, `${brand}.${m}.overlay.tokens.json`), 'utf8'));
+          const at = (t: any, p: string) => p.split('.').reduce((o, k) => o?.[k], t?.[root])?.$value;
+          const res = (p: string): any => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
+          const panel = rgb(res('color.foreground.raised'));
+          const wash = rgb(res('color.interactive.neutral.overlay.hover'));
+          const comp = [0, 1, 2].map((i) => wash[i] * wash[3] + panel[i] * (1 - wash[3]));
+          const a = lum(comp), b = lum(panel);
+          best = Math.max(best, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)); cells++;
+        }
+      }
+      // #4123: the reader is held on the handoff's object form, typed here, and on the committed handoff actually reaching
+      // it (two object reads per cell), so a reader that only parses strings fails here by name.
+      const committedObjectReads = objectReads;
+      const typed = (() => { try { return rgb({ colorSpace: 'srgb', components: [0.2, 0.4, 0.6], alpha: 0.5 }); } catch { return null; } })();
+      ok(JSON.stringify(typed) === JSON.stringify([0.2, 0.4, 0.6, 0.5]) && cells > 0 && committedObjectReads === 2 * cells,
+        `#4123 K2 reader: the #4007 K2 arm reads a DTCG 2025.10 color object (srgb components + alpha), and every committed panel and wash it read was one (got ${JSON.stringify(typed)}; ${committedObjectReads} object reads over ${cells} cells)`);
+      ok(cells >= 20 && best < 3, `#4007 K2: the item highlight (neutral hover wash over the raised panel) stays under 3:1 against the panel in every brand and mode, so the ring is drawn (best ${best.toFixed(2)}:1 over ${cells} cells)`);
+      const ring = item.anatomy.parts.focusRing;
+      ok(ring?.kind === 'absolute' && ring.nests === 'focus-ring' && ring.when === 'focus-visible' && item.tokens['default.overlay.focus-visible'] === 'color.interactive.neutral.overlay.hover',
+        '#4007 K2 A: a focus-visible item shows the highlight and the shared focus ring');
+      // OD-M3 A: 15 members, one size.
+      const members = figmaAnatomySet(item, { swapTarget: 'FPO-default-icon' });
+      ok(members.length === 15 && !item.variants?.size, `#4007 OD-M3: Menu.Item is 15 members and one size (${members.length})`);
+      // K1 B: menubar kept as an alias.
+      ok(mnu.aliases?.includes('menubar') === true, '#4007 K1 B: Menu keeps menubar as an alias');
+      // Owner direction (2026-11-18): two-line items align to the first line.
+      const row = item.anatomy.parts.row;
+      ok(row.kind === 'box' && row.layout?.align === 'start' && row.firstLine?.glyphCell === 'leadCell' && row.firstLine?.textCell === 'textCell',
+        '#4007 first line: the item row is top-aligned and centers its leading cell on the label\'s first line');
+      // K3 B: checkable items never close the menu.
+      ok(item.anatomy.codeOnly.some((e) => /checkbox or radio item toggles and the menu stays open, whatever the key/.test(e.description)),
+        '#4007 K3 B: the activation contract keeps the menu open for a checkbox or radio item, whatever the key');
+    }
     // ---- #3163: `PartDef.scroll`, the scroll region, and its two refusal arms, each pinned BY NAME (docs/34) ----
     // SUBJECT: Dialog's body as committed, then mutated. EXPECTED: the projection Q3130.8 A asks for (the body clips and
     // scrolls vertically on every member) and the authored refusal shapes. Delete either refusal from `anatomyErrors`
@@ -19533,14 +19937,14 @@ arm: {
         const dis = state === 'disabled';
         if (control?.bound?.height !== 'size/md/min-height') trackOff.push(`${size}/${type}/${state}: control height ${String(control?.bound?.height)}`);
         if (track?.bound?.height !== TRACK[size] || track?.paints?.fills !== (dis ? 'color/disabled/fill' : 'color/field/border/rest')) trackOff.push(`${size}/${type}/${state}: track ${String(track?.bound?.height)} ${String(track?.paints?.fills)}`);
-        if (bar?.bound?.height !== TRACK[size] || bar?.paints?.fills !== (dis ? 'color/disabled/icon' : 'color/interactive/neutral/border/rest') || bar?.bound?.topLeftRadius !== undefined) trackOff.push(`${size}/${type}/${state}: bar ${String(bar?.bound?.height)} ${String(bar?.paints?.fills)} radius ${String(bar?.bound?.topLeftRadius)}`);
+        if (bar?.bound?.height !== TRACK[size] || bar?.paints?.fills !== (dis ? 'color/disabled/icon' : 'color/interactive/neutral/indicator/rest') || bar?.bound?.topLeftRadius !== undefined) trackOff.push(`${size}/${type}/${state}: bar ${String(bar?.bound?.height)} ${String(bar?.paints?.fills)} radius ${String(bar?.bound?.topLeftRadius)}`);
         for (const n of ['spaceStart', 'spaceEnd']) { const sp = findIn(m.root, n); if (sp && (sp.bound?.height !== TRACK[size] || sp.paints?.fills !== undefined)) trackOff.push(`${size}/${type}/${state}: ${n} ${String(sp.bound?.height)} ${String(sp.paints?.fills)}`); }
         const kids = (track?.children ?? []).map((k) => k.name);
         if (JSON.stringify(kids) !== JSON.stringify(ORDER[type])) trackOff.push(`${size}/${type}/${state}: track holds ${kids.join(', ')}`);
         if (!['bar', 'spaceEnd', ...(type === 'range' ? ['spaceStart'] : [])].every((n) => findIn(m.root, n)?.layoutGrow === 1)) trackOff.push(`${size}/${type}/${state}: a segment does not grow`);
       }
       ok(trackOff.length === 0,
-        `#2669 Q550 a / e the track: one thickness per size (border-width/thick, heavy, x-heavy) in color/field/border/rest, the square-ended bar at the same thickness in color/interactive/neutral/border/rest, growing segments around the thumbs in a size/md/min-height control row at every size, disabled track color/disabled/fill and bar color/disabled/icon (${trackOff.length} off — ${trackOff.slice(0, 3).join('; ') || 'none'})`);
+        `#2669 Q550 a / e the track: one thickness per size (border-width/thick, heavy, x-heavy) in color/field/border/rest, the square-ended bar at the same thickness in color/interactive/neutral/indicator/rest (the thumb's mark, #3398 A), growing segments around the thumbs in a size/md/min-height control row at every size, disabled track color/disabled/fill and bar color/disabled/icon (${trackOff.length} off — ${trackOff.slice(0, 3).join('; ') || 'none'})`);
 
       // Q550 e, in pixels: the three track rungs above resolve to 2 / 4 / 6px in the emitted tree of every corpus brand.
       // The arm above pins which rung each size binds; this pins what the rung is worth, so a regenerated 5px x-heavy
@@ -20658,10 +21062,11 @@ arm: {
       'shop-pay': { minH: 40, minW: 120, logo: 'provider-logo/logo/shop-pay' },
     };
     const harbor = parseDesignMd(readFileSync(new URL('./examples/harbor.design.md', import.meta.url), 'utf8')).input;
+    // #1889: a density the engine refuses records one named failure and reads NaN, so the arms below fail by their own names.
     const builds = (['compact', 'comfortable', 'spacious'] as const).map((density) => {
-      const t = buildTree(brandTheme({ ...harbor, density })).tree as Record<string, unknown>;
-      const r = Object.keys(t)[0];
-      return { density, px: (v: string | undefined): number => (v ? (v.split('/').reduce((n: any, k) => n?.[k], t[r]) as any)?.$extensions?.prism3?.px ?? NaN : NaN) };
+      const t = exampleTheme(`harbor (density ${density})`, () => buildTree(brandTheme({ ...harbor, density })).tree as Record<string, unknown>);
+      const r = t ? Object.keys(t)[0] : undefined;
+      return { density, px: (v: string | undefined): number => (v && t && r ? (v.split('/').reduce((n: any, k) => n?.[k], t[r]) as any)?.$extensions?.prism3?.px ?? NaN : NaN) };
     });
     const comfortable = builds.find((b) => b.density === 'comfortable')!;
     const plans = figmaAnatomySet(wb, {});
@@ -20699,9 +21104,9 @@ arm: {
     // `buttonRadius` to min(radius, height / 2). The lever bounds come from the manifest, the clamp from codeOnly.
     const leverMax = (key: string): number => (leverManifest.find((l) => l.key === key) as { max?: number } | undefined)?.max ?? NaN;
     const softest = (['compact', 'comfortable', 'spacious'] as const).map((density) => {
-      const t = buildTree(brandTheme({ ...harbor, density, radiusScale: leverMax('radiusScale'), baseMd: leverMax('baseMd') })).tree as Record<string, unknown>;
-      const r = Object.keys(t)[0];
-      return { density, px: (v: string | undefined): number => (v ? (v.split('/').reduce((n: any, k) => n?.[k], t[r]) as any)?.$extensions?.prism3?.px ?? NaN : NaN) };
+      const t = refusable(`#2343 the softest harbor (density ${density})`, () => buildTree(brandTheme({ ...harbor, density, radiusScale: leverMax('radiusScale'), baseMd: leverMax('baseMd') })).tree as Record<string, unknown>); // #1889
+      const r = t ? Object.keys(t)[0] : undefined;
+      return { density, px: (v: string | undefined): number => (v && t && r ? (v.split('/').reduce((n: any, k) => n?.[k], t[r]) as any)?.$extensions?.prism3?.px ?? NaN : NaN) };
     });
     const softOver = overHalf(softest);
     const clamped = (codeOnlyText(wb.anatomy.codeOnly) ?? []).some((c) => /Google Pay/.test(c) && /min\(radius, height \/ 2\)/.test(c));
@@ -21017,13 +21422,17 @@ arm: {
       button: 1,
       'button-destructive': 2, 'button-neutral': 2, 'wallet-button': 2, 'sign-in-button': 2, 'icon-button': 2, 'icon-button-neutral': 2, icon: 2,
       'text-field': 2, textarea: 2, 'password-field': 2, 'code-input': 2, 'search-field': 2, 'card-number-field': 2, select: 2, 'checkbox-row': 2, 'checkbox-group': 2, 'tag-group': 2,
-      'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, banner: 2, toast: 2, pagination: 2, slider: 2,
-      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, veil: 3, 'image-placeholder': 3,
+      'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, menu: 2, 'menu-item': 9, 'menu-group': 3, banner: 2, toast: 2, pagination: 2, slider: 2,
+      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, skeleton: 3, veil: 3, 'image-placeholder': 3,
+      // Tooltip (#4009, generation priority 3, decided in Q-FL2): supports another component, as Badge does.
+      tooltip: 3,
       'flush-icon-button-neutral': 4, 'flush-icon-button': 5, 'flush-icon-button-destructive': 5,
       'checkbox-control': 6, 'radio-control': 6, 'switch-control': 6, 'field-label': 6, 'field-message': 6, 'focus-ring': 6,
       'tab-item': 9, 'list-item': 9, 'segmented-control-segment': 9, '_accordion-indicator': 9, 'code-input-cell': 9, 'radio-row': 9, 'pagination-item': 9, '_slider-thumb': 9,
       // Breadcrumbs (#2666): the trail is placed on its own; its step and separator are parts its host places.
       breadcrumbs: 2, 'breadcrumb-item': 9, '_breadcrumb-separator': 9,
+      // Steps (#3055): the indicator is placed on its own; its step is a part the indicator places.
+      steps: 2, 'step-item': 9,
       'page-nav': 2, 'page-nav-item': 9,
       // Provider logo (#2343): a glyph other components carry, placed alone only in a row of accepted cards.
       'provider-logo': 3,
@@ -21767,6 +22176,8 @@ arm: {
       // Q-CC1 A (#3554): the cell carries [default, error] only, its danger edge one flat role at every state but disabled.
       'code-input-cell': 'a code input cell: status is [default, error] only (Q354, Q-CC1 A), the danger edge is one flat `color.border.danger` at every state but disabled, so there is no status hover step to measure; the #2428 contrast arm holds that border to 3:1 against the page',
       // #2670: Progress's `error` status colors a fill, not a border, and its message is a nested FieldMessage.
+      // #3055: a step's `error` status shows a glyph in the danger icon role in place of its disc, with no stroke.
+      'step-item': 'a step in a Steps indicator: no state axis and no stroked boundary at error; its error status swaps the disc for the danger error glyph and keeps the name, and the #3055 block holds that glyph to 3:1 against the page',
       progress: 'a progress bar or ring: no state axis and no stroked boundary; its error status colors the fill and shows in the nested FieldMessage\'s text and glyph, and its contrast is held by the #2670 block',
     };
     const SH_STATUSES = ['error', 'warning', 'success'];
@@ -22185,6 +22596,7 @@ arm: {
       ...(fieldMessage.anatomy?.codeOnly ?? []).map((c, i): [string, string] => [`anatomy.codeOnly[${i}]`, c.description]),
       ...(fieldMessage.docs.do ?? []).map((d, i): [string, string] => [`docs.do[${i}]`, d]),
       ...(fieldMessage.docs.dont ?? []).map((d, i): [string, string] => [`docs.dont[${i}]`, d]),
+      ...(fieldMessage.docs.implementation ?? []).map((d, i): [string, string] => [`docs.implementation[${i}]`, d]),
       ['docs.usage', fieldMessage.docs.usage ?? ''],
       ['textField.accessibility.aria', textField.accessibility.aria ?? ''],
     ];
@@ -22953,6 +23365,155 @@ arm: {
     }
   }
 
+  // ---- #3055: STEPS, the approved proposal (owner decisions 2026-11-19, all nine as recommended) — each held against a literal ----
+  // EXPECTED is typed here from the proposal and the decisions on #3055, never read from `steps.ts` or `step-item.ts`.
+  // ACTUAL is the real projection (`figmaAnatomySet`), node by node, and the def's shipped fields. Contrast is measured
+  // from the COMMITTED emission, every brand in its four modes, as the #2666 block does. Mutations, each failing the arm
+  // named:
+  //   the status order, a size or orientation reordered, or a state axis → `#3055 steps/members`;
+  //   the disc's fill, outline, number, check or error glyph at the wrong status (decisions 2, 4) → `#3055 steps/marker`;
+  //   a link at a status other than complete, or a text name on a complete step (decision 3) → `#3055 steps/name`;
+  //   a chevron or a missing line, or the line in the wrong color (decision 7) → `#3055 steps/connector`;
+  //   the slot's minimum, preferred item, default statuses, the discs' numbers or direction → `#3055 steps/slot`;
+  //   the names, aliases, the hidden status words or aria-current (decisions 1, 8) → `#3055 steps/identity`;
+  //   a painted role under its floor in any committed cell → `#3055 steps/contrast`.
+  {
+    const itemDef = componentDefs.find((d) => d.id === 'step-item');
+    const stepsDef = componentDefs.find((d) => d.id === 'steps');
+    ok(!!itemDef && !!stepsDef, '#3055 steps: Steps and StepItem are registered');
+    if (itemDef && stepsDef) {
+      type SN = { name: string; type: string; layoutMode?: string; nestTarget?: string; nestVariant?: Record<string, string>; nestExpose?: string[]; descendantFills?: string; textStyle?: string; characters?: string; paints?: { fills?: string; strokes?: string }; bound?: Record<string, string>; slotSettings?: Record<string, unknown>; slotPreferred?: string[]; children: SN[] };
+      const all = (n: SN): SN[] => [n, ...n.children.flatMap(all)];
+      const find = (n: SN, name: string): SN | undefined => all(n).find((x) => x.name === name);
+      const co = (p: { coord: unknown }, k: string) => String((p.coord as Record<string, string>)[k]);
+      const itemPlans = figmaAnatomySet(itemDef, { swapTarget: 'FPO-default-icon' }).map((p) => ({ status: co(p, 'status'), orient: co(p, 'orientation'), size: String(p.size), root: p.root as unknown as SN }));
+      const stepsPlans = figmaAnatomySet(stepsDef, { swapTarget: 'FPO-default-icon' }).map((p) => ({ orient: co(p, 'orientation'), size: String(p.size), root: p.root as unknown as SN }));
+      const DISC: Record<string, string> = { medium: 'icon/size/md', small: 'icon/size/sm' };
+
+      // MEMBERS: status [upcoming, current, complete, error] × orientation × size = 16, Steps orientation × size = 4, the
+      // first member the code default on every axis, no state axis on either.
+      const ITEM_MEMBERS = ['upcoming', 'current', 'complete', 'error'].flatMap((s) => ['horizontal', 'vertical'].flatMap((o) => ['medium', 'small'].map((z) => `${s}/${o}/${z}`)));
+      const STEPS_MEMBERS = ['horizontal', 'vertical'].flatMap((o) => ['medium', 'small'].map((z) => `${o}/${z}`));
+      ok(JSON.stringify(itemPlans.map((p) => `${p.status}/${p.orient}/${p.size}`)) === JSON.stringify(ITEM_MEMBERS)
+        && JSON.stringify(stepsPlans.map((p) => `${p.orient}/${p.size}`)) === JSON.stringify(STEPS_MEMBERS)
+        && itemDef.props.find((p) => p.name === 'status')?.default === 'upcoming'
+        && [itemDef, stepsDef].every((d) => d.props.find((p) => p.name === 'orientation')?.default === 'horizontal' && d.props.find((p) => p.name === 'size')?.default === 'medium')
+        && itemDef.states.length === 0 && stepsDef.states.length === 0 && !itemDef.figmaProperties?.stateAxis && !stepsDef.figmaProperties?.stateAxis,
+        `#3055 steps/members: StepItem status [upcoming, current, complete, error] × orientation [horizontal, vertical] × size [medium, small] = 16, Steps orientation × size = 4, upcoming / horizontal / medium first, no state axis (got ${itemPlans.length} / ${stepsPlans.length})`);
+
+      // THE MARKER (decisions 2, 4): a round disc one icon rung square; the current step's filled with the number in on-fill
+      // ink, the upcoming step's outlined in the 3:1 edge with the number in secondary text, the complete step's filled with
+      // a check, and an errored step's bare behind the error-circle glyph in the danger icon role.
+      const WANT: Record<string, { fill?: string; stroke?: string; number?: string; glyph?: [string, string] }> = {
+        upcoming: { stroke: 'color/border/tertiary', number: 'color/text/secondary' },
+        current: { fill: 'color/interactive/primary/fill/rest', number: 'color/interactive/primary/on-fill' },
+        complete: { fill: 'color/interactive/primary/fill/rest', glyph: ['icon/check', 'color/interactive/primary/on-fill'] },
+        error: { glyph: ['icon/error-circle', 'color/icon/danger'] },
+      };
+      const markOff = itemPlans.filter((p) => {
+        const m = find(p.root, 'marker'), w = WANT[p.status];
+        if (!m) return true;
+        const num = m.children.filter((c) => c.type === 'TEXT'), glyphs = m.children.filter((c) => c.type !== 'TEXT');
+        return !(m.bound?.width === DISC[p.size] && m.bound?.height === DISC[p.size] && m.bound?.topLeftRadius === 'radius/round'
+          && m.paints?.fills === w.fill && m.paints?.strokes === w.stroke
+          && (w.number ? num.length === 1 && num[0].paints?.fills === w.number && num[0].characters === '1' : num.length === 0)
+          && (w.glyph ? glyphs.length === 1 && glyphs[0].nestTarget === w.glyph[0] && glyphs[0].descendantFills === w.glyph[1] : glyphs.length === 0));
+      });
+      ok(markOff.length === 0, `#3055 steps/marker (decisions 2, 4): a 24 / 20px round disc, filled with the number at current, outlined with the number at upcoming, filled with a check at complete, bare behind the danger error-circle at error${markOff.length ? ` — OFF: ${markOff.map((p) => `${p.status}/${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // THE NAME (decision 3): a complete step's name is Link, inline, default weight, at the step's size, its state
+      // exposed; every other step's name is text, never a link, in primary text (current, error) or secondary (upcoming).
+      const INK: Record<string, string> = { upcoming: 'color/text/secondary', current: 'color/text/primary', error: 'color/text/primary' };
+      const nameOff = itemPlans.filter((p) => {
+        const links = all(p.root).filter((n) => n.nestTarget === 'link'), t = find(p.root, 'label');
+        if (p.status === 'complete') return !(links.length === 1 && !t && JSON.stringify(links[0].nestVariant) === JSON.stringify({ style: 'inline', weight: 'default', size: p.size, surface: 'default', selection: 'unselected', state: 'rest' }) && JSON.stringify(links[0].nestExpose) === '["state"]');
+        return !(links.length === 0 && t && t.type === 'TEXT' && t.paints?.fills === INK[p.status] && t.textStyle === `body/${p.size === 'medium' ? 'md' : 'sm'}/default`);
+      });
+      ok(nameOff.length === 0, `#3055 steps/name (decision 3): only a complete step's name is a Link (inline, default weight, state exposed); every other name is body text, primary at current and error, secondary at upcoming${nameOff.length ? ` — OFF: ${nameOff.map((p) => `${p.status}/${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // THE CONNECTOR (decision 7): a line, never a glyph. Across a row it is the last cell, a hairline in a cell one disc
+      // tall; down a column it sits under the disc in the rail. Every line, at every status, in the neutral secondary icon
+      // role, the Breadcrumbs chevron's gray (owner decision 2026-11-20 on #4341, option 3): a complete step's line too.
+      const LINE = (_s: string) => 'color/icon/secondary';
+      const lineOff = itemPlans.filter((p) => {
+        const h = find(p.root, 'connectorH'), v = find(p.root, 'connectorV'), cell = find(p.root, 'connectorCell'), rail = find(p.root, 'rail');
+        const line = p.orient === 'horizontal' ? h : v;
+        const placed = p.orient === 'horizontal'
+          ? !v && !!cell && p.root.children[p.root.children.length - 1] === cell && cell.bound?.height === DISC[p.size] && line?.bound?.height === 'border-width/hairline'
+          : !h && !cell && !!rail && rail.children[1] === v && line?.bound?.width === 'border-width/hairline';
+        return !(placed && line && line.children.length === 0 && line.paints?.fills === LINE(p.status) && !all(p.root).some((n) => /chevron/.test(n.nestTarget ?? '')));
+      });
+      ok(lineOff.length === 0, `#3055 steps/connector (decision 7): one hairline line per step, across in a disc-tall end cell or down under the disc, in color/icon/secondary at every status (a complete step's line too), and no chevron${lineOff.length ? ` — OFF: ${lineOff.map((p) => `${p.status}/${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // THE ITEMS SLOT: at least two, StepItem only, complete / current / upcoming by default at the indicator's orientation
+      // and size, running across or down with the orientation.
+      const slotOff = stepsPlans.filter((p) => {
+        const s = find(p.root, 'items');
+        return !(s && s.type === 'CONTENT_SLOT' && s.layoutMode === (p.orient === 'horizontal' ? 'HORIZONTAL' : 'VERTICAL')
+          && JSON.stringify(s.slotSettings) === '{"minChildren":2,"allowPreferredValuesOnly":true}' && JSON.stringify(s.slotPreferred) === '["step-item"]'
+          && JSON.stringify(s.children.map((c) => [c.nestTarget, c.nestVariant?.status, c.nestVariant?.orientation, c.nestVariant?.size])) === JSON.stringify(['complete', 'current', 'upcoming'].map((st) => ['step-item', st, p.orient, p.size]))
+          // The discs read 2 and 3 (the complete step shows a check): StepItem's own default is "1" (#3055 review).
+          && JSON.stringify(s.children.map((c) => c.nestTexts?.number ?? null)) === JSON.stringify([null, '2', '3']));
+      });
+      ok(slotOff.length === 0, `#3055 steps/slot: Steps holds a native items slot, at least 2, StepItem only, defaulting to complete, current, upcoming at its own orientation and size, the discs numbered 2 and 3 after the check, a row across and a column down${slotOff.length ? ` — OFF: ${slotOff.map((p) => `${p.orient}/${p.size}`).join(', ')}` : ''}`);
+
+      // IDENTITY AND WORDING (decisions 1, 8): the names and aliases, a navigation landmark around a list, aria-current
+      // "step", and the four hidden status words (DRAFT copy, typed here so a rewording fails by name).
+      const aria = `${stepsDef.accessibility.aria} ${itemDef.accessibility.aria}`;
+      ok(stepsDef.name === 'Steps' && itemDef.name === 'StepItem' && stepsDef.category === 'navigation' && itemDef.category === 'navigation'
+        && JSON.stringify(stepsDef.aliases) === '["stepper","step-indicator","progress-steps"]' && !stepsDef.aliases?.includes('progress-indicator')
+        && ['"Completed"', '"Current step"', '"Not started"', '"Error"'].every((w) => itemDef.accessibility.aria.includes(w))
+        && (aria.match(/aria-current="step"/g) ?? []).length >= 2 && stepsDef.accessibility.aria.includes('<nav>')
+        && stepsDef.props.find((p) => p.name === 'label')?.required === true && itemDef.props.find((p) => p.name === 'href')?.required === false,
+        `#3055 steps/identity (decisions 1, 8): Steps and StepItem, navigation, aliases stepper / step-indicator / progress-steps, a named <nav> with a required label, aria-current="step", the hidden words "Completed", "Current step", "Not started", "Error", and an optional href`);
+
+      // CONTRAST over every committed brand × mode: the names 4.5:1 on the page, the number 4.5:1 on its disc (on-fill on
+      // the primary fill) and on the page (secondary text), the outlined disc and the error glyph 3:1 on the page
+      // (SC 1.4.11). The filled disc is held at 3:1 on the page too. The line is decorative and held to no floor.
+      const treeFiles = readdirSync(resolve(HERE, 'out')).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f));
+      const MODES = ['light', 'dark', 'hc-light', 'hc-dark'];
+      const colorOf = (tree: Record<string, any>, root: string, path: string, mode: string, depth = 0): string | null => {
+        let n: any = tree[root];
+        for (const k of path.split('.')) n = n?.[k];
+        if (!n || depth > 8) return null;
+        const v = mode === 'light' ? n.$value : (n.$extensions?.prism3?.modes?.[mode]?.$value ?? n.$value);
+        if (typeof v !== 'string') return null;
+        const ref = /^\{([^}]+)\}$/.exec(v);
+        if (ref) { const [r0, ...rest] = ref[1].split('.'); return colorOf(tree, r0, rest.join('.'), mode, depth + 1); }
+        const rgb = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(v);
+        if (rgb) return rgb[4] !== undefined && Number(rgb[4]) < 1 ? null : '#' + [rgb[1], rgb[2], rgb[3]].map((x) => Number(x).toString(16).padStart(2, '0')).join('');
+        return /^#[0-9a-f]{6}$/i.test(v) ? v : null;
+      };
+      const PAIRS: [string, string, number][] = [
+        ['color.text.primary', 'color.background.primary', 4.5], ['color.text.secondary', 'color.background.primary', 4.5],
+        ['color.interactive.primary.on-fill', 'color.interactive.primary.fill.rest', 4.5],
+        ['color.border.tertiary', 'color.background.primary', 3], ['color.icon.danger', 'color.background.primary', 3],
+        ['color.interactive.primary.fill.rest', 'color.background.primary', 3],
+      ];
+      const painted = new Set(itemPlans.flatMap((p) => all(p.root)).flatMap((n) => [n.paints?.fills, n.paints?.strokes, n.descendantFills]).filter(Boolean).map((v) => String(v).replace(/\//g, '.')));
+      const CELLS = 20;
+      const lows: string[] = [];
+      for (const [fg, bg, floor] of PAIRS) {
+        let measured = 0;
+        for (const f of treeFiles) {
+          const tree = JSON.parse(readFileSync(resolve(HERE, 'out', f), 'utf8'));
+          const root = Object.keys(tree)[0];
+          for (const m of MODES) {
+            const a = colorOf(tree, root, fg, m), b = colorOf(tree, root, bg, m);
+            if (!a || !b) { lows.push(`${f}/${m}: ${!a ? fg : bg} unresolved`); continue; }
+            const r = contrast(hexToRgb(a), hexToRgb(b));
+            measured++;
+            if (r < floor) lows.push(`${fg} on ${bg} ${f}/${m} ${r.toFixed(2)}`);
+          }
+        }
+        if (measured !== CELLS) lows.push(`${fg} on ${bg}: ${measured} of ${CELLS} cells measured`);
+      }
+      const unpainted = PAIRS.map(([fg]) => fg).filter((r) => !painted.has(r));
+      ok(lows.length === 0 && unpainted.length === 0 && treeFiles.length === 5,
+        `#3055 steps/contrast: the step names 4.5:1 on the page, the number 4.5:1 on its filled disc and on the page, the outlined disc, the error glyph and the filled disc 3:1 on the page, in all ${CELLS} committed brand × mode cells (${treeFiles.length} brands)${unpainted.length ? ` — the projection no longer paints ${unpainted.join(', ')}` : ''}${lows.length ? ` — LOW: ${lows.slice(0, 8).join('; ')}` : ''}`);
+    }
+  }
+
   // ---- #1339: disabled is ONE mechanism (the STATE), not a state axis + a prop ----
   // The label dims when its field is disabled, carried by the `disabled` STATE (a paint change projected as a
   // Figma variant), with NO duplicating `disabled` prop. EXPECTED is the authored contract; ACTUAL is the
@@ -23191,9 +23752,10 @@ arm: {
     // `segmented-control-segment` joins (#2418, Q269.4): an unselected option's hover and pressed are the neutral wash,
     // and its selected tint is the subtle-fill Tag binds, so a solid-tint or no-hover brand reaches it as it reaches a tag.
     // `pagination-item` joins (#2665): a page cell's hover and pressed are IconButton.Neutral ghost's neutral wash.
+    // `menu-item` joins (#4007): its highlight is the neutral wash, so the brand's wash steps reach it.
     // `code-input-cell` joined with #2428 and every field (text-field, password-field, search-field, select, textarea) left
     // with #2926: a field binds no wash, so the lever has nothing to reach on it.
-    ok(JSON.stringify(binders) === JSON.stringify(['button', 'button-destructive', 'button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral', 'pagination-item', 'segmented-control-segment', 'tag']),
+    ok(JSON.stringify(binders) === JSON.stringify(['button', 'button-destructive', 'button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral', 'menu-item', 'pagination-item', 'segmented-control-segment', 'tag']),
       `#1608 the wash binders the lever reaches: button ×3, flush-icon-button ×3 (round), icon-button ×3, pagination-item, segmented-control-segment, tag, and no field (${binders.join(', ')})`);
     // #3071 (owner Q3071.4 A): the opaque fill reaches Button, Icon button and Flush icon button only. Tag, Segmented
     // control and Pagination keep the neutral wash: a fill on an unselected item reads as selected.
@@ -23644,6 +24206,8 @@ arm: {
       // BREADCRUMBS (#2666, call 4 A): the current page binds the two default body rungs. It exists only on a current
       // member.
       { def: componentDefs.find((d) => d.id === 'breadcrumb-item')!, part: 'label', axes: { size: 2 }, at: { kind: 'current' } },
+      // STEPS (#3055): a text step's name binds the two default body rungs. A complete step's name is the nested Link.
+      { def: componentDefs.find((d) => d.id === 'step-item')!, part: 'label', axes: { size: 2 }, at: { status: 'current' } },
       // Pagination (#2665): the item's number by selection (the current page's emphasis weight) and size, its bold reserve
       // by size alone, and the compact text by size. The ellipsis is an icon (Q404 A), so it binds no type.
       { def: componentDefs.find((d) => d.id === 'pagination-item')!, part: 'label', axes: { selection: 2, size: 3 } },
@@ -28147,6 +28711,42 @@ arm: {
         ok(remedy.every((r) => !r.misses.length) && renPage.children.length === 2 && kids(setOf(renPage)).length === 36
           && at(setOf(renPage)) === '664,0' && kids(setOf(renPage, 'button (earlier axes)')).every((m, i) => m === renBefore[i]),
           `#1809 after renaming the old set aside, the paste makes a fresh 36-member set beside it at 664,0 and leaves the old one as it was (${renPage.children.length} top-level, new set at ${at(setOf(renPage))}, misses ${JSON.stringify(remedy.map((r) => r.misses.length))})`);
+
+        // (k) #2610 — UNDER THE PAGE'S SECTION HEADER, as the plugin's \`placeNewSet\` places it (#2405, #2598). Every coordinate is a
+        // literal worked by hand from the rule: the row's top is the sets' top, else the header's bottom + 80; the set takes the
+        // first slot, scanning right from the header's left edge, whose box widened 160 each side meets nothing in the row.
+        // A header alone: 0,120 + 80 = 0,200. Before #2610 the paste read the header as content, so 1200 + 160 = 1360,0.
+        const header = () => ({ type: 'INSTANCE', name: '_section-header', x: 0, y: 0, width: 1200, height: 120 });
+        const hdrPage: StubPage = { children: [header()] };
+        const hdrPlug: StubPage = { children: [header()] };
+        await paste(btn, hdrPage);
+        await plug(btn, hdrPlug);
+        ok(at(setOf(hdrPage)) === '0,200',
+          `#2610 on a page holding only its section header, the pasted set goes under it, on its left edge, 80 below: 0,200 (got ${at(setOf(hdrPage))})`);
+        ok(at(setOf(hdrPlug)) === at(setOf(hdrPage)),
+          `#2610 parity: the plugin places the set under the header at the same coordinate (plugin ${at(setOf(hdrPlug))}, paste ${at(setOf(hdrPage))})`);
+        // A header plus a kept set moved right (1500..2004 at y 200): the slot at the header's edge is free (0 + 504 + 160 < 1500), so
+        // the set goes into the gap, 0,200, and not past the kept set (2004 + 160 = 2164) as the old rule put it.
+        const kept = () => ({ type: 'COMPONENT_SET', name: 'kept', x: 1500, y: 200, width: 504, height: 348, children: [] });
+        const gapPage: StubPage = { children: [header(), kept()] };
+        const gapPlug: StubPage = { children: [header(), kept()] };
+        await paste(btn, gapPage);
+        await plug(btn, gapPlug);
+        ok(at(setOf(gapPage)) === '0,200',
+          `#2610 on a page with a header and a kept set, the pasted set takes the first free slot under the header: 0,200 (got ${at(setOf(gapPage))})`);
+        ok(at(setOf(gapPlug)) === at(setOf(gapPage)),
+          `#2610 parity: the plugin takes the same slot (plugin ${at(setOf(gapPlug))}, paste ${at(setOf(gapPage))})`);
+        // A header plus a kept set ON the header's left edge (0..504 at y 200), the ordinary second paste: the slot at the edge is
+        // taken, so the scan pushes the set right of it, 504 + 160 = 664,200, and never onto the kept set at 0,200.
+        const keptAtEdge = () => ({ type: 'COMPONENT_SET', name: 'kept', x: 0, y: 200, width: 504, height: 348, children: [] });
+        const pushPage: StubPage = { children: [header(), keptAtEdge()] };
+        const pushPlug: StubPage = { children: [header(), keptAtEdge()] };
+        await paste(btn, pushPage);
+        await plug(btn, pushPlug);
+        ok(at(setOf(pushPage)) === '664,200',
+          `#2610 on a page with a header and a kept set on its left edge, the pasted set is pushed right of the kept set: 664,200 (got ${at(setOf(pushPage))})`);
+        ok(at(setOf(pushPlug)) === at(setOf(pushPage)),
+          `#2610 parity: the plugin pushes the set to the same slot (plugin ${at(setOf(pushPlug))}, paste ${at(setOf(pushPage))})`);
       }
 
       // ---- #1377 / #1392: THE PAYLOAD EXECUTOR'S EXPOSURE WRITE, over EVERY nest-exposed def -------
@@ -32261,21 +32861,26 @@ arm: {
   const prim = (key: number, sec: number): Row => [`motion/duration-ms/${key}`, sec, null];
   const sem = (name: string, key: number, sec: number): Row => [`motion/${name}`, sec, `motion/duration-ms/${key}`];
   const NB_MOTION: Row[] = [
-    prim(0, 0), prim(40, 0.04), prim(50, 0.05), prim(100, 0.1), prim(200, 0.2), prim(300, 0.3), prim(500, 0.5), prim(800, 0.8), prim(1600, 1.6), prim(2600, 2.6),
+    prim(0, 0), prim(40, 0.04), prim(50, 0.05), prim(100, 0.1), prim(200, 0.2), prim(300, 0.3), prim(500, 0.5), prim(800, 0.8),
+    prim(900, 0.9), prim(1100, 1.1), prim(1300, 1.3), prim(1600, 1.6), prim(2600, 2.6),
     sem('duration/instant', 50, 0.05), sem('duration/fast', 100, 0.1), sem('duration/normal', 200, 0.2), sem('duration/moderate', 300, 0.3),
     sem('duration/slow', 500, 0.5), sem('duration/slower', 800, 0.8), sem('duration/spin', 800, 0.8), sem('duration/sweep', 1600, 1.6),
+    sem('duration/long', 900, 0.9), sem('duration/longer', 1100, 1.1), sem('duration/longest', 1300, 1.3),
     sem('duration-reduced/instant', 50, 0.05), sem('duration-reduced/fast', 100, 0.1), sem('duration-reduced/normal', 50, 0.05),
     sem('duration-reduced/moderate', 0, 0), sem('duration-reduced/slow', 0, 0), sem('duration-reduced/slower', 0, 0),
+    sem('duration-reduced/long', 0, 0), sem('duration-reduced/longer', 0, 0), sem('duration-reduced/longest', 0, 0),
     sem('duration-reduced/spin', 2600, 2.6), sem('duration-reduced/sweep', 2600, 2.6),
     sem('stagger', 40, 0.04),
   ];
   const AURORA_MOTION: Row[] = [
     prim(0, 0), prim(30, 0.03), prim(40, 0.04), prim(50, 0.05), prim(80, 0.08), prim(160, 0.16), prim(240, 0.24), prim(400, 0.4),
-    prim(640, 0.64), prim(800, 0.8), prim(1600, 1.6), prim(2600, 2.6),
+    prim(640, 0.64), prim(720, 0.72), prim(800, 0.8), prim(880, 0.88), prim(1040, 1.04), prim(1600, 1.6), prim(2600, 2.6),
     sem('duration/instant', 40, 0.04), sem('duration/fast', 80, 0.08), sem('duration/normal', 160, 0.16), sem('duration/moderate', 240, 0.24),
     sem('duration/slow', 400, 0.4), sem('duration/slower', 640, 0.64), sem('duration/spin', 800, 0.8), sem('duration/sweep', 1600, 1.6),
+    sem('duration/long', 720, 0.72), sem('duration/longer', 880, 0.88), sem('duration/longest', 1040, 1.04),
     sem('duration-reduced/instant', 40, 0.04), sem('duration-reduced/fast', 80, 0.08), sem('duration-reduced/normal', 50, 0.05),
     sem('duration-reduced/moderate', 0, 0), sem('duration-reduced/slow', 0, 0), sem('duration-reduced/slower', 0, 0),
+    sem('duration-reduced/long', 0, 0), sem('duration-reduced/longer', 0, 0), sem('duration-reduced/longest', 0, 0),
     sem('duration-reduced/spin', 2600, 2.6), sem('duration-reduced/sweep', 2600, 2.6),
     sem('stagger', 30, 0.03),
   ];
@@ -32344,7 +32949,9 @@ arm: {
 
   // "Every DTCG motion token has a Figma form or a stated reason" (#2412 done-when): every family under
   // `<root>.motion` in the DTCG is a key of MOTION_FIGMA_COVERAGE, and the one with no form says why.
-  const nbDtcgMotion = Object.keys(buildTree(nbTheme()).tree[NB_ROOT].motion);
+  // NB's families, plus the brand-only group (#2857), which only a brand that sets it emits.
+  const brandOnlyFamilies = Object.keys(buildTree(brandTheme({ ...MINIMAL_BRAND, motionPersonality: { brandOnly: { coast: { kind: 'gesture', coastTauMs: 325 } } } } as unknown as BrandInput)).tree.prism.motion);
+  const nbDtcgMotion = [...new Set([...Object.keys(buildTree(nbTheme()).tree[NB_ROOT].motion), ...brandOnlyFamilies])];
   const uncovered = nbDtcgMotion.filter((f) => !(f in MOTION_FIGMA_COVERAGE));
   ok(uncovered.length === 0 && nbDtcgMotion.length === Object.keys(MOTION_FIGMA_COVERAGE).length,
     `motion: every DTCG motion family has a Figma form or a stated reason (${nbDtcgMotion.join(', ')}${uncovered.length ? ` — UNCOVERED: ${uncovered.join(', ')}` : ''})`);
@@ -32455,7 +33062,7 @@ arm: {
     && cs.files.get('./cs/component-contracts.json') === cs.files.get('./cs/component-defs.json'),
     `#1325 export_theme: include:[componentSpecs] writes exactly the component contracts, their compatibility copy (the same bytes) and the Specs projection (${[...cs.files.keys()].join(', ')})`);
   const csDoc = JSON.parse(cs.files.get('./cs/component-defs.json') ?? '{}');
-  ok(csDoc.brand?.id === xbrand.id && csDoc.format === 'prism3-component-defs/1.5' && Object.keys(csDoc.components ?? {}).length >= 40,
+  ok(csDoc.brand?.id === xbrand.id && csDoc.format === 'prism3-component-defs/1.7' && Object.keys(csDoc.components ?? {}).length >= 40,
     `export_theme: the component-defs export is the brand's (${csDoc.brand?.id}), in its format, with every component (${Object.keys(csDoc.components ?? {}).length})`);
 
   // A bad brand must fail BEFORE anything is written — a partial export is worse than none.
@@ -32468,8 +33075,8 @@ arm: {
   // structured, actionable error list from an incidental crash. The named errors are the difference
   // between an agent that can fix its input and one that only knows it failed.
   const badPayload = JSON.parse(badRes.content[0].text) as { error?: string; errors?: string[] };
-  ok(/schema validation/i.test(badPayload.error ?? '') && (badPayload.errors?.length ?? 0) >= 3
-     && badPayload.errors!.some((e) => /missing required 'id'/.test(e)),
+  ok(badPayload.error === 'the brand input fails the schema' && (badPayload.errors?.length ?? 0) >= 3
+     && badPayload.errors!.some((e) => /^id is missing; the brand input requires it/.test(e)),
     'export_theme: the failure is a NAMED schema error list, not an incidental throw');
 }
 
@@ -33024,6 +33631,23 @@ arm: {
     ok(JSON.stringify(restored) === JSON.stringify(base),
       `#4155 ${b}: the web base differs from the conforming base only in its typefaces' values`);
   }
+}
+
+// ---- #2997: the shadcn/Tailwind projectors enumerate brands, not each brand's web base --------------------------
+// #4155 added `<brand>.web.base.tokens.json` beside `<brand>.base.tokens.json`. Both end `.base.tokens.json`, so a
+// suffix match read `aurora.web` as a brand and the projectors threw for its missing dark overlay. The expected list is
+// the committed handoff's own `.tokens.json` canonicals, never `handoffBrands`' rule. A dynamic import, so no line above
+// the public guide's cited test.ts blocks moves (lint-guide-claims).
+{
+  const { handoffBrands, readHandoff } = await import('./emit-shadcn');
+  const OUT = resolve(HERE, 'out');
+  const want = readdirSync(OUT).filter((f) => /^[^.]+\.tokens\.json$/.test(f) && existsSync(resolve(OUT, f.replace(/\.tokens\.json$/, '.base.tokens.json'))))
+    .map((f) => f.split('.')[0]!).sort();
+  const got = handoffBrands(OUT);
+  ok(want.length >= 5 && JSON.stringify(got) === JSON.stringify(want),
+    `#2997: handoffBrands lists each brand once, no web base among them (want ${want.join(', ')}; got ${got.join(', ')})`);
+  ok(got.every((b) => { try { readHandoff(b, OUT); return true; } catch { return false; } }),
+    `#2997: every brand handoffBrands lists reads as a handoff, its overlays present`);
 }
 
 // ---- Arc 2's primitives: `icon` and `focus-ring` as real defs (#741) ---------------------------
@@ -33785,7 +34409,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'step-item', 'menu-item', 'tooltip'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -33932,7 +34556,7 @@ arm: {
   // variables: a fixed column one line tall.
   // Pagination.Item's balance (Q537) binds a zero width under its 2px height: the frame above the underlined number that
   // must not set the label box's width. Two different variables, so it joins on the rule's own terms.
-  const WIDTH_EXPECTED = ['text-field', 'textarea', 'switch-control', 'divider', 'list-item', 'password-field', 'search-field', 'card-number-field', 'code-input-cell', 'pagination-item'];
+  const WIDTH_EXPECTED = ['text-field', 'textarea', 'switch-control', 'divider', 'list-item', 'password-field', 'search-field', 'card-number-field', 'code-input-cell', 'pagination-item', 'step-item'];
   ok(WIDTH_EXPECTED.every((n) => widthDefs.some((d) => d.id === n)) && widthDefs.length === WIDTH_EXPECTED.length,
     `#990 the width projection rule below covers exactly [${WIDTH_EXPECTED.join(', ')}] — a def gaining a deliberately non-square box must be represented here, and a def losing one is a stale claim (found: ${widthDefs.map((d) => d.id).join(', ') || 'none'})`);
   const grownWidth: string[] = [];
@@ -35370,6 +35994,9 @@ arm: {
     + 'block and centring cannot float the icon mid-paragraph. Fixed on its counter axis as well, which is '
     + 'the mechanical half of the same fact: the row has no room to grow into a second line.';
   const CENTRE_OK: Record<string, string> = {
+    // #4007: the shortcut is one short line that never wraps; centered in the 20px trailing cell, it sits on the chevron's
+    // middle, which the top-aligned row keeps on the label's first line.
+    'menu-item.trailCell': 'a one-line shortcut beside a 20px chevron, inside a top-aligned row',
     'button.container': buttonCentreReason,
     // #1223 split the semantic intents into sibling components that share Button's exact anatomy, so the
     // same design fact exempts them — a Destructive or Neutral button label is the same short action phrase.
@@ -35453,6 +36080,10 @@ arm: {
     // (the provider's own words), so the glyph centers against the only line, as Button's icon does.
     'sign-in-button.container':
       "a sign-in button is one fixed height and its label is the provider's one-line wording, which never wraps, so the glyph centers against the only line, as on Button.",
+    // `step-item` (#3055): the disc centers its one number (or the check, or the error glyph; gated on status, never two
+    // at once) inside a fixed square, so there is no wrapping block to float against.
+    'step-item.marker':
+      "the disc is a fixed square holding one short number, or a single glyph in its place (gated on status, never two at once), so centring places the only line in the middle of the disc.",
     'tag.labelCheck':
       "the tag's height is fixed at one line in Figma and its label is one line there, so the check mark (and, one row out, the leading icon) center against the only line; in code a wrapped label centers them on the label block, which is held for the owner (tag.ts notes.contested).",
   };
@@ -35599,7 +36230,8 @@ arm: {
     const std = parseStandardDesignMd(text);
     const input = isStandardDesignMd(std) ? standardToBrandInput(std).input : parseDesignMd(text).input;
     if (!corpus.includes(input.id)) continue;
-    worlds.push({ brand: input.id, density: 'spacious', root: treeOf(buildTree(brandTheme({ ...input, density: 'spacious' })).tree) });
+    const spacious = exampleTheme(`${input.id} (spacious)`, () => buildTree(brandTheme({ ...input, density: 'spacious' })).tree); // #1889
+    if (spacious) worlds.push({ brand: input.id, density: 'spacious', root: treeOf(spacious) });
   }
   const offSize: string[] = [], offCell: string[] = [], offDesc: string[] = [], offStart: string[] = [];
   let measured = 0, grew = 0;
@@ -35787,7 +36419,8 @@ arm: {
     if (!corpus.includes(input.id)) continue;
     rebuilt++;
     for (const density of ['compact', 'spacious'] as const) {
-      const theme = brandTheme({ ...input, density });
+      const theme = exampleTheme(`${input.id} (${density})`, () => brandTheme({ ...input, density })); // #1889
+      if (!theme) continue;
       ok(theme.dims.density === density, `#2894: ${input.id} built at ${density} resolves to that density (got ${theme.dims.density})`);
       worlds.push({ brand: input.id, density, root: treeOf(buildTree(theme).tree) });
     }
@@ -36050,6 +36683,43 @@ arm: {
 // fixture, not a path, so the test does not move when that file does. Module scope since #1387's block
 // below reads it too.
 const NB_MASTER: BrandInput = {"id": "nb-redesign", "root": "nbds", "modes": ["light"], "primary": {"l": 0.5418, "c": 0.2151, "h": 23}, "neutral": {"hue": 325.7, "chroma": 0.0025, "auto": true}, "actionPalette": "brand-neutral", "actionAnchorStep": 950, "neutralEmphasis": "strong", "roleColors": {"danger": "primary"}, "radiusScale": 0.5, "controlShape": "hairline", "typography": {"families": {"display": "ITC Garamond Std", "title": "ITC Garamond Std", "body": "Suisse Int'l", "label": "Suisse Int'l", "caption": "Suisse Int'l", "eyebrow": "Suisse Int'l"}, "weights": {"display": ["subtle"], "title": ["subtle"], "body": ["default", "emphasis"], "caption": ["default", "emphasis"], "label": ["default", "emphasis"]}, "weightRoles": {"emphasis": 500}, "responsive": {"fluid": true, "minViewport": 375, "maxViewport": 1440}, "typefaceLibrary": ["Inter", "Suisse Int'l"], "displayCeiling": "2xl", "faces": {"display": {"subtle": {"family": "ITC Garamond Std", "style": "Light Condensed"}}, "title": {"subtle": {"family": "ITC Garamond Std", "style": "Light Condensed"}}}, "leadingShift": {"title": 1, "body": 1, "display": 1}, "trackingShift": {"display": 1, "body": -1, "label": -1, "caption": -1, "eyebrow": -1}, "lineHeights": {"compact": 1.25, "snug": 1.2}, "sizes": {"title": {"2xl": 56, "xl": 48, "lg": 40, "md": 36, "sm": 32, "xs": 24}, "display": {"sm": 64, "md": 72}}, "sizeOverrides": {"title": {"2xl": {"mobile": 40}, "xl": {"mobile": 36}, "lg": {"mobile": 32}, "md": {"mobile": 28}, "sm": {"mobile": 24}}}}, "overrides": {"light": {"foreground.primary": {"palette": "neutral", "step": "025"}, "foreground.secondary": {"palette": "neutral", "step": "050"}, "foreground.tertiary": {"palette": "neutral", "step": "100"}, "interactive.primary.fill.hover": {"palette": "brand-neutral", "step": "800"}, "interactive.primary.fill.pressed": {"palette": "brand-neutral", "step": "700"}, "inverse.interactive.primary.fill.rest": {"palette": "brand-neutral", "step": "025"}, "interactive.primary.text.rest": {"palette": "brand-neutral", "step": "950"}, "interactive.primary.text.hover": {"palette": "brand-neutral", "step": "800"}, "interactive.primary.text.pressed": {"palette": "brand-neutral", "step": "700"}, "inverse.interactive.primary.text.rest": {"palette": "brand-neutral", "step": "025"}, "inverse.interactive.primary.border.rest": {"palette": "brand-neutral", "step": "025"}, "inverse.interactive.primary.on-fill": {"palette": "neutral", "step": "950"}, "interactive.primary.border.rest": {"palette": "brand-neutral", "step": "350"}}}, "motionPersonality": {"tempo": "relaxed"}, "baseMd": 5, "radiusHairline": true, "brandColors": [{"name": "brand-neutral", "oklch": {"l": 0.578529639963649, "c": 0.014407766653341907, "h": 244.39838400513634}}], "outlineInteraction": "solid-tint", "layout": {"breakpoints": [0, 768], "columns": 24, "columnOverrides": {"sm": 6}, "containerNarrow": 740}, "density": "comfortable", "buttonContentSize": "smaller", "buttonMinWidthMultiplier": 2.75, "buttonIcons": "edges"} as unknown as BrandInput;
+
+// ---- #2778 (owner, 2026-11-18, Q362 A): THE BUILD RULES SHIP IN THEIR OWN LIST ------------------------------------
+// `docs.implementation` holds the rules a developer acts on and a designer placing the component does not; `docs.do`
+// keeps the usage rules. Expectations are literals typed from the move (the proposal's classification), never read from
+// a def: four representative lines must sit in `implementation` and not in `do`, in the def, in components.ai.json and
+// on the page under "Building it in code"; the defs that carry the list are named; and no line is in both lists.
+// Mutation: put Checkbox.Group's value-array line back in `docs.do` → `#2778 checkbox-group: …` fails by name.
+{
+  const MOVED: [string, string][] = [
+    ['button', "Place the icons the way the brand's `buttonIcons` setting says; `attached` (Attached to label, the default) keeps them beside the label with the group centered"],
+    ['flush-icon-button', 'Extend its hit area in code to at least 44×44px at every size, with a transparent `::before` inset outward and centered on the glyph, so the target clears 44px while the box stays glyph-sized'],
+    ['checkbox-group', 'Let the group own the value array, required and validation — a row inside a group never manages its own'],
+    ['tab-item', 'Let the tab list set selected from its value'],
+  ];
+  const ai = JSON.parse(readFileSync(resolve(HERE, './out/components/components.ai.json'), 'utf8')) as { components: unknown };
+  const aiList = (Array.isArray(ai.components) ? ai.components : Object.values(ai.components as object)) as Array<{ id: string; docs?: { do?: string[]; implementation?: string[] } }>;
+  for (const [id, line] of MOVED) {
+    const def = componentDefs.find((d) => d.id === id);
+    const a = aiList.find((c) => c.id === id);
+    const md = existsSync(resolve(HERE, `./out/components/${id}.md`)) ? readFileSync(resolve(HERE, `./out/components/${id}.md`), 'utf8') : '';
+    const code = md.split('\n## ').find((sec) => sec.startsWith('Building it in code')) ?? '';
+    const where = {
+      def: !!def?.docs.implementation?.includes(line) && !def?.docs.do?.includes(line),
+      ai: !!a?.docs?.implementation?.includes(line) && !a?.docs?.do?.includes(line),
+      page: code.includes(line.replace(/`[^`]*`/g, '').slice(0, 30)) || code.includes(line.slice(0, 40)),
+    };
+    ok(where.def && where.ai && where.page, `#2778 ${id}: the build rule ships in docs.implementation, not docs.do, in the def, components.ai.json and the page's Building it in code (${JSON.stringify(where)})`);
+  }
+  const WITH = ['_slider-thumb', 'banner', 'button', 'button-destructive', 'button-neutral', 'card-number-field', 'checkbox-control', 'checkbox-group', 'checkbox-row',
+    'code-input', 'counter', 'dialog', 'field-message', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'focus-ring', 'icon-button',
+    'icon-button-destructive', 'icon-button-neutral', 'page-nav', 'pagination', 'pagination-item', 'password-field', 'radio-control', 'radio-group', 'radio-row',
+    'search-field', 'segmented-control', 'select', 'slider', 'spinner', 'switch-control', 'switch-row', 'tab-item', 'tag', 'text-field', 'textarea', 'veil'];
+  const got = componentDefs.filter((d) => (d.docs.implementation ?? []).length).map((d) => d.id).sort();
+  ok(JSON.stringify(got) === JSON.stringify([...WITH].sort()), `#2778 the defs carrying docs.implementation are the ${WITH.length} the move named (got ${got.length}: ${JSON.stringify(got.filter((x) => !WITH.includes(x)))} extra, ${JSON.stringify(WITH.filter((x) => !got.includes(x)))} missing)`);
+  const both = componentDefs.flatMap((d) => (d.docs.implementation ?? []).filter((l) => (d.docs.do ?? []).includes(l)).map((l) => `${d.id}: ${l.slice(0, 50)}`));
+  ok(both.length === 0, `#2778 no line is in both docs.do and docs.implementation (${JSON.stringify(both)})`);
+}
 
 // ---- #2814 (owner, 2026-11-18, A): CODE INPUT'S CELLS SET LINING FIGURES ---------------------------------------------
 // The title family's default figures can be old style, which drop 3, 4, 5, 7 and 9 below the baseline, so a digit sits
@@ -37278,14 +37948,14 @@ arm: {
     const wide = { light: { hover: 'neutral.050' } };
     const same = diff3335(roles3335({ ...base3335, outlineHoverFill: wide }),
       roles3335({ ...base3335, outlineHoverFill: { light: { hover: 'neutral.050', sets: { primary: { hover: 'neutral.050' }, neutral: { hover: 'neutral.050' }, destructive: { hover: 'neutral.050' } } } } }));
-    const light = resolveAllModes({ ...corpus()[0].theme, outlineInteraction: 'overlay-neutral' }).find((m) => m.mode === 'light')!.roles;
+    const light = resolveAllModes({ ...(corpus()[0]?.theme ?? base3335), outlineInteraction: 'overlay-neutral' }).find((m) => m.mode === 'light')!.roles; // #1889: an empty corpus is already red by name
     const alphas = ['hover', 'pressed', 'selected'].map((st) => light[`interactive.primary.overlay.${st}`]?.alpha);
     ok(moved.length === 0 && same.length === 0 && JSON.stringify(alphas) === JSON.stringify([0.1, 0.2, 0.2]),
       `#3335 (B) brands that don't set the new inputs are unchanged: ${built} brand × method builds resolve identically with the default steps given (10/20 neutral, 20/30 tinted, typed here), a restated per-set pick changes nothing, and the unset neutral wash is ${alphas.join(' / ')} (want 0.1 / 0.2 / 0.2)${moved.length ? ` — MOVED: ${moved.slice(0, 3).join('; ')}` : ''}${same.length ? ` — SETS MOVED: ${same.slice(0, 3).join('; ')}` : ''}`);
   }
   // (C)
   {
-    const t0 = { ...corpus()[0].theme, outlineInteraction: 'overlay-neutral' as const };
+    const t0 = { ...(corpus()[0]?.theme ?? base3335), outlineInteraction: 'overlay-neutral' as const };
     const light = resolveAllModes({ ...t0, outlineWash: { hover: 5, pressed: 30 } }).find((m) => m.mode === 'light')!.roles;
     const alphas = ['hover', 'pressed', 'selected'].map((st) => light[`interactive.primary.overlay.${st}`]?.alpha);
     const tint = (w?: { hover: number; pressed: number }) => corpus().flatMap(({ theme }) => resolveAllModes({ ...theme, outlineInteraction: 'solid-tint', ...(w ? { outlineWash: w } : {}) })
@@ -39211,15 +39881,18 @@ arm: {
           const v = /^\+export const ENGINE_VERSION = '(\d+\.\d+\.\d+)'/m.exec(rec)?.[1];
           if (sha && parents.length === 1 && v) set.add(v);
         }
-        const releases = join(REPO, 'docs/public/releases');
+        // The versions named AT THE BASE, not in the working tree (the 0.239.0 fold): a fold PR's tree names the version it
+        // is minting, which no commit of main can set until that PR merges, so reading the tree failed every fold in CI.
+        // Every version main's own record names must still be set by a single-parent commit in its history.
         const named = [
-          ...(existsSync(releases) ? readdirSync(releases).filter((f) => /^\d+\.\d+\.\d+\.json$/.test(f)).map((f) => f.slice(0, -5)) : []),
-          /ENGINE_VERSION = '(\d+\.\d+\.\d+)'/.exec(readFileSync(join(REPO, 'packages/engine/version.ts'), 'utf8'))?.[1] ?? 'the working tree\'s ENGINE_VERSION (unreadable)',
+          ...raw(['ls-tree', '--name-only', base, 'docs/public/releases/']).stdout.split('\n')
+            .map((f) => /\/(\d+\.\d+\.\d+)\.json$/.exec(f.trim())?.[1]).filter((v): v is string => !!v),
+          /ENGINE_VERSION = '(\d+\.\d+\.\d+)'/.exec(raw(['show', `${base}:packages/engine/version.ts`]).stdout)?.[1] ?? `the ENGINE_VERSION at ${base.slice(0, 8)} (unreadable)`,
         ];
         const unset = [...new Set(named)].filter((v) => !set.has(v));
         if (unset.length) premiseBroken.push(`no single-parent commit in the history of ${at} sets ${unset.slice(0, 5).join(', ')}${unset.length > 5 ? ` and ${unset.length - 5} more` : ''}, so the folds the tree's release notes name are not in it`);
       }
-      const inPrism3 = process.env.GITHUB_REPOSITORY === 'adamforrester/prism3';
+      const inPrism3 = process.env.GITHUB_REPOSITORY === 'prism-ds/prism3';
       if (premiseBroken.length && inPrism3) {
         for (const b of premiseBroken) ok(false, `#3985 integration replay: in prism3's own CI its premise must hold, and it does not — ${b}`);
         failSpan('integration-replay', premiseBroken.join('; '));
@@ -39351,8 +40024,40 @@ arm: {
     }
     if ((skippedSpans.has('integration-replay') || failedSpans.has('integration-replay')) && pass + fails.length !== assertedBefore)
       ok(false, `#3985 integration replay: the span was skipped and still recorded ${pass + fails.length - assertedBefore} assertion(s) — a skip that asserts is not a skip`);
+  } catch (e) {
+    // #1889: a replay step that throws (its regen meets an engine refusal) is one named failure, and the arms after it still run.
+    ok(false, `#3833 integration replay threw, so its remaining arms did not run: ${(e as Error).message.slice(0, 600)}`);
   } finally {
     rmSync(work, { recursive: true, force: true });
+  }
+}
+
+// #4197 — run-suites.ts proves its count parser on every run, not behind a flag nothing passed. The audit's mutation,
+// replayed on a copy: `countOf` returning 99999 read a collapsed suite as at its floor, at exit 0. The copy runs over an
+// empty app (no suite to spawn), so the only thing that can fail it is the runner's own self-test. A control runs the
+// unmutated copy over the same app and passes, so the failure is the mutation's, not the fixture's.
+{
+  const runner = readFileSync(join(resolve(HERE, '..', '..'), 'run-suites.ts'), 'utf8');
+  const broken = runner.replace(/(export const countOf = \(stdout: string\): number \| null => \{)/, '$1\n  return 99999;');
+  ok(broken !== runner, '#4197: the mutation (countOf returns 99999) applies to run-suites.ts — the anchor still matches');
+  const dir = mkdtempSync(join(tmpdir(), 'prism3-4197-'));
+  try {
+    const app = join(dir, 'app');
+    mkdirSync(app);
+    writeFileSync(join(app, 'suites.json'), JSON.stringify({ suites: [], elsewhere: {} }));
+    writeFileSync(join(app, 'package.json'), JSON.stringify({ scripts: { test: 'npx tsx ../run-suites.ts' } }));
+    const run = (src: string) => {
+      writeFileSync(join(dir, 'run-suites.ts'), src);
+      const r = spawnSync(process.execPath, [...process.execArgv, join(dir, 'run-suites.ts')], { cwd: app, encoding: 'utf8' });
+      return { status: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+    };
+    const bad = run(broken);
+    ok(bad.status === 1 && /run-suites self-test: \d+ failed/.test(bad.out),
+      `#4197: run-suites.ts with a broken countOf fails its own self-test on a plain run, before any suite (exit ${bad.status}: ${bad.out.trim().split('\n').at(-1)})`);
+    const good = run(runner);
+    ok(good.status === 0, `#4197: the unmutated runner passes over the same empty app (exit ${good.status}: ${good.out.trim().split('\n').at(-1)})`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -40060,7 +40765,7 @@ arm: {
     const ringNote = codeOnlyText(progress.anatomy!.codeOnly).find((c) => c.startsWith('the indeterminate ring')) ?? '';
     const usage = progress.docs?.usage ?? '';
     ok(ringOff.length === 0
-      && /rotate\(1turn\)/.test(ringNote) && /var\(--motion-duration-sweep\) linear infinite/.test(ringNote) && /prefers-reduced-motion: reduce/.test(ringNote) && /var\(--motion-duration-reduced-sweep\)/.test(ringNote) && /never stopped/.test(ringNote)
+      && /rotate\(1turn\)/.test(ringNote) && /var\(--motion-duration-sweep\) var\(--motion-easing-linear\) infinite/.test(ringNote) && /prefers-reduced-motion: reduce/.test(ringNote) && /var\(--motion-duration-reduced-sweep\)/.test(ringNote) && /never stopped/.test(ringNote)
       && !/refused in development, pointing to Spinner/.test(code)
       && /\(3 at small, 2\.4 at medium/.test(code)
       && /ring/.test(usage) && /Spinner for a short wait inside a control/.test(usage) && /indeterminate when it is not/.test(usage),
@@ -40208,6 +40913,49 @@ arm: {
   const MUST = ['button', 'icon-button', 'text-field', 'textarea', 'select', 'switch-row', 'tag', 'checkbox-control', 'field-label', 'spinner'];
   const missing = MUST.filter((id) => !(checked.get(id) ?? 0));
   ok(missing.length === 0, `#2501: the axis order rule read every def it was raised on, each with values to order${missing.length ? ` — not read: ${missing.join(', ')}` : ''}`);
+}
+
+// ------------------------------------------------------------------- #4109: Skeleton
+// Each owner decision (OD-S1 to OD-S7, all A, 2026-11-19) held against a literal typed here from the proposal; ACTUAL is
+// the def and its projected plans, so a def that moves a member, a binding, a width or the announcement model fails by name.
+{
+  const def = componentDefs.find((d) => d.id === 'skeleton')!;
+  const set = figmaAnatomySet(def, {});
+  const at = (name: string) => set.find((p) => planComponentName(p) === name);
+  const findIn = (n: AnatomyPlan['root'], name: string): AnatomyPlan['root'] | undefined => n.name === name ? n : n.children.map((k) => findIn(k, name)).find(Boolean);
+  // OD-S6 A: four members, text at both sizes, circle and rect at medium only; text leads (the code default).
+  const NAMES = ['shape=text, size=medium', 'shape=text, size=small', 'shape=circle, size=medium', 'shape=rect, size=medium'];
+  ok(JSON.stringify(set.map(planComponentName)) === JSON.stringify(NAMES),
+    `#4109 skeleton (OD-S6 A): the set is text × [medium, small], circle and rect, text medium first (${set.map(planComponentName).join(' | ')})`);
+  // OD-S1 A: no `ghost` alias. OD-S2 A: one primitive with a shape axis, states [] (one visible condition).
+  ok(!def.aliases.includes('ghost') && JSON.stringify(def.variants.shape) === JSON.stringify(['text', 'circle', 'rect']) && def.states.length === 0,
+    `#4109 skeleton (OD-S1 A, OD-S2 A): no ghost alias, one def with shape [text, circle, rect], and no states`);
+  // OD-S4 A: every painted node takes the recessed neutral, nothing else.
+  const paints = set.flatMap((p) => planPaintVars(p.root));
+  ok(paints.length === 8 && paints.every((v) => v === 'color/background/tertiary'),
+    `#4109 skeleton (OD-S4 A): the 8 painted nodes (3 bars × 2 text members, the circle, the rect) all take color/background/tertiary (${[...new Set(paints)].join(', ')}; ${paints.length})`);
+  // The line row is one body line box tall (brief: bind to the type line height); OD-S5 A: the bar is inset by space.050
+  // above and below, so it is about two thirds of the line.
+  const LINE: Record<string, string> = { medium: 'type/body/md/line-box', small: 'type/body/sm/line-box' };
+  const lineOff = (['medium', 'small'] as const).filter((sz) => {
+    const r = at(`shape=text, size=${sz}`)?.root;
+    return !r || ['firstLine', 'middleLine', 'lastLine'].some((l) => { const b = findIn(r, l)?.bound ?? {}; return b.height !== LINE[sz] || b.paddingTop !== 'space/050' || b.paddingBottom !== 'space/050'; });
+  });
+  ok(lineOff.length === 0, `#4109 skeleton (OD-S5 A): every text line is one body line box tall with the bar inset space.050 above and below (off: ${lineOff.join(', ') || 'none'})`);
+  // The stepped ragged-right widths: 100 / 80 / 40% of the 320 build width.
+  const text = at('shape=text, size=medium')?.root;
+  ok(!!text && text.placementWidth === 320 && findIn(text, 'firstBar')?.layoutGrow === 1 && findIn(text, 'middleBar')?.minWidth === 256 && findIn(text, 'lastBar')?.minWidth === 128,
+    `#4109 skeleton: the text member is built 320 wide and its bars step 100 / 80 / 40% (firstBar grows, middleBar 256, lastBar 128)`);
+  // Corners: radius.sm on the bars, radius.md on the rect, radius.round on the circle; rect built 320×180, circle 40×40.
+  const corner = (name: string, part: string) => findIn(at(name)!.root, part)?.bound.topLeftRadius;
+  const rect = at('shape=rect, size=medium')?.root, circle = at('shape=circle, size=medium')?.root;
+  ok(corner('shape=text, size=medium', 'firstBar') === 'radius/sm' && corner('shape=rect, size=medium', 'block') === 'radius/md' && corner('shape=circle, size=medium', 'block') === 'radius/round'
+    && rect?.placementWidth === 320 && rect.placementHeight === 180 && circle?.placementWidth === 40 && circle.placementHeight === 40,
+    `#4109 skeleton: bars radius.sm, rect radius.md at 320×180, circle radius.round at 40×40`);
+  // OD-S3 A: the pulse period is motion.duration.sweep (no new token); OD-S7 A: Skeleton never speaks.
+  const announce = def.anatomy?.codeOnly.find((c) => c.class === 'announcement')?.description ?? '';
+  ok(def.tokens['motion.pulse'] === 'motion.duration.sweep' && /never speaks/.test(announce) && /aria-busy/.test(def.accessibility.aria) && /aria-hidden="true"/.test(def.accessibility.aria) && !def.props.some((p) => p.name === 'label'),
+    `#4109 skeleton (OD-S3 A, OD-S7 A): the pulse runs on motion.duration.sweep, every shape is aria-hidden, the region owns aria-busy and the status, and there is no label prop`);
 }
 
 // ------------------------------------------------------------------- #2428: Code input and its cell
@@ -40469,6 +41217,9 @@ arm: {
     'pagination-item.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'the current page is marked by `current`, rendering aria-current="page", as Link does (#2665, #3554 Q-CC15 A)' },
     'page-nav-item.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'a page navigation item marks the current page by `current`, as Link does (#3345)' },
     'link.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'a link marks the current page by `current`, rendering aria-current="page" (#2872, Q507.3 A)' },
+    // #4007 (held for the owner): one member, so the group carries a one-value `type` the engine needs to project a set.
+    // Code has no type prop: every group is a section, with or without its heading, and a radio set is a section too.
+    'menu-group.type': { prop: 'heading', map: { undefined: 'section' }, reason: 'code has no type prop; a group is a section whether or not it sets `heading` (#4007: the one-value axis is how the engine projects one member)' },
     'accordion.expansion': { prop: 'defaultExpanded', map: off('collapsed', 'expanded'), reason: 'an accordion opens by `defaultExpanded`' },
     // #2666 (owner call 11 A): code has no path prop. `responsive` (default true) swaps the trail for the parent link
     // below 480px by a container query, and either value renders the trail at every wider width, so the code default
@@ -40692,7 +41443,7 @@ arm: {
   const DECLARED = new Set(['nb light background.secondary']);
   const under: string[] = [], declaredSeen: string[] = [];
   const brands: Array<[string, Theme]> = [
-    ...Object.entries(exampleBrands()).map(([id, input]) => [id, brandTheme(input as BrandInput)] as [string, Theme]),
+    ...loadedRows(Object.entries(exampleBrands()).map(([id, input]) => [id, exampleTheme(id, () => brandTheme(input as BrandInput))] as [string, Theme])), // #1889
     ['nb', nbTheme()],
   ];
   for (const [id, th] of brands) {
@@ -41997,6 +42748,126 @@ arm: {
   ok(validateComponentDef(td).errors.length === 0, `#2668 toast validates clean (${validateComponentDef(td).errors.slice(0, 2).join('; ')})`);
 }
 
+// ------------------------------------------------------------------- #4009: the tooltip
+// The proposal on #4009 with every OD at its recommendation, and the owner's Q-FL2 record on #4007 and #4009
+// (2026-11-19): K6 B (label mode on an icon-only trigger), K7 B (a fade plus a small scale), K8 A (an owned positioning
+// layer), OD-X2 A (logical sides), OD-T6 (the numbers with no token, as placeholders). EXPECTED is typed here as literals
+// from those records; ACTUAL is the projected plan and, for contrast, the committed emission under `out/`, read as files,
+// never through the def. Mutations: the bubble's fill to `color.background.primary` → `#4009 tooltip bubble`; the arrow
+// boolean dropped → `#4009 tooltip properties`; the scale entrance removed from codeOnly → `#4009 tooltip code-side`.
+{
+  const td = componentDefs.find((d) => d.id === 'tooltip')!;
+  const plans = figmaAnatomySet(td, { swapTarget: 'FPO-default-icon' });
+  type TN = { name: string; type: string; children: TN[]; bound?: Record<string, string>; paints?: Record<string, string>; layoutMode?: string; textStyle?: string; glyphPx?: number; visibleProp?: string; descendantFills?: string; effectStyle?: string };
+  const find = (n: TN, name: string): TN | undefined => (n.name === name ? n : n.children.map((c) => find(c, name)).find(Boolean));
+
+  // THE SHAPE (OD-X2 A, OD-T2 A, OD-T3 A): 4 members, top first; no size, no state, no alignment axis.
+  ok(JSON.stringify(plans.map(planComponentName)) === JSON.stringify(['placement=top', 'placement=bottom', 'placement=start', 'placement=end']) && figmaVariantCount(td) === 4,
+    `#4009 tooltip: 4 members, placement top, bottom, start, end (OD-X2 A, OD-T3 A) (got ${plans.map(planComponentName).join(' | ')})`);
+  ok(JSON.stringify(td.variants) === JSON.stringify({ placement: ['top', 'bottom', 'start', 'end'] }) && td.states.length === 0 && !td.figmaProperties?.stateAxis
+    && td.props.find((p) => p.name === 'placement')?.default === 'top' && td.props.find((p) => p.name === 'align')?.default === 'center',
+    `#4009 tooltip: placement [top, bottom, start, end] only, top the code default, align center in code, no state axis (got ${JSON.stringify(td.variants)})`);
+  ok(td.name === 'Tooltip' && td.category === 'overlay' && JSON.stringify(td.aliases) === JSON.stringify(['hint', 'infotip', 'info-tip']) && td.ai.generationPriority === 3,
+    `#4009 tooltip: named Tooltip, category overlay, aliases hint, infotip and info-tip, generation priority 3 (got ${td.name}, ${td.category}, ${JSON.stringify(td.aliases)}, ${td.ai.generationPriority})`);
+
+  // THE BUBBLE (OD-X1, OD-T6): the inverse surface, radius md, padding 4 / 8, no border, no shadow.
+  const bubbleBad = plans.filter((p) => {
+    const b = find(p.root as TN, 'bubble');
+    return !(b && b.paints?.fills === 'color/inverse/background/primary' && !b.paints?.strokes && !b.effectStyle
+      && b.bound?.topLeftRadius === 'radius/md' && b.bound?.bottomRightRadius === 'radius/md'
+      && b.bound?.paddingTop === 'space/050' && b.bound?.paddingBottom === 'space/050' && b.bound?.paddingLeft === 'space/100' && b.bound?.paddingRight === 'space/100');
+  }).map(planComponentName);
+  ok(bubbleBad.length === 0, `#4009 tooltip bubble: inverse.background.primary with no border and no shadow, radius/md, padding 4/8 (OD-X1, OD-T6)${bubbleBad.length ? ` — WRONG: ${bubbleBad.join(', ')}` : ''}`);
+
+  // THE LABEL (OD-T6): inverse.text.primary in the 14px body style.
+  const labelBad = plans.filter((p) => { const l = find(p.root as TN, 'label'); return !(l && l.paints?.fills === 'color/inverse/text/primary' && l.textStyle === 'body/sm/default'); }).map(planComponentName);
+  ok(labelBad.length === 0, `#4009 tooltip label: inverse.text.primary in body/sm/default (OD-T6)${labelBad.length ? ` — WRONG: ${labelBad.join(', ')}` : ''}`);
+
+  // THE ARROW (OD-T2 A, OD-T6): one per member, on the bubble's trigger side, 8px literal, in the bubble's fill.
+  const SIDE: Record<string, { part: string; dir: string; order: string[] }> = {
+    top: { part: 'topGlyph', dir: 'VERTICAL', order: ['bubble', 'topGlyph'] },
+    bottom: { part: 'bottomGlyph', dir: 'VERTICAL', order: ['bottomGlyph', 'bubble'] },
+    start: { part: 'startGlyph', dir: 'HORIZONTAL', order: ['bubble', 'startGlyph'] },
+    end: { part: 'endGlyph', dir: 'HORIZONTAL', order: ['endGlyph', 'bubble'] },
+  };
+  const arrowBad = plans.filter((p) => {
+    const r = p.root as TN, s = SIDE[(p.coord as Record<string, string>).placement], g = s && find(r, s.part);
+    return !(s && g && g.type === 'GLYPH' && r.layoutMode === s.dir && JSON.stringify(r.children.map((c) => c.name)) === JSON.stringify(s.order)
+      && g.glyphPx === 8 && g.descendantFills === 'color/inverse/background/primary' && g.visibleProp === 'arrow');
+  }).map(planComponentName);
+  ok(arrowBad.length === 0, `#4009 tooltip arrow: one 8px arrow per member on the trigger side, in inverse.background.primary, shown by the arrow toggle (OD-T2 A, OD-T6)${arrowBad.length ? ` — WRONG: ${arrowBad.join(', ')}` : ''}`);
+
+  // THE PROPERTIES (OD-T2 A): the label text and the arrow toggle, on by default; lowercase names (Q345).
+  ok(JSON.stringify(planSetProperties(plans)) === JSON.stringify([{ name: 'label', type: 'TEXT', default: 'Tooltip text' }, { name: 'arrow', type: 'BOOLEAN', default: true }]),
+    `#4009 tooltip properties: label "Tooltip text", arrow on (OD-T2 A) (got ${JSON.stringify(planSetProperties(plans))})`);
+  ok(JSON.stringify(td.composition?.composesWith) === '[]', `#4009 tooltip nests nothing: its arrow is a component-owned glyph (got ${JSON.stringify(td.composition?.composesWith)})`);
+
+  // THE CODE-SIDE CONTRACT, each stated in codeOnly, the props or accessibility as literals.
+  const co = codeOnlyText(td.anatomy!.codeOnly).join('\n');
+  const kind = td.props.find((p) => p.name === 'kind');
+  // K7 A holds the motion to a fade, however a size change is worded (Delta review N2 at 0c32bc9c): the word scale, a
+  // grow, shrink or zoom, a transform, or a percentage, in the code motion entry or any of the motion field's lines.
+  const SIZE_CHANGE = /\bscal(?:e|es|ed|ing)\b|\b(?:grow|shrink|zoom)|\btransform|\d\s*%/i;
+  const tdMotionEntry = codeOnlyText(td.anatomy!.codeOnly).find((t) => /^motion — /.test(t)) ?? '';
+  const contract: [string, boolean][] = [
+    ['role tooltip, described by default', /`role="tooltip"`/.test(co) && /`aria-describedby`/.test(co) && kind?.default === 'description'],
+    ['label mode on an icon-only trigger, with no aria-label (K6 B)', JSON.stringify(kind?.values) === '["description","label"]' && /`aria-labelledby` pointing at it and no `aria-label`/.test(co)],
+    ['Escape hides it without moving focus, and it never takes focus (OD-T1 A)', /Escape hides it without moving focus/.test(co) && /It never takes focus/.test(co)],
+    ['at once on keyboard focus, after the delay on hover, at once in the skip window (OD-T4 A)', /after `delay`, at once on keyboard focus/.test(co) && /within the shared skip window/.test(co)],
+    ['a fade alone with no scale, no animation in the skip window, the reduced fade both ways (K7 A)', /show: opacity 0 to 1, a fade alone with no scale/.test(co) && !/scale from/.test(co) && [tdMotionEntry.replace('a fade alone with no scale', ''), td.motion?.enter ?? '', td.motion?.exit ?? '', td.motion?.reduceMotion ?? ''].every((t) => !SIZE_CHANGE.test(t)) && tdMotionEntry !== '' && /Inside the skip window it appears with no animation/.test(co) && /both ways fade on `motion\.duration-reduced\.fast`/.test(co)],
+    ['an owned positioning layer on the platform, no library (K8 A)', /`popover="manual"`/.test(co) && /CSS anchor positioning/.test(co) && /No positioning library/.test(co)],
+    ['max width 240, offset space.100 (OD-T6)', /up to 240px/.test(co) && /offset `space\.100` from the trigger to the arrow\\'s tip|offset `space\.100` from the trigger to the arrow's tip/.test(co)],
+    ['logical sides that mirror in right-to-left (OD-X2 A)', /start and end are logical/.test(co)],
+    ['never native disabled on the trigger', /never native `disabled`/.test(co)],
+  ];
+  const contractBad = contract.filter(([, v]) => !v).map(([k]) => k);
+  ok(contractBad.length === 0, `#4009 tooltip code-side contract, stated: ${contract.map(([k]) => k).join('; ')}${contractBad.length ? ` — MISSING: ${contractBad.join('; ')}` : ''}`);
+
+  // CONTRAST, over every committed brand × mode: the label on the bubble, and the bubble (and so the arrow) against the
+  // page. Read from `out/<brand>.tokens.json`, resolving aliases, never through the def.
+  {
+    const OUT = resolve(HERE, 'out');
+    const brands = readdirSync(OUT).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f) && !f.includes('.base.') && !f.includes('.overlay.'));
+    const PAIRS: [string, string, number, string][] = [
+      ['color.inverse.text.primary', 'color.inverse.background.primary', 4.5, 'label on the bubble'],
+      ['color.inverse.background.primary', 'color.background.primary', 3, 'the bubble and arrow against the page'],
+    ];
+    const misses: string[] = [];
+    let checked = 0;
+    for (const f of brands) {
+      const doc = JSON.parse(readFileSync(resolve(OUT, f), 'utf8'));
+      const rootKey = Object.keys(doc).find((k) => !k.startsWith('$'))!;
+      const leaf = (path: string) => path.split('.').reduce((o: any, k) => o?.[k], doc[rootKey]);
+      const modes = ['light', ...Object.keys(leaf('color.inverse.background.primary')?.$extensions?.prism3?.modes ?? {})];
+      const valueAt = (path: string, mode: string, depth = 0): string | undefined => {
+        const l = leaf(path);
+        if (!l || depth > 12) return undefined;
+        const v = mode !== 'light' && l.$extensions?.prism3?.modes?.[mode] ? l.$extensions.prism3.modes[mode].$value : l.$value;
+        if (typeof v !== 'string') return undefined;
+        const m = /^\{(.+)\}$/.exec(v);
+        return m ? valueAt(m[1].replace(new RegExp(`^${rootKey}\\.`), ''), mode, depth + 1) : v;
+      };
+      const rgbOf = (v: string | undefined): RGB | undefined => {
+        if (!v) return undefined;
+        if (/^#[0-9a-f]{6}$/i.test(v)) return hexToRgb(v);
+        const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(v);
+        return m ? hexToRgb(`#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`) : undefined;
+      };
+      for (const mode of modes) for (const [fg, bg, floor, what] of PAIRS) {
+        const a = rgbOf(valueAt(fg, mode)), b = rgbOf(valueAt(bg, mode));
+        if (!a || !b) { misses.push(`${f}/${mode} ${what}: unresolved (${valueAt(fg, mode)} on ${valueAt(bg, mode)})`); continue; }
+        const ratio = contrast(a, b);
+        checked++;
+        if (ratio < floor) misses.push(`${f}/${mode} ${what}: ${ratio.toFixed(2)}:1 under ${floor}:1`);
+      }
+    }
+    ok(brands.length >= 5 && checked >= brands.length * 4 * PAIRS.length && misses.length === 0,
+      `#4009 tooltip contrast: ${PAIRS.length} inverse pairs clear their floors in every committed brand × mode (${brands.length} brands, ${checked} ratios)${misses.length ? ` — MISS: ${misses.slice(0, 4).join('; ')}` : ''}`);
+  }
+
+  ok(validateComponentDef(td).errors.length === 0, `#4009 tooltip validates clean (${validateComponentDef(td).errors.slice(0, 2).join('; ')})`);
+}
+
 // ------------------------------------------------------------------- #3165: the toast's message at 14px
 // Owner request (#3165): the message is 14px, `type.body.sm`, not 16. Q3165.1 A: the card takes a floor at the
 // ladder's medium rung, so a one-line toast with no action still lands on the control-height ladder rather than at
@@ -42028,7 +42899,10 @@ arm: {
     const std = parseStandardDesignMd(text);
     const input = isStandardDesignMd(std) ? standardToBrandInput(std).input : parseDesignMd(text).input;
     if (!corpus.includes(input.id)) continue;
-    for (const density of ['compact', 'spacious'] as const) worlds.push({ brand: input.id, density, root: treeOf(buildTree(brandTheme({ ...input, density })).tree) });
+    for (const density of ['compact', 'spacious'] as const) { // #1889
+      const tree = exampleTheme(`${input.id} (${density})`, () => buildTree(brandTheme({ ...input, density })).tree);
+      if (tree) worlds.push({ brand: input.id, density, root: treeOf(tree) });
+    }
   }
   const sizeBad: string[] = [], offLadder: string[] = [], offLine: string[] = [], withAction: string[] = [];
   let measured = 0;
@@ -43911,6 +44785,31 @@ arm: {
   ok(MARKS.length === 13 && bindOff.length === 0,
     `#3346-E1 the five selection marks bind interactive.<c>.indicator.*: the tab's selected bar, the radio's checked ring, the tag's selected outline, the switch's off thumb and the slider's disc (${bindOff.length} off — ${bindOff.slice(0, 3).join('; ') || 'none'})`);
 
+  // (4b) #3398 A (owner, 2026-11-18): THE THREE NEARBY BINDINGS, EACH KEY A LITERAL. The slider's selected bar is a mark
+  // like the disc it meets, so it binds the thumb's `interactive.neutral.indicator.*` at rest; the nav-item preview's
+  // resting indicator is a mark on `interactive.primary.indicator.rest`, on its binding AND on the contract that
+  // measures it; Tag Underline's unselected line stays an EDGE on `interactive.primary.border.*` (the role Q589 named),
+  // so the outline-edge setting may quiet it. The expected refs are typed here, never read from the defs.
+  // MUTATION: put the slider's bar back on `interactive.neutral.border.rest`, or the nav-item's indicator back on
+  // `interactive.primary.border.rest`, and the arm fails by name; move the unselected line to the indicator and it fails too.
+  {
+    const off3398: string[] = [];
+    const sliderBar = componentDefs.find((d) => d.id === 'slider')?.tokens['indicator'];
+    if (sliderBar !== 'color.interactive.neutral.indicator.rest') off3398.push(`slider indicator: ${sliderBar ?? 'unbound'}`);
+    const navSel = previewSpec.components.find((c) => c.id === 'nav-item')?.variants.find((v) => v.name === 'selected');
+    const navInd = (navSel?.bindings as Record<string, string> | undefined)?.indicator;
+    if (navInd !== 'color.interactive.primary.indicator.rest') off3398.push(`nav-item selected indicator: ${navInd ?? 'unbound'}`);
+    const navCt = navSel?.contracts?.find((ct) => ct.label === 'indicator')?.fg;
+    if (navCt !== 'color.interactive.primary.indicator.rest') off3398.push(`nav-item indicator contract: ${navCt ?? 'none'}`);
+    const uTag = applyTagStyle(componentDefs.find((d) => d.id === 'tag')!, 'underline');
+    for (const st of STATES3) {
+      const k = st === 'rest' ? 'unselected.border' : `unselected.border.${st}`;
+      if (uTag.tokens[k] !== `color.interactive.primary.border.${st}`) off3398.push(`tag underline ${k}: ${uTag.tokens[k] ?? 'unbound'}`);
+    }
+    ok(off3398.length === 0,
+      `#3398 the slider's selected bar and the nav-item preview indicator are marks (interactive.<c>.indicator.rest); Tag Underline's unselected line stays an edge (interactive.primary.border.*) (${off3398.length} off — ${off3398.join('; ') || 'none'})`);
+  }
+
   // (5) NO SHAPE BINDS A TEXT ROLE (owner, 2026-11-03), even where the values match. SUBJECT = every projected member
   // of every def; a node whose part is a `box` may not fill or stroke with a `text` role on either band. The oracle is
   // the rule, typed here. `TEXT_CARET` is the one exception, exempt by owner decision (#3397 A, 2026-11-18): the text
@@ -43959,7 +44858,8 @@ arm: {
   const bad: string[] = [];
   let checked = 0;
   for (const id of EXAMPLE_IDS) {
-    const x = exportComponentDefs(componentDefs, { brand: exampleBrands()[id] as BrandInput }) as any;
+    const x = exampleTheme(id, () => exportComponentDefs(componentDefs, { brand: exampleBrands()[id] as BrandInput })) as any; // #1889
+    if (!x) continue;
     for (const [cid, c] of Object.entries<any>(x.components ?? {})) for (const r of c.spec?.redlines ?? []) for (const p of r.parts ?? []) {
       const mw = p.values?.minWidth, h = p.values?.height?.px;
       const m = typeof mw?.rule === 'string' ? /^height × (\d+(?:\.\d+)?)(?:, rounded (to the nearest|up to) 8px)?$/.exec(mw.rule) : null;
@@ -44045,7 +44945,10 @@ arm: {
 {
   const ids = readdirSync(resolve(HERE, './out')).filter((f) => /^[^.]+\.tokens\.json$/.test(f)).map((f) => f.slice(0, -'.tokens.json'.length)).sort();
   const trees: [string, any][] = ids.map((id) => [id, JSON.parse(readFileSync(resolve(HERE, `./out/${id}.tokens.json`), 'utf8'))]);
-  for (const id of EXAMPLE_IDS) trees.push([`${id}@solid-tint`, buildTree(brandTheme({ ...(exampleBrands()[id] as BrandInput), outlineInteraction: 'solid-tint' } as BrandInput)).tree]);
+  for (const id of EXAMPLE_IDS) { // #1889
+    const tinted = exampleTheme(`${id}@solid-tint`, () => buildTree(brandTheme({ ...(exampleBrands()[id] as BrandInput), outlineInteraction: 'solid-tint' } as BrandInput)).tree);
+    if (tinted) trees.push([`${id}@solid-tint`, tinted]);
+  }
   const parse = (v: string): { rgb: RGB; a: number } | undefined => {
     let m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(v);
     if (m) return { rgb: hexToRgb('#' + m[1]), a: m[2] ? parseInt(m[2], 16) / 255 : 1 };
@@ -44126,6 +45029,255 @@ arm: {
     const offText = nodes.filter((n) => n.textStyle !== undefined && n.type !== 'TEXT').map((n) => `${n.name}:${n.type}`);
     ok(parts[h.part]?.kind === h.kind && !!typeKey && !threw && host !== undefined && host.textStyle === undefined && offText.length === 0,
       `#3783 a '${h.kind}' part carrying 'type' (${h.def}.${h.part}, synthetic) plans NO text style — only a TEXT node takes one (${threw ? `threw: ${threw}` : !host ? 'the part was not built at this coordinate' : `text style on ${offText.join(', ') || 'none'}`})`);
+  }
+}
+
+// ------------------------------------------------------------------- #4123 / #4128: the projection's value forms
+// The handoff writes DTCG 2025.10 object forms, and a type style's tracking resolved to px, per mode. No committed
+// brand varies tracking by mode or writes `rgb()` outside the reference brand, so a synthetic canonical tree pins both.
+// Expected values are literals. Mutations: drop `conformValues` from `buildOverlaySet` → the #4123 rows fail; drop
+// `trackingInPx` → the #4128 rows fail.
+{
+  const ext = (modes: Record<string, unknown>) => ({ $extensions: { prism3: { modes } } });
+  const canon = { r: {
+    c: { $type: 'color', $value: 'rgba(255, 128, 0, 0.5)', ...ext({ dark: { $value: '#102030' } }) },
+    d: { $type: 'dimension', $value: '1.5rem' },
+    t: { $type: 'duration', $value: '200ms' },
+    size: { $type: 'dimension', $value: '3rem', $extensions: { prism3: { px: 48 } } },
+    tight: { $type: 'number', $value: -0.02, ...ext({ dark: { $value: -0.05 } }) },
+    ty: { $type: 'typography', $value: { fontFamily: 'Inter', fontSize: '{r.size}', fontWeight: 400, lineHeight: 1.2, letterSpacing: '{r.tight}' } },
+  } };
+  const set = buildOverlaySet(canon) as any;
+  const dark = set.overlays.find((o: any) => o.mode === 'dark')?.tree;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  ok(same(set.base.r.c.$value, { colorSpace: 'srgb', components: [1, 0.502, 0], alpha: 0.5, hex: '#ff8000' })
+    && same(dark?.r?.c?.$value, { colorSpace: 'srgb', components: [0.0627, 0.1255, 0.1882], hex: '#102030' }),
+    `#4123 a literal color reaches the projection as a DTCG color object, rgba() and #hex alike (base ${JSON.stringify(set.base.r.c.$value)}, dark ${JSON.stringify(dark?.r?.c?.$value)})`);
+  ok(same(set.base.r.d.$value, { value: 1.5, unit: 'rem' }) && set.base.r.t.$value === '200ms',
+    `#4123 a dimension is { value, unit } and a duration stays a string (dimension ${JSON.stringify(set.base.r.d.$value)}, duration ${JSON.stringify(set.base.r.t.$value)})`);
+  ok(same(set.base.r.ty.$value.letterSpacing, { value: -0.96, unit: 'px' }) && same(dark?.r?.ty?.$value?.letterSpacing, { value: -2.4, unit: 'px' }),
+    `#4128 a type style's tracking is resolved to px from its own size, per mode: -0.02 × 48 in base, -0.05 × 48 in dark (base ${JSON.stringify(set.base.r.ty.$value.letterSpacing)}, dark ${JSON.stringify(dark?.r?.ty?.$value?.letterSpacing)})`);
+  ok(canon.r.ty.$value.letterSpacing === '{r.tight}', `#4128 the canonical tree keeps the alias; only the projection resolves it (${canon.r.ty.$value.letterSpacing})`);
+}
+
+// ---- #4123 / #2997: the shadcn/Tailwind projectors read the handoff's DTCG 2025.10 value forms --------------------
+// The projectors read `<brand>.base.tokens.json` and the dark overlay, which #4123 writes as color objects and
+// `{ value, unit }` dimensions, a shadow layer's color and lengths included. A synthetic handoff spelled both ways must
+// project to the same CSS, and the string spelling is the one main's projector already read. Expected literals are
+// written here, never derived from `conformColor`. Mutation: put back the `typeof value !== 'string'` guard in
+// `colorValue` / `dimensionValue` → these rows fail by name (and `check:shadcn`, `lint-shadcn-contrast` throw).
+{
+  const { shadcnCss, dimensionValue, toOklchCss, readHandoff, handoffBrands, shadcnRegistryItem } = await import('./emit-shadcn');
+  const { tailwindThemeCss, shadowCss } = await import('./emit-tailwind');
+  const { SHADCN_COLOR_VARS, SHADCN_DIMENSION_VARS, SHADCN_THEME_VARS } = await import('./projections/shadcn');
+  const { TAILWIND_DIMENSIONS, TAILWIND_FONTS, TAILWIND_SHADOWS } = await import('./projections/tailwind');
+  const put = (tree: Record<string, any>, path: string, tok: unknown) => {
+    const ks = path.split('.'); let n = tree;
+    for (const k of ks.slice(0, -1)) n = (n[k] ??= {});
+    n[ks[ks.length - 1]!] = tok;
+  };
+  const handoff = (objects: boolean) => {
+    const base: Record<string, any> = {};
+    const translucent = objects ? { colorSpace: 'srgb', components: [1, 0.502, 0], alpha: 0.5, hex: '#ff8000' } : 'rgba(255, 128, 0, 0.5)';
+    const opaque = objects ? { colorSpace: 'srgb', components: [0.0392, 0.0706, 0.1569], hex: '#0a1228' } : '#0a1228';
+    const dim = (v: number, u: string) => (objects ? { value: v, unit: u } : `${v}${u}`);
+    put(base, 'z.ink', { $type: 'color', $value: opaque });
+    put(base, 'z.veil', { $type: 'color', $value: translucent });
+    Object.values(SHADCN_COLOR_VARS).forEach((role, i) => put(base, role, { $type: 'color', $value: i % 3 === 0 ? '{q.z.ink}' : i % 3 === 1 ? translucent : opaque }));
+    for (const role of [...Object.values(SHADCN_DIMENSION_VARS), ...Object.values(TAILWIND_DIMENSIONS), ...Object.entries(SHADCN_THEME_VARS).filter(([k]) => !k.startsWith('font-')).map(([, r]) => r)])
+      put(base, role, { $type: 'dimension', $value: dim(0.5, 'rem') });
+    for (const role of [...Object.values(TAILWIND_FONTS), ...Object.entries(SHADCN_THEME_VARS).filter(([k]) => k.startsWith('font-')).map(([, r]) => r)])
+      put(base, role, { $type: 'fontFamily', $value: 'Inter' });
+    for (const role of Object.values(TAILWIND_SHADOWS))
+      put(base, role, { $type: 'shadow', $value: [
+        { color: translucent, offsetX: dim(0, 'px'), offsetY: dim(1, 'px'), blur: dim(2, 'px'), spread: dim(-1, 'px') },
+        { color: '{q.z.veil}', offsetX: dim(0, 'px'), offsetY: dim(4, 'px'), blur: dim(6, 'px'), spread: dim(0, 'px'), inset: true },
+      ] });
+    return { brand: 'q', root: 'q', base, overlays: { dark: {} } } as any;
+  };
+  const obj = handoff(true), str = handoff(false);
+  const shadowRole = Object.values(TAILWIND_SHADOWS)[0]!;
+  let objCss = '', strCss = '', err = '';
+  try { strCss = shadcnCss(str) + tailwindThemeCss(str); objCss = shadcnCss(obj) + tailwindThemeCss(obj); } catch (e) { err = (e as Error).message; }
+  ok(!err && objCss.length > 0 && objCss === strCss,
+    `#4123 the shadcn/Tailwind projectors write the same CSS from a handoff in DTCG 2025.10 object forms as from its string spelling (${err || 'CSS differs'})`);
+  let dimGot = '', shadowGot = '';
+  try { dimGot = dimensionValue(obj, 'radius.lg'); shadowGot = shadowCss(obj, shadowRole, 'light'); } catch (e) { dimGot = (e as Error).message; }
+  ok(dimGot === '0.5rem', `#4123 a { value, unit } dimension projects as its CSS length (got ${JSON.stringify(dimGot)})`);
+  ok(shadowGot === `0px 1px 2px -1px ${toOklchCss('rgba(255, 128, 0, 0.5)')}, inset 0px 4px 6px 0px ${toOklchCss('rgba(255, 128, 0, 0.5)')}`,
+    `#4123 a shadow layer's color object and { value, unit } lengths project as a CSS box-shadow (got ${JSON.stringify(shadowGot)})`);
+  let p3 = '';
+  try { toOklchCss({ colorSpace: 'display-p3', components: [1, 0, 0], hex: '#ff0000' }); } catch (e) { p3 = (e as Error).message; }
+  ok(/display-p3/.test(p3), `#4123 a color object outside srgb is refused by name, not read as srgb (got ${JSON.stringify(p3)})`);
+  const OUT = resolve(HERE, 'out');
+  for (const b of handoffBrands(OUT)) {
+    let e = '';
+    try { const h = readHandoff(b, OUT); shadcnRegistryItem(h); tailwindThemeCss(h); } catch (x) { e = (x as Error).message; }
+    ok(!e, `#4123 ${b}: the committed handoff projects to shadcn and Tailwind CSS (${e})`);
+  }
+}
+
+// #2857 (owner decision Q-MP7 option 3, 2026-11-19) — the engine foundation for motion presets: the long steps of the
+// one duration scale, the brand's preset → step mapping, and the brand-only group outside the contract.
+{
+  const base = { id: 'presets2857', primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.008 } };
+  const withMotion = (mp: Record<string, unknown>) => ({ ...base, motionPersonality: mp }) as unknown as BrandInput;
+  const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+  const sidecar = (input: BrandInput) => { const th = brandTheme(input); return buildAiMetadata(th, buildTree(th).tree) as any; };
+  const treeOf = (input: BrandInput) => buildTree(brandTheme(input)).tree.prism;
+
+  // (1) THE DEFAULT MAPPING IS THE OWNER'S TEN (Q-MP1 A, #2857, 2026-11-19). EXPECTED is written here by hand, never
+  // read from the engine's MOTION_PRESET_DEFAULTS: the names are the decision's own list, in its order, and each row is
+  // the DRAFT default the Ready comment puts to the owner (step, easing role, reduced step). ACTUAL is the sidecar the
+  // engine emits for the canonical brand, so a preset added, dropped, renamed or moved fails here by name.
+  const QMP1 = 'state, fade, crossfade, move, reveal, draw, surface, expand, step and settle'.split(/, | and /);
+  const DRAFT_DEFAULTS: Record<string, [string, string, string]> = {
+    state: ['fast', 'default', 'fast'], fade: ['normal', 'enter', 'normal'], crossfade: ['normal', 'default', 'normal'],
+    move: ['moderate', 'default', 'normal'], reveal: ['slow', 'enter', 'normal'], draw: ['slow', 'default', 'normal'],
+    surface: ['moderate', 'enter', 'normal'], expand: ['normal', 'default', 'normal'], step: ['moderate', 'default', 'normal'],
+    settle: ['slow', 'enter', 'normal'],
+  };
+  const cards = QMP1.map((data) => { const [dur, ease, rdur] = DRAFT_DEFAULTS[data] ?? ['?', '?', '?']; return { data, dur, ease, rdur }; });
+  const prism3Input = readExampleBrand('./examples/prism3.design.md');
+  const stockPresets = sidecar(prism3Input).motion_presets ?? {};
+  const wrongCards = cards.filter((c) => {
+    const p = stockPresets[c.data];
+    return !p || p.duration !== `motion.duration.${c.dur}` || p.easing !== `motion.easing-role.${c.ease}` || p.reduced_duration !== `motion.duration-reduced.${c.rdur}`;
+  });
+  const emittedNames = Object.keys(stockPresets);
+  ok(QMP1.length === 10 && Object.keys(DRAFT_DEFAULTS).length === 10 && wrongCards.length === 0 && JSON.stringify(emittedNames) === JSON.stringify(QMP1),
+    `#2857 default mapping: the owner's ten Q-MP1 presets, in order, each on its DRAFT step, easing role and reduced step for prism3 (${QMP1.length} named, ${emittedNames.length} emitted: ${emittedNames.join(', ')})${wrongCards.length ? ` — wrong: ${wrongCards.map((c) => `${c.data} wants ${c.dur}/${c.ease}/${c.rdur}, got ${JSON.stringify(stockPresets[c.data])}`).join('; ')}` : ''}`);
+  // OWNER DECISIONS 2026-11-20 on #4332, each resolved through the prism3 tree to the value it lands on, with the
+  // EXPECTED written here as literals. `draw` FADES under reduced motion rather than disappearing: its reduced
+  // duration is a real fade (50ms at the standard tempo), not the 0ms "eliminated" twin of its `slow` step.
+  const decTree = buildTree(brandTheme(prism3Input)).tree;
+  const leafOf = (path: string | undefined): any => (path ? path.split('.').reduce((n: any, k) => n?.[k], decTree[Object.keys(decTree)[0]]) : undefined);
+  const drawReduced = stockPresets.draw?.reduced_duration;
+  ok(drawReduced === 'motion.duration-reduced.normal' && leafOf(drawReduced)?.$extensions?.prism3?.ms === 50,
+    `#2857 owner 2026-11-20: draw fades under reduced motion (motion.duration-reduced.normal, 50ms), not eliminated at 0ms (got ${drawReduced} → ${leafOf(drawReduced)?.$extensions?.prism3?.ms}ms)`);
+  // `expand` plays on the in-place `default` curve (standard, [0.2, 0, 0, 1]), not the arriving `enter` one.
+  const expandEasing = stockPresets.expand?.easing;
+  ok(expandEasing === 'motion.easing-role.default' && leafOf(expandEasing)?.$value === '{pds3.motion.easing.standard}',
+    `#2857 owner 2026-11-20: expand takes the in-place default curve (motion.easing-role.default → standard; got ${expandEasing} → ${leafOf(expandEasing)?.$value})`);
+  // OWNER DECISION 2026-11-20 on #4332 (Accordion recipe → A): the prism3-motion skill's Accordion recipe plays the
+  // panel's height on the `expand` preset, both ways, instead of hand-picking the enter and exit transitions. The
+  // SUBJECT is the hand-written skill; the ORACLE is the emitted sidecar, so the recipe's preset must exist and every
+  // name it says `expand` resolves to must be the one prism3 emits. Every "`<name>` preset" the skill cites must be an
+  // emitted preset too. Mutations: the panel row back to `motion.transition.enter` / `.exit`, or the recipe naming a
+  // preset prism3 doesn't emit, fail this arm by name.
+  {
+    const motionSkill = readFileSync(resolve(HERE, '../../skills/prism3-motion/SKILL.md'), 'utf8');
+    const accordion = /\n### Accordion\n([\s\S]*?)(?=\n### )/.exec(motionSkill)?.[1] ?? '';
+    const panelRow = accordion.split('\n').find((l) => l.startsWith('| Panel height')) ?? '';
+    const cells = panelRow.split('|').slice(2, 4).map((c) => c.trim());
+    const rowOk = cells.length === 2 && cells.every((c) => c === 'the `expand` preset');
+    const cited = [...motionSkill.matchAll(/`([a-z][a-z-]*)` preset\b/g)].map((m) => m[1]);
+    const unknown = cited.filter((n) => !(n in stockPresets));
+    const exp = stockPresets.expand ?? {};
+    const resolvesTo = [exp.duration, exp.easing, exp.reduced_duration];
+    const missing = resolvesTo.filter((n) => !n || !accordion.includes(`\`${n}\``));
+    ok(rowOk && cited.includes('expand') && unknown.length === 0 && missing.length === 0,
+      `#4332 owner 2026-11-20: the prism3-motion Accordion recipe plays the panel on the \`expand\` preset both ways, and every preset and name it cites is emitted (panel row: ${JSON.stringify(cells)}; presets cited: ${cited.join(', ') || 'none'}${unknown.length ? `; not emitted: ${unknown.join(', ')}` : ''}${missing.length ? `; expand resolves to names the recipe doesn't cite: ${missing.join(', ')}` : ''})`);
+  }
+  // The owner's own examples (Q-MP7 option 3) name `crossfade` and `surface`: a brand can map both.
+  const mapped = sidecar({ ...prism3Input, motionPersonality: { ...(prism3Input.motionPersonality ?? {}), presets: { crossfade: 'long', surface: 'longest' } } } as BrandInput).motion_presets ?? {};
+  ok(mapped.crossfade?.duration === 'motion.duration.long' && mapped.surface?.duration === 'motion.duration.longest',
+    `#2857 default mapping: the owner's Q-MP7 examples map (crossfade → long, surface → longest; got ${JSON.stringify([mapped.crossfade?.duration, mapped.surface?.duration])})`);
+  // Every path a preset names is a real tree leaf, so a preset resolves through the mapping to the semantic step.
+  const p3tree = buildTree(brandTheme(prism3Input)).tree;
+  const p3root = Object.keys(p3tree)[0];
+  const dangling = Object.entries<any>(stockPresets).flatMap(([n, p]) => [p.duration, p.easing, p.reduced_duration].filter((path) => !at(p3tree[p3root], path)).map((path) => `${n} → ${path}`));
+  ok(Object.keys(stockPresets).length > 0 && dangling.length === 0, `#2857 default mapping: every preset names a leaf the prism3 tree emits${dangling.length ? ` — dangling: ${dangling.join('; ')}` : ''}`);
+  // No value moves: the steps that existed before keep the values they had at the standard tempo (frozen here), and
+  // spelling the default mapping out in the input changes nothing the engine emits.
+  const BEFORE: Record<string, number> = { instant: 50, fast: 100, normal: 200, moderate: 300, slow: 500, slower: 800 };
+  const msOf = (v: string) => Number(/duration-ms\.(\d+)\}$/.exec(v)?.[1]);
+  const moved = Object.entries(BEFORE).filter(([k, v]) => msOf(p3tree[p3root].motion.duration[k]?.$value ?? '') !== v);
+  ok(moved.length === 0, `#2857 default mapping: no existing duration step moves for prism3${moved.length ? ` — moved: ${moved.map(([k]) => `${k} → ${p3tree[p3root].motion.duration[k]?.$value}`).join('; ')}` : ''}`);
+  const spelled = { ...prism3Input, motionPersonality: { ...(prism3Input.motionPersonality ?? {}), presets: Object.fromEntries(cards.map((c) => [c.data, c.dur])) } } as BrandInput;
+  ok(JSON.stringify(buildTree(brandTheme(spelled)).tree) === JSON.stringify(p3tree) && JSON.stringify(sidecar(spelled)) === JSON.stringify(sidecar(prism3Input)),
+    '#2857 default mapping: writing the default mapping into the input is byte-identical to leaving it out (tree and sidecar)');
+
+  // The long steps: three steps past `slower`, tempo-scaled like every step, 0ms under reduced motion. Values frozen.
+  for (const [tempo, f] of [['snappy', 0.8], ['standard', 1], ['relaxed', 1.3]] as const) {
+    const mo = treeOf(withMotion({ tempo })).motion;
+    const want = { long: 900, longer: 1100, longest: 1300 };
+    const bad = Object.entries(want).filter(([k, v]) => msOf(mo.duration[k]?.$value ?? '') !== Math.round((v * f) / 5) * 5 || msOf(mo['duration-reduced'][k]?.$value ?? '') !== 0
+      || mo['duration-ms'][String(Math.round((v * f) / 5) * 5)]?.$type !== 'duration');
+    ok(bad.length === 0, `#2857 long steps (${tempo}): motion.duration.{long,longer,longest} are 900/1100/1300ms × ${f}, reduced to 0, each on a real duration-ms primitive${bad.length ? ` — wrong: ${bad.map(([k]) => `${k} ${mo.duration[k]?.$value} / reduced ${mo['duration-reduced'][k]?.$value}`).join('; ')}` : ''}`);
+  }
+
+  // (2) AN OVERRIDE MOVES EXACTLY ONE PRESET, and only in the sidecar: a preset is not a token, so the tree is
+  // byte-identical.
+  const stock = sidecar(withMotion({})).motion_presets;
+  const over = sidecar(withMotion({ presets: { surface: 'longest' } })).motion_presets;
+  const differ = Object.keys({ ...stock, ...over }).filter((k) => JSON.stringify(stock[k]) !== JSON.stringify(over[k]));
+  ok(differ.length === 1 && differ[0] === 'surface' && over.surface?.duration === 'motion.duration.longest'
+    && over.surface?.easing === stock.surface?.easing && over.surface?.reduced_duration === stock.surface?.reduced_duration,
+    `#2857 override: presets {surface: 'longest'} moves exactly that preset's step and nothing else (moved: ${JSON.stringify(differ)}, now ${JSON.stringify(over.surface)})`);
+  ok(JSON.stringify(treeOf(withMotion({ presets: { surface: 'longest' } }))) === JSON.stringify(treeOf(withMotion({}))),
+    '#2857 override: a preset mapping moves no token (the tree is byte-identical)');
+
+  // (3) AN UNKNOWN ENTRY IS REFUSED BY NAME: an unknown preset, an unknown step, a loop period (not a step), and in
+  // the brand-only group an unknown kind and an unknown field.
+  const refusals: Array<[string, Record<string, unknown>, RegExp]> = [
+    ['unknown preset', { presets: { 'dialog/enter': 'normal' } }, /motionPersonality\.presets: unknown preset 'dialog\/enter'/],
+    ['unknown step', { presets: { fade: 'huge' } }, /motionPersonality\.presets\.fade: unknown duration step 'huge'/],
+    ['a loop period', { presets: { fade: 'spin' } }, /motionPersonality\.presets\.fade: unknown duration step 'spin'/],
+    ['unknown brand-only kind', { brandOnly: { thumb: { kind: 'wobble' } } }, /motionPersonality\.brandOnly\.thumb: unknown kind 'wobble'/],
+    ['unknown brand-only field', { brandOnly: { coast: { kind: 'gesture', friction: 2 } } }, /motionPersonality\.brandOnly\.coast: unknown field 'friction'/],
+    ['missing brand-only field', { brandOnly: { thumb: { kind: 'spring', damping: 0.7 } } }, /motionPersonality\.brandOnly\.thumb: kind 'spring' needs 'stiffness'/],
+  ];
+  for (const [label, mp, want] of refusals) {
+    const msg = refusal(() => brandTheme(withMotion(mp)));
+    ok(want.test(msg), `#2857 refused by name: ${label} (got ${JSON.stringify(msg)})`);
+  }
+  ok(validateBrandInput(withMotion({ presets: { fade: 'huge' } }) as never).some((e) => /motionPersonality\.presets\.fade is "huge"; it takes one of/.test(String(e))),
+    '#2857 refused by name: the schema refuses an unknown step too');
+
+  // (4) THE BRAND-ONLY GROUP STAYS OUT OF THE CONTRACT. A brand that sets it gets custom-typed leaves under
+  // motion.brand.*, which the conforming projection omits; no corpus member emits them, so the live corpus
+  // intersection and the committed baseline both leave every one out, as guaranteed and as brand-dependent.
+  const oneOffs = { thumb: { kind: 'spring', damping: 0.7, stiffness: 300 }, travel: { kind: 'distance', baseMs: 200, msPerPx: 0.5, maxMs: 900 }, coast: { kind: 'gesture', coastTauMs: 325, rubberBand: 0.55, parallax: 0.3 } };
+  const brandOnlyTheme = brandTheme(withMotion({ brandOnly: oneOffs }));
+  const bo = buildTree(brandOnlyTheme).tree.prism.motion.brand ?? {};
+  ok(bo.thumb?.$type === 'spring' && bo.travel?.$type === 'distanceDuration' && bo.coast?.$type === 'gesture'
+    && bo.travel?.$value?.msPerPx === 0.5 && bo.coast?.$value?.coastTauMs === 325 && Object.values<any>(bo).every((l) => l.$extensions?.prism3?.brandOnly === true),
+    `#2857 brand-only: a brand that sets the group emits one custom-typed motion.brand.* leaf per entry (${JSON.stringify(Object.fromEntries(Object.entries<any>(bo).map(([k, l]) => [k, l.$type])))})`);
+  ok(treeOf(withMotion({})).motion.brand === undefined, '#2857 brand-only: a brand that sets none emits no motion.brand group');
+  const baseProj = JSON.stringify(buildBase(buildTree(brandOnlyTheme).tree));
+  ok(!/"brand":\{"thumb"/.test(baseProj) && !baseProj.includes('distanceDuration'), '#2857 brand-only: the conforming projection omits the custom-typed leaves (#642)');
+  const live = buildContract();
+  const committed = readBaseline();
+  const inContract = (c: { guaranteed: Record<string, string>; brandDependent: string[] }) =>
+    [...Object.keys(c.guaranteed), ...c.brandDependent].filter((p) => p.startsWith('motion.brand.') || p === 'motion.brand');
+  ok(inContract(live).length === 0 && inContract(committed).length === 0 && Object.keys(live.guaranteed).includes('motion.duration.longest'),
+    `#2857 brand-only: no motion.brand.* path is guaranteed or brand-dependent, in the live corpus contract or the committed baseline (live ${JSON.stringify(inContract(live))}, committed ${JSON.stringify(inContract(committed))})`);
+}
+
+// ------------------------------------------------------------------- #4161 / #4163: the tree says which leaves are which
+// #4163 (owner decision A): no rename, so the `.ai.json` note names the primitive families, and a family outside `core.*`
+// reads as a primitive. Oracle: the literal families the issue is about, plus this file's own read of the `primitives`
+// keys. #4161 (owner decision A): the two pill radii each say which one a pill control binds. Mutations: drop the
+// families sentence from the note, or empty `PILL_USE` in tree.ts → the rows fail by name.
+{
+  for (const [id, input] of Object.entries(exampleBrands())) {
+    const t = exampleTheme(`${id} (#4161/#4163)`, () => brandTheme(input as BrandInput));
+    if (!t) { ok(false, `#4163 ${id}: the brand loads`); continue; }
+    const tree = (buildTree(t) as any).tree;
+    const ai = buildAiMetadata(t, tree) as any;
+    const m = /The primitive families are (.*?)\. Not every one/.exec(ai.note ?? '');
+    const named = m ? [...m[1].matchAll(/`([^`]+)`/g)].map((x) => x[1]) : [];
+    const keys = Object.keys(ai.primitives ?? {});
+    const uncovered = keys.filter((k) => !named.some((f) => k === f || k.startsWith(`${f}.`)));
+    const empty = named.filter((f) => !keys.some((k) => k === f || k.startsWith(`${f}.`)));
+    ok(m !== null && uncovered.length === 0 && empty.length === 0 && ['opacity', 'motion.duration-ms', 'motion.easing', 'core.palette'].every((f) => named.includes(f)),
+      `#4163 ${id}: the .ai.json note names every primitive family, opacity and motion.duration-ms among them (named: ${named.join(', ') || 'none'}; uncovered: ${uncovered.slice(0, 3).join(', ') || 'none'}; empty: ${empty.join(', ') || 'none'})`);
+    const base = buildBase(tree) as any;
+    const round = String(base?.[t.root]?.radius?.round?.$description ?? '');
+    const capsule = String(base?.[t.root]?.radius?.capsule?.$description ?? '');
+    ok(round.includes('`radius.capsule`') && capsule.includes('`radius.round`') && capsule.includes('`controlShape: pill`'),
+      `#4161 ${id}: radius.round and radius.capsule each say which pill a pill control binds (round: "${round}"; capsule: "${capsule}")`);
   }
 }
 
@@ -44314,7 +45466,7 @@ const MIN_ASSERTIONS = 1800;
   ok(edge.stats.broken.length === 0, `#3871 whole weights 1/450/1000 build with every alias resolving (broken: ${edge.stats.broken.slice(0, 3).map((b: any) => b.ref).join(', ')})`);
   // The schema says the same, so a file-driven brief fails at the schema before the engine.
   const schemaErrs = validateBrandInput(withRoles({ default: 450.5, strong: 2000 }));
-  ok(schemaErrs.some((e) => e.includes('weightRoles.default') && e.includes('not an integer')) && schemaErrs.some((e) => e.includes('weightRoles.strong')),
+  ok(schemaErrs.some((e) => e.includes('weightRoles.default') && e.includes('a whole number')) && schemaErrs.some((e) => e.includes('weightRoles.strong')),
     `#3871 the schema refuses a fractional and an out-of-range weight role (errors: ${JSON.stringify(schemaErrs)})`);
 }
 
@@ -44538,7 +45690,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   // a file-driven brief passed the schema and failed later. The two layers now agree, both ways, over the same ids.
   for (const [id, refused] of [['.', true], ['..', true], ['   ', true], ['\t', true], [' ', true], ['\0', true], ['a\0b', true],
     ['Has Space', false], ['...', false], [' ..', false], ['.hidden', false], ['aurora', false]] as const) {
-    const errs = validateBrandInput({ ...base, id } as unknown as BrandInput).filter((e) => e.startsWith('id:'));
+    const errs = validateBrandInput({ ...base, id } as unknown as BrandInput).filter((e) => e.startsWith('id is '));
     const engine = refusal(() => brandTheme({ ...base, id } as unknown as BrandInput)) !== '';
     ok(engine === refused && (errs.length > 0) === refused,
       `#3875 the schema and brandTheme agree on the id ${JSON.stringify(id)}: ${refused ? 'both refuse it' : 'both accept it'} (brandTheme ${engine ? 'refused' : 'accepted'}; schema ${JSON.stringify(errs)})`);
@@ -44622,7 +45774,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
 // defs is written out here by hand, not read from the defs, so a def that drops the note fails by its id (docs/34 shape 1).
 {
   const DECIDED = 'Plain HTML/CSS: wire this behavior contract up in your framework. The web component includes it.';
-  const INTERACTIVE = ['breadcrumb-item', 'breadcrumbs', 'code-input', 'dialog', 'link', 'page-nav-item', 'page-nav', 'pagination', 'popover', 'segmented-control-segment', 'segmented-control', 'slider', 'tab-item', 'tabs'];
+  const INTERACTIVE = ['breadcrumb-item', 'breadcrumbs', 'code-input', 'dialog', 'link', 'page-nav-item', 'page-nav', 'pagination', 'popover', 'segmented-control-segment', 'segmented-control', 'slider', 'tab-item', 'tabs', 'menu-item', 'menu'];
   const all = componentDefs;
   for (const id of INTERACTIVE) {
     const d = all.find((x) => x.id === id);
@@ -44651,6 +45803,130 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   // The accept side: rising floors, a fractional one among them, still build.
   const rising = refusal(() => brandTheme(withBps([0, 768.5, 1024])));
   ok(rising === '', `#3872 rising breakpoints [0, 768.5, 1024] still build (got ${JSON.stringify(rising)})`);
+}
+
+// #3076 — THE BRAND ICON MAP (owner decision 2026-11-18, A, both; Q1–Q8 at their recommendations). A brand names which of
+// its own icons stands in for each Prism3 icon and carries the art; `applyIconMap` rewrites every def before projection.
+// EXPECTED is typed here from #3076's own table of where the core icons are used (plus the counter, the proposal's
+// finding 2) and from the rules the proposal lists; ACTUAL is the projected plans and `brandTheme`'s refusals. Neither
+// is read from `icon-map.ts` (docs/34).
+{
+  const MAP = { plus: 'add', 'plus-filled': 'add', minus: 'subtract', 'minus-filled': 'subtract', check: 'checkmark', 'close-filled': 'close' };
+  const ADD = 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z';
+  const GLYPHS = { add: { path: ADD }, subtract: { path: 'M4 11h16v2H4z' }, checkmark: { path: 'M9.5 15.6 5.4 11.5 4 12.9l5.5 5.5L20 7.9l-1.4-1.4z' }, close: { path: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z', fillRule: 'evenodd' as const } };
+  const ICONS = { map: MAP, glyphs: GLYPHS };
+  const refs = (defs: readonly ComponentDef[]): Map<string, Set<string>> => {
+    const out = new Map<string, Set<string>>();
+    const walk = (id: string, n: any): void => {
+      for (const t of [n.nestTarget, n.swapTarget, ...(n.nestOverrides ?? []).map((o: any) => o.value)])
+        if (typeof t === 'string' && t.startsWith('icon/')) { if (!out.has(t)) out.set(t, new Set()); out.get(t)!.add(id); }
+      for (const c of n.children ?? []) walk(id, c);
+    };
+    for (const d of defs) for (const p of figmaAnatomySet(d, {})) walk(d.id, p.root);
+    return out;
+  };
+  const mapped = componentDefs.map((d) => applyIconMap(d, ICONS));
+  const got = refs(mapped);
+  // No generated component instances a mapped Prism3 icon, through a glyph, a slot's default or an override.
+  for (const core of ['plus', 'plus-filled', 'minus', 'minus-filled', 'check', 'close-filled'])
+    ok(!got.has(`icon/${core}`), `#3076 no generated component instances icon/${core} once it is mapped (found in ${[...(got.get(`icon/${core}`) ?? [])].join(', ')})`);
+  // Each place #3076 lists now instances the brand's icon there.
+  const WANT: [string, string][] = [
+    ['_accordion-indicator', 'icon/add'], ['_accordion-indicator', 'icon/subtract'],
+    ['checkbox-control', 'icon/checkmark'], ['checkbox-control', 'icon/subtract'],
+    ['list-item', 'icon/checkmark'], ['search-field', 'icon/close'], ['switch-control', 'icon/checkmark'], ['tag', 'icon/checkmark'],
+    ['counter', 'icon/add'], ['counter', 'icon/subtract'],
+  ];
+  for (const [id, target] of WANT) ok(got.get(target)?.has(id) === true, `#3076 ${id} instances ${target} under the map`);
+  // The icon set: each mapped name gone, each brand glyph built from the brand's art, a redrawn Prism3 name kept (Q5 A).
+  const iconPlans = figmaAnatomySet(mapped.find((d) => d.id === 'icon')!, {});
+  const memberOf = (n: string) => iconPlans.find((p) => planComponentName(p) === `name=${n}`);
+  for (const core of Object.keys(MAP)) ok(!memberOf(core), `#3076 the icon set builds no icon/${core} once it is mapped`);
+  ok(JSON.stringify(memberOf('add') ?? null).includes(ADD), '#3076 the icon set builds icon/add from the brand\'s art');
+  const closeDoc = JSON.stringify(memberOf('close') ?? null);
+  ok(closeDoc.includes(GLYPHS.close.path) && closeDoc.includes('evenodd'), '#3076 a brand glyph named close redraws icon/close with the brand\'s art and its fill rule (Q5 A)');
+  ok(iconPlans.length === 46 - 6 + 3, `#3076 the icon set is Prism3's 46 less the 6 mapped plus the 3 new brand names (got ${iconPlans.length})`);
+  // The icon def's own `name` property lists the same set its axis builds, so a reader of the materialized def (the
+  // export's spec, an agent) sees no mapped name offered and every brand name.
+  const nameProp = mapped.find((d) => d.id === 'icon')!.props.find((p) => p.name === 'name')?.values ?? [];
+  ok(nameProp.length === 43 && !nameProp.includes('plus') && !nameProp.includes('check') && ['add', 'subtract', 'checkmark', 'close'].every((n) => nameProp.includes(n)),
+    `#3076 the mapped icon def's name property offers the brand's 43 names, no mapped one (got ${nameProp.length}: ${nameProp.slice(-4).join(', ')})`);
+  // No map, no change: every def comes back as the same object, so every plan is the one component-surface.json pins.
+  const same = componentDefs.filter((d) => applyIconMap(d, undefined) !== d || applyIconMap(d, {}) !== d || applyIconMap(d, { map: {}, glyphs: {} }) !== d).map((d) => d.id);
+  ok(same.length === 0, `#3076 a brand with no icon map leaves every def as authored (rewrote ${same.join(', ')})`);
+  // The rules, each refused by name at the choke point every entry path passes through.
+  const base = { id: 'icons3076', primary: { l: 0.55, c: 0.15, h: 260 }, neutral: { hue: 260, chroma: 0.01 } } as unknown as BrandInput;
+  const refusal = (icons: unknown): string => { try { brandTheme({ ...base, icons } as unknown as BrandInput); return ''; } catch (e) { return (e as Error).message; } };
+  ok(refusal(ICONS) === '', `#3076 a valid map with art builds (got ${JSON.stringify(refusal(ICONS))})`);
+  const RULES: [string, unknown, string][] = [
+    ['a key that is not a Prism3 icon', { map: { plsu: 'add' }, glyphs: GLYPHS }, 'icons.map.plsu'],
+    ['a chain', { map: { plus: 'minus', minus: 'subtract' }, glyphs: GLYPHS }, 'icons.map.plus'],
+    ['a self-map', { map: { check: 'check' } }, 'icons.map.check'],
+    ['a target with no art', { map: { check: 'tick' } }, 'icons.map.check'],
+    ['art for a mapped name', { map: { plus: 'add' }, glyphs: { ...GLYPHS, plus: { path: ADD } } }, 'icons.glyphs.plus'],
+    ['art that is not one path', { glyphs: { add: { path: '<path d="M0 0"/>' } } }, 'icons.glyphs.add.path'],
+    ['a glyph name in the wrong shape', { glyphs: { Add_Icon: { path: ADD } } }, 'icons.glyphs.Add_Icon'],
+    ['a glyph named like one a component draws itself', { glyphs: { spinner: { path: ADD } } }, 'icons.glyphs.spinner'],
+    ['a fill rule other than evenodd', { glyphs: { add: { path: ADD, fillRule: 'nonzero' } } }, 'icons.glyphs.add.fillRule'],
+    // The art itself, measured offline (Q1 A, the proposal's Design B: one path on the 24×24 artboard, with ink).
+    ['art drawn on a 512 artboard, as most icon packages ship it', { map: { plus: 'add' }, glyphs: { add: { path: 'M0 0h512v512H0z' } } }, 'icons.glyphs.add.path'],
+    ['a move with no numbers', { glyphs: { add: { path: 'M' } } }, 'icons.glyphs.add.path'],
+    ['art that draws nothing', { glyphs: { add: { path: 'M4 4' } } }, 'icons.glyphs.add.path'],
+    ['path characters that do not parse', { glyphs: { add: { path: 'M,,,eee---' } } }, 'icons.glyphs.add.path'],
+    ['an arc that leaves the artboard between two endpoints inside it', { glyphs: { add: { path: 'M1 2A11 11 0 0 1 23 2Z' } } }, 'icons.glyphs.add.path'],
+  ];
+  for (const [what, icons, names] of RULES) ok(refusal(icons).includes(names), `#3076 ${what} is refused, naming ${names} (got ${JSON.stringify(refusal(icons))})`);
+  // Art an icon package ships in its own grammar still builds: arcs, relative commands, and a curve whose handles leave the
+  // artboard while the curve stays on it (its ink, measured by hand: 2..22 across, 0..12 down).
+  for (const [what, path] of [['a circle drawn with relative arcs', 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20z'], ['a curve whose handles leave the artboard', 'M2 12C2 -4 22 -4 22 12Z'], ['smooth and quadratic curves', 'M4 12s2-4 4 0t4 0Q14 8 16 12z']])
+    ok(refusal({ glyphs: { add: { path } } }) === '', `#3076 ${what} builds as brand art (got ${JSON.stringify(refusal({ glyphs: { add: { path } } }))})`);
+  // The contract describes the block: a valid one passes the schema, an unknown key in it does not.
+  ok(validateBrandInput({ ...base, icons: ICONS }).length === 0, `#3076 theme-schema.json accepts the icons block (${validateBrandInput({ ...base, icons: ICONS }).join('; ')})`);
+  ok(validateBrandInput({ ...base, icons: { maps: MAP } }).some((e) => e.includes('icons.maps')), '#3076 theme-schema.json refuses an unknown key in the icons block');
+  // The schema holds the engine's name shapes: lowercase words joined by hyphens, or a Prism3 icon as a map value.
+  ok(validateBrandInput({ ...base, icons: { map: { plus: 'Add' } } }).some((e) => e.includes('icons.map.plus')), '#3076 theme-schema.json refuses a map value outside the icon-name shape');
+  ok(validateBrandInput({ ...base, icons: { glyphs: { Add_Icon: { path: ADD } } } }).some((e) => e.includes('icons.glyphs.Add_Icon')), '#3076 theme-schema.json refuses a glyph name outside the icon-name shape');
+  ok(validateBrandInput({ ...base, icons: { map: { check: 'FPO-default-icon' } } }).length === 0, `#3076 theme-schema.json accepts a Prism3 icon as a map value (${validateBrandInput({ ...base, icons: { map: { check: 'FPO-default-icon' } } }).join('; ')})`);
+  // The design.md round trip (#3984's rule, for this block): three round trips keep it deep-equal, art and all.
+  let rt: any = { ...base, icons: ICONS };
+  for (let i = 0; i < 3; i++) rt = parseDesignMd(toDesignMd(rt)).input;
+  ok(JSON.stringify(rt.icons) === JSON.stringify(ICONS), `#3076 three design.md round trips keep the icons block (got ${JSON.stringify(rt.icons)})`);
+  // The brand's component export carries the map for a code consumer, and is still valid against its schema.
+  const xdoc = exportComponentDefs(componentDefs, { brand: { ...base, icons: ICONS } as BrandInput }) as any;
+  ok(JSON.stringify(xdoc.brand?.settings?.icons) === JSON.stringify(ICONS), '#3076 the brand\'s component export carries settings.icons');
+  ok(!('icons' in (exportComponentDefs(componentDefs, { brand: base }) as any).brand.settings), '#3076 a brand without a map exports no settings.icons');
+  // `def` is the authored def in every export; the brand's materialization is the `spec`, whose Icon axis follows the map.
+  const iconAxis = xdoc.components?.icon?.spec?.axes?.find((x: any) => x.name === 'name');
+  ok(!!iconAxis && !iconAxis.values.includes('plus') && iconAxis.values.includes('add'), `#3076 the exported Icon spec's name axis follows the map (got ${JSON.stringify(iconAxis?.values?.slice(-4))})`);
+  // `.ai.json` records the map for an agent reading component docs, which name Prism3 icons; a brand without one carries none.
+  const mappedTheme = brandTheme({ ...base, icons: ICONS } as BrandInput);
+  const aiIcons = (buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree) as any).icons;
+  ok(aiIcons?.map?.plus === 'add' && aiIcons?.map?.['close-filled'] === 'close' && aiIcons.names.includes('checkmark') && !aiIcons.names.includes('check'),
+    `#3076 .ai.json carries the brand's icon map and its icon set (got ${JSON.stringify(aiIcons)?.slice(0, 160)})`);
+  ok(!('icons' in (buildAiMetadata(brandTheme(base), buildTree(brandTheme(base)).tree) as any)), '#3076 .ai.json carries no icons block for a brand without a map');
+  const aiSchema = JSON.parse(readFileSync(resolve(HERE, 'schema', 'ai-metadata.schema.json'), 'utf8'));
+  const aiErrs = validateJsonSchema(aiSchema, buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree));
+  ok(aiErrs.length === 0, `#3076 a mapped brand's .ai.json is valid against ai-metadata.schema.json (${aiErrs.slice(0, 3).join('; ')})`);
+  // ONE SCHEMA VERSION, ONE SHAPE. #2857 took `prism3-ai-metadata/0.6` for `motion_presets`, so the icons block is the
+  // next version, 0.7. Both lines are typed here, never read from ai-metadata.ts: a merge that leaves both fields under
+  // one id (git merges the two identical `0.6` lines silently) fails this arm by name.
+  const aiDoc = buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree) as any;
+  ok(aiDoc.$schema === 'prism3-ai-metadata/0.7' && aiSchema.$id === 'prism3-ai-metadata/0.7' && 'icons' in aiDoc && 'motion_presets' in aiDoc,
+    `#3076 the icons block takes its own sidecar schema version, 0.7, after #2857's motion_presets took 0.6 (got $schema ${aiDoc.$schema}, $id ${aiSchema.$id})`);
+  const xErrs = validateJsonSchema(JSON.parse(readFileSync(resolve(HERE, 'schema', 'component-defs.schema.json'), 'utf8')), JSON.parse(JSON.stringify(xdoc)));
+  ok(xErrs.length === 0, `#3076 a mapped brand's component export is valid against component-defs.schema.json (${xErrs.slice(0, 3).join('; ')})`);
+  // DUPLICATE ART IS REPORTED, NEVER REFUSED (owner decision 2026-11-20 A). Each brand glyph below is typed by hand as a
+  // respelling of a core icon the map leaves in place (core `minus` reversed in relative commands, core `slash` in
+  // relative commands), plus `checkmark` drawn as core `check`, which the map takes out of the set. EXPECTED is the
+  // groups named here; ACTUAL is `iconArtDuplicates` over the projected icon set.
+  const DUP = { map: { plus: 'add', check: 'checkmark' }, glyphs: { add: { path: ADD }, checkmark: { path: 'M10.0007 15.1709L19.1931 5.97852L20.6073 7.39273L10.0007 17.9993L3.63672 11.6354L5.05093 10.2212L10.0007 15.1709Z' }, dash: { path: 'M19 13h-14v-2h14z' }, oblique: { path: 'M14.03 4h2.14l-6.2 16H7.83z' } } };
+  ok(refusal(DUP) === '', `#3076 a brand whose art duplicates an icon in its set still builds (got ${JSON.stringify(refusal(DUP))})`);
+  const iconDef = componentDefs.find((d) => d.id === 'icon')!;
+  const dups = iconArtDuplicates(figmaAnatomySet(applyIconMap(iconDef, DUP), {}));
+  ok(JSON.stringify(dups) === JSON.stringify([['dash', 'minus', 'minus-filled'], ['oblique', 'slash']]),
+    `#3076 duplicate art: the brand glyphs that draw a core icon's shape are named with it, relative spellings included, and a mapped-away icon is not (got ${JSON.stringify(dups)})`);
+  ok(iconArtDuplicates(figmaAnatomySet(iconDef, {})).length === 0, `#3076 duplicate art: Prism3's own duplicates are not the brand's to report (got ${JSON.stringify(iconArtDuplicates(figmaAnatomySet(iconDef, {})))})`);
+  ok(iconArtDuplicates(iconPlans).length === 0, `#3076 duplicate art: a brand whose art draws no icon's shape reports nothing (got ${JSON.stringify(iconArtDuplicates(iconPlans))})`);
 }
 
 // #3505 — the dependency-advisory register holds each accepted or awaited `npm audit` advisory with a review date,
@@ -44748,7 +46024,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const withLinks = (links: string[]) => ({ ...base, typography: { links } }) as unknown as BrandInput;
   const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
   const schemaErrs = validateBrandInput(withLinks([]) as never).map(String);
-  ok(schemaErrs.some((e) => /typography\.links: 0 item\(s\) < minItems 1/.test(e)),
+  ok(schemaErrs.some((e) => /typography\.links has 0 item\(s\); it takes at least 1/.test(e)),
     `#3707 the schema refuses an empty typography.links (got ${JSON.stringify(schemaErrs)})`);
   const msg = refusal(() => brandTheme(withLinks([])));
   ok(msg === 'Link styles must name at least one text type: typography.links is empty.',
@@ -44794,6 +46070,148 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const cell = componentDefs.find((d) => d.id === 'code-input-cell');
   const ladder = ['small', 'medium', 'large', 'x-large'].map((s) => (cell?.tokens as Record<string, string> | undefined)?.[`size.${s}.radius`]);
   ok(JSON.stringify(ladder) === JSON.stringify(['radius.sm', 'radius.sm', 'radius.sm', 'radius.lg']), `#3551 the code input cell's corner ladder is sm, sm, sm, lg, as decided (got ${JSON.stringify(ladder)})`);
+}
+
+// #4133 (owner decision A, 2026-11-19) — a hex color is accepted wherever the brand input takes an OKLCH anchor
+// (`primary`, `neutral.anchor`, `brandColors[].oklch`), converted at the top of `brandTheme`, with a note naming the
+// converted value. Before, `primary: "#3355ff"` failed with "primary: expected object". A hex brand builds the same
+// tree as the same brand written in the converted OKLCH, so the conversion is the only thing the hex changes.
+{
+  const base = { id: 'hex4133', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 } };
+  const asHex = { ...base, primary: '#2f6b4f', neutral: { hue: 262, chroma: 0.01, anchor: '#6b6e72' }, brandColors: [{ name: 'accent', oklch: '#c8102e' }] };
+  const asOklch = { ...base, primary: hexToAnchor('#2f6b4f'), neutral: { hue: 262, chroma: 0.01, anchor: hexToAnchor('#6b6e72') }, brandColors: [{ name: 'accent', oklch: hexToAnchor('#c8102e') }] };
+  const schemaErrs = validateBrandInput(asHex);
+  ok(schemaErrs.length === 0, `#4133 the schema accepts a hex anchor at primary, neutral.anchor and brandColors[].oklch (got ${JSON.stringify(schemaErrs)})`);
+  const built = (b: object): Theme | string => { try { return brandTheme(b as unknown as BrandInput); } catch (e) { return (e as Error).message; } };
+  const hexOrErr = built(asHex), tOk = brandTheme(asOklch as unknown as BrandInput);
+  ok(typeof hexOrErr !== 'string', `#4133 brandTheme builds a hex-anchored brand (got ${JSON.stringify(typeof hexOrErr === 'string' ? hexOrErr : 'a theme')})`);
+  const tHex = typeof hexOrErr === 'string' ? tOk : hexOrErr;
+  // The trees differ only in the decisions log, which carries the conversion notes: compared with it set aside.
+  const noLog = (t: Theme): string => { const tr = buildTree(t).tree as any; tr.$extensions.prism3.decisions = []; return JSON.stringify(tr); };
+  ok(typeof hexOrErr !== 'string' && noLog(tHex) === noLog(tOk),
+    '#4133 a hex-anchored brand builds the same tree as the same brand written in the converted OKLCH');
+  for (const [at, h] of [['primary', '#2f6b4f'], ['neutral.anchor', '#6b6e72'], ["brandColors 'accent'", '#c8102e']] as const) {
+    const line = `${at}: the hex ${h}, converted to OKLCH ${formatAnchor(hexToAnchor(h))}.`;
+    ok(tHex.notes.includes(line), `#4133 the notes record the ${at} conversion (want ${JSON.stringify(line)}; got ${JSON.stringify(tHex.notes.filter((n) => n.includes('hex')))})`);
+  }
+  ok(!tOk.notes.some((n) => n.includes('converted to OKLCH')), '#4133 an OKLCH brand gets no conversion note');
+  // #4312 review (docs/34): the arms above build their EXPECTED with `hexToAnchor`, the function under test, so they
+  // cannot see the conversion itself change. These pin it to typed literals: a saturated green, a tinted gray (chroma
+  // 0.0072, which keeps its hue) and a pure gray (hue 0, #2280).
+  for (const [h, l, c, hue] of [['#2f6b4f', 0.4794, 0.078, 161.08], ['#6b6e72', 0.537, 0.0072, 255.51], ['#808080', 0.5999, 0, 0]] as const) {
+    const o = hexToAnchor(h);
+    ok(Math.abs(o.l - l) < 5e-5 && Math.abs(o.c - c) < 5e-5 && Math.abs(o.h - hue) < 5e-3,
+      `#4312 ${h} converts to the literal OKLCH { l: ${l}, c: ${c}, h: ${hue} } (got ${formatAnchor(o)})`);
+  }
+  const bad = validateBrandInput({ ...base, primary: '#zz0000' });
+  ok(bad.length === 1 && /OKLCH object/.test(bad[0]) && /hex color/.test(bad[0]), `#4133 a malformed hex is refused, naming both forms the anchor takes (got ${JSON.stringify(bad)})`);
+}
+
+// #4312 (owner decision B, 2026-11-20) — an 8- or 4-digit hex anchor is taken too, its alpha dropped, as the standard
+// dialect drops it. EXPECTED is typed literals (docs/34), never `hexToAnchor` of the 6-digit form: the 8- and 4-digit
+// spellings land on the same OKLCH as their opaque twins, in the schema, in `brandTheme` and on the command line.
+{
+  const base = { id: 'alpha4312', neutral: { hue: 262, chroma: 0.01 } };
+  for (const [h, want] of [['#2f6b4fcc', '{ l: 0.4794, c: 0.078, h: 161.08 }'], ['#2F6B4F00', '{ l: 0.4794, c: 0.078, h: 161.08 }'],
+    ['#808080ff', '{ l: 0.5999, c: 0, h: 0 }'], ['#888f', '{ l: 0.6268, c: 0, h: 0 }'], ['#36a8', '{ l: 0.5095, c: 0.1216, h: 256.41 }']] as const) {
+    const errs = validateBrandInput({ ...base, primary: h });
+    ok(errs.length === 0, `#4312 the schema accepts the alpha hex anchor ${h} (got ${JSON.stringify(errs)})`);
+    let t: Theme | string;
+    try { t = brandTheme({ ...base, primary: h } as unknown as BrandInput); } catch (e) { t = (e as Error).message; }
+    const line = `primary: the hex ${h}, converted to OKLCH ${want}.`;
+    ok(typeof t !== 'string' && t.notes.includes(line),
+      `#4312 brandTheme drops the alpha of ${h} (want the note ${JSON.stringify(line)}; got ${typeof t === 'string' ? t : JSON.stringify(t.notes.filter((n) => n.includes('hex')))})`);
+  }
+  // The schema's pattern and HEX_ANCHOR are two spellings of one rule; each sample is judged by both.
+  const pattern = new RegExp(JSON.parse(readFileSync(resolve(HERE, 'schema', 'theme-schema.json'), 'utf8')).$defs.hexColor.pattern);
+  const takes = ['#abc', '#ABCD', '#a1b2c3', '#A1B2C3D4', '#000', '#ffff', '#000000', '#ffffffff'];
+  const refuses = ['#ab', '#abcde', '#abcdefa', '#abcdefabc', 'abc', '#ggg', '#12345g', '# abc', '#abc ', ''];
+  const split = [...takes.filter((s) => !(pattern.test(s) && HEX_ANCHOR.test(s))), ...refuses.filter((s) => pattern.test(s) || HEX_ANCHOR.test(s))];
+  ok(split.length === 0, `#4312 the schema's hexColor pattern and HEX_ANCHOR take #rgb, #rgba, #rrggbb and #rrggbbaa and refuse every other length (misjudged: ${JSON.stringify(split)})`);
+  for (const h of ['#2f6b4', '#2f6b4fc']) {
+    const errs = validateBrandInput({ ...base, primary: h });
+    ok(errs.length === 1 && /#rrggbb, #rgb, #rrggbbaa or #rgba/.test(errs[0]), `#4312 a ${h.length - 1}-digit hex is refused, naming the four hex forms (got ${JSON.stringify(errs)})`);
+  }
+  const r = spawnSync('npx', ['tsx', resolve(HERE, 'oklch.ts'), '#2f6b4fcc'], { cwd: HERE, encoding: 'utf8' });
+  ok(r.status === 0 && r.stdout.trim() === '#2f6b4fcc  →  { l: 0.4794, c: 0.078, h: 161.08 }',
+    `#4312 oklch.ts prints an 8-digit hex as its opaque anchor (status ${r.status}, got ${JSON.stringify(r.stdout.trim() || r.stderr.trim())})`);
+}
+
+// #4133 / #4200 A (owner decisions 2026-11-19) — the schema validator's messages say what the field takes, in the voice
+// standard's "X is …; it takes …" pattern, for each row of #4133's table: no "expected object", no "matches none of
+// oneOf", no raw regex, and a near-miss key gets "did you mean".
+{
+  const base = { id: 'msg4133', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 } };
+  const errs = (extra: object): string => validateBrandInput({ ...base, ...extra }).join(' | ');
+  for (const [label, extra, want] of [
+    ['primary "blue"', { primary: 'blue' }, /^primary is "blue"; it takes an OKLCH object \{ l, c, h \}.* or a hex color/],
+    ['primary.l 2', { primary: { l: 2, c: 0.1, h: 3 } }, /^primary\.l is 2; it takes a number from 0 to 1$/],
+    ['radiusScale "roundish"', { radiusScale: 'roundish' }, /^radiusScale is "roundish"; it takes a number.* or one of sharp, modest, standard, soft or round$/],
+    ['id "a/b"', { id: 'a/b' }, /^id is "a\/b"; it takes a name with no slash or backslash/],
+    ['root "a.b"', { root: 'a.b' }, /^root is "a\.b"; it takes one lowercase segment/],
+    ['desnity', { desnity: 'compact' }, /^desnity is not a field of the brand input; did you mean density\?$/],
+  ] as const) {
+    const got = errs(extra);
+    ok(want.test(got) && !/expected object|matches none of oneOf|does not match \/|not in contract/.test(got),
+      `#4133 ${label}: the message says what the field takes (got ${JSON.stringify(got)})`);
+  }
+}
+
+// #4176 (owner decision b, 2026-11-19) — `oklch.ts <hex>` prints the anchor a design.md takes, so prism3-theme's step 1
+// has a command. The printed precision round-trips: each printed OKLCH converts back to the hex it came from.
+{
+  const r = spawnSync('npx', ['tsx', resolve(HERE, 'oklch.ts'), '#2F6B4F'], { cwd: HERE, encoding: 'utf8' });
+  ok(r.status === 0 && r.stdout.trim() === `#2F6B4F  →  ${formatAnchor(hexToAnchor('#2F6B4F'))}`,
+    `#4176 oklch.ts prints the hex as an OKLCH anchor (status ${r.status}, got ${JSON.stringify(r.stdout.trim() || r.stderr.trim())})`);
+  const refused = spawnSync('npx', ['tsx', resolve(HERE, 'oklch.ts'), 'blue'], { cwd: HERE, encoding: 'utf8' });
+  ok(refused.status === 1 && /"blue" is not a hex color/.test(refused.stderr), `#4176 oklch.ts refuses a non-hex by name (got ${JSON.stringify(refused.stderr.trim())})`);
+  const drift: string[] = [];
+  for (let v = 0; v < 4096; v += 7) {
+    const h = '#' + [v >> 8, (v >> 4) & 15, v & 15].map((n) => (n * 17).toString(16).padStart(2, '0')).join('');
+    const printed = formatAnchor(hexToAnchor(h)).match(/l: ([\d.]+), c: ([\d.]+), h: ([\d.]+)/)!;
+    const back = hex(oklchToRgb({ l: +printed[1], c: +printed[2], h: +printed[3] }));
+    if (back !== h) drift.push(`${h}→${back}`);
+  }
+  ok(drift.length === 0, `#4176 every printed anchor converts back to its hex (drifted: ${drift.slice(0, 8).join(', ') || 'none'})`);
+  const skill = readFileSync(resolve(HERE, '../../skills/prism3-theme/SKILL.md'), 'utf8');
+  ok(skill.includes('npx tsx packages/engine/oklch.ts'), '#4176 prism3-theme names the oklch.ts command in its authoring steps');
+}
+
+// #4200 (owner decisions 3 and 4, 2026-11-19) — score_consumption says when its rate measured nothing (`vacuous: true`,
+// additive: `rate` keeps its 1), and theme_brand's contract failures are data, { role, mode, ratio, against, min }, the
+// fields the CLI's failure line prints (score_consumption's share mode, ratio and min, keyed by `pair`), not the string
+// `dark.text.secondary 4.39<4.5`.
+{
+  const b4200 = { id: 'v4200', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 } };
+  const score = (pairs: object[]) => (mcpCallTool('score_consumption', { brand: b4200, refs: ['color.text.primary'], pairs }).structuredContent as any).contracts;
+  const none = score([{ fg: 'nope', bg: 'background.primary' }]), real = score([{ fg: 'text.primary', bg: 'background.primary' }]);
+  ok(none.checked === 0 && none.rate === 1 && none.vacuous === true, `#4200 score_consumption flags a rate that checked nothing as vacuous (got ${JSON.stringify(none)})`);
+  ok(real.checked > 0 && real.vacuous === false, `#4200 a pair that resolved is not vacuous (got ${JSON.stringify(real)})`);
+  // A pinned action anchor at a light step is reported, never corrected (#1894), so it fails its 3:1 in light.
+  const t = mcpCallTool('theme_brand', { brand: { ...b4200, actionAnchorStep: 100 }, include: [] }).structuredContent as any;
+  const f = t.contracts.failures as any[];
+  ok(f.length > 0 && f.every((x) => typeof x === 'object' && typeof x.role === 'string' && typeof x.mode === 'string'
+      && typeof x.ratio === 'number' && typeof x.against === 'string' && typeof x.min === 'number' && x.ratio < x.min),
+    `#4200 theme_brand reports each contract failure as { role, mode, ratio, against, min } (got ${JSON.stringify(f.slice(0, 2))})`);
+  ok(t.hint?.startsWith('Not included: tokens (~890,000 characters') && /Add them with include/.test(t.hint),
+    `#4200 the omitted-sections hint says what is not included and how to add it, from one size figure (got ${JSON.stringify(t.hint)})`);
+  const desc = toolDefs({}).find((d: any) => d.name === 'theme_brand')!.description as string;
+  ok(desc.includes('roughly 890,000 and 590,000 characters') && /agent link takes the same object as `input`/.test(desc),
+    `#4200 theme_brand states the one size figure the hint uses, and names the agent link's \`input\` alias`);
+}
+
+// #4200 A, B (DRAFT copy) — the CLI and the MCP server say what failed and what to do next: no raw stack trace from
+// file-facts-cli, no "cannot read design file" without the cause, one header per kind of brand failure.
+{
+  const cli = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), 'no-such-brief.md'], { cwd: HERE, encoding: 'utf8' });
+  ok(cli.status === 1 && /cannot read no-such-brief\.md: no such file\. Pass the path to a design\.md/.test(cli.stderr),
+    `#4200 cli.ts names a missing brief and the next step (got ${JSON.stringify(cli.stderr.trim())})`);
+  const ff = spawnSync('npx', ['tsx', resolve(HERE, 'file-facts-cli.ts'), 'no-such-snapshot.json'], { cwd: HERE, encoding: 'utf8' });
+  ok(ff.status === 1 && ff.stderr.trim() === '✖ cannot read snapshot no-such-snapshot.json: no such file',
+    `#4200 file-facts-cli.ts reports a missing snapshot in one line, not a stack (got ${JSON.stringify(ff.stderr.trim().slice(0, 200))})`);
+  const refusal = JSON.parse(mcpCallTool('theme_brand', { brand: { id: 'r4200', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 }, layout: { breakpoints: [320, 768] } } }).content[0].text);
+  ok(refusal.error === 'the engine refused the brand input', `#4200 an engine refusal reads "the engine refused the brand input" (got ${JSON.stringify(refusal.error)})`);
+  ok(JSON.parse(mcpCallTool('nope', {}).content[0].text).error === 'Unknown tool: nope', '#4200 unknown tool has one casing, the protocol error\'s');
 }
 
 // #4207 (owner decision A, 2026-11-19) — `actionPalette` and `roleColors.action` are schema aliases. Two that name
@@ -44872,6 +46290,143 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(files.get('./e/acme.base.tokens.json') === JSON.stringify(projected.base, null, 2) + '\n'
     && files.get('./e/acme.dark.overlay.tokens.json') === JSON.stringify(projected.overlays.find((o) => o.mode === 'dark')?.tree, null, 2) + '\n',
     '#4144 the base + overlay files are the projection of the tree written beside them, as the CLI writes it');
+}
+
+// #4193 decision 1 (owner, 2026-11-19): each lever's ⓘ in the UI is one line of at most 90 characters (voice standard
+// §4), its `tip`; the long `description` stays for agents. Read from the EMITTED manifest on disk, so the arm also holds
+// the emission to carrying the tip. The 90 is the standard's number, typed here. Mutations that fail BY NAME: a tip
+// lengthened past 90 → `#4193 every lever's UI line …`; a tip dropped from a long lever → `#4193 a lever has a tip …`.
+{
+  const manifest = JSON.parse(readFileSync(new URL('./schema/lever-manifest.json', import.meta.url), 'utf8')) as { levers: { key: string; description: string; tip?: string }[] };
+  const long = manifest.levers.filter((l) => (l.tip ?? l.description).length > 90).map((l) => `${l.key} (${(l.tip ?? l.description).length})`);
+  ok(manifest.levers.length > 40 && long.length === 0, `#4193 every lever's UI line (its tip, or a short description) is at most 90 characters (over: ${long.join(', ') || 'none'})`);
+  const mismatched = manifest.levers.filter((l) => (l.description.length > 90) !== (l.tip !== undefined)).map((l) => l.key);
+  ok(mismatched.length === 0, `#4193 a lever has a tip exactly when its description runs past 90 characters (mismatched: ${mismatched.join(', ') || 'none'})`);
+  const notShorter = manifest.levers.filter((l) => l.tip !== undefined && !(l.tip.length < l.description.length && l.tip.trim() === l.tip && l.tip.length > 20)).map((l) => l.key);
+  ok(notShorter.length === 0, `#4193 each tip is a real line, shorter than its description (${notShorter.join(', ') || 'none'})`);
+  // #4367 review: a rewrite left Strict interactive contrast saying "so every state clears AA — every state clears AA
+  // over brand color". A run of four words said again within two words of where it ended is a doubled clause, never
+  // emphasis. Mutation that fails BY NAME: restore the doubled clause → `#4193 no lever text says a clause twice …`.
+  const doubled: string[] = [];
+  for (const l of manifest.levers) for (const [field, text] of [['description', l.description], ['tip', l.tip]] as const) {
+    if (!text) continue;
+    const w = text.toLowerCase().split(/[^a-z0-9:.]+/).filter(Boolean);
+    const gram = (i: number): string => w.slice(i, i + 4).join(' ');
+    let hit = false;
+    for (let i = 0; i + 8 <= w.length && !hit; i++) for (let j = i + 4; j <= i + 6 && j + 4 <= w.length; j++) if (gram(i) === gram(j)) { doubled.push(`${l.key} ${field}: "${gram(i)}"`); hit = true; break; }
+  }
+  ok(doubled.length === 0, `#4193 no lever text says a clause twice, back to back (${doubled.join('; ') || 'none'})`);
+  // #4367 owner decision (2026-11-20, Outline hover → A): the tip names the four hover treatments, in the owner's
+  // words. The expected line is the decision's text, typed here; the actual is the EMITTED manifest. Mutation that
+  // fails BY NAME: any other tip on outlineInteraction → `#4367 the Outline hover tip is the owner's line …`.
+  const OUTLINE_HOVER_TIP = 'How outline and text controls show hover: a neutral wash, a tinted wash, a fill, or none.';
+  const outlineTip = manifest.levers.find((l) => l.key === 'outlineInteraction')?.tip;
+  ok(outlineTip === OUTLINE_HOVER_TIP && OUTLINE_HOVER_TIP.length <= 90, `#4367 the Outline hover tip is the owner's line, at most 90 characters (tip: ${JSON.stringify(outlineTip)})`);
+}
+
+// #2997: the shadcn contrast gate holds an accepted pair to the ratio the owner accepted. The regression fixture's pair
+// (owner decision 2026-11-19 A, on #4289) is muted at 3.77 and above, and fails by name below it, as a KNOWN pair does.
+{
+  const key = 'nb light: muted-foreground on muted';
+  ok(KNOWN_PENDING[key]?.floor === 3.77 && /2026-11-19 A/.test(KNOWN_PENDING[key]?.why ?? ''),
+    `#2997 the fixture's accepted pair records its floor 3.77 and the owner decision (got ${JSON.stringify(KNOWN_PENDING[key])})`);
+  const held = judgeBelowFloor(key, 3.775);
+  ok(held.verdict === 'accepted' && held.listed, `#2997 the fixture's pair at its accepted ratio is reported, not failed (got ${held.verdict})`);
+  const fell = judgeBelowFloor(key, 2.57);
+  ok(fell.verdict === 'failing' && fell.note.includes('BELOW ACCEPTED 3.77'),
+    `#2997 the fixture's pair below its accepted 3.77 fails by name (got ${fell.verdict}${fell.note})`);
+  ok(judgeBelowFloor('nb light: muted-foreground on card', 3.9).verdict === 'failing', '#2997 a pair with no entry fails');
+  const k = judgeBelowFloor('prism3 dark: primary on background', 1.19);
+  ok(k.verdict === 'failing' && k.note.includes('BELOW ACCEPTED 4.24'), `#2997 a KNOWN pair below its accepted floor fails by name (got ${k.verdict}${k.note})`);
+}
+
+// #4428: a regression arm for #4155's filter in the shadcn projector's brand walk (`handoffBrands`). Since #4282 the
+// handoff also carries a web-only `<brand>.web.base.tokens.json` with no overlays; read as a brand, it crashed both
+// Chromium gates. A planted web base is skipped, and every brand the walk returns over the committed handoff reads.
+// BY-NAME MUTATION: drop the `.web.base.tokens.json` exclusion from `handoffBrands` → both arms below fail.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'prism3-4428-'));
+  try {
+    for (const f of ['acme.tokens.json', 'acme.base.tokens.json', 'acme.dark.overlay.tokens.json', 'acme.web.base.tokens.json']) {
+      writeFileSync(join(dir, f), '{"acme":{}}\n');
+    }
+    const got = handoffBrands(dir);
+    ok(JSON.stringify(got) === '["acme"]', `#4428 a web-only base is not read as a brand (got ${JSON.stringify(got)})`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const unread = handoffBrands().filter((b) => { try { readHandoff(b); return false; } catch { return true; } });
+  ok(handoffBrands().length > 0 && unread.length === 0,
+    `#4428 every brand the walk returns over the committed handoff reads (unreadable: ${JSON.stringify(unread)})`);
+}
+
+// #811 — the engine README names only roles the engine emits. `foreground.danger.<state>` was retired (the
+// interactive-family arm above asserts it gone), and the README still taught `.default` and `.pressed`. ACTUAL is
+// read off a freshly resolved theme, never off the README or a list kept beside it, so a renamed role fails here
+// the day the README stops matching.
+{
+  const t = brandTheme({ id: 'acme', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 }, modes: ['light'] } as BrandInput);
+  const keys = Object.keys(resolveAllModes(t).find((m) => m.mode === 'light')!.roles);
+  const md = readFileSync(resolve(HERE, './README.md'), 'utf8');
+  const named = [...new Set([...md.matchAll(/`((?:foreground|interactive|background|text|border|inverse|disabled|overlay)(?:\.[a-z0-9-]+)+)`/g)].map((m) => m[1]))];
+  const unknown = named.filter((n) => !keys.includes(n) && !keys.some((k) => k.startsWith(`${n}.`)));
+  ok(named.length >= 10, `#811 the README scan finds the role names it teaches (found ${named.length})`);
+  ok(unknown.length === 0, `#811 every role the engine README names is one the engine emits (not emitted: ${unknown.join(', ') || 'none'})`);
+}
+
+// #1754 — the selection controls' shipped prose names the ROLE their selected ink takes, never "brand". The checked
+// ring binds `interactive.primary.indicator.*`, and a brand that points its action at the neutral palette (the
+// nb-redesign example) draws that ring gray. The arm first proves the claim is false in a shipped example, from the
+// def's own binding resolved in that brand, so the prose rule rests on a measured fact and not on taste.
+{
+  const nb = exampleTheme('nb-redesign', () => brandTheme(parseDesignMd(readFileSync(resolve(HERE, './examples/nb-redesign.design.md'), 'utf8')).input));
+  const ring = String((radioControl.tokens as Record<string, string>)['checked.border']).replace(/^color\./, '');
+  const path = nb ? String((resolveAllModes(nb).find((m) => m.mode === 'light')!.roles as Record<string, { path?: string }>)[ring]?.path) : '';
+  ok(/\.palette\.neutral\./.test(path), `#1754 nb-redesign's checked radio ring (${ring}) resolves to a neutral step, so "brand-colored" is untrue there (got ${path || 'nothing'})`);
+  const shipped = (d: ComponentDef): string[] => [d.summary ?? '', d.description ?? '', ...(d.docs?.do ?? []), ...(d.docs?.dont ?? []), ...(d.docs?.implementation ?? []),
+    ...(d.props ?? []).map((p) => p.description ?? '')];
+  const claim = /\bbrand(?:-colou?red| colou?r| ring| edge)\b|\bring to brand\b/i;
+  const hits = componentDefs.filter((d) => /^(checkbox|radio|switch)-/.test(d.id))
+    .flatMap((d) => shipped(d).filter((s) => claim.test(s)).map((s) => `${d.id}: "${s.match(claim)![0]}"`));
+  ok(hits.length === 0, `#1754 no selection control's shipped prose says its selected ink is the brand color (found: ${hits.join('; ') || 'none'})`);
+  // #4389 owner decision (2026-11-20, Radio wording → A): one thing, one name. The role is "action color", the term the
+  // Action palette setting uses, never "primary action color". The term is the decision's, typed here. Mutation that
+  // fails BY NAME: "primary action color" back in any shipped field → `#4389 the selection controls call the role …`.
+  const misnamed = componentDefs.filter((d) => /^(checkbox|radio|switch)-/.test(d.id))
+    .flatMap((d) => shipped(d).filter((s) => /\bprimary action colou?r\b/i.test(s)).map(() => d.id));
+  const radioNames = shipped(radioControl as ComponentDef).filter((s) => /\baction color\b/.test(s)).length;
+  ok(misnamed.length === 0 && radioNames >= 4, `#4389 the selection controls call the role "action color", never "primary action color" (misnamed in: ${misnamed.join(', ') || 'none'}; Radio.Control fields naming it: ${radioNames} of at least 4)`);
+}
+
+// #1819 — the prism3-theme skill's `actionPalette` row lists every built-in palette the engine accepts there, as the
+// `linkPalette` row beside it does. ACTUAL: the engine compiles a brand with each value; the row is read as text.
+{
+  const skill = readFileSync(resolve(HERE, '../../skills/prism3-theme/SKILL.md'), 'utf8');
+  const row = skill.split('\n').find((l) => l.startsWith('| `actionPalette` |')) ?? '';
+  const values = row.split(/(?<!\\)\|/)[2] ?? ''; // a `\|` inside a cell is the table's escaped pipe, not a column break
+  const base = { id: 'acme', primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 }, modes: ['light'] };
+  for (const v of ['primary', 'neutral']) {
+    let compiles = true;
+    try { brandTheme({ ...base, actionPalette: v } as BrandInput); } catch { compiles = false; }
+    ok(compiles && values.includes(`\`${v}\``), `#1819 the prism3-theme actionPalette row lists \`${v}\`, which the engine accepts (compiles: ${compiles}; row: ${values.trim() || 'MISSING'})`);
+  }
+}
+
+// #1716 — `notes.contested` refuses a decided entry by the verbs decided entries USE, not by four opening words.
+// #1700's check read Settled/Resolved/RESOLVED/CLOSED and broke at colons, so it refused argued prose and passed
+// "Decided: …" and "Chosen: …". The literals below are the issue's own examples, in both directions; the corpus arm
+// names the three entries the issue found decided in `contested`, read off the defs themselves.
+{
+  const contestedErrs = (entry: string) => validateComponentDef({ ...focusRing, notes: { contested: [entry] } } as ComponentDef).errors
+    .filter((e) => /notes\.contested/.test(e));
+  for (const entry of ['Where the ring is drawn — on the edge or outside it. Decided as the offset sibling.', 'A or B. Chosen: B, for reach.',
+    'error as a border swap vs a set — settled as text-field settles it.'])
+    ok(contestedErrs(entry).length === 1, `#1716 contested refuses a decided entry: "${entry}" (got ${contestedErrs(entry).length} refusal(s))`);
+  for (const entry of ['Brief §4: Settled in the brief, argued here.', 'Whether the dot reads at 6px, e.g. Resolved later? Unmeasured.',
+    'Legacy icon fonts are settled as dead; the font model is not.'])
+    ok(contestedErrs(entry).length === 0, `#1716 contested keeps an argued entry: "${entry}" (got ${contestedErrs(entry).join(' | ') || 'no refusal'})`);
+  const contestedOf = (id: string) => componentDefs.find((d) => d.id === id)?.notes?.contested ?? [];
+  const stillContested = [['text-field', /ship both/], ['checkbox-row', /BORDER AND FILL AT ONE COORDINATE/], ['select', /settled as text-field settles it/]]
+    .filter(([id, re]) => contestedOf(id as string).some((e) => (re as RegExp).test(e))).map(([id]) => id);
+  ok(stillContested.length === 0, `#1716 the three entries that describe themselves as decided are out of contested (still there: ${stillContested.join(', ') || 'none'})`);
 }
 
 if (pass + fails.length < MIN_ASSERTIONS) {

@@ -38,7 +38,7 @@ export {
 } from './theme';
 export type {
   BrandInput, FacePin, GlassRoleInput, GradientInput, LayoutAxis, OutlineHoverFill, OutlineWash, PerModeSizeGroup,
-  RaisedSurface, ResolvedGradient, ScrimStrength, Theme, TypeComposite, TypographyInput,
+  RaisedSurface, ResolvedGradient, ScrimStrength, InteractiveGround, Theme, TypeComposite, TypographyInput,
 } from './theme';
 export {
   ACHROMATIC_C, composite, contrast, floorRatio, formatRatio, hex, hexToRgb, oklchToRgb, rgbToOklch, storedOklch,
@@ -61,6 +61,7 @@ export { leverManifest } from './levers';
 export type { Lever } from './levers';
 export { parseDesignMd, toDesignMd } from './design-md';
 export { isStandardDesignMd, parseStandardDesignMd, standardToBrandInput } from './standard-design-md';
+export { resolveHexAnchors } from './hex-anchors';
 export {
   PERSIST_VERSION, UnrecognizedPersistedInputError, deserializeBrandInput, serializeBrandInput,
 } from './persist-input';
@@ -73,6 +74,7 @@ export { colorVariablesOutOfOrder } from './color-order';
 export { buildBase, buildOverlaySet, stripExtensions } from './emit-dtcg-overlay';
 export { BUTTON_SPACING } from './button-spacing';
 export { default as EXAMPLE_BRANDS_JSON } from './schema/example-brands.json';
+export { EXAMPLE_DESCRIPTIONS } from './example-registry';
 export {
   COMPONENT_RENAMES, coordKey, coordPairs, currentDefId, formerDefIds, partRenames, renameCoordinate, renameProperty,
   slotMigrationOf, slotTextMigrationOf,

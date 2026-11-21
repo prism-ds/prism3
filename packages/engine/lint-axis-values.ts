@@ -373,6 +373,26 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       + 'separator type a glyph, and no value would mean the same thing on both defs. The item picks it by its own '
       + '`separator` axis, which holds the same two values.',
   },
+  {
+    axis: 'type',
+    values: ['action', 'submenu'],
+    defs: ['menu-item'],
+    relation: 'disjoint',
+    reason:
+      'What a menu row does when chosen (#4007, owner decision Q-FL2 on OD-M3 A): runs an action, or opens a submenu, '
+      + 'which adds the arrow and its space. Checkbox and radio items are action members with the check toggles on, so '
+      + 'they are not values. `action` LEADS because it is the code default and Figma\'s default member. DISJOINT from '
+      + 'Badge\'s canonical set: no value would mean the same thing on both defs.',
+  },
+  {
+    axis: 'type',
+    values: ['section'],
+    defs: ['menu-group'],
+    relation: 'disjoint',
+    reason:
+      'One value (#4007, held for the owner): the engine projects no set without an axis, so Menu.Group\'s one member '
+      + 'carries `section`. A radio set draws the same. DISJOINT from Badge\'s canonical set.',
+  },
   // field-label's `indicator` axis left the register (#1338). It carried a three-way `[none/required/optional]`
   // axis whose most important value was ABSENCE, which is exactly why it never projected to Figma. The owner
   // decision (2026-09-13) reconciled it into Prism 2's `Required` BOOLEAN (default true) — a node-visibility toggle,
@@ -645,9 +665,10 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
     // to the nested `switch-control` by `follow`; the atom declares the same two-rung ladder (#1354).
     // Breadcrumbs and its item join it (#2666, owner call 7 A): one line of 14 or 16px body text, and an 18px trail
     // stops reading as secondary wayfinding. Page navigation and its item join it (#3345, Q8 A): Breadcrumbs' pair, one
-    // line of 14 or 16px body text. Badge joins it (#2983, owner direction 2026-10-24): the status label's
+    // line of 14 or 16px body text. Steps and its step join it (#3055): Breadcrumbs' pair, a 24px disc beside 16px text
+    // or a 20px disc beside 14px text. Badge joins it (#2983, owner direction 2026-10-24): the status label's
     // compact size beside today's, and nothing above it.
-    defs: ['switch-row', 'switch-control', 'breadcrumbs', 'breadcrumb-item', 'progress', 'badge', 'page-nav', 'page-nav-item'],
+    defs: ['switch-row', 'switch-control', 'breadcrumbs', 'breadcrumb-item', 'progress', 'badge', 'page-nav', 'page-nav-item', 'steps', 'step-item', 'skeleton'],
     relation: 'subset',
     reason:
       'The ladder minus its top rung, for a def with no large form, led by medium as canonical is (#2752 Q1 B): a switch above medium stops reading '
@@ -704,6 +725,18 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       + 'reads the same to a designer (round) without the sets being one ladder. `circular` is the brief\'s own word '
       + '(`variant: linear | circular`), the approved proposal\'s axis table, and MUI\'s `CircularProgress`. `linear` '
       + 'LEADS because it is the code default and Figma\'s default member (owner Q347).',
+  },
+  {
+    axis: 'shape',
+    values: ['text', 'circle', 'rect'],
+    defs: ['skeleton'],
+    relation: 'disjoint',
+    reason:
+      'Skeleton\'s three placeholders (#4109, owner decisions OD-S2 A and OD-S6 A): lines of text, a circle for an avatar, '
+      + 'a rectangle for media or a card. A whole drawing per value, like Progress\'s and unlike IconButton\'s corner '
+      + 'silhouette. DISJOINT, with one near-overlap named on purpose: `circle` here and `circular` on IconButton and '
+      + 'Progress both read as round. The approved proposal spells it `circle`, the brief\'s word, and the two sets never '
+      + 'meet on one def. `text` LEADS because it is the code default, so Figma\'s inserted member is the text skeleton.',
   },
   {
     axis: 'style',
@@ -871,6 +904,18 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       + 'it is the code default and Figma\'s default member.',
   },
   {
+    axis: 'status',
+    values: ['upcoming', 'current', 'complete', 'error'],
+    defs: ['step-item'],
+    relation: 'overlapping',
+    reason:
+      'Where a step stands in a Steps indicator (#3055, owner decisions 2 to 4): not started, the one being taken, done, '
+      + 'or needing attention. OVERLAPPING with the canonical validation set on `error` only, and the shared value means '
+      + 'the same thing: a failure the person must fix, shown with the danger icon role. `complete` is Progress\'s word '
+      + 'for done; `upcoming` and `current` name a place in a sequence, which neither a field nor Progress has. '
+      + '`upcoming` LEADS because it is the code default and Figma\'s default member.',
+  },
+  {
     axis: 'width',
     values: ['auto', 'full'],
     defs: ['button', 'button-destructive', 'button-neutral'],
@@ -970,14 +1015,16 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
   {
     axis: 'orientation',
     values: ['horizontal', 'vertical'],
-    defs: ['divider'],
+    defs: ['divider', 'steps', 'step-item'],
     relation: 'sole',
     reason:
       'The divider\'s RUN (#2455, the owner\'s issue, DRAFT) — which way the rule runs across its container: '
       + 'spanning its width between content stacked above and below (`horizontal`, the default and the code '
       + 'default, first so it is Figma\'s default member), or its height between items side by side (`vertical`). '
       + 'The same word and values as ARIA\'s `aria-orientation`. Distinct from `direction` (where a veil\'s wash '
-      + 'sits across an image) and `width` (how much of its container a control takes), argued in `VARIANT_AXES`.',
+      + 'sits across an image) and `width` (how much of its container a control takes), argued in `VARIANT_AXES`. '
+      + 'Steps and its step join it (#3055): which way the steps run, a row or a column, with the same two words and '
+      + '`horizontal` first; Steps passes it to every step (`follow`), so the two hold one set.',
   },
   {
     axis: 'expansion',
@@ -1013,19 +1060,33 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       'Where a layer sits over the page (#2609, owner decision Q303.1): centered, attached to the bottom edge as a bottom '
       + 'sheet, filling a small screen, or attached to the end edge as a side sheet (#2877, Q483 A, named `end` by Q488 A: '
       + 'the writing direction\'s end, so it mirrors in right-to-left text and a `start` can join it with no rename). `center` LEADS because it is the code '
-      + 'default on every screen and Figma\'s default member. Canonical since Popover joined the axis with its one '
-      + 'side (#4008), described against this set. Distinct from `alignment` and `direction`, argued in `VARIANT_AXES`.',
+      + 'default on every screen and Figma\'s default member. Canonical since Popover\'s one side (#4008) and Tooltip\'s side '
+      + 'placement (#4009) joined the axis, each described against this set. Distinct from `alignment` and `direction`, '
+      + 'argued in `VARIANT_AXES`.',
   },
   {
     axis: 'placement',
     values: ['bottom'],
-    defs: ['popover'],
+    defs: ['popover', 'menu'],
     relation: 'subset',
     reason:
       'The side of its trigger a popover opens on (#4008, owner decision Q-FL2 on OD-P2 A and OD-X2 A): Dialog\'s word for '
       + 'where a layer sits, and its `bottom` means the same edge. Code takes top, bottom, start or end; with no arrow the '
       + 'panel draws the same on every side, so the set is one member at the default side, and a one-value axis is how '
       + 'the engine projects one member (owner decision 1 on #4252, 2026-11-19). Same vocabulary, shorter.',
+  },
+  {
+    axis: 'placement',
+    values: ['top', 'bottom', 'start', 'end'],
+    defs: ['tooltip'],
+    relation: 'overlapping',
+    reason:
+      'Which side of its trigger a tooltip sits on (#4009, owner OD-X2 A): above, below, at the start or at the end, in '
+      + 'writing-direction terms, so `start` and `end` swap sides in right-to-left text with no rename. `top` LEADS because '
+      + 'it is the code default and Figma\'s default member. OVERLAPPING with Dialog\'s canonical set by design: both use '
+      + '`end` for the writing direction\'s end edge (Q488 A) and `bottom` for the bottom edge, and each adds what its layer '
+      + 'needs. A dialog is placed against the viewport (centered, or full screen), a tooltip against its trigger, which is '
+      + 'why it has `top` and `start` and no `center` or `full`. The two words they share mean the same edge.',
   },
   {
     axis: 'kind',
@@ -1064,13 +1125,23 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
     axis: 'intent',
     values: ['neutral', 'success'],
     defs: ['toast'],
-    relation: 'sole',
+    relation: 'canonical',
     reason:
       'What a toast confirms (#2668, owner call 2 A): a plain confirmation, or a completed action with a circled check. '
       + 'No danger, warning or info: a message the user must see goes to a banner (call 1 A). `neutral` LEADS because it '
       + 'is the code default and Figma\'s default member. The axis returns here as a variant axis after #1225 retired it '
       + 'from the button families (where intent became the component): a toast\'s two intents differ in one glyph and its '
       + 'ink, not in a family of interactive colors, so they are members of one set. One def carries it.',
+  },
+  {
+    axis: 'intent',
+    values: ['default', 'destructive'],
+    defs: ['menu-item'],
+    relation: 'disjoint',
+    reason:
+      'What a menu action does (#4007, owner decision Q-FL2 on OD-M3 A): a plain action, or one that deletes or cannot '
+      + 'be undone, in the destructive ink. Disjoint from Toast\'s [neutral, success]: a toast reports, a menu item acts, '
+      + 'and neither has the other\'s values. `default` LEADS because it is the code default and Figma\'s default member.',
   },
   {
     axis: 'footer',

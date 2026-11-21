@@ -32,7 +32,7 @@ import { applyFloatPlan } from './src/write-figma';
 import { applyGridStylePlan } from './src/write-grid-styles';
 import {
   computePrunePlan, prunePlanCount, applyPrunePlan, prunePreviewSummary, pruneAppliedSummary, STYLE_KINDS,
-  isEngineDescription, emptyPruneResult, prunePreviewHashOf, pruneConfirmRefusal, PRUNE_COPY,
+  isEngineDescription, orphanStyles, unlessRenamedPlanned, emptyPruneResult, prunePreviewHashOf, pruneConfirmRefusal, PRUNE_COPY,
 } from './src/prune-figma';
 import type { PruneInput, PruneApi, StyleKind, StyleNames, FileStyles } from './src/prune-figma';
 import { dead, dieOnRemove, removeOnce } from './removal-shim';
@@ -338,6 +338,9 @@ ok(prunePlanCount(plan) === 9,
 const preview = prunePreviewSummary(plan);
 ok(/style/.test(preview) && /mode/.test(preview) && /variable/.test(preview) && /collection/.test(preview) && /namespace/.test(preview),
   'prunePreviewSummary names each kind and the namespace scope');
+// #4317 review: the verb's subject is "the brand", always singular, whatever the item count (9 here).
+ok(/\bthe brand no longer uses, /.test(preview) && !/\bno longer use, /.test(preview),
+  `prunePreviewSummary: "the brand no longer uses" for many items too — the verb agrees with the brand, not the count ("${preview.slice(0, preview.indexOf(' all within'))}")`);
 ok(/layout → sm, lg/.test(preview),
   `prunePreviewSummary NAMES the modes per collection — the one arm whose items are spelled out, because a mode carries no provenance ("${preview.slice(preview.indexOf('The modes'))}")`);
 
@@ -950,7 +953,7 @@ console.log('\n#3697 R6 — each removal tried, running counts, the confirm guar
     .then(() => '', (e: Error) => e.message);
   ok(threw === 'host lost the collection' && counts.variables === 2 && sh2.liveVarNames().size === 0,
     `R6/running counts: a throw after two removals leaves the caller holding 2, not 0 (threw ${JSON.stringify(threw)}, counts ${counts.variables})`);
-  ok(PRUNE_COPY.stopped(counts, threw) === 'Prune stopped — host lost the collection. Removed 2 stale items before it stopped: 2 variables.',
+  ok(PRUNE_COPY.stopped(counts, threw) === 'Clean up stopped — host lost the collection. Removed 2 stale items before it stopped: 2 variables.',
     `R6/stopped: the verdict for a stopped prune says what was removed (${PRUNE_COPY.stopped(counts, threw)})`);
 
   // #3709 N1: the same per-removal `try` for every kind the executor removes, not only variables. One mode,
@@ -980,12 +983,32 @@ console.log('\n#3697 R6 — each removal tried, running counts, the confirm guar
   const plan = { variables: [{ collection: 'color', names: ['nbds/color/a'] }], collections: [], modes: [], styles: [] };
   const h = prunePreviewHashOf(plan, []);
   ok(pruneConfirmRefusal({ holdsInput: true, previewHash: h, currentHash: h }) === null, 'R6/guard: the file holds the input and the hash matches → go ahead');
-  ok(pruneConfirmRefusal({ holdsInput: false, previewHash: h, currentHash: h }) === "Nothing removed — the file doesn't hold this brand yet. Apply the theme first, then check again.",
+  ok(pruneConfirmRefusal({ holdsInput: false, previewHash: h, currentHash: h }) === "Nothing removed — the file doesn't hold this brand yet. Run Update file with Theme ticked, then check again.",
     'R6/guard: an input the file does not hold is refused, even with the right hash');
   ok(pruneConfirmRefusal({ holdsInput: true, previewHash: '', currentHash: h }) === 'Nothing removed — the file changed after the check. Check again.', 'R6/guard: a missing hash is refused');
   ok(pruneConfirmRefusal({ holdsInput: true, previewHash: h, currentHash: prunePreviewHashOf({ ...plan, collections: ['x'] }, []) }) === 'Nothing removed — the file changed after the check. Check again.',
     'R6/guard: a plan that moved after the preview is refused');
   ok(prunePreviewHashOf(plan, ['1:2']) !== h, 'R6/hash: a stale canvas label is in the hash');
+}
+
+// #3860 / #3869 (owner decision A, 2026-11-18) — A NAME A COLLISION RENAME WROTE IS THE PLAN'S OWN. With every
+// ` (Prism3)` stripped, `body/md (Prism3)` is the planned `body/md`, so neither arm offers it; one suffix or several.
+// A suffix on a name the plan does not hold changes nothing: that one is judged exactly as before.
+// Mutation: `unlessRenamedPlanned` dropped from `orphanStyles` → `#3860 orphanStyles spares a renamed style`.
+// Mutation: `unlessRenamedPlanned` dropped from the variables arm → `#3869 computePrunePlan spares a renamed variable`.
+{
+  const none = { text: [], effect: [], paint: [], grid: [] };
+  const got = orphanStyles({ ...none, text: [{ name: 'body/md (Prism3)' }, { name: 'body/md' }, { name: 'body/md (Prism3) (Prism3)' }, { name: 'body/zz (Prism3)' }] }, { ...none, text: ['body/md'] });
+  ok(JSON.stringify(got) === JSON.stringify([{ kind: 'text', names: ['body/zz (Prism3)'], byProvenance: [] }]),
+    `#3860 orphanStyles spares a renamed style: \`body/md (Prism3)\`, twice-renamed too, is the plan's; \`body/zz (Prism3)\` is still offered (${JSON.stringify(got)})`);
+  const plan = computePrunePlan({
+    collections: [{ name: 'core', variableNames: ['nbds/core/palette/white', 'nbds/core/palette/white (Prism3)', 'nbds/core/palette/zz (Prism3)'], modes: [] }],
+    styles: none, plannedVariables: ['nbds/core/palette/white'], plannedCollections: ['core'], plannedStyles: none, plannedModes: [], root: 'nbds',
+  });
+  ok(JSON.stringify(plan.variables) === JSON.stringify([{ collection: 'core', names: ['nbds/core/palette/zz (Prism3)'] }]),
+    `#3869 computePrunePlan spares a renamed variable: \`…/white (Prism3)\` is the plan's; \`…/zz (Prism3)\` is still offered (${JSON.stringify(plan.variables)})`);
+  ok(JSON.stringify(unlessRenamedPlanned(['a (Prism3)', 'b', 'a (Prism3)x'], ['a', 'b'])) === JSON.stringify(['b', 'a (Prism3)x']),
+    '#3869 unlessRenamedPlanned strips trailing suffixes only, and leaves an unsuffixed name to the caller');
 }
 
 console.log(`\nplugin OPT-IN PRUNE: ${failed === 0 ? 'ALL PASS' : failed + ' FAILED'} — ${executed} assertions executed`);
