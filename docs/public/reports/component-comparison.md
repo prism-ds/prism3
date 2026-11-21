@@ -10,7 +10,7 @@ Peers come from three groupings, each derived from the definitions:
 
 Generated from the component definitions and the emission by `packages/engine/emit-analysis-reports.ts`; `regen.ts --check` fails when this page is stale. The same data for agents: [component-comparison.json](component-comparison.json). All reports: [index](index.md).
 
-## Findings (130)
+## Findings (133)
 
 ### axis values
 
@@ -18,7 +18,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 - **axis emphasis** — the emphasis axis takes 3 value sets — [bold, subtle] in divider; [bold, subtle, surface] in badge; [primary, secondary] in field-label
 - **axis inset** — the inset axis takes 2 value sets — [default, flush] in button, button-destructive, button-neutral; [inset, middle-inset, none] in divider
 - **axis intent** — the intent axis takes 2 value sets — [default, destructive] in menu-item; [neutral, success] in toast
-- **axis placement** — the placement axis takes 2 value sets — [bottom] in menu, popover; [bottom, center, end, full] in dialog
+- **axis placement** — the placement axis takes 3 value sets — [bottom] in menu, popover; [bottom, center, end, full] in dialog; [bottom, end, start, top] in tooltip
 - **axis provider** — the provider axis takes 2 value sets — [apple, facebook, google] in sign-in-button; [apple-pay, google-pay, paypal, shop-pay] in wallet-button
 - **axis selection** — the selection axis takes 4 value sets — [selected, unselected] in link, page-nav-item, pagination-item, segmented-control-segment, tab-item, tag; [checked, indeterminate, unchecked] in checkbox-control; [checked, unchecked] in radio-control; [off, on] in switch-control
 - **axis shape** — the shape axis takes 4 value sets — [circular, square] in icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circle, rect, text] in skeleton; [circular, linear] in progress
@@ -63,11 +63,14 @@ Generated from the component definitions and the emission by `packages/engine/em
 
 ### prop default
 
+- **prop align** — align defaults differ over the same values — center in tooltip; start in menu, popover
+- **prop arrow** — arrow defaults differ over the same values — false in popover; true in tooltip
 - **prop dismissible** — dismissible defaults differ over the same values — false in banner; true in toast
 - **prop headingLevel** — headingLevel defaults differ over the same values — 2 in banner; 3 in accordion
 - **prop hideLabel** — hideLabel defaults differ over the same values — false in search-field, slider; true in counter
 - **prop label** — label defaults differ over the same values — Breadcrumb in breadcrumbs; Loading in spinner; Pagination in pagination
 - **prop max** — max defaults differ over the same values — 100 in progress, slider; 99 in badge
+- **prop placement** — placement defaults differ over the same values — bottom in menu, popover; top in tooltip
 - **prop wording** — wording defaults differ over the same values — continue in sign-in-button; plain in wallet-button
 
 ### size default
@@ -256,6 +259,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | text-field | form | rest, hover, pending, filled, focus-visible, focus-visible-filled, disabled, read-only, empty | rest, hover, filled, focus-visible, focus-visible-filled, disabled, read-only |
 | textarea | form | rest, hover, pending, filled, focus-visible, focus-visible-filled, disabled, read-only, empty | rest, hover, filled, focus-visible, focus-visible-filled, disabled, read-only |
 | toast | feedback | — | — |
+| tooltip | overlay | — | — |
 | veil | overlay | — | — |
 | wallet-button | form | rest, focus-visible | rest, focus-visible |
 
@@ -305,6 +309,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | path | full, parent | breadcrumbs |
 | placement | bottom | menu, popover |
 |  | bottom, center, end, full | dialog |
+|  | bottom, end, start, top | tooltip |
 | provider | apple, facebook, google | sign-in-button |
 |  | apple-pay, google-pay, paypal, shop-pay | wallet-button |
 | ratio | 16:9, 1:1, 2:3, 3:2, 3:4, 4:3, 4:5 | image-placeholder |
@@ -418,6 +423,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | dialog | — | — |
 | align | menu | start | start, center, end |
 |  | popover | start | start, center, end |
+|  | tooltip | center | start, center, end |
 | announce | banner | auto | auto, none |
 |  | progress | milestones | milestones, end, none |
 | appearance | button | filled | filled, outline, text |
@@ -440,6 +446,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | icon-button-neutral | — | — |
 |  | radio-control | — | — |
 |  | switch-control | — | — |
+| arrow | popover | false | — |
+|  | tooltip | true | — |
 | autoComplete | code-input | one-time-code | — |
 |  | password-field | — | current-password, new-password |
 |  | search-field | — | — |
@@ -456,6 +464,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | dialog | — | — |
 |  | list-item | — | — |
 |  | popover | — | — |
+|  | tooltip | — | — |
 | count | pagination | — | — |
 |  | tab-item | — | — |
 | current | link | false | — |
@@ -463,6 +472,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | pagination-item | false | — |
 | defaultOpen | menu | false | — |
 |  | popover | false | — |
+|  | tooltip | false | — |
 | defaultValue | card-number-field | — | — |
 |  | checkbox-group | — | — |
 |  | code-input | — | — |
@@ -476,6 +486,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | tabs | — | — |
 |  | tag-group | — | — |
 |  | text-field | — | — |
+| delay | progress | 400 | — |
+|  | tooltip | — | — |
 | description | checkbox-row | — | — |
 |  | dialog | — | — |
 |  | menu-item | — | — |
@@ -515,6 +527,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | tag | false | — |
 |  | text-field | false | — |
 |  | textarea | false | — |
+|  | tooltip | false | — |
 | dismissible | banner | false | — |
 |  | toast | true | — |
 | emphasis | badge | subtle | subtle, bold, surface |
@@ -615,6 +628,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | steps | — | — |
 |  | tabs | — | — |
 |  | tag-group | — | — |
+| kind | breadcrumb-item | ancestor | ancestor, current, overflow |
+|  | tooltip | description | description, label |
 | label | badge | — | — |
 |  | breadcrumb-item | — | — |
 |  | breadcrumbs | Breadcrumb | — |
@@ -655,6 +670,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | tag-group | — | — |
 |  | text-field | — | — |
 |  | textarea | — | — |
+|  | tooltip | — | — |
 | leadingIcon | card-number-field | — | — |
 |  | menu-item | — | — |
 |  | password-field | — | — |
@@ -722,11 +738,13 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 | onOpenChange | dialog | — | — |
 |  | menu | — | — |
 |  | popover | — | — |
+|  | tooltip | — | — |
 | onRemove | tag | — | — |
 |  | tag-group | — | — |
 | open | dialog | false | — |
 |  | menu | false | — |
 |  | popover | false | — |
+|  | tooltip | — | — |
 | orientation | divider | horizontal | horizontal, vertical |
 |  | step-item | horizontal | horizontal, vertical |
 |  | steps | horizontal | horizontal, vertical |
@@ -741,6 +759,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 | placement | dialog | center | center, bottom, full, end |
 |  | menu | bottom | top, bottom, start, end |
 |  | popover | bottom | top, bottom, start, end |
+|  | tooltip | top | top, bottom, start, end |
 | provider | sign-in-button | — | apple, google, facebook |
 |  | wallet-button | — | apple-pay, google-pay, paypal, shop-pay |
 | readOnly | card-number-field | false | — |

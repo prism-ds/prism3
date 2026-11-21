@@ -1341,11 +1341,16 @@ Type: color. Bound by 2 component(s).
 
 ### `color.inverse.background.primary`
 
-Type: color. Bound by 1 component(s).
+Type: color. Bound by 2 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | toast | `fill` | container | every member (2 of 2) |
+| tooltip | `fill` | bottomGlyph | placement: bottom (1 of 4) |
+|  |  | bubble | every member (4 of 4) |
+|  |  | endGlyph | placement: end (1 of 4) |
+|  |  | startGlyph | placement: start (1 of 4) |
+|  |  | topGlyph | placement: top (1 of 4) |
 
 ### `color.inverse.border.focus`
 
@@ -1966,13 +1971,14 @@ Type: color. Bound by 1 component(s).
 
 ### `color.inverse.text.primary`
 
-Type: color. Bound by 2 component(s).
+Type: color. Bound by 3 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | badge | `neutral.count.contained.bold.label`, `neutral.status.contained.bold.label` | count | emphasis: bold · size: medium · style: contained · tone: neutral · type: count (1 of 50) |
 |  |  | label | emphasis: bold · style: contained · tone: neutral · type: status (2 of 50) |
 | toast | `label` | message | every member (2 of 2) |
+| tooltip | `label` | label | every member (4 of 4) |
 
 ### `color.text.danger`
 
@@ -2875,7 +2881,7 @@ Type: dimension. Bound by 3 component(s).
 
 ### `radius.md`
 
-Type: dimension. Bound by 13 component(s).
+Type: dimension. Bound by 14 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2891,6 +2897,7 @@ Type: dimension. Bound by 13 component(s).
 | segmented-control | `radius` | track | every member (3 of 3) |
 | sign-in-button | `radius` | container | every member (96 of 96) |
 | skeleton | `rect.radius` | block | shape: rect · size: medium (1 of 4) |
+| tooltip | `radius` | bubble | every member (4 of 4) |
 | wallet-button | `radius` | container | every member (68 of 68) |
 
 ### `radius.none`
@@ -3159,7 +3166,7 @@ Type: dimension. Bound by 3 component(s).
 
 ### `space.050`
 
-Type: dimension. Bound by 19 component(s).
+Type: dimension. Bound by 20 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -3192,6 +3199,7 @@ Type: dimension. Bound by 19 component(s).
 | tag | `size.large.dismissible.gap`, `size.large.dismissible.label-inset`, `size.medium.dismissible.gap`, `size.medium.dismissible.label-inset`, `size.small.check-gap`, `size.small.dismissible.label-inset`, `size.small.underline.inset` (not drawn) | content | selection: unselected · size: large, medium · type: dismissible (10 of 45) |
 |  |  | labelCheck | every member (25 of 45) |
 | toast | `controls-gap` | controls | every member (2 of 2) |
+| tooltip | `pad-y` | bubble | every member (4 of 4) |
 
 ### `space.075`
 
@@ -3225,7 +3233,7 @@ Type: dimension. Bound by 22 component(s).
 
 ### `space.100`
 
-Type: dimension. Bound by 39 component(s).
+Type: dimension. Bound by 40 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -3295,6 +3303,7 @@ Type: dimension. Bound by 39 component(s).
 |  |  | messageCell | every member (84 of 84) |
 |  |  | messageRow | every member (84 of 84) |
 | toast | `gap`, `pad-end`, `pad-y` | container | every member (2 of 2) |
+| tooltip | `pad-x` | bubble | every member (4 of 4) |
 
 ### `space.150`
 
@@ -3567,7 +3576,7 @@ Type: typography. Bound by 1 component(s).
 
 ### `type.body.sm.default`
 
-Type: typography. Bound by 21 component(s).
+Type: typography. Bound by 22 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -3607,6 +3616,7 @@ Type: typography. Bound by 21 component(s).
 | textarea | `size.small.type` | placeholder | size: small · state: disabled, focus-visible, hover, rest (16 of 84) |
 |  |  | value | size: small · state: filled, focus-visible-filled, read-only (12 of 84) |
 | toast | `type` | message | every member (2 of 2) |
+| tooltip | `type` | label | every member (4 of 4) |
 
 ### `type.body.sm.default-link`
 
@@ -4396,6 +4406,12 @@ Declared, not drawn: `color.border.focus`
 13 token(s); 2 design-file member(s).
 
 `color.inverse.background.primary`, `color.inverse.icon.success`, `color.inverse.text.primary`, `icon.size.sm`, `radius.xl`, `shadow.lg`, `size.md.height`, `space.050`, `space.100`, `space.150`, `space.200`, `type.body.sm.default`, `type.body.sm.line-box`
+
+### tooltip
+
+6 token(s); 4 design-file member(s).
+
+`color.inverse.background.primary`, `color.inverse.text.primary`, `radius.md`, `space.050`, `space.100`, `type.body.sm.default`
 
 ### veil
 

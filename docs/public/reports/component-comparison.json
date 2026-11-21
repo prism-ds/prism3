@@ -5729,6 +5729,81 @@
       "sizes": []
     },
     {
+      "id": "tooltip",
+      "name": "Tooltip",
+      "category": "overlay",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "placement": [
+          "top",
+          "bottom",
+          "start",
+          "end"
+        ]
+      },
+      "props": [
+        {
+          "name": "label"
+        },
+        {
+          "name": "placement",
+          "default": "top",
+          "values": [
+            "top",
+            "bottom",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "name": "align",
+          "default": "center",
+          "values": [
+            "start",
+            "center",
+            "end"
+          ]
+        },
+        {
+          "name": "arrow",
+          "default": true
+        },
+        {
+          "name": "kind",
+          "default": "description",
+          "values": [
+            "description",
+            "label"
+          ]
+        },
+        {
+          "name": "delay"
+        },
+        {
+          "name": "closeDelay"
+        },
+        {
+          "name": "open"
+        },
+        {
+          "name": "defaultOpen",
+          "default": false
+        },
+        {
+          "name": "onOpenChange"
+        },
+        {
+          "name": "disabled",
+          "default": false
+        },
+        {
+          "name": "children"
+        }
+      ],
+      "sizes": []
+    },
+    {
       "id": "veil",
       "name": "Veil",
       "category": "overlay",
@@ -6537,6 +6612,17 @@
         "components": [
           "dialog"
         ]
+      },
+      {
+        "values": [
+          "bottom",
+          "end",
+          "start",
+          "top"
+        ],
+        "components": [
+          "tooltip"
+        ]
       }
     ],
     "provider": [
@@ -7137,6 +7223,15 @@
           "center",
           "end"
         ]
+      },
+      {
+        "id": "tooltip",
+        "default": "center",
+        "values": [
+          "start",
+          "center",
+          "end"
+        ]
       }
     ],
     "alignment": [
@@ -7288,6 +7383,10 @@
       {
         "id": "popover",
         "default": false
+      },
+      {
+        "id": "tooltip",
+        "default": true
       }
     ],
     "asChild": [
@@ -7390,12 +7489,20 @@
       },
       {
         "id": "popover"
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "clearable": [
       {
         "id": "text-field",
         "default": false
+      }
+    ],
+    "closeDelay": [
+      {
+        "id": "tooltip"
       }
     ],
     "closeOnSelect": [
@@ -7471,6 +7578,10 @@
       {
         "id": "popover",
         "default": false
+      },
+      {
+        "id": "tooltip",
+        "default": false
       }
     ],
     "defaultPage": [
@@ -7524,6 +7635,9 @@
       {
         "id": "progress",
         "default": 400
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "description": [
@@ -7696,6 +7810,10 @@
       },
       {
         "id": "textarea",
+        "default": false
+      },
+      {
+        "id": "tooltip",
         "default": false
       }
     ],
@@ -8297,6 +8415,14 @@
           "current",
           "overflow"
         ]
+      },
+      {
+        "id": "tooltip",
+        "default": "description",
+        "values": [
+          "description",
+          "label"
+        ]
       }
     ],
     "label": [
@@ -8422,6 +8548,9 @@
       },
       {
         "id": "textarea"
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "labelPosition": [
@@ -8909,6 +9038,9 @@
       },
       {
         "id": "popover"
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "onPageChange": [
@@ -8946,6 +9078,9 @@
       {
         "id": "popover",
         "default": false
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "options": [
@@ -9041,6 +9176,16 @@
       {
         "id": "popover",
         "default": "bottom",
+        "values": [
+          "top",
+          "bottom",
+          "start",
+          "end"
+        ]
+      },
+      {
+        "id": "tooltip",
+        "default": "top",
         "values": [
           "top",
           "bottom",
@@ -11046,9 +11191,10 @@
       "components": [
         "dialog",
         "menu",
-        "popover"
+        "popover",
+        "tooltip"
       ],
-      "detail": "the placement axis takes 2 value sets — [bottom] in menu, popover; [bottom, center, end, full] in dialog"
+      "detail": "the placement axis takes 3 value sets — [bottom] in menu, popover; [bottom, center, end, full] in dialog; [bottom, end, start, top] in tooltip"
     },
     {
       "kind": "axis values",
@@ -11660,6 +11806,25 @@
     },
     {
       "kind": "prop default",
+      "subject": "prop align",
+      "components": [
+        "menu",
+        "popover",
+        "tooltip"
+      ],
+      "detail": "align defaults differ over the same values — center in tooltip; start in menu, popover"
+    },
+    {
+      "kind": "prop default",
+      "subject": "prop arrow",
+      "components": [
+        "popover",
+        "tooltip"
+      ],
+      "detail": "arrow defaults differ over the same values — false in popover; true in tooltip"
+    },
+    {
+      "kind": "prop default",
       "subject": "prop dismissible",
       "components": [
         "banner",
@@ -11705,6 +11870,16 @@
         "slider"
       ],
       "detail": "max defaults differ over the same values — 100 in progress, slider; 99 in badge"
+    },
+    {
+      "kind": "prop default",
+      "subject": "prop placement",
+      "components": [
+        "menu",
+        "popover",
+        "tooltip"
+      ],
+      "detail": "placement defaults differ over the same values — bottom in menu, popover; top in tooltip"
     },
     {
       "kind": "prop default",

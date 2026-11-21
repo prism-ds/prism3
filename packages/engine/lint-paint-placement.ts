@@ -306,7 +306,7 @@ const EXPECT_ANATOMY = [
   'segmented-control-segment', 'segmented-control', 'link', 'button-group', 'dialog', 'password-field', 'counter', 'pagination-item', 'pagination', 'progress', 'search-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', '_slider-thumb', 'slider',
   'code-input-cell', 'code-input', 'provider-logo', 'card-number-field', 'page-nav-item', 'page-nav',
   'skeleton',
-  'popover', 'menu-item', 'menu-group', 'menu',
+  'popover', 'menu-item', 'menu-group', 'menu', 'tooltip',
   // #3055: Steps and its step.
   'step-item', 'steps',
 ];
@@ -331,6 +331,8 @@ const EXPECT_PAINTERS = [
   'popover',
   // #4007: the menu's raised panel (Popover's roles) and the item's highlight wash.
   'menu', 'menu-item',
+  // #4009: the inverse bubble (its arrow takes the same fill as a glyph).
+  'tooltip',
   // #2427: the outline Counter's fill and edge. A ghost member's box resolves none of them.
   'counter',
   // #2428: the Code cell paints Text field's field chrome on its own box.
