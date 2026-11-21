@@ -42,7 +42,7 @@ import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme } from './emit-dtcg';
 import { buildAiMetadata } from './ai-metadata';
 import { validate as validateJsonSchema } from './json-schema-lite';
-import { handleRpc, callTool, toolDefs, manifestRootKeys, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
+import { handleRpc, callTool, toolDefs, manifestRootKeys, summarizeDescription, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
 import { ENGINE_VERSION, CONTRACT_VERSION, COMPONENT_CONTRACT_VERSION, COMPONENT_SCHEMA_VERSION, classify, contractVersionDrift, satisfiesBump, DEPRECATIONS } from './version';
 import { renameMap, validateRenameMap, planVariableRenames, planCollectionRenames, composeVariableRenames, projectionsOf, PROJECTED_ROOTS, isRefusal, COLLECTION_RENAMES, type RenameMap } from './rename-map';
 import {
@@ -1200,6 +1200,8 @@ for (const hx of ['#000000', '#333333', '#7f7f7f', '#808080', '#ffffff']) {
     'color.ts': [/fmt === 'hex' \? Math\.round\(a \* 255\) \/ 255 : Math\.round\(a \* 100\) \/ 100/],
     // A dark-mode shadow layer's alpha, not a ratio.
     'theme-shadow.ts': [/const darkAlpha = .*Math\.round\(a \* \(0\.3 \+ 0\.09 \* i\) \* 100\) \/ 100/],
+    // #4128: a type style's tracking in px, to 0.01px, not a ratio.
+    'emit-dtcg-overlay.ts': [/const r = Math\.round\(mult \* sizePx \* 100\) \/ 100;/],
   };
   const engineSrc = readdirSync(HERE).filter((n) => n.endsWith('.ts') && n !== 'test.ts' && !n.endsWith('-test.ts') && !n.startsWith('lint-'));
   const engineRolled = engineSrc.flatMap((n) => readFileSync(resolve(HERE, n), 'utf8').split('\n').flatMap((text, i) =>
@@ -16634,6 +16636,11 @@ arm: {
   // compacted top-level field measured a median ~220 characters, so 5,000 is room for ~20 more levers
   // at ~250 each. When this fails, the list is 5,000 short of the wall and still passes the hard
   // limit, so there is time to scale again rather than trim.
+  //
+  // It came close (2026-11-21): 54,509, 491 under the alarm, with two approved PRs each pushing it over.
+  // The owner chose to scale again, not to move the alarm, so the ceiling and the margin are unchanged and
+  // the inline copy dropped the descriptions beneath every OPTIONAL field (the required fields and the
+  // `$defs` they reach keep theirs), which took the list from 54,897 to 41,731. The arms below hold where prose stays.
   const listChars = JSON.stringify(tools).length;
   ok(listChars <= 55_000,
     `MCP: tools/list keeps 5,000 chars of headroom under its 60,000 ceiling, room for ~20 more levers (${listChars.toLocaleString()} chars; fails above 55,000)`);
@@ -16643,33 +16650,97 @@ arm: {
   // description must be a non-empty PREFIX of the file's (a summary truncates, never rewrites), at most
   // 200 characters. The cap is what makes the headroom above hold: a lever's inline cost is its
   // structure plus one sentence, however long its full description grows.
+  //
+  // 2026-11-21: and WHERE a description stays is the second step's rule, restated here from the file, not
+  // read from mcp.ts: the schema's own, every top-level field's own, everything beneath a REQUIRED field,
+  // and everything in a `$defs` entry a required field reaches through `$ref`. Every other description
+  // must be absent from the inline copy, and must come back, word for word, from `list_levers describe`.
   {
     const inline = tools.find((t) => t.name === 'theme_brand')?.inputSchema?.properties?.brand;
+    const fileRequired = new Set<string>((brandSchema as any).required ?? []);
+    const fileDefs0: Record<string, any> = (brandSchema as any).$defs ?? {};
+    const reachedDefs = new Set<string>();
+    const reach = (o: any): void => {
+      if (Array.isArray(o)) { o.forEach(reach); return; }
+      if (!o || typeof o !== 'object') return;
+      for (const [k, v] of Object.entries(o)) {
+        const name = k === '$ref' && typeof v === 'string' && v.startsWith('#/$defs/') ? v.slice('#/$defs/'.length) : null;
+        if (name !== null && name in fileDefs0 && !reachedDefs.has(name)) { reachedDefs.add(name); reach(fileDefs0[name]); }
+        else reach(v);
+      }
+    };
+    for (const k of fileRequired) reach((brandSchema as any).properties?.[k]);
+    ok(fileRequired.size > 0 && [...reachedDefs].sort().join(',') === 'oklch',
+      `MCP: the required fields reach exactly the oklch $defs entry, the one whose prose stays inline with them (got: ${[...reachedDefs].sort().join(',') || 'none'})`);
+    const DATA = new Set(['default', 'enum', 'const', 'examples']);
     const drift: string[] = [], notPrefix: string[] = [], tooLong: string[] = [], midSentence: string[] = [];
-    const walk = (a: any, b: any, path: string): void => {
+    const notDropped: string[] = [];
+    const dropped: { path: string[]; text: string }[] = [];
+    // `keep`: may this node's description stay? `segs`: the JSON path from the schema root.
+    const walk = (a: any, b: any, path: string, segs: string[], keep: boolean): void => {
       if (Array.isArray(b)) {
         if (!Array.isArray(a) || a.length !== b.length) { drift.push(path); return; }
-        b.forEach((x, i) => walk(a[i], x, `${path}/${i}`));
+        b.forEach((x, i) => walk(a[i], x, `${path}/${i}`, [...segs, String(i)], keep));
         return;
       }
       if (b && typeof b === 'object') {
         if (!a || typeof a !== 'object' || Array.isArray(a)) { drift.push(path); return; }
-        if (Object.keys(a).sort().join(',') !== Object.keys(b).sort().join(',')) drift.push(`${path} (keys)`);
+        const dropsHere = !keep && typeof b.description === 'string';
+        const want = Object.keys(b).filter((k) => !(dropsHere && k === 'description')).sort().join(',');
+        if (Object.keys(a).sort().join(',') !== want) drift.push(`${path} (keys)`);
         for (const k of Object.keys(b)) {
           if (k === 'description' && typeof b[k] === 'string') {
+            if (!keep) {
+              if ('description' in a) notDropped.push(`${path}/description`);
+              dropped.push({ path: [...segs, k], text: b[k] });
+              continue;
+            }
             const sum = a[k];
             if (typeof sum !== 'string' || !sum.trim() || !b[k].startsWith(sum)) notPrefix.push(`${path}/description`);
             else if (sum.length > 200) tooLong.push(`${path} (${sum.length})`);
             // Where the cut falls, checked without mcp.ts's sentence splitter: a summary is the whole
             // text, or it ends in "." and the full text goes on with whitespace (never mid-word).
             if (typeof sum === 'string' && sum !== b[k] && !(sum.endsWith('.') && /^\s/.test(b[k].slice(sum.length)))) midSentence.push(`${path}/description`);
-          } else walk(a[k], b[k], `${path}/${k}`);
+          } else if (segs.length > 0 && (k === 'properties' || k === '$defs' || k === 'patternProperties') && b[k] && typeof b[k] === 'object' && !Array.isArray(b[k])) {
+            // A map of NAMES to schemas: a field called `default` or `description` is a schema, not data.
+            const am = a[k] ?? {};
+            if (!am || typeof am !== 'object' || Object.keys(am).sort().join(',') !== Object.keys(b[k]).sort().join(',')) { drift.push(`${path}/${k} (keys)`); continue; }
+            for (const name of Object.keys(b[k])) walk(am[name], b[k][name], `${path}/${k}/${name}`, [...segs, k, name], keep);
+          } else if (DATA.has(k)) {
+            if (!isDeepStrictEqual(a[k], b[k])) drift.push(`${path}/${k}`);
+          } else if (segs.length === 0 && (k === 'properties' || k === '$defs') && b[k] && typeof b[k] === 'object') {
+            // The two places the rule changes: a top-level field keeps its own summary and, if required,
+            // everything beneath; a $defs entry keeps its prose if a required field reaches it.
+            const am = a[k] ?? {};
+            if (Object.keys(am).sort().join(',') !== Object.keys(b[k]).sort().join(',')) drift.push(`${path}/${k} (keys)`);
+            for (const name of Object.keys(b[k])) {
+              const fieldKeep = k === 'properties' ? fileRequired.has(name) : reachedDefs.has(name);
+              const fa = am[name], fb = b[k][name];
+              if (k === 'properties' && fb && typeof fb === 'object' && typeof fb.description === 'string' && !fieldKeep) {
+                // Its own summary stays; walk the rest with prose dropped.
+                const { description: fdA, ...restA } = fa ?? {};
+                const { description: fdB, ...restB } = fb;
+                walk({ description: fdA }, { description: fdB }, `${path}/${k}/${name}`, [k, name], true);
+                walk(restA, restB, `${path}/${k}/${name}`, [k, name], false);
+              } else walk(fa, fb, `${path}/${k}/${name}`, [k, name], fieldKeep);
+            }
+          } else walk(a[k], b[k], `${path}/${k}`, [...segs, k], keep);
         }
         return;
       }
       if (a !== b) drift.push(path);
     };
-    walk(inline, brandSchema, '#');
+    walk(inline, brandSchema, '#', [], true);
+    ok(notDropped.length === 0, `MCP: tools/list drops every description beneath an optional field and in every $defs entry no required field reaches (still inline: ${notDropped.slice(0, 5).join(', ') || 'none'})`);
+    // Each dropped description, looked up at its own path in `describe`'s answer: a field's under
+    // described.properties, a $defs entry's under described.$defs. Non-vacuous: the step drops something.
+    {
+      const everyField = callTool('list_levers', { describe: Object.keys((brandSchema as any).properties) }, brandSchema);
+      const got = everyField.isError ? {} : (everyField.structuredContent as any)?.described ?? {};
+      const lost = dropped.filter(({ path, text }) => path.reduce((o: any, seg) => (o == null ? o : o[seg]), got) !== text).map(({ path }) => path.join('/'));
+      ok(dropped.length >= 100 && lost.length === 0,
+        `MCP: every description tools/list drops comes back word for word from list_levers describe, at its own path (${dropped.length} dropped; not returned: ${lost.slice(0, 5).join(', ') || 'none'})`);
+    }
     ok(drift.length === 0, `MCP: the inline brand schema matches the file in every keyword but description — types, enums, ranges, defaults, $defs, $ref, $id (drift: ${drift.slice(0, 5).join(', ') || 'none'})`);
     ok(notPrefix.length === 0, `MCP: every inline schema description is a non-empty prefix of the file's full text (not: ${notPrefix.slice(0, 5).join(', ') || 'none'})`);
     ok(midSentence.length === 0, `MCP: every inline schema summary is the full text or ends at a "." the full text follows with whitespace — never cut mid-word (cut: ${midSentence.slice(0, 5).join(', ') || 'none'})`);
@@ -16682,8 +16753,11 @@ arm: {
       `MCP: strictInteractiveContrast's inline summary is its tag plus first sentence (got: ${inline?.properties?.strictInteractiveContrast?.description})`);
     ok(inline?.properties?.id?.description === "Brand identifier (e.g. 'aurora').",
       `MCP: an \`e.g.\` does not end a summary (got: ${inline?.properties?.id?.description})`);
-    ok(inline?.properties?.typography?.properties?.sizeOverrides?.description === 'OPTIONAL. Opt-in per-rung DESKTOP/MOBILE size override (#1587): group -> rung -> { desktop?, mobile? }.',
-      `MCP: a \`?\` inside an optional-key shape does not end a summary (got: ${inline?.properties?.typography?.properties?.sizeOverrides?.description})`);
+    // sizeOverrides sits under optional `typography`, so since 2026-11-21 its description is no longer inline;
+    // the splitter it exercised still cuts every summary that is, so the case is held on the function itself.
+    const sizeOverridesSummary = summarizeDescription((brandSchema as any).properties?.typography?.properties?.sizeOverrides?.description ?? '');
+    ok(sizeOverridesSummary === 'OPTIONAL. Opt-in per-rung DESKTOP/MOBILE size override (#1587): group -> rung -> { desktop?, mobile? }.',
+      `MCP: a \`?\` inside an optional-key shape does not end a summary (got: ${sizeOverridesSummary})`);
     ok(/list_levers with `describe`/.test(tools.find((t) => t.name === 'theme_brand')?.description ?? ''),
       'MCP: theme_brand says its field descriptions are summaries and names where the full text is');
 
@@ -19267,7 +19341,16 @@ arm: {
       // K2: the highlight against the panel, recomputed from the emitted trees (never from the def's own claim). It does
       // not clear 3:1 in any committed brand and mode, so K2 is A: a focus-visible item draws the FocusRing as well.
       const OUT = join(HERE, 'out');
-      const rgb = (v: string): number[] => {
+      // The handoff writes a literal color as a DTCG 2025.10 Color-module object (#4123): read its sRGB `components`
+      // and `alpha` (absent = 1). Never its `hex`, which drops alpha; any other colorSpace is refused by name. A string
+      // (an older handoff) is still read as `#hex` / `rgb()`.
+      let objectReads = 0;
+      const rgb = (v: string | { colorSpace?: string; components?: number[]; alpha?: number }): number[] => {
+        if (v && typeof v === 'object') {
+          if (v.colorSpace !== 'srgb' || !Array.isArray(v.components) || v.components.length !== 3) throw new Error(`#4007 K2: a color object outside srgb [r,g,b] is not read: ${JSON.stringify(v)}`);
+          objectReads++;
+          return [...v.components, v.alpha ?? 1];
+        }
         const m = /^rgba?\(([^)]*)\)$/.exec(v);
         if (m) { const q = m[1].split(',').map(Number); return [q[0] / 255, q[1] / 255, q[2] / 255, q.length > 3 ? q[3] : 1]; }
         const h = v.replace('#', '');
@@ -19283,7 +19366,7 @@ arm: {
         for (const m of modes) {
           const ov = m === 'light' ? {} : JSON.parse(readFileSync(join(OUT, `${brand}.${m}.overlay.tokens.json`), 'utf8'));
           const at = (t: any, p: string) => p.split('.').reduce((o, k) => o?.[k], t?.[root])?.$value;
-          const res = (p: string): string => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
+          const res = (p: string): any => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
           const panel = rgb(res('color.foreground.raised'));
           const wash = rgb(res('color.interactive.neutral.overlay.hover'));
           const comp = [0, 1, 2].map((i) => wash[i] * wash[3] + panel[i] * (1 - wash[3]));
@@ -19291,6 +19374,12 @@ arm: {
           best = Math.max(best, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)); cells++;
         }
       }
+      // #4123: the reader is held on the handoff's object form, typed here, and on the committed handoff actually reaching
+      // it (two object reads per cell), so a reader that only parses strings fails here by name.
+      const committedObjectReads = objectReads;
+      const typed = (() => { try { return rgb({ colorSpace: 'srgb', components: [0.2, 0.4, 0.6], alpha: 0.5 }); } catch { return null; } })();
+      ok(JSON.stringify(typed) === JSON.stringify([0.2, 0.4, 0.6, 0.5]) && cells > 0 && committedObjectReads === 2 * cells,
+        `#4123 K2 reader: the #4007 K2 arm reads a DTCG 2025.10 color object (srgb components + alpha), and every committed panel and wash it read was one (got ${JSON.stringify(typed)}; ${committedObjectReads} object reads over ${cells} cells)`);
       ok(cells >= 20 && best < 3, `#4007 K2: the item highlight (neutral hover wash over the raised panel) stays under 3:1 against the panel in every brand and mode, so the ring is drawn (best ${best.toFixed(2)}:1 over ${cells} cells)`);
       const ring = item.anatomy.parts.focusRing;
       ok(ring?.kind === 'absolute' && ring.nests === 'focus-ring' && ring.when === 'focus-visible' && item.tokens['default.overlay.focus-visible'] === 'color.interactive.neutral.overlay.hover',
@@ -44645,6 +44734,91 @@ arm: {
     const offText = nodes.filter((n) => n.textStyle !== undefined && n.type !== 'TEXT').map((n) => `${n.name}:${n.type}`);
     ok(parts[h.part]?.kind === h.kind && !!typeKey && !threw && host !== undefined && host.textStyle === undefined && offText.length === 0,
       `#3783 a '${h.kind}' part carrying 'type' (${h.def}.${h.part}, synthetic) plans NO text style — only a TEXT node takes one (${threw ? `threw: ${threw}` : !host ? 'the part was not built at this coordinate' : `text style on ${offText.join(', ') || 'none'}`})`);
+  }
+}
+
+// ------------------------------------------------------------------- #4123 / #4128: the projection's value forms
+// The handoff writes DTCG 2025.10 object forms, and a type style's tracking resolved to px, per mode. No committed
+// brand varies tracking by mode or writes `rgb()` outside the reference brand, so a synthetic canonical tree pins both.
+// Expected values are literals. Mutations: drop `conformValues` from `buildOverlaySet` → the #4123 rows fail; drop
+// `trackingInPx` → the #4128 rows fail.
+{
+  const ext = (modes: Record<string, unknown>) => ({ $extensions: { prism3: { modes } } });
+  const canon = { r: {
+    c: { $type: 'color', $value: 'rgba(255, 128, 0, 0.5)', ...ext({ dark: { $value: '#102030' } }) },
+    d: { $type: 'dimension', $value: '1.5rem' },
+    t: { $type: 'duration', $value: '200ms' },
+    size: { $type: 'dimension', $value: '3rem', $extensions: { prism3: { px: 48 } } },
+    tight: { $type: 'number', $value: -0.02, ...ext({ dark: { $value: -0.05 } }) },
+    ty: { $type: 'typography', $value: { fontFamily: 'Inter', fontSize: '{r.size}', fontWeight: 400, lineHeight: 1.2, letterSpacing: '{r.tight}' } },
+  } };
+  const set = buildOverlaySet(canon) as any;
+  const dark = set.overlays.find((o: any) => o.mode === 'dark')?.tree;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  ok(same(set.base.r.c.$value, { colorSpace: 'srgb', components: [1, 0.502, 0], alpha: 0.5, hex: '#ff8000' })
+    && same(dark?.r?.c?.$value, { colorSpace: 'srgb', components: [0.0627, 0.1255, 0.1882], hex: '#102030' }),
+    `#4123 a literal color reaches the projection as a DTCG color object, rgba() and #hex alike (base ${JSON.stringify(set.base.r.c.$value)}, dark ${JSON.stringify(dark?.r?.c?.$value)})`);
+  ok(same(set.base.r.d.$value, { value: 1.5, unit: 'rem' }) && set.base.r.t.$value === '200ms',
+    `#4123 a dimension is { value, unit } and a duration stays a string (dimension ${JSON.stringify(set.base.r.d.$value)}, duration ${JSON.stringify(set.base.r.t.$value)})`);
+  ok(same(set.base.r.ty.$value.letterSpacing, { value: -0.96, unit: 'px' }) && same(dark?.r?.ty?.$value?.letterSpacing, { value: -2.4, unit: 'px' }),
+    `#4128 a type style's tracking is resolved to px from its own size, per mode: -0.02 × 48 in base, -0.05 × 48 in dark (base ${JSON.stringify(set.base.r.ty.$value.letterSpacing)}, dark ${JSON.stringify(dark?.r?.ty?.$value?.letterSpacing)})`);
+  ok(canon.r.ty.$value.letterSpacing === '{r.tight}', `#4128 the canonical tree keeps the alias; only the projection resolves it (${canon.r.ty.$value.letterSpacing})`);
+}
+
+// ---- #4123 / #2997: the shadcn/Tailwind projectors read the handoff's DTCG 2025.10 value forms --------------------
+// The projectors read `<brand>.base.tokens.json` and the dark overlay, which #4123 writes as color objects and
+// `{ value, unit }` dimensions, a shadow layer's color and lengths included. A synthetic handoff spelled both ways must
+// project to the same CSS, and the string spelling is the one main's projector already read. Expected literals are
+// written here, never derived from `conformColor`. Mutation: put back the `typeof value !== 'string'` guard in
+// `colorValue` / `dimensionValue` → these rows fail by name (and `check:shadcn`, `lint-shadcn-contrast` throw).
+{
+  const { shadcnCss, dimensionValue, toOklchCss, readHandoff, handoffBrands, shadcnRegistryItem } = await import('./emit-shadcn');
+  const { tailwindThemeCss, shadowCss } = await import('./emit-tailwind');
+  const { SHADCN_COLOR_VARS, SHADCN_DIMENSION_VARS, SHADCN_THEME_VARS } = await import('./projections/shadcn');
+  const { TAILWIND_DIMENSIONS, TAILWIND_FONTS, TAILWIND_SHADOWS } = await import('./projections/tailwind');
+  const put = (tree: Record<string, any>, path: string, tok: unknown) => {
+    const ks = path.split('.'); let n = tree;
+    for (const k of ks.slice(0, -1)) n = (n[k] ??= {});
+    n[ks[ks.length - 1]!] = tok;
+  };
+  const handoff = (objects: boolean) => {
+    const base: Record<string, any> = {};
+    const translucent = objects ? { colorSpace: 'srgb', components: [1, 0.502, 0], alpha: 0.5, hex: '#ff8000' } : 'rgba(255, 128, 0, 0.5)';
+    const opaque = objects ? { colorSpace: 'srgb', components: [0.0392, 0.0706, 0.1569], hex: '#0a1228' } : '#0a1228';
+    const dim = (v: number, u: string) => (objects ? { value: v, unit: u } : `${v}${u}`);
+    put(base, 'z.ink', { $type: 'color', $value: opaque });
+    put(base, 'z.veil', { $type: 'color', $value: translucent });
+    Object.values(SHADCN_COLOR_VARS).forEach((role, i) => put(base, role, { $type: 'color', $value: i % 3 === 0 ? '{q.z.ink}' : i % 3 === 1 ? translucent : opaque }));
+    for (const role of [...Object.values(SHADCN_DIMENSION_VARS), ...Object.values(TAILWIND_DIMENSIONS), ...Object.entries(SHADCN_THEME_VARS).filter(([k]) => !k.startsWith('font-')).map(([, r]) => r)])
+      put(base, role, { $type: 'dimension', $value: dim(0.5, 'rem') });
+    for (const role of [...Object.values(TAILWIND_FONTS), ...Object.entries(SHADCN_THEME_VARS).filter(([k]) => k.startsWith('font-')).map(([, r]) => r)])
+      put(base, role, { $type: 'fontFamily', $value: 'Inter' });
+    for (const role of Object.values(TAILWIND_SHADOWS))
+      put(base, role, { $type: 'shadow', $value: [
+        { color: translucent, offsetX: dim(0, 'px'), offsetY: dim(1, 'px'), blur: dim(2, 'px'), spread: dim(-1, 'px') },
+        { color: '{q.z.veil}', offsetX: dim(0, 'px'), offsetY: dim(4, 'px'), blur: dim(6, 'px'), spread: dim(0, 'px'), inset: true },
+      ] });
+    return { brand: 'q', root: 'q', base, overlays: { dark: {} } } as any;
+  };
+  const obj = handoff(true), str = handoff(false);
+  const shadowRole = Object.values(TAILWIND_SHADOWS)[0]!;
+  let objCss = '', strCss = '', err = '';
+  try { strCss = shadcnCss(str) + tailwindThemeCss(str); objCss = shadcnCss(obj) + tailwindThemeCss(obj); } catch (e) { err = (e as Error).message; }
+  ok(!err && objCss.length > 0 && objCss === strCss,
+    `#4123 the shadcn/Tailwind projectors write the same CSS from a handoff in DTCG 2025.10 object forms as from its string spelling (${err || 'CSS differs'})`);
+  let dimGot = '', shadowGot = '';
+  try { dimGot = dimensionValue(obj, 'radius.lg'); shadowGot = shadowCss(obj, shadowRole, 'light'); } catch (e) { dimGot = (e as Error).message; }
+  ok(dimGot === '0.5rem', `#4123 a { value, unit } dimension projects as its CSS length (got ${JSON.stringify(dimGot)})`);
+  ok(shadowGot === `0px 1px 2px -1px ${toOklchCss('rgba(255, 128, 0, 0.5)')}, inset 0px 4px 6px 0px ${toOklchCss('rgba(255, 128, 0, 0.5)')}`,
+    `#4123 a shadow layer's color object and { value, unit } lengths project as a CSS box-shadow (got ${JSON.stringify(shadowGot)})`);
+  let p3 = '';
+  try { toOklchCss({ colorSpace: 'display-p3', components: [1, 0, 0], hex: '#ff0000' }); } catch (e) { p3 = (e as Error).message; }
+  ok(/display-p3/.test(p3), `#4123 a color object outside srgb is refused by name, not read as srgb (got ${JSON.stringify(p3)})`);
+  const OUT = resolve(HERE, 'out');
+  for (const b of handoffBrands(OUT)) {
+    let e = '';
+    try { const h = readHandoff(b, OUT); shadcnRegistryItem(h); tailwindThemeCss(h); } catch (x) { e = (x as Error).message; }
+    ok(!e, `#4123 ${b}: the committed handoff projects to shadcn and Tailwind CSS (${e})`);
   }
 }
 
