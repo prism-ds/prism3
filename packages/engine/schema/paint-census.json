@@ -448,13 +448,13 @@
     "accordion": {
       "set": {
         "members": 48,
-        "assignments": 72,
-        "sha256": "79b4765acbe9f328fe56ff4839f67e29dded84fc669d75855e815d1e2c3bac95"
+        "assignments": 96,
+        "sha256": "29a8364b7253fd476e5abf8f0ad78598ef2b56212367ef9b1d10118082cae5bd"
       },
       "grid": {
         "members": 48,
-        "assignments": 72,
-        "sha256": "f15d8dcc89705f1668d26675318aa5a748fd1e3102c480b1f1e562af8bc409aa"
+        "assignments": 96,
+        "sha256": "044415365edf8368dcf464be70466a05c16b66ebd93f69b2b69b3d1c36bcd9ee"
       }
     },
     "list-item": {
@@ -531,14 +531,14 @@
     },
     "dialog": {
       "set": {
-        "members": 24,
-        "assignments": 96,
-        "sha256": "13167a4c67256a9d7fb38c7df2c9240621545096f059ebdb0110cdb6fa7c5e2e"
+        "members": 16,
+        "assignments": 64,
+        "sha256": "0180e1f5ec7c8b763421f3c1a576ac7fa4a2aa3e390d4b4319c2dba83a03e2ce"
       },
       "grid": {
-        "members": 24,
-        "assignments": 96,
-        "sha256": "cadef9fdf791c963be09da86b843eb8729e6fe9603bb135acb4f1dc6b226efce"
+        "members": 16,
+        "assignments": 64,
+        "sha256": "45ae2ae9d9e1064488bc7aedc7694bc9f41094d540330f7254240966aa958235"
       }
     },
     "password-field": {
@@ -701,12 +701,12 @@
       "set": {
         "members": 30,
         "assignments": 180,
-        "sha256": "8561fdc47d1397548f310640636765587af4e1e73e4c526a51890f5994b50071"
+        "sha256": "7228d8b2ee37c0e5fb1f24515d22614a58b9fc50275431657b9afb31ec2fb96e"
       },
       "grid": {
         "members": 30,
         "assignments": 180,
-        "sha256": "25ce5ac499ff43cb0d3dd1e2fb063fb7f76da38c24f313c461244050fe9b5d09"
+        "sha256": "fd0072ad203afc3627c9e01a6b5d4b3ac6b26e84851152cbe87158b0f5f20a62"
       }
     },
     "code-input-cell": {
@@ -757,6 +757,18 @@
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     },
+    "skeleton": {
+      "set": {
+        "members": 4,
+        "assignments": 8,
+        "sha256": "6558ff3d60678f48a6b31dfee222d19ee5f0f8a59e011a3062b67512730543ca"
+      },
+      "grid": {
+        "members": 4,
+        "assignments": 8,
+        "sha256": "6610537978aef736d4d8471336052897bc2cc0afbc5de4db231a0df3d9928cc6"
+      }
+    },
     "popover": {
       "set": {
         "members": 1,
@@ -767,6 +779,54 @@
         "members": 1,
         "assignments": 4,
         "sha256": "92e9d522af64dce87a341930067f3de19097577db0f12b22b91691523dd8d54c"
+      }
+    },
+    "menu-item": {
+      "set": {
+        "members": 15,
+        "assignments": 89,
+        "sha256": "092a0a729bc96ac87993f1b593de2665fda65bcb4a9b99ca325830e3f0dcb3fb"
+      },
+      "grid": {
+        "members": 15,
+        "assignments": 89,
+        "sha256": "ba0f1036cde72cabfe0649ea0954b3ae9005ec1f58854b205c3998373e762795"
+      }
+    },
+    "menu-group": {
+      "set": {
+        "members": 1,
+        "assignments": 1,
+        "sha256": "92913096e0634edb328468b2e91644d9a20ecf1472899716537401549d1774fa"
+      },
+      "grid": {
+        "members": 1,
+        "assignments": 1,
+        "sha256": "aa9f65754f2cf92d34950327a5449b18b540c124a8e9762e3db19aaf9a56bc40"
+      }
+    },
+    "menu": {
+      "set": {
+        "members": 1,
+        "assignments": 2,
+        "sha256": "3b5d379578b0493f47a65e6018b3830dd3e10f982f12a88169e09f262c40baf8"
+      },
+      "grid": {
+        "members": 1,
+        "assignments": 2,
+        "sha256": "b81958886c20ab845356177fd7f01382b9263fa89faeb8600692ff7a18e4e4a4"
+      }
+    },
+    "tooltip": {
+      "set": {
+        "members": 4,
+        "assignments": 12,
+        "sha256": "b65f61e47b4040a24af1a462b0c5a1cdb022577c0cc74cc9c74ba3e6df3de3dd"
+      },
+      "grid": {
+        "members": 4,
+        "assignments": 12,
+        "sha256": "4345da742d70d27e352a7769bd42221b6c84d0c5d379437ec6407421d8f68f61"
       }
     }
   }

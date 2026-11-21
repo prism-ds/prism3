@@ -176,7 +176,9 @@ await new Promise((r) => setTimeout(r, 3000));
   // The size ceiling that keeps discovery affordable — the schema must be inlined once, not per tool.
   // 60,000 is our own ceiling, not raised (#1368). Since #1760 it fails 5,000 chars BEFORE that wall,
   // room for ~20 more levers, and the inline schema carries one-line summaries so a lever's full prose
-  // never counts here. Kept in lockstep with test.ts, which also holds the per-summary cap.
+  // never counts here. Kept in lockstep with test.ts, which also holds the per-summary cap. At 54,509 and 491
+  // under the alarm (2026-11-21) the owner chose to scale again rather than move it: the inline copy now drops
+  // the descriptions beneath every optional field (54,897 → 41,731), and test.ts holds where prose stays.
   const listChars = JSON.stringify(list.tools ?? []).length;
   ok(listChars <= 55_000, `conformance: tools/list keeps 5,000 chars of headroom under its 60,000 ceiling (${listChars.toLocaleString()} chars; fails above 55,000)`);
 
@@ -371,6 +373,98 @@ await new Promise((r) => setTimeout(r, 3000));
   }
 }
 
+// ------------------------------------------- #4122: every tool refuses an argument its schema does not declare
+// All six tools declare `additionalProperties: false`, and `include` is an enum, but only `export_theme` checked either:
+// a typo in `include` quietly shrank the answer. EXPECTED is typed here per tool, never read from the schemas. The one
+// named exception is a call with no `brand` key to a tool that requires one (#4120), such as theme_brand's bare
+// BrandInput; test.ts's #4120 block holds the missing-`brand` message. BY-NAME MUTATION: turn the
+// shared argument check off in mcp.ts → every refusal arm below fails.
+{
+  const B = { id: 'args', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } };
+  const brief = ['---', 'id: args', 'primary: { l: 0.5, c: 0.15, h: 250 }', 'neutral: { hue: 250, chroma: 0.01 }', '---'].join('\n');
+  for (const [tool, args, named] of [
+    ['theme_brand', { brand: B, include: ['tokenz'] }, 'tokenz'],
+    ['theme_from_brief', { brief, include: ['aiMetaData'] }, 'aiMetaData'],
+    ['theme_from_brief', { brief, brand: B }, 'brand'],
+    ['list_levers', { foo: 1 }, 'foo'],
+    ['score_consumption', { brand: B, refs: ['color.text.primary'], ref: ['x'] }, 'ref'],
+    ['export_theme', { brand: B, outDir: 'packages/engine/.mcp-test-4122-out', bogus: true }, 'bogus'],
+  ] as const) {
+    const r = await server.callJson(tool, args);
+    ok(r.isError === true && JSON.stringify(r.payload).includes(named),
+      `#4122 ${tool} refuses the undeclared ${JSON.stringify(named)} by name instead of ignoring it (got ${JSON.stringify(r.payload).slice(0, 200)})`);
+  }
+  rmSync(resolve(HERE, '.mcp-test-4122-out'), { recursive: true, force: true });   // written only when the check is off
+  const bare = await server.callJson('theme_brand', B);
+  ok(!bare.isError, '#4122 theme_brand still accepts a bare BrandInput, the one named exception (#4120)');
+  const none = await server.callJson('theme_brand', { brand: B, include: [] });
+  ok(!none.isError && none.payload.omitted?.length === 3, '#4122 theme_brand still accepts an empty include');
+  // A present `include` that is not an array (#4277 review): it fell through to the default sections with no error, and
+  // export_theme threw `want.filter is not a function` (#4281). EXPECTED: an isError result naming the argument.
+  // BY-NAME MUTATION: drop the array-type check from mcp.ts `argumentErrors` → each of these fails.
+  for (const [tool, args] of [
+    ['theme_brand', { brand: B, include: 'tokens' }],
+    ['theme_brand', { brand: B, include: null }],
+    ['theme_from_brief', { brief, include: 'aiMetadata' }],
+    ['export_theme', { brand: B, outDir: 'packages/engine/.mcp-test-4122-out', include: 'tokenz' }],
+  ] as const) {
+    let seen: string;
+    let refused = false;
+    try {
+      const r = await server.callJson(tool, args);
+      seen = JSON.stringify(r.payload ?? r).slice(0, 200);
+      refused = r.isError === true && seen.includes('include must be an array');
+    } catch (err) { seen = `threw: ${(err as Error).message.slice(0, 160)}`; }
+    ok(refused, `#4122 ${tool} refuses include ${JSON.stringify(args.include)} as not an array instead of answering with the default sections (got ${seen})`);
+  }
+  rmSync(resolve(HERE, '.mcp-test-4122-out'), { recursive: true, force: true });
+}
+
+// ---------------------------------- #4151: a tool that returns structuredContent declares an outputSchema it meets
+// theme_brand and theme_from_brief returned structuredContent with no outputSchema, so the generated reference said
+// they had none. Every tool in tools/list is called once with a valid input (a tool missing from SAMPLES fails by
+// name), and each structured result is checked against the declared schema with a small validator written here, not
+// imported from mcp.ts. BY-NAME MUTATION: drop theme_brand's outputSchema → its arm fails.
+{
+  const conforms = (v: any, s: any, at = '$'): string[] => {
+    if (!s || typeof s !== 'object') return [];
+    const e: string[] = [];
+    const t = s.type;
+    const typeOk = !t || (t === 'array' ? Array.isArray(v) : t === 'object' ? v !== null && typeof v === 'object' && !Array.isArray(v)
+      : t === 'integer' ? Number.isInteger(v) : typeof v === t);
+    if (!typeOk) return [`${at}: not ${t}`];
+    if (Array.isArray(s.required)) for (const k of s.required) if (v?.[k] === undefined) e.push(`${at}: missing '${k}'`);
+    if (s.properties && v && typeof v === 'object') for (const [k, sub] of Object.entries(s.properties)) if (v[k] !== undefined) e.push(...conforms(v[k], sub, `${at}.${k}`));
+    if (s.items && Array.isArray(v)) v.forEach((x: unknown, i: number) => e.push(...conforms(x, s.items, `${at}[${i}]`)));
+    if (Array.isArray(s.anyOf) && !s.anyOf.some((b: any) => conforms(v, b, at).length === 0)) e.push(`${at}: matches no anyOf branch`);
+    return e;
+  };
+  const B = { id: 'schema', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } };
+  const SAMPLES: Record<string, unknown> = {
+    list_levers: {},
+    theme_brand: { brand: B, include: ['notes', 'tokens', 'aiMetadata'] },
+    score_consumption: { brand: B, refs: ['color.text.primary'], pairs: [{ fg: 'color.text.primary', bg: 'color.background.primary' }] },
+    theme_from_brief: { brief: ['---', 'id: schema', 'primary: { l: 0.5, c: 0.15, h: 250 }', 'neutral: { hue: 250, chroma: 0.01 }', '---'].join('\n') },
+    export_theme: { brand: B, outDir: 'packages/engine/.mcp-test-4151-out', include: ['tokens'] },
+    validate_brand: B,
+  };
+  const listed = ((await server.reply(server.send('tools/list'))).result?.tools ?? []) as Array<{ name: string; outputSchema?: unknown }>;
+  try {
+    for (const tool of listed) {
+      if (!(tool.name in SAMPLES)) { ok(false, `#4151 ${tool.name} has no sample input here, so its output contract went unchecked`); continue; }
+      const res = await server.call(tool.name, SAMPLES[tool.name]);
+      if (res.isError || res.structuredContent === undefined) {
+        ok(res.structuredContent === undefined && !res.isError, `#4151 ${tool.name}: the sample call succeeded (got ${JSON.stringify(res).slice(0, 200)})`);
+        continue;
+      }
+      const bad = tool.outputSchema ? conforms(res.structuredContent, tool.outputSchema) : ['declares no outputSchema'];
+      ok(bad.length === 0, `#4151 ${tool.name} returns structuredContent and declares an outputSchema it meets (${bad.slice(0, 4).join('; ') || 'ok'})`);
+    }
+  } finally {
+    rmSync(resolve(HERE, '.mcp-test-4151-out'), { recursive: true, force: true });
+  }
+}
+
 // ------------------------------- #2227: a contrast floor no page ground sits on is refused, by sentence
 // `surfaces.light.floorStep: 25` sits under no light page ground (white, neutral.050, neutral.100). The DTCG and
 // Figma prose name the ground every floor-gated fill clears its bar on, so the Figma color emission had no ground
@@ -475,6 +569,20 @@ await new Promise((r) => setTimeout(r, 3000));
   // Matched past the first sentence, so only the full text passes (#2053 retired the lever; the text says so).
   ok(/is always emitted/.test(described?.properties?.radiusHairline?.description ?? ''),
     'journey ①b: list_levers describe returns a field\'s full description over the wire');
+  // ①c What tools/list no longer carries, `describe` does (2026-11-21): a description beneath an optional
+  // field is absent from the inline schema and comes back in full over the wire. A required field keeps its
+  // sub-field summaries inline, so a first call can be written from tools/list alone.
+  const listed = (await server.reply(server.send('tools/list'))).result?.tools ?? [];
+  const inlineBrand = listed.find((t: any) => t.name === 'theme_brand')?.inputSchema?.properties?.brand;
+  const familiesFull = (await server.callJson('list_levers', { describe: ['typography'] })).payload.described?.properties?.typography?.properties?.families?.description;
+  ok(typeof inlineBrand?.properties?.typography?.description === 'string'
+    && inlineBrand?.properties?.typography?.properties?.families !== undefined
+    && !('description' in inlineBrand.properties.typography.properties.families)
+    && typeof familiesFull === 'string' && familiesFull.length > 0,
+    'journey ①c: a description beneath an optional field is dropped from tools/list and returned by list_levers describe');
+  ok(typeof inlineBrand?.properties?.neutral?.properties?.hue?.oneOf?.[0]?.description === 'string'
+    && typeof inlineBrand?.$defs?.oklch?.properties?.l?.description === 'string',
+    'journey ①c: the required fields (and the oklch shape they use) keep their sub-field summaries in tools/list');
 
   // ② Generate from a brief, the way an agent working from prose would.
   const brief = ['---', 'id: journey', 'primary: { l: 0.58, c: 0.17, h: 265 }', 'neutral: { hue: 265, chroma: 0.008 }',
@@ -523,6 +631,34 @@ await new Promise((r) => setTimeout(r, 3000));
   const bogus = await server.callJson('theme_from_brief', { brief: 'no frontmatter, just prose' });
   ok(bogus.isError, 'journey ⑥: a malformed brief is an actionable tool error the model can retry');
   ok(/frontmatter/i.test(JSON.stringify(bogus.payload)), 'journey ⑥: the error says what was wrong with it');
+
+  // ⑦ A STANDARD-dialect brief (a flat `colors:` hex map, `typography:` tokens, an `x-prism3:` block), the
+  // shape an extraction exports. The CLI reads it; the tool refused it as a malformed BrandInput (#4118).
+  const stdBrief = ['---', 'version: alpha', 'name: Lumen Coffee', 'x-prism3:', '  root: lcds', '  density: compact', '  tempo: brisk',
+    'colors:', '  primary: "#6B3E26"', '  secondary: "#D9A441"', '  neutral-900: "#2A2522"', '  neutral-100: "#F4F0EC"',
+    '  white: "#FFFFFF"', '  error: "#B3261E"', 'typography:', '  body: { fontFamily: Inter, fontSize: 16px, fontWeight: 400 }',
+    '  body-alt: { fontFamily: Georgia, fontSize: 14px, fontWeight: 400 }',
+    '---', '# Lumen Coffee'].join('\n');
+  const std = await server.callJson('theme_from_brief', { brief: stdBrief });
+  ok(!std.isError, `#4118 theme_from_brief generates from a standard-dialect brief (${std.isError ? JSON.stringify(std.payload).slice(0, 200) : 'ok'})`);
+  ok(std.payload?.dialect === 'standard' && std.payload?.derivedBrandInput?.id === 'lumen-coffee',
+    '#4118 theme_from_brief reports the standard dialect and the id it slugged from the name');
+  ok(std.payload?.derivedBrandInput?.root === 'lcds' && (std.payload?.xApplied ?? []).includes('density=compact'),
+    '#4118 theme_from_brief applies the x-prism3 levers and lists them in xApplied');
+  ok(JSON.stringify(std.payload?.xWarnings ?? []).includes("'tempo'"),
+    '#4118 theme_from_brief names the x-prism3 key it skipped in xWarnings, as the CLI does');
+  // #4137 (#4265) put typography faces on the same xWarnings channel. The tool description's xWarnings clause must
+  // name every channel the PAYLOAD carries: CLAIM is the description's own sentence, ACTUAL is each warning's
+  // `<channel>:` prefix as the converter wrote it, so a new channel with no description edit fails here.
+  const channels = [...new Set(((std.payload?.xWarnings ?? []) as string[]).map((w) => w.split(':')[0]))];
+  const fromBrief = (((await server.reply(server.send('tools/list'))).result?.tools ?? []) as any[]).find((t) => t.name === 'theme_from_brief');
+  const xClause = String(fromBrief?.description ?? '').split('For a standard brief')[1]?.split('. ')[0] ?? '';
+  ok(channels.length >= 2 && channels.every((c) => xClause.includes(c)),
+    `#4118 theme_from_brief's description names every kind of skip xWarnings reports (${channels.join(', ')} vs "${xClause.slice(0, 160)}")`);
+  ok(Array.isArray(std.payload?.classification) && std.payload.classification.length > 0,
+    '#4118 theme_from_brief returns the color classification, so a misread swatch is visible');
+  ok(gen.payload.dialect === undefined && gen.payload.xWarnings === undefined,
+    '#4118 theme_from_brief keeps an engine-native brief off the standard converter');
 }
 
 server.stop();

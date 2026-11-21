@@ -41,7 +41,7 @@
  * `ENGINE_VOCABULARY` that the schema does not close → `#3697 H4 every engine word … is a value the schema closes`,
  * read from `theme-schema.json`, not from the list; typeface families dropped from `brandWords` → `#3697 H4 opt-in:
  * off, a typeface family is replaced`. The same drop fails `apps/plugin/test-report-redaction.ts` over the plugin's
- * own lines. D3703.1 B (the drawer keeps the host's message; only the report reduces a `write failed:` or `prune failed:`
+ * own lines. D3703.1 B (the drawer keeps the host's message; only the report reduces a `write failed:` or `Clean up failed:`
  * line to the error's class): `reduceFailure` dropped from `buildReport` → `#3697 H4 D3703.1 B a thrown write's and
  * prune's lines keep the error's class, not the host's message`. #3702 (every other line that carries a host's message):
  * the `DETAIL` rule dropped from `reduceLine` → `#3702 component build: the report keeps the error's class, not the host's
@@ -229,12 +229,12 @@ ok(authoredOn.includes('hds/color/interactive/seaside/fill/rest') && authoredOn.
 {
   const failedRep = (includeBrand: boolean): string => buildReport({ ...BASE, includeBrand, activity: [
     { title: 'Apply Theme', verdict: '✗ write failed', lines: ['write failed: TypeError: cannot write to Checkout Hero / Q3 launch'], agent: false },
-    { title: 'Prune', verdict: '✗ failed', lines: ['prune failed: Error: in remove: node "Unannounced pricing"'], agent: true },
+    { title: 'Prune', verdict: '✗ failed', lines: ['Clean up failed: Error: in remove: node "Unannounced pricing"'], agent: true },
     { title: 'Build', verdict: '✗ failed', lines: ['write failed: cannot write to Checkout Hero', 'member 3 failed to bind: Checkout Hero'], agent: false },
   ] });
   for (const on of [false, true]) {
     const rep = failedRep(on);
-    ok(rep.includes('  - write failed: TypeError\n') && rep.includes('  - prune failed: Error\n') && !/Q3 launch|Unannounced|in remove/.test(rep),
+    ok(rep.includes('  - write failed: TypeError\n') && rep.includes('  - Clean up failed: Error\n') && !/Q3 launch|Unannounced|in remove/.test(rep),
       `#3697 H4 D3703.1 B a thrown write's and prune's lines keep the error's class, not the host's message (brand ${on ? 'included' : 'left out'})`);
   }
   const rep = failedRep(false);
@@ -249,7 +249,7 @@ ok(authoredOn.includes('hds/color/interactive/seaside/fill/rest') && authoredOn.
   const SECRET = 'in appendChild: node "Checkout Hero / Q3 launch" on page "Unannounced"';
   const cases: readonly [site: string, posted: string, reported: string][] = [
     ['component build', `component build failed: TypeError: ${SECRET} — 2 nodes had already reached the file; they are parked in the frame 'Q3 launch' on this page`, 'component build failed: TypeError'],
-    ['canvas labels', `No canvas labels for button: Figma refused the write (Error: ${SECRET})`, 'No canvas labels for button: Figma refused the write (Error)'],
+    ['canvas labels', `No labels for button: Figma refused the write (Error: ${SECRET})`, 'No labels for button: Figma refused the write (Error)'],
     ['usage panel', `No usage panel for button: Figma refused the write (TypeError: ${SECRET})`, 'No usage panel for button: Figma refused the write (TypeError)'],
     ['spec panel', `No spec panel for button: Figma refused the write (Error: ${SECRET})`, 'No spec panel for button: Figma refused the write (Error)'],
     ['cover', `Cover: not drawn, Figma refused the write (Error: ${SECRET}).`, 'Cover: not drawn, Figma refused the write (Error)'],
@@ -258,7 +258,7 @@ ok(authoredOn.includes('hds/color/interactive/seaside/fill/rest') && authoredOn.
     ['file setup', `file setup failed: Error: ${SECRET}. Built from tree-test0000 at 2026-11-12T00:00:00Z.`, 'file setup failed: Error'],
     ['style guide', `style guide failed: TypeError: ${SECRET}`, 'style guide failed: TypeError'],
     ['read-back', `read-back failed: Error: ${SECRET}`, 'read-back failed: Error'],
-    ['cleanup', `Cleanup failed: Error: ${SECRET}`, 'Cleanup failed: Error'],
+    ['cleanup', `Clean up failed: Error: ${SECRET}`, 'Clean up failed: Error'],
     ['prune version', `Nothing removed — the named version could not be saved (Error: ${SECRET}).`, 'Nothing removed — the named version could not be saved (Error)'],
     ['variable writes', `⚠ 3 variable writes refused by Figma (pds/color/blue: ${SECRET.slice(0, 60)})`, '⚠ 3 variable writes refused by Figma (pds/color/blue)'],
   ];
@@ -288,8 +288,8 @@ ok(authoredOn.includes('hds/color/interactive/seaside/fill/rest') && authoredOn.
     [(d) => `file setup failed: ${d}. Built from tree-test0000 at 2026-11-12T00:00:00Z.`, (c) => `file setup failed: ${c}`],
     [(d) => `style guide failed: ${d}`, (c) => `style guide failed: ${c}`],
     [(d) => `read-back failed: ${d}`, (c) => `read-back failed: ${c}`],
-    [(d) => `Cleanup failed: ${d}`, (c) => `Cleanup failed: ${c}`],
-    [(d) => `No canvas labels for button: Figma refused the write (${d})`, (c) => `No canvas labels for button: Figma refused the write (${c})`],
+    [(d) => `Clean up failed: ${d}`, (c) => `Clean up failed: ${c}`],
+    [(d) => `No labels for button: Figma refused the write (${d})`, (c) => `No labels for button: Figma refused the write (${c})`],
     [(d) => `Cover: not drawn, Figma refused the write (${d}).`, (c) => `Cover: not drawn, Figma refused the write (${c})`],
     [(d) => `button: can't be checked. the engine could not plan it (${d}).`, (c) => `button: can't be checked. the engine could not plan it (${c})`],
     [(d) => `Sets not moved to their pages: the named version could not be saved (${d}).`, (c) => `Sets not moved to their pages: the named version could not be saved (${c})`],
@@ -337,8 +337,8 @@ ok(authoredOn.includes('hds/color/interactive/seaside/fill/rest') && authoredOn.
     [(d) => `file setup failed: ${d}. Built from tree-test0000 at 2026-11-12T00:00:00Z.`, (c) => `file setup failed: ${c}`],
     [(d) => `style guide failed: ${d}`, (c) => `style guide failed: ${c}`],
     [(d) => `read-back failed: ${d}`, (c) => `read-back failed: ${c}`],
-    [(d) => `Cleanup failed: ${d}`, (c) => `Cleanup failed: ${c}`],
-    [(d) => `No canvas labels for button: Figma refused the write (${d})`, (c) => `No canvas labels for button: Figma refused the write (${c})`],
+    [(d) => `Clean up failed: ${d}`, (c) => `Clean up failed: ${c}`],
+    [(d) => `No labels for button: Figma refused the write (${d})`, (c) => `No labels for button: Figma refused the write (${c})`],
     [(d) => `button: can't be checked. the engine could not plan it (${d}).`, (c) => `button: can't be checked. the engine could not plan it (${c})`],
     [(d) => `Sets not moved to their pages: the named version could not be saved (${d}).`, (c) => `Sets not moved to their pages: the named version could not be saved (${c})`],
     [(d) => `write failed: ${d}`, (c) => `write failed: ${c}`],
@@ -422,7 +422,7 @@ ok(scrub('tidewaters\novernight-watch\tshelf', [...PUNCT, ...ROOT]) === 'tidewat
 // opens with the title and a body that only asks for the report, which travels on the clipboard. The expected URL is
 // typed here whole, so a body built from the report, or any change to the title or the instruction, fails by name.
 // MUTATION: `issueUrl` given the report back as its body → `paste: the issue opens with the title and the instruction alone`.
-const PASTE_URL = 'https://github.com/adamforrester/prism3/issues/new?title=Problem%20report&body='
+const PASTE_URL = 'https://github.com/prism-ds/prism3/issues/new?title=Problem%20report&body='
   + 'Paste%20the%20report%20here%20%E2%80%94%20Prism3%20copies%20it%20to%20your%20clipboard%20as%20it%20opens%20this%20page.'
   + '%20Copy%20in%20the%20Report%20a%20problem%20dialog%20copies%20it%20again.';
 const url = issueUrl();
@@ -538,6 +538,40 @@ ok(!isIssueUrl('https://example.com/collect?d=1') && !isIssueUrl('https://github
     '#3883: the report reads the session list, and includes the failed restore\'s brand, not the boot demo');
   ok(postedInit === 'postedInput' && /restoreFailure\?\.brand, heldRestore\]/.test(main),
     '#3883: every post goes through the store\'s postedInput, and the scrub list takes a held restore\'s brand');
+}
+
+// #3957: a brand word the scrub's own placeholder holds (`brand`, `remove`) wrapped the placeholder again (`[[brand]]`).
+// The words are typed here (`{ whole }` and plain, short and long), so the check does not read `brandWords`. Mutation:
+// `scrub` looking inside a placeholder again → `#3957 … [[brand]]` by name.
+{
+  const aurora = buildReport({ stamp: 's', engine: 'e', host: 'figma', includeBrand: false, seen: [], brand: EXAMPLE_BRANDS_JSON.aurora as never,
+    activity: [{ title: 'Apply Theme', verdict: '✓ applied', lines: ['wrote aurora/color/text/brand'], agent: false }] });
+  ok(aurora.includes('  - wrote [brand]/color/text/[brand]') && !aurora.includes('[['),
+    `#3957: the aurora example's gradient named "brand" does not wrap the placeholder again (${JSON.stringify(aurora.split('\n').filter((l) => l.includes('wrote')))})`);
+  const cases: [string, string, Parameters<typeof scrub>[1], string][] = [
+    ['a whole word "brand"', 'zephyr/color/text/brand', ['zephyr', { whole: 'brand' }], '[brand]/color/text/[brand]'],
+    ['a plain word "bran"', 'zephyr-bran/x', ['zephyr', 'bran'], '[brand]-[brand]/x'],
+    ['a plain word "remove" over a key', `see figma.com/file/abc and remove it`, ['remove'], 'see [removed] and [brand] it'],
+    ['a short word "b"', 'zephyr/b', ['zephyr', { whole: 'b' }], '[brand]/[brand]'],
+  ];
+  for (const [name, text, words, want] of cases) {
+    const got = scrub(text, words);
+    ok(got === want, `#3957: ${name} never looks inside a placeholder the scrub wrote ([[brand]]: ${JSON.stringify(got)}, wanted ${JSON.stringify(want)})`);
+  }
+}
+
+// #3957, the #4393 review's should-fix 2: a brand word that itself holds a placeholder's text is still taken out whole,
+// as before the split. Mutation: `scrub` looking for every word only between placeholders → `#3957/holds …` by name.
+{
+  const cases: [string, string, Parameters<typeof scrub>[1], string][] = [
+    ['a whole word holding "[brand]"', 'Zork [brand] Quux', [{ whole: 'Zork [brand] Quux' }], '[brand]'],
+    ['a plain word holding "[removed]"', 'see Zork [removed] Quux here', ['Zork [removed] Quux'], 'see [brand] here'],
+    ['a word holding "[Brand]" in another case', 'Zork [brand] Quux', ['zork [Brand] quux'], '[brand]'],
+  ];
+  for (const [name, text, words, want] of cases) {
+    const got = scrub(text, words);
+    ok(got === want && !/Zork|Quux/i.test(got), `#3957/holds: ${name} is taken out whole, never kept around the placeholder (${JSON.stringify(got)}, wanted ${JSON.stringify(want)})`);
+  }
 }
 
 console.log(`${failed ? `\n✗ ${failed} check(s) failed` : '\n✓ report: all checks passed'} — ${executed} assertions executed`);

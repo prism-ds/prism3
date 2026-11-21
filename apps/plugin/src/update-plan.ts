@@ -53,7 +53,7 @@ import { ENGINE_VERSION, colorVariablesOutOfOrder, COMPONENT_RENAMES, coordKey, 
 import { EXECUTOR_REVISION } from './executor-revision';
 import { PACE_MS } from './pace';
 import { reaches } from './executor-reach';
-import { adoptions, emitCoordValue, memberStamp, planHalf, revHalf, respaceSets, snugSets, STAMP_KEY, type RespaceBox } from './write-components';
+import { adoptions, emitCoordValue, engineHalf, memberStamp, planHalf, revHalf, respaceSets, snugSets, STAMP_KEY, type RespaceBox } from './write-components';
 import { FURNITURE_KEY, FURNITURE_NS, furnitureDue, furnitureDueCount, furnitureLayout, hasFurniture, readTag, type FurnitureApi, type FurnitureDue, type XNode } from './canvas-furniture';
 import { labelColumns, readLabelColumn } from './label-columns';
 import { NS } from './persist-figma';
@@ -140,6 +140,8 @@ export const isPublished = (s: PublishStatus | undefined): boolean => s === 'CUR
  */
 export type Breaking =
   | { kind: 'drop'; member: string }
+  /** #3392 — a member merged into another and removed: instances of it in files that use the library stop updating. */
+  | { kind: 'merge'; member: string; into: string }
   | { kind: 'replace'; member: string; path: string; reason: string }
   | { kind: 'private'; from: string; to: string }
   | { kind: 'property'; name: string; change: 'removed' | 'retyped'; from?: string; to?: string }
@@ -193,6 +195,9 @@ export type SetPreview = {
   replacements: { member: string; path: string; reason: string }[];
   adds: string[];
   drops: string[];
+  /** #3392 — the members an axis the ledger merges collapses, each with the member it merges into: an update swaps its
+   *  placed instances onto that member at the width they had, then removes it. Absent when there are none. */
+  merges?: { member: string; into: string }[];
   /** Every coordinate member with no stamp, by name: skipped by the update, never a drop (#2283). */
   unstamped: string[];
   /** The unstamped members Adopt may claim: each is the match for a planned coordinate (renames and axis changes
@@ -211,6 +216,11 @@ export type SetPreview = {
    *  would rebuild it without the edit. Always a conflict. Under Keep and Accept the apply skips the member. Absent
    *  otherwise. */
   handEdits: { member: string; path: string; conflict: boolean; structural: boolean; lost?: true }[];
+  /** #2882 (owner decision A) — the engine half of every member stamp the check read, each once: the engines this set
+   *  was last written or checked by (`restampMembers` rewrites the half on unchanged members, #2379). The publish
+   *  description's range for the set starts at the oldest. Outside the set's `previewHash`: the stamps are in its
+   *  fingerprint already. Absent when no member is stamped. */
+  engines?: string[];
   /** #2265 PR 2 — every matched member that is not current, with how it reads; what an apply acts on. Current
    *  members are left out, so a set with nothing to do carries an empty list. Never capped: an apply must see all. */
   states: { member: string; state: Exclude<MemberState, 'current'>; earlierRecord?: true;
@@ -224,7 +234,12 @@ export type SetPreview = {
      *  the plan adds, removes, replaces or moves into a new frame. Under Keep and Accept the apply skips it whole and
      *  names it; Overwrite writes it. Absent otherwise, and on a member whose layer was added or removed by hand, which
      *  every choice skips. */
-    restructured?: true }[];
+    restructured?: true;
+    /** #3907 — the member is behind today's plan apart from any hand edit: its plan or a revision reaching it moved, or
+     *  it draws or reacts other than its plan, or an update stopped on it. An apply that skips such a member leaves it
+     *  out of date, so the as-built ledger does not record its set as built from today's def (`ledgerAfter`). Absent
+     *  for a member whose only difference is the designer's own edit. */
+    behind?: true }[];
   /** #2188 Q173 — the members an update moves to their place in the grid, by name (`gridMoves`). Absent when none. */
   positions?: string[];
   /** #2542 (owner decision Q245.2 A) — the WHOLE SET moves on its page, to where a fresh build would place it
@@ -308,7 +323,7 @@ export const MOVES = 'moves into';
  */
 export type NestFault = { part: string; set: string; member: string; plan: string };
 /** A nested-member fault as the verify lists it: `<path>.nestVariant: <set>/<member> (the plan says <set>/<coordinate>)`. */
-export const nestFaultLine = (f: NestFault): string => `${f.part}.nestVariant: ${f.set}/${f.member} (the plan says ${f.set}/${f.plan})`;
+export const nestFaultLine = (f: NestFault): string => `${f.part}.nestVariant: ${f.set}/${f.member} (Prism3 expects ${f.set}/${f.plan})`;
 export const nestedMemberFaults = (plan: AnatomyPlan['root'], snap: SnapNode, keep: ReadonlySet<string>): NestFault[] => {
   const out: NestFault[] = [];
   const coordOfName = (n: string): Map<string, string> => {
@@ -482,7 +497,7 @@ export const gridMoves = (plans: AnatomyPlan[], members: readonly HostMember[], 
  * Adopt claims them, so it must not be refused by it, or the set could never be updated (#2603 review).
  */
 export const setRefusal = (p: Pick<SetPreview, 'needsChoice' | 'unstamped' | 'moves'> & { axes: { from: readonly string[]; to: readonly string[] } }, names: readonly string[]): { reason: string; adoptClears: boolean } | null => {
-  if (p.needsChoice.includes('axisCollapse')) return { reason: 'an axis the plan removed would collapse members onto one coordinate, and they cannot stay in the set', adoptClears: false };
+  if (p.needsChoice.includes('axisCollapse')) return { reason: 'an axis Prism3 removed would collapse variants onto one coordinate, and they cannot stay in the set', adoptClears: false };
   if (p.axes.from.join(',') !== p.axes.to.join(',') && p.unstamped.length)
     return { reason: `the axes change, and ${p.unstamped.length} member${p.unstamped.length === 1 ? '' : 's'} not built by Prism3 would be left on the old ones (${p.unstamped.slice(0, 3).join('; ')})`, adoptClears: true };
   const after = new Set(names);
@@ -509,7 +524,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
   const planned = new Map<string, AnatomyPlan>();
   for (const p of plans) {
     const k = coordKey(planComponentName(p));
-    if (k === null) { blockers.push(`the plan names a member that is not a coordinate: ${planComponentName(p)}`); continue; }
+    if (k === null) { blockers.push(`Prism3 names a variant that is not a coordinate: ${planComponentName(p)}`); continue; }
     planned.set(k, p);
   }
   const planAxes = [...new Set([...planned.keys()].flatMap((k) => coordPairs(k).map(([a]) => a)))].sort();
@@ -525,15 +540,18 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     byKey.set(k, [...(byKey.get(k) ?? []), m]);
   }
   for (const [k, ms] of byKey)
-    if (ms.length > 1) blockers.push(`${ms.length} members share the coordinate ${k} (${ms.map((m) => m.id).join(', ')}) — the set is refused rather than one picked`);
+    if (ms.length > 1) blockers.push(`${ms.length} variants share the coordinate ${k} (${ms.map((m) => m.id).join(', ')}) — the set is refused rather than one picked`);
   const axisLists = new Set(host.members.map((m) => coordPairs(coordKey(m.name)!).map(([a]) => a).sort().join(',')));
-  if (axisLists.size > 1) blockers.push(`the members disagree on the axis list (${[...axisLists].map((l) => `[${l}]`).join(' vs ')}), so Figma cannot read the set's properties (#1780)`);
+  if (axisLists.size > 1) blockers.push(`the variants disagree on the axis list (${[...axisLists].map((l) => `[${l}]`).join(' vs ')}), so Figma cannot read the set's properties (#1780)`);
   const hostAxes = [...new Set(host.members.flatMap((m) => coordPairs(coordKey(m.name)!).map(([a]) => a)))].sort();
   const firstHost = host.members[0] ? coordKey(host.members[0].name)! : null;
   const hostDefault = new Map(firstHost ? coordPairs(firstHost) : []);
 
   // ---- where each lands -----------------------------------------------------------------------------------
-  type Landing = { m: HostMember; from: string; target: string; exact: boolean };
+  type Landing = { m: HostMember; from: string; target: string; exact: boolean; merged: boolean };
+  // #3392: an axis the ledger declares merged into one value. Its `into` member is the exact one, whatever the set's
+  // default, and every other member it collapses merges into it rather than blocking the set.
+  const mergeInto = new Map(ledger.filter((r): r is Extract<ComponentRename, { kind: 'merge' }> => r.def === defId && r.kind === 'merge').map((r) => [r.axis, r.into] as const));
   const landings: Landing[] = [];
   const axisRenames = ledger.filter((r) => r.def === defId && r.kind === 'axis' && hostAxes.includes((r as { from: string }).from)).map((r) => ({ from: (r as { from: string }).from, to: (r as { to: string }).to }));
   for (const [k, ms] of byKey) {
@@ -545,8 +563,8 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     pairs = pairs.filter(([a]) => planAxes.includes(a));
     for (const a of planAxes) if (!pairs.some(([x]) => x === a) && planDefault.has(a)) pairs.push([a, planDefault.get(a)!]);
     // A removed axis keeps the member on the set's default value of it; the rest collapse (§4).
-    const exact = removed.every(([a, v]) => hostDefault.get(a) === v);
-    landings.push({ m: ms[0], from: k, target: keyOf(pairs), exact });
+    const exact = removed.every(([a, v]) => (mergeInto.get(a) ?? hostDefault.get(a)) === v);
+    landings.push({ m: ms[0], from: k, target: keyOf(pairs), exact, merged: removed.length > 0 && removed.every(([a]) => mergeInto.has(a)) });
   }
   const byTarget = new Map<string, Landing[]>();
   for (const l of landings) byTarget.set(l.target, [...(byTarget.get(l.target) ?? []), l]);
@@ -554,6 +572,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
   const matched: Landing[] = [];
   const drops: string[] = [];
   const collapse: string[] = [];
+  const merges: { member: string; into: string }[] = [];
   const unstamped: string[] = [];
   const adoptable: string[] = [];
   const held: SetPreview['held'] = [];
@@ -567,7 +586,9 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     matched.push(keep);
     if (!keep.m.stamp) adoptable.push(keep.m.name);
     for (const l of ls) if (!l.m.stamp && l !== keep) held.push({ member: l.m.name, byPrism3: !!keep.m.stamp });
-    for (const l of ours) if (l !== keep) collapse.push(l.m.name);
+    for (const l of ours) if (l !== keep) {
+      if (l.merged && keep.m.stamp) merges.push({ member: l.m.name, into: keep.m.name }); else collapse.push(l.m.name);
+    }
   }
   const adds = [...planned.keys()].filter((k) => !byTarget.has(k)).map((k) => planComponentName(planned.get(k)!));
   const renames = matched.filter((l) => l.m.stamp && l.target !== l.from).map((l) => ({ from: l.m.name, to: planComponentName(planned.get(l.target)!) }));
@@ -647,13 +668,20 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     const unfinished = m.updating != null;
     // A LAYER ADDED BY HAND OUTRANKS DANGLING REACTIONS TOO (#2674), as it does drawn damage (#2413): the apply skips the
     // member, so it counts as edited by hand, and its state says the reactions are left dangling.
+    // #3101: a member stamped under another revision is to update only when a revision since reaches this set.
+    const moved = unfinished || planMoved || (revField !== null && revField !== rev && reaches(defId, Number(revField), EXECUTOR_REVISION)) || nested.length > 0;
+    const drifted = moved || rxv.differs;
     const state: MemberState = (damaged.length || rxv.dangling) && !structural ? 'update'
       : !m.baseline ? 'noBaseline'
       : edited ? 'handEdited'
-      // #3101: a member stamped under another revision is to update only when a revision since reaches this set.
-      : unfinished || planMoved || (revField !== null && revField !== rev && reaches(defId, Number(revField), EXECUTOR_REVISION)) || rxv.differs || nested.length ? 'update'
+      : drifted ? 'update'
       : revField === null ? 'revisionUnknown'
       : 'current';
+    // #3907: behind today's plan whatever the hand edits, so a skip leaves it out of date. Reactions the designer edited
+    // by hand are theirs, as `nested` leaves out a node edited by hand (#4381 review S1): only reactions that differ from
+    // the plan and are not a hand edit count. A plan that moves its reactions still moves `planMoved`.
+    const rxBehind = rxv.differs && !(edit?.changed ?? []).includes(REACTIONS_PATH);
+    const behind = moved || rxBehind || damaged.length > 0 || rxv.dangling;
     counts[state]++;
     const earlier = state === 'noBaseline' && !!m.earlierRecord;
     if (earlier) counts.earlierRecord = (counts.earlierRecord ?? 0) + 1;
@@ -662,7 +690,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
       ...(rxv.dangling ? { dangling: true as const } : {}),
     } : {};
     const at = states.length;
-    if (state !== 'current') states.push({ member: m.name, state, ...(earlier ? { earlierRecord: true as const } : {}), ...hurt });
+    if (state !== 'current') states.push({ member: m.name, state, ...(earlier ? { earlierRecord: true as const } : {}), ...hurt, ...(behind ? { behind: true as const } : {}) });
     if (state === 'current' || state === 'revisionUnknown') continue;
 
     // The field changes, from the host's snapshot. `member` divergences are the set-level match's own
@@ -723,7 +751,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
       touched.add(parent);
       if (!structural) removedLayers.set(part, (removedLayers.get(part) ?? 0) + 1);
       const k = `${part}\u0000children\u0000present\u0000removed`;
-      const c = changes.get(k) ?? { part, field: 'children', from: 'present', to: 'removed — not in the plan', members: 0, sample: [] };
+      const c = changes.get(k) ?? { part, field: 'children', from: 'present', to: 'removed — Prism3 no longer builds it', members: 0, sample: [] };
       c.members++;
       if (c.sample.length < 3) c.sample.push(m.name);
       changes.set(k, c);
@@ -774,7 +802,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     if (state === 'update' && placed.length === 0 && moves.length === 0 && extras.length === 0 && dropped.length === 0 && !(m.drawn ?? []).length && !rxv.differs && !nested.length) {
       counts.reapplied++;
       const k = '.\u0000stamp\u0000\u0000';
-      const c = changes.get(k) ?? { part: '.', field: 'stamp', from: planMoved ? 'an earlier plan' : 'an earlier executor revision', to: 're-applied — no field-level difference visible', members: 0, sample: [] };
+      const c = changes.get(k) ?? { part: '.', field: 'stamp', from: planMoved ? 'an earlier version of Prism3' : 'an earlier executor revision', to: 're-applied — no field-level difference visible', members: 0, sample: [] };
       c.members++;
       if (c.sample.length < 3) c.sample.push(m.name);
       changes.set(k, c);
@@ -806,7 +834,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     if (!blockers.some((b) => b.includes('#1780'))) blockers.push("the set's property definitions could not be read");
   } else {
     let wanted: ReturnType<typeof planSetProperties> = [];
-    try { wanted = planSetProperties(plans); } catch (err) { blockers.push(`the plan's properties contradict each other: ${(err as Error).message}`); }
+    try { wanted = planSetProperties(plans); } catch (err) { blockers.push(`Prism3's properties for this set contradict each other: ${(err as Error).message}`); }
     const have = new Map<string, { type: string; defaultValue?: unknown }>();
     for (const [k, d] of Object.entries(host.definitions)) {
       if (d.type === 'VARIANT') continue;
@@ -871,6 +899,7 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
     replacements: cap('replacements', replacements),
     adds: cap('adds', adds),
     drops: cap('drops', [...drops, ...collapse]),
+    ...(merges.length ? { merges } : {}),
     unstamped: cap('unstamped', unstamped),
     adoptable,
     held,
@@ -892,7 +921,8 @@ export const dryRunSet = (defId: string, plans: AnatomyPlan[], read: HostSetView
   // the preview even where the preview's own text would not have changed.
   const fingerprint = read.members.map((m) => { const b = baselineOf(m.snap); return [m.id, m.name, m.stamp, b.nodes, b.reactions ?? null]; });
   const previewHash = fnv(JSON.stringify([body, fingerprint]));
-  return { ...body, previewHash };
+  const engines = [...new Set(read.members.filter((m) => m.stamp).map((m) => engineHalf(m.stamp)))].sort();
+  return { ...body, previewHash, ...(engines.length ? { engines } : {}) };
 };
 
 // ---- reading the host --------------------------------------------------------------------------------------
@@ -1000,12 +1030,12 @@ export const differencesOf = (plan: AnatomyPlan, m: HostMember, ports: ReadPorts
 };
 
 export const captureVerdict = (plan: AnatomyPlan | undefined, m: HostMember, ports: ReadPorts, rx?: { planned: ReadReaction[]; read: ReadReaction[] } | null): { record: boolean; reason: string; differences?: Difference[] } => {
-  if (!plan) return { record: false, reason: 'not in the plan' };
+  if (!plan) return { record: false, reason: 'not a variant Prism3 builds' };
   if (!m.stamp) return { record: false, reason: 'unstamped' };
   if (m.baseline) return { record: false, reason: 'already has a baseline' };
-  if (planHalf(m.stamp) !== planHalf(memberStamp(plan))) return { record: false, reason: 'built from an earlier plan' };
+  if (planHalf(m.stamp) !== planHalf(memberStamp(plan))) return { record: false, reason: 'built by an earlier version of Prism3' };
   const differences = differencesOf(plan, m, ports, rx);
-  if (differences.length) return { record: false, reason: `differs from the plan in ${differences.length} place(s)`, differences };
+  if (differences.length) return { record: false, reason: `differs from what Prism3 expects in ${differences.length} place(s)`, differences };
   return { record: true, reason: 'recorded' };
 };
 
@@ -1068,7 +1098,7 @@ export const adoptSet = async (
   for (const m of view.members) {
     if (m.stamp) continue;
     if (!adoptable.has(m.name)) {
-      skipped.push({ member: m.name, reason: held.has(m.name) ? (held.get(m.name) ? 'a Prism3 member has this coordinate' : 'another member has this coordinate') : 'not in the plan' });
+      skipped.push({ member: m.name, reason: held.has(m.name) ? (held.get(m.name) ? 'a Prism3 variant has this coordinate' : 'another variant has this coordinate') : 'not a variant Prism3 builds' });
       continue;
     }
     // By node id, not by position (#2301).
@@ -1757,12 +1787,12 @@ const fileBlockers = async (host: UpdateHost, plans: readonly AnatomyPlan[], set
   // #3421: how many of `out` are a variable or a text or effect style the plans name: what Apply Theme writes.
   let theme = 0;
   const absent = absentNests(have, plans);
-  if (absent.length) out.push(`Not in this file: ${absent.join(', ')}. Build ${[...new Set(absent.map((a) => a.split('/')[0]))].join(', ')} first, then run the update again`);
+  if (absent.length) out.push(`Not in this file: ${absent.join(', ')}. Build ${[...new Set(absent.map((a) => a.split('/')[0]))].join(', ')} first, then run Update file again`);
   const roots = plans.map((x) => x.root);
   const vars = new Set((await host.variables.getLocalVariablesAsync()).map((v) => tailOf(v.name)).filter(Boolean) as string[]);
   const noVar = [...new Set(roots.flatMap((r) => [...planBoundVars(r), ...planPaintVars(r)]))].filter((v) => !vars.has(v));
   if (noVar.length) theme++;
-  if (noVar.length) out.push(`${noVar.length} variable${noVar.length === 1 ? '' : 's'} the plan binds ${noVar.length === 1 ? 'is' : 'are'} not in this file (${noVar.slice(0, 3).join(', ')})`);
+  if (noVar.length) out.push(`${noVar.length} variable${noVar.length === 1 ? '' : 's'} Prism3 binds ${noVar.length === 1 ? 'is' : 'are'} not in this file (${noVar.slice(0, 3).join(', ')})`);
   const styles = await host.getLocalTextStylesAsync();
   const byName = new Map(styles.map((s) => [s.name, s] as const));
   const wantStyles = [...new Set(roots.flatMap(planTextStyles))];
@@ -1775,7 +1805,7 @@ const fileBlockers = async (host: UpdateHost, plans: readonly AnatomyPlan[], set
   if (noEffect.length) out.push(`effect style${noEffect.length === 1 ? '' : 's'} not in this file: ${firstFew(noEffect)}`);
   // Nests are named above, with what to build first; a swap target is named here.
   const noSwap = planTargets(plans).filter((n) => !have.has(n) && !absent.includes(n));
-  if (noSwap.length) out.push(`component${noSwap.length === 1 ? '' : 's'} the plan swaps to ${noSwap.length === 1 ? 'is' : 'are'} not in this file: ${firstFewSets(noSwap)}`);
+  if (noSwap.length) out.push(`component${noSwap.length === 1 ? '' : 's'} Prism3 swaps to ${noSwap.length === 1 ? 'is' : 'are'} not in this file: ${firstFewSets(noSwap)}`);
   if (!host.loadFontAsync) return { lines: out, theme };
   const fonts = new Map<string, { family: string; style: string }>();
   for (const s of wantStyles) { const f = byName.get(s)?.fontName; if (f) fonts.set(`${f.family}|${f.style}`, f); }
@@ -1905,8 +1935,8 @@ const partName = (part: string): string => (part === '.' ? 'the member' : part);
 /** One named difference, as a line. DRAFT. */
 export const differenceLine = (where: string, d: { part: string; field: string; plan: string; file: string }, members?: number): string =>
   // DRAFT wording for the owner (#2595, the issue's option A): a part the update moves into a new frame, kept.
-  d.field === MOVES ? `${where} · ${partName(d.part)} · ${MOVES} ${d.plan}, kept${members && members > 1 ? ` (${members} members)` : ''}.`
-    : `${where} · ${partName(d.part)} · ${d.field}: the plan says ${d.plan}, the file has ${d.file}${members && members > 1 ? ` (${members} members)` : ''}.`;
+  d.field === MOVES ? `${where} · ${partName(d.part)} · ${MOVES} ${d.plan}, kept${members && members > 1 ? ` (${members} variants)` : ''}.`
+    : `${where} · ${partName(d.part)} · ${d.field}: Prism3 expects ${d.plan}, the file has ${d.file}${members && members > 1 ? ` (${members} variants)` : ''}.`;
 /** A set's named differences, capped, with what was left out counted. */
 const namedLines = (where: string, list: { part: string; field: string; plan: string; file: string; members?: number }[]): string[] => [
   ...list.slice(0, DIFFERENCE_LINES).map((d) => differenceLine(where, d, d.members)),
@@ -1932,9 +1962,12 @@ export const previewLine = (p: SetPreview): string => {
     c.add ? `${c.add} to add` : '',
     c.drop ? `${c.drop} to mark deprecated` : '',
     c.rename ? `${c.rename} to rename` : '',
+    // DRAFT wording for the owner (#3392): members an axis the ledger merges collapses, removed once their placed
+    // instances move onto the member they merge into.
+    p.merges?.length ? `${p.merges.length} to merge into another member, its instances moved` : '',
     // DRAFT wording for the owner (#2188 Q173): the moves an update makes, in the line's "N to …" form.
     c.move ? `${c.move} to move` : '',
-    c.handEdited ? `${n(c.handEdited, 'member')} edited by hand` : '',
+    c.handEdited ? `${n(c.handEdited, 'variant')} edited by hand` : '',
     c.noBaseline - (c.earlierRecord ?? 0) ? `${c.noBaseline - (c.earlierRecord ?? 0)} with no as-built record` : '',
     // The owner's wording (2026-10-09): a record from an earlier format is named as one, not as a missing record.
     c.earlierRecord ? `${c.earlierRecord} recorded by an earlier plugin version, read as having no as-built record` : '',
@@ -1947,13 +1980,13 @@ export const previewLine = (p: SetPreview): string => {
   // DRAFT (#2476, owner decision Q191 2B): on a set with no changes, the members Adopt could claim are named as such.
   const k = p.adoptable.length;
   const adopt = k ? ` Adopt can claim ${k === c.unstamped ? (k === 1 ? 'it' : 'them') : `${k} of them`}.` : '';
-  if (upToDate(p)) return `${p.set}: up to date (${n(c.members, 'member')}).${own}`;
-  if (noChanges(p)) return `${p.set}: no changes (${n(c.members, 'member')}).${own}${adopt}`;
+  if (upToDate(p)) return `${p.set}: up to date (${n(c.members, 'variant')}).${own}`;
+  if (noChanges(p)) return `${p.set}: no changes (${n(c.members, 'variant')}).${own}${adopt}`;
   // Wording approved, Q246 A (#2542, Q245.2 A): the whole set moves on its page.
   const setMove = p.setMove ? ' The set moves to its place on the page.' : '';
   // DRAFT wording for the owner (#2759): the set is renamed in place from its earlier name.
   const setRename = p.setRename ? ` Renamed from ${p.setRename.from}.` : '';
-  return parts.length ? `${p.set}: ${n(c.members, 'member')}. ${parts.join(', ')}.${setMove}${setRename}` : `${p.set}: ${n(c.members, 'member')}.${setMove}${setRename}`;
+  return parts.length ? `${p.set}: ${n(c.members, 'variant')}. ${parts.join(', ')}.${setMove}${setRename}` : `${p.set}: ${n(c.members, 'variant')}.${setMove}${setRename}`;
 };
 
 /** #2831 — what a set's update breaks for library consumers, from what its dry run lists. Empty for a set that is not
@@ -1969,6 +2002,7 @@ export const breakingOf = (p: SetPreview): Breaking[] => {
     ...p.properties.remove.map((x) => ({ kind: 'property' as const, name: x.name, change: 'removed' as const })),
     ...p.properties.retype.map((x) => ({ kind: 'property' as const, name: x.name, change: 'retyped' as const, from: x.from, to: x.to })),
     ...p.drops.map((member) => ({ kind: 'drop' as const, member })),
+    ...(p.merges ?? []).map((x) => ({ kind: 'merge' as const, ...x })),
     ...(p.replacedLayers ?? []).filter((r) => r.path !== '.').map((r) => ({ kind: 'replace' as const, ...r })),
     ...removedLayers(p),
   ];
@@ -1991,14 +2025,15 @@ const removedLayers = (p: SetPreview): Breaking[] => {
 /** #3711 (Q-UF1 A): whether a change breaks files that use the library, the word "breaks" reserved for these: a property
  *  removed or retyped, a layer replaced or removed. A member retired (kept and marked deprecated) and a set renamed out
  *  of the library affect those files without breaking them, and are named by what they do. */
-export const breaksConsumers = (b: Breaking): boolean => b.kind === 'property' || b.kind === 'replace' || b.kind === 'layer';
+export const breaksConsumers = (b: Breaking): boolean => b.kind === 'property' || b.kind === 'replace' || b.kind === 'layer' || b.kind === 'merge';
 
 /** One change that affects files using the library, as a line. DRAFT wording for the owner (#2831, #3711 Q-UF1 A). */
 export const breakingLine = (set: string, b: Breaking): string =>
   b.kind === 'drop' ? `${set} · ${b.member} · retired — its instances in files that use this library keep working and show as deprecated.`
+    : b.kind === 'merge' ? `${set} · ${b.member} · merged into ${b.into} and removed — breaks files that use this library: their instances of it stop updating until swapped to ${b.into}.`
     : b.kind === 'replace' ? `${set} · ${b.member} / ${b.path} · replaced, not updated in place (${b.reason}) — breaks files that use this library: overrides on it are lost.`
       : b.kind === 'private' ? `${set} · renamed ${b.from} → ${b.to} — a name starting with _ or . is not published, so the set leaves the library.`
-        : b.kind === 'layer' ? `${set} · ${b.path} · removed from ${n(b.members, 'member')} — breaks files that use this library: overrides on it are lost.${b.added ? ` If ${b.added.join(' or ')} is this layer renamed, declare the rename and the update renames it in place.` : ''}`
+        : b.kind === 'layer' ? `${set} · ${b.path} · removed from ${n(b.members, 'variant')} — breaks files that use this library: overrides on it are lost.${b.added ? ` If ${b.added.join(' or ')} is this layer renamed, declare the rename and the update renames it in place.` : ''}`
           : b.change === 'removed' ? `${set} · property ${b.name} · removed — breaks files that use this library: overrides of it are dropped.`
             : `${set} · property ${b.name} · ${b.from} → ${b.to} — breaks files that use this library: overrides of it are dropped.`;
 
@@ -2020,6 +2055,7 @@ export const breakingSummary = (breaking: readonly Breaking[] | undefined, set =
   const sentences = [
     k('private') ? `${set || 'The set'} is renamed to a name Figma does not publish, so it leaves the library.` : '',
     k('drop') ? `${k('drop')} ${name}${k('drop') === 1 ? 'member' : 'members'} retired. ${k('drop') === 1 ? 'Its instances keep' : 'Their instances keep'} working and show as deprecated.` : '',
+    k('merge') ? `${n(k('merge'), 'member')} merged into another and removed, which breaks those files: ${k('merge') === 1 ? 'its instances stop' : 'their instances stop'} updating until swapped.` : '',
     props.length ? `${n(props.length, 'property', 'properties')} removed or retyped, which breaks those files: overrides of ${props.length === 1 ? 'it' : 'them'} are dropped.` : '',
     replaced ? `${n(replaced, 'layer')} replaced, not updated in place, which breaks those files: overrides on ${replaced === 1 ? 'it' : 'them'} are lost.` : '',
     layers.length ? `${n(layers.length, 'layer')} removed, which breaks those files: overrides on ${layers.length === 1 ? 'it' : 'them'} are lost.${layers.some((l) => l.added) ? ' A declared rename keeps a renamed layer in place.' : ''}` : '',
@@ -2123,7 +2159,7 @@ export const previewVerdict = (r: UpdatePreview, whatChanged: (sets: string[]) =
     aboutDueLine(r.about),
     aboutOnly(r) ? coverPageOnlyLine({ about: aboutIsWork(r.about), cover: coverIsWork(r.cover) }, false) : '',
     variablesLine(r.variables),
-    r.missing.length ? `Not in this file: ${r.missing.join(', ')}.` : '',
+    r.missing.length ? `Not in this file: ${r.missing.join(', ')}. Build them first, then run Update file again.` : '',
     earlier ? `${earlier} built by an earlier plugin. Update ${earlier === 1 ? 'it to bring it' : 'them to bring them'} current.` : '',
     // Wording approved, Q246 A (#2542, Q245.2 A).
     setsMoving(r) ? `${n(setsMoving(r), 'set')} to move, so the sets on each page sit as a new build spaces them.` : '',
@@ -2142,13 +2178,13 @@ export const captureVerdictText = (r: CaptureResult): { ok: boolean; headline: s
     ...r.sets.flatMap((x) => {
       const why = [...new Set(x.skipped.map((s) => s.reason))];
       const head = x.skipped.length
-        ? `${x.set}: ${n(x.recorded, 'member')} recorded, ${x.skipped.length} left as they are (${why.slice(0, 3).join('; ')}${why.length > 3 ? '; …' : ''}).`
-        : `${x.set}: ${n(x.recorded, 'member')} recorded.`;
+        ? `${x.set}: ${n(x.recorded, 'variant')} recorded, ${x.skipped.length} left as ${x.skipped.length === 1 ? 'it is' : 'they are'} (${why.slice(0, 3).join('; ')}${why.length > 3 ? '; …' : ''}).`
+        : `${x.set}: ${n(x.recorded, 'variant')} recorded.`;
       // Each member left out because it differs from its plan, with what differs, NAMED (#2295).
       return [head, ...namedLines(x.set, x.skipped.flatMap((s) => (s.differences ?? []).map((d) => ({ ...d, part: d.part === '.' ? s.member : `${s.member} / ${d.part}` }))))];
     }),
     ...r.refused.map((x) => `${x.def}: not recorded. ${x.reason}.`),
-    r.missing.length ? `Not in this file: ${r.missing.join(', ')}.` : '',
+    r.missing.length ? `Not in this file: ${r.missing.join(', ')}. Build them first, then run Update file again.` : '',
   ].filter(Boolean);
   return { ok: r.refused.length === 0, headline: r.sets.length ? `✓ ${recorded} recorded` : 'No sets to record', summary: lines.join('\n'), lines };
 };
@@ -2160,13 +2196,13 @@ export const adoptVerdictText = (r: AdoptResult): { ok: boolean; headline: strin
     ...r.sets.map((x) => {
       const why = [...new Set(x.skipped.map((s) => s.reason))];
       return x.skipped.length
-        ? `${x.set}: ${n(x.adopted, 'member')} adopted, ${x.skipped.length} left as they are (${why.join('; ')}).`
-        : `${x.set}: ${n(x.adopted, 'member')} adopted.`;
+        ? `${x.set}: ${n(x.adopted, 'variant')} adopted, ${x.skipped.length} left as ${x.skipped.length === 1 ? 'it is' : 'they are'} (${why.join('; ')}).`
+        : `${x.set}: ${n(x.adopted, 'variant')} adopted.`;
     }),
     ...r.refused.map((x) => `${x.def}: not adopted. ${x.reason}.`),
     r.notOffered?.length ? `Adopt doesn't apply to ${r.notOffered.join(', ')}. Hand-made ones are left as they are.` : '',
-    r.missing.length ? `Not in this file: ${r.missing.join(', ')}.` : '',
-    adopted ? `Run an update to bring ${adopted === 1 ? 'it' : 'them'} in line with the plan.` : '',
+    r.missing.length ? `Not in this file: ${r.missing.join(', ')}. Build them first, then run Update file again.` : '',
+    adopted ? `Run Update file to bring ${adopted === 1 ? 'it' : 'them'} in line with Prism3's values.` : '',
   ].filter(Boolean);
   return { ok: r.refused.length === 0, headline: r.sets.length ? `✓ ${adopted} adopted` : 'No sets to adopt from', summary: lines.join('\n'), lines };
 };

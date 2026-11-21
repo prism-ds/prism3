@@ -696,7 +696,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "id": "radio-control",
     "name": "Radio.Control",
     "category": "form",
-    "summary": "Outlined radio ring; dot and brand ring on select. Nested by a radio row; no label.",
+    "summary": "Outlined radio ring; dot and action color on select. Nested by a radio row; no label.",
     "unit": "variants",
     "spacing": [],
     "page": "Radio",
@@ -906,7 +906,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "id": "spinner",
     "name": "Spinner",
     "category": "foundations",
-    "summary": "Indeterminate loading indicator on the icon ladder. Announces \"Loading\" unless its host hides it.",
+    "summary": "Indeterminate loading indicator in the icon sizes. Announces \"Loading\" unless its host hides it.",
     "unit": "components",
     "spacing": [],
     "page": "Spinner",
@@ -919,7 +919,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
   {
     "id": "badge",
     "name": "Badge",
-    "category": "foundations",
+    "category": "feedback",
     "summary": "A static status label, count or dot. Nothing to click; color is not meant to be the only signal.",
     "unit": "variants",
     "spacing": [],
@@ -933,7 +933,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
   {
     "id": "tag",
     "name": "Tag",
-    "category": "foundations",
+    "category": "form",
     "summary": "An interactive token a user toggles or removes. A static label is a badge.",
     "unit": "variants",
     "spacing": [
@@ -1358,7 +1358,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "section": "Components",
     "buildable": true,
     "reason": null,
-    "members": 24,
+    "members": 16,
     "nests": [
       "flush-icon-button-neutral",
       "icon",
@@ -1857,6 +1857,20 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     ]
   },
   {
+    "id": "skeleton",
+    "name": "Skeleton",
+    "category": "foundations",
+    "summary": "Content-shaped placeholder for a first load. Reserves the box so nothing shifts on arrival.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Skeleton",
+    "section": "Subcomponents",
+    "buildable": true,
+    "reason": null,
+    "members": 4,
+    "nests": []
+  },
+  {
     "id": "popover",
     "name": "Popover",
     "category": "overlay",
@@ -1873,5 +1887,86 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
       "icon",
       "button-group"
     ]
+  },
+  {
+    "id": "menu-item",
+    "name": "Menu.Item",
+    "category": "overlay",
+    "summary": "One action in a menu: a label, an optional icon, check, description, shortcut or submenu arrow.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "padding-x",
+        "ref": "space.150"
+      },
+      {
+        "key": "gap",
+        "ref": "space.100"
+      }
+    ],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 15,
+    "nests": [
+      "icon",
+      "focus-ring"
+    ]
+  },
+  {
+    "id": "menu-group",
+    "name": "Menu.Group",
+    "category": "overlay",
+    "summary": "A labeled run of items inside a menu: a section, or a set of radio choices.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 1,
+    "nests": [
+      "menu-item"
+    ]
+  },
+  {
+    "id": "menu",
+    "name": "Menu",
+    "category": "overlay",
+    "summary": "A list of actions on a raised panel, opened from a button. It closes once an action is chosen.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 1,
+    "nests": [
+      "menu-item"
+    ]
+  },
+  {
+    "id": "tooltip",
+    "name": "Tooltip",
+    "category": "overlay",
+    "summary": "A short text label for the control under the pointer or focus. It never takes focus.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "pad-y",
+        "ref": "space.050"
+      },
+      {
+        "key": "pad-x",
+        "ref": "space.100"
+      }
+    ],
+    "page": "Tooltip",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 4,
+    "nests": []
   }
 ];
