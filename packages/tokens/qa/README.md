@@ -23,5 +23,6 @@ It exits 1 when a rendered value differs from the handoff. Contrast and font obs
 | `shadcn-components.html` | Stock shadcn/ui new-york-v4 markup and classes: Button (every variant), Input, Card, Dialog, Select, Tabs, Badge, Alert, Table, Checkbox, Switch. |
 | `tailwind-utilities.html` | Plain Tailwind v4 utilities: color, `rounded-*`, `shadow-*`, `font-*`, spacing. |
 | `render-qa.mjs` | Builds the pages with the pinned Tailwind CLI, measures them with Playwright, and writes the report. Its header says why the oracle is independent of the CSS it checks (docs/34). |
+| `handoff-values.mjs` | The oracle's readers for the handoff's value forms (DTCG 2025.10 color objects and `{ value, unit }` dimensions, plus the older strings). `npm run -w @prism3/tokens qa:test` pins them without a browser. |
 
 Only the hosted brands are rendered: the house brand and the engine's made-up example brands (#4373).

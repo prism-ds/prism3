@@ -4,9 +4,9 @@
  *   npm run -w @prism3/tokens qa:render            # build every page, assert, write screenshots + report
  *   npm run -w @prism3/tokens qa:render -- --brand prism3 --surface shadcn
  *
- * A MEASUREMENT HARNESS, NOT A CI GATE (tools/CLAUDE.md's split): nothing in ci.yml runs it. It exits 1 when a measured
- * value differs from its oracle, and 0 otherwise. Contrast and fallback observations are reported, never failed: they
- * are for a person to read.
+ * A GATE-SHAPED TOOL KEPT OUT OF CI: nothing in ci.yml runs it. Unlike tools/CLAUDE.md's tools, which answer a question
+ * and exit 0, it exits 1 when a measured value differs from its oracle, and 0 otherwise, so a person running it sees a
+ * mismatch as a failure. Contrast and fallback observations are reported, never failed: they are for a person to read.
  *
  * WHAT IT BUILDS, per hosted brand (the house brand and the engine's two made-up example brands, #4373), in light and dark:
  *   shadcn    `shadcn-components.html`, stock new-york-v4 markup and classes, under the stock `globals.css` skeleton
@@ -38,6 +38,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parseColor, px } from './handoff-values.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../../..');
@@ -83,15 +84,7 @@ const role = (brand, mode, path) => {
   };
   return walk(`${root}.${path}`);
 };
-/** A DTCG color string as 8-bit sRGB plus alpha. Only the formats the handoff emits; anything else throws by name. */
-const parseColor = (s) => {
-  let m = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(s);
-  if (m) return { r: parseInt(m[1].slice(0, 2), 16), g: parseInt(m[1].slice(2, 4), 16), b: parseInt(m[1].slice(4, 6), 16), a: m[2] ? parseInt(m[2], 16) / 255 : 1 };
-  m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/.exec(s);
-  if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : m[5] ? +m[4] / 100 : +m[4] };
-  throw new Error(`unparsed handoff color ${s}`);
-};
-const px = (v) => { const m = /^(-?[\d.]+)px$/.exec(String(v)); if (!m) throw new Error(`not a px dimension: ${v}`); return +m[1]; };
+// `parseColor` and `px` read the handoff's value forms; they live in `handoff-values.mjs` so `qa:test` can pin them.
 const hex = ({ r, g, b, a }) => `#${[r, g, b].map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}${a < 1 ? Math.round(a * 255).toString(16).padStart(2, '0') : ''}`;
 
 // ── WHAT EACH PROPERTY SHOULD WEAR (typed from #2997's decisions and shadcn's class strings, never the role map) ───
@@ -316,7 +309,7 @@ for (const { brand, surface, mode, file } of pages) {
     if (raw === undefined) continue;
     const v = { css: raw, ...(/color$/.test(prop) ? cssColor(raw) : {}), layers: prop === 'box-shadow' ? shadowLayers(raw) : undefined };
     checks++;
-    const name = `${label} ${qa} ${prop0}`;
+    const name = `${label} ${qa} ${prop}`;
     if (typeof want0 === 'string') {
       const want = parseColor(role(brand, mode, want0));
       if (!same(v, want)) failures.push(`${name}: renders ${hex(v)} (${v.css}), the handoff's ${want0} is ${hex(want)}`);
