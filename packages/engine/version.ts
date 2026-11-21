@@ -726,7 +726,13 @@ export const ENGINE_VERSION = '0.239.0';
  * (`motion.brand.*`) is not on the surface: no corpus member emits it. A MAJOR (#4165 with #1421) is being batched
  * separately and is not part of this raise.
  */
-export const CONTRACT_VERSION = '15.2.0';
+/**
+ * 15.3.0 (owner OD-A3 A on #4110, 2026-11-19; name OD-A3.1 A, 2026-11-20): MINOR. `icon.size.2xl` (64px) joins the
+ * guaranteed surface: Avatar's x-large size. Avatar binds the icon ladder at its other four sizes, so the one new step
+ * extends that ladder past the control rungs it pairs with (`ICON_PAIRED` in `scale.ts`). One added path; an added path
+ * cannot break a reference. Nothing is removed or retyped.
+ */
+export const CONTRACT_VERSION = '15.3.0';
 
 /**
  * THE COMPONENT VERSIONS (#1325 Option 3, #1326 decision 3, owner decision Q-CC1 A, 2026-11-18). Two more numbers,
@@ -766,9 +772,10 @@ export const CONTRACT_VERSION = '15.2.0';
  * 2.3.0 (the contract, MINOR): `tooltip` added (#4251).
  * 1.7.0 (the schema, MINOR): #4096's `prism3-component-defs/1.7`, the optional brand `icons` map added.
  * 2.4.0 (the contract, MINOR): `steps` and `step-item` added (#4341).
+ * 2.5.0 (the contract, MINOR): `avatar` added, and the icon's `person` and `organization` names (#4345).
  */
 export const COMPONENT_SCHEMA_VERSION = '1.7.0';
-export const COMPONENT_CONTRACT_VERSION = '2.4.0';
+export const COMPONENT_CONTRACT_VERSION = '2.5.0';
 
 /** A guaranteed path that was removed, and where its consumers should point instead. */
 export type Deprecation = {
