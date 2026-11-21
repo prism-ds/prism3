@@ -673,7 +673,7 @@ Type: color. Bound by 9 component(s).
 
 ### `color.icon.secondary`
 
-Type: color. Bound by 6 component(s).
+Type: color. Bound by 7 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2071,7 +2071,7 @@ Type: color. Bound by 1 component(s).
 
 ### `color.text.primary`
 
-Type: color. Bound by 23 component(s).
+Type: color. Bound by 24 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2614,7 +2614,7 @@ Type: dimension. Bound by 9 component(s).
 
 ### `icon.size.md`
 
-Type: dimension. Bound by 25 component(s).
+Type: dimension. Bound by 26 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2680,7 +2680,7 @@ Type: dimension. Bound by 25 component(s).
 
 ### `icon.size.sm`
 
-Type: dimension. Bound by 30 component(s).
+Type: dimension. Bound by 31 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2768,7 +2768,7 @@ Type: dimension. Bound by 3 component(s).
 
 ### `icon.size.xs`
 
-Type: dimension. Bound by 19 component(s).
+Type: dimension. Bound by 20 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2911,7 +2911,7 @@ Type: dimension. Bound by 3 component(s).
 
 ### `radius.md`
 
-Type: dimension. Bound by 14 component(s).
+Type: dimension. Bound by 15 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2946,7 +2946,7 @@ Type: dimension. Bound by 6 component(s).
 
 ### `radius.round`
 
-Type: dimension. Bound by 15 component(s).
+Type: dimension. Bound by 16 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -3139,7 +3139,7 @@ Type: dimension. Bound by 1 component(s).
 
 ### `space.0`
 
-Type: dimension. Bound by 27 component(s).
+Type: dimension. Bound by 28 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -3896,7 +3896,7 @@ Type: typography. Bound by 6 component(s).
 
 ### `type.label.sm.emphasis`
 
-Type: typography. Bound by 11 component(s).
+Type: typography. Bound by 12 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|

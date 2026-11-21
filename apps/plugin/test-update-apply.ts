@@ -2463,11 +2463,11 @@ const singleWorld = async (plans: AnatomyPlan[], extraVars: string[] = [], o: { 
   const v = previewVerdict(pre);
   ok(v.lines.includes('Icons: 2 groups draw the same shape (dash, minus and minus-filled; oblique and slash). Each is built as its own icon.'),
     `#3076 duplicate art/summary: the dry run summary carries the line (${JSON.stringify(v.lines.filter((l) => l.startsWith('Icons')))})`);
-  ok(v.ok && !pre.refused.length && !pre.missing.length && pre.sets.length === 1 && !pre.sets[0].blockers.length && pre.sets[0].counts.update === 48,
-    `#3076 duplicate art/not blocked: the set is checked with no blocker and all 48 icons to update (${v.headline}; ${JSON.stringify(pre.sets[0]?.blockers)}; ${JSON.stringify(pre.sets[0]?.counts)})`);
+  ok(v.ok && !pre.refused.length && !pre.missing.length && pre.sets.length === 1 && !pre.sets[0].blockers.length && pre.sets[0].counts.update === 50,
+    `#3076 duplicate art/not blocked: the set is checked with no blocker and all 50 icons to update (${v.headline}; ${JSON.stringify(pre.sets[0]?.blockers)}; ${JSON.stringify(pre.sets[0]?.counts)})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const av = applyVerdictOf(res);
-  ok(av.ok && av.headline === '✓ updated 48 in place', `#3076 duplicate art/applied: the apply the dry run hashed goes through (${av.headline}; ${av.lines.slice(0, 2).join(" | ")})`);
+  ok(av.ok && av.headline === '✓ updated 50 in place', `#3076 duplicate art/applied: the apply the dry run hashed goes through (${av.headline}; ${av.lines.slice(0, 2).join(" | ")})`);
   const plain = await previewUpdate((await singleWorld(plansOf('icon'))).host, [{ def: 'icon', plans: plansOf('icon'), single: true }]);
   ok(plain.iconDuplicates === undefined && !previewVerdict(plain).lines.some((l) => l.startsWith('Icons:')),
     `#3076 duplicate art/none: Prism3's own set reports no duplicate art (got ${JSON.stringify(plain.iconDuplicates)})`);

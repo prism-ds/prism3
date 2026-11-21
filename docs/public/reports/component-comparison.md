@@ -10,7 +10,7 @@ Peers come from three groupings, each derived from the definitions:
 
 Generated from the component definitions and the emission by `packages/engine/emit-analysis-reports.ts`; `regen.ts --check` fails when this page is stale. The same data for agents: [component-comparison.json](component-comparison.json). All reports: [index](index.md).
 
-## Findings (133)
+## Findings (136)
 
 ### axis values
 
@@ -21,12 +21,12 @@ Generated from the component definitions and the emission by `packages/engine/em
 - **axis placement** — the placement axis takes 3 value sets — [bottom] in menu, popover; [bottom, center, end, full] in dialog; [bottom, end, start, top] in tooltip
 - **axis provider** — the provider axis takes 2 value sets — [apple, facebook, google] in sign-in-button; [apple-pay, google-pay, paypal, shop-pay] in wallet-button
 - **axis selection** — the selection axis takes 4 value sets — [selected, unselected] in link, page-nav-item, pagination-item, segmented-control-segment, tab-item, tag; [checked, indeterminate, unchecked] in checkbox-control; [checked, unchecked] in radio-control; [off, on] in switch-control
-- **axis shape** — the shape axis takes 4 value sets — [circular, square] in icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circle, rect, text] in skeleton; [circular, linear] in progress
-- **axis size** — the size axis takes 4 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, step-item, steps, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell
+- **axis shape** — the shape axis takes 4 value sets — [circular, square] in avatar, icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circle, rect, text] in skeleton; [circular, linear] in progress
+- **axis size** — the size axis takes 5 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, step-item, steps, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell; [large, medium, small, x-large, x-small] in avatar
 - **axis status** — the status axis takes 4 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item
 - **axis style** — the style axis takes 6 value sets — [outline] in card-number-field, code-input-cell, password-field, search-field, select, text-field, textarea; [border, underline] in pagination, pagination-item; [any, black, blue, gold, purple, silver, white, white-outline] in wallet-button; [black, blue, dark, light, neutral, outline, white] in sign-in-button; [contained, inline] in badge; [inline, standalone] in link
 - **axis tone** — the tone axis takes 2 value sets — [danger, info, neutral, success, warning] in badge, banner; [brand, danger, info, inherit, primary, secondary, success, tertiary, warning] in icon
-- **axis type** — the type axis takes 10 value sets — [icon, ordered, unordered] in list, list-item; [action, submenu] in menu-item; [chevron, slash] in _breadcrumb-separator; [compact, numbered, simple] in pagination; [count, dot, status] in badge; [determinate, indeterminate] in progress; [dismissible, select] in tag; [ellipsis, next, page, previous] in pagination-item; [range, single] in slider; [section] in menu-group
+- **axis type** — the type axis takes 11 value sets — [icon, ordered, unordered] in list, list-item; [action, submenu] in menu-item; [chevron, slash] in _breadcrumb-separator; [compact, numbered, simple] in pagination; [count, dot, status] in badge; [determinate, indeterminate] in progress; [dismissible, select] in tag; [ellipsis, next, page, previous] in pagination-item; [icon, image, initials] in avatar; [range, single] in slider; [section] in menu-group
 - **axis weight** — the weight axis takes 2 value sets — [bold, regular] in field-label; [default, emphasis] in link
 
 ### axis without prop
@@ -66,6 +66,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 
 - **prop align** — align defaults differ over the same values — center in tooltip; start in menu, popover
 - **prop arrow** — arrow defaults differ over the same values — false in popover; true in tooltip
+- **prop decorative** — decorative defaults differ over the same values — false in avatar; true in divider
 - **prop dismissible** — dismissible defaults differ over the same values — false in banner; true in toast
 - **prop headingLevel** — headingLevel defaults differ over the same values — 2 in banner; 3 in accordion
 - **prop hideLabel** — hideLabel defaults differ over the same values — false in search-field, slider; true in counter
@@ -76,7 +77,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 
 ### size default
 
-- **field-label** — field-label defaults size to small; 53 of 54 sized components default to medium
+- **field-label** — field-label defaults size to small; 54 of 55 sized components default to medium
 
 ### size order
 
@@ -476,6 +477,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 | current | link | false | — |
 |  | page-nav-item | false | — |
 |  | pagination-item | false | — |
+| decorative | avatar | false | — |
+|  | divider | true | — |
 | defaultOpen | menu | false | — |
 |  | popover | false | — |
 |  | tooltip | false | — |

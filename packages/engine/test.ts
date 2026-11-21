@@ -45964,12 +45964,13 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(JSON.stringify(memberOf('add') ?? null).includes(ADD), '#3076 the icon set builds icon/add from the brand\'s art');
   const closeDoc = JSON.stringify(memberOf('close') ?? null);
   ok(closeDoc.includes(GLYPHS.close.path) && closeDoc.includes('evenodd'), '#3076 a brand glyph named close redraws icon/close with the brand\'s art and its fill rule (Q5 A)');
-  ok(iconPlans.length === 46 - 6 + 3, `#3076 the icon set is Prism3's 46 less the 6 mapped plus the 3 new brand names (got ${iconPlans.length})`);
+  // 48 since Avatar (#4110) added `person` and `organization` to Prism3's set.
+  ok(iconPlans.length === 48 - 6 + 3, `#3076 the icon set is Prism3's 48 less the 6 mapped plus the 3 new brand names (got ${iconPlans.length})`);
   // The icon def's own `name` property lists the same set its axis builds, so a reader of the materialized def (the
   // export's spec, an agent) sees no mapped name offered and every brand name.
   const nameProp = mapped.find((d) => d.id === 'icon')!.props.find((p) => p.name === 'name')?.values ?? [];
-  ok(nameProp.length === 43 && !nameProp.includes('plus') && !nameProp.includes('check') && ['add', 'subtract', 'checkmark', 'close'].every((n) => nameProp.includes(n)),
-    `#3076 the mapped icon def's name property offers the brand's 43 names, no mapped one (got ${nameProp.length}: ${nameProp.slice(-4).join(', ')})`);
+  ok(nameProp.length === 45 && !nameProp.includes('plus') && !nameProp.includes('check') && ['add', 'subtract', 'checkmark', 'close'].every((n) => nameProp.includes(n)),
+    `#3076 the mapped icon def's name property offers the brand's 45 names, no mapped one (got ${nameProp.length}: ${nameProp.slice(-4).join(', ')})`);
   // No map, no change: every def comes back as the same object, so every plan is the one component-surface.json pins.
   const same = componentDefs.filter((d) => applyIconMap(d, undefined) !== d || applyIconMap(d, {}) !== d || applyIconMap(d, { map: {}, glyphs: {} }) !== d).map((d) => d.id);
   ok(same.length === 0, `#3076 a brand with no icon map leaves every def as authored (rewrote ${same.join(', ')})`);
