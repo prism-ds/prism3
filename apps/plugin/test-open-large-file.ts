@@ -955,6 +955,10 @@ console.log('\n  Capture baseline and Adopt (#3189)');
   // with them to 905,404 calls (882,494 at 64 sets), linear in the members it reads. With Skeleton (#4109) the template
   // holds 67 sets and the check 913,510 calls, so 900,000 fails on the merged tree and 950,000 holds. The regressions
   // this cap exists for stay far above it: the fresh read of every set measures 2.10M, and `main` before #3313 made 2.6M.
+  // #4007: 950,000 since Menu, Menu.Item and Menu.Group took the template to 66 sets (904,870 measured; 900,000 held 63). The
+  // mutations above still land at 2.1M and more, so the cap keeps its margin over them.
+  // Steps merged onto Menu: 70 sets, 946,063 calls (fresh read 2,144,328). 950,000 still holds, with about 4,000 to spare,
+  // so the next set added will likely need to raise it.
   const CHECK_CAP = 950_000;
   const checkOf = async (): Promise<{ msg: any; calls: number; progress: { msg: any; turn: number; i: number }[]; answerAt: number }> => {
     const at = posted.length;

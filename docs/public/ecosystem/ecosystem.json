@@ -346,7 +346,10 @@
           "skeleton",
           "popover",
           "step-item",
-          "steps"
+          "steps",
+          "menu-item",
+          "menu-group",
+          "menu"
         ]
       }
     },

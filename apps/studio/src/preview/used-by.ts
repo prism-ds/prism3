@@ -6,7 +6,7 @@
  * never imports the definitions themselves (UI redesign S7, T4; the generator's header says why).
  */
 export const USED_BY = {
-  defs: 67,
+  defs: 70,
   radius: {
     rounded: {
       "radius.2xl": [
@@ -17,7 +17,8 @@ export const USED_BY = {
       ],
       "radius.lg": [
         "CodeInput",
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
         "Button",
@@ -27,7 +28,8 @@ export const USED_BY = {
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu"
       ],
       "radius.none": [
         "FlushIconButton",
@@ -78,13 +80,15 @@ export const USED_BY = {
       ],
       "radius.lg": [
         "CodeInput",
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu"
       ],
       "radius.none": [
         "FlushIconButton",
@@ -130,13 +134,15 @@ export const USED_BY = {
         "Progress"
       ],
       "radius.lg": [
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu"
       ],
       "radius.none": [
         "Button",
@@ -201,13 +207,15 @@ export const USED_BY = {
         "CodeInput"
       ],
       "radius.lg": [
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu"
       ],
       "radius.none": [
         "FlushIconButton",
