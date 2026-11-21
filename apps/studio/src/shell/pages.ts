@@ -25,6 +25,8 @@
  * replaced it (marked where it does). It ships in the bundle.
  */
 
+import { must } from '../must';
+
 /** The Links copy (S5.2), shared by the levers' Links section and the preview's (owner decision Q23). APPROVED. */
 export const LINKS_DESC = 'The link color in each state, on the page and on the inverse fill.';
 /** The Icons copy (S5.2), APPROVED. Interactive no longer draws an Icons section, levers or preview (the owner's
@@ -112,7 +114,7 @@ export type Host = 'web' | 'figma';
 
 /** The views a page can call home, with their titles (the preview header shows the title). */
 export const VIEWS = [
-  ['guide', 'Style guide'], ['palettes', 'Palettes'], ['surfaces', 'Surfaces & fills'], ['interactive', 'Interactive'],
+  ['guide', 'Brand overview'], ['palettes', 'Palettes'], ['surfaces', 'Surfaces & fills'], ['interactive', 'Interactive'],  // #4184 decision 8 A: "Brand overview" (DRAFT), so "Style guide" names only the token tables Docs draws into Figma.
   ['type', 'Type'], ['shape', 'Shape'], ['depth', 'Depth & motion'], ['layout', 'Layout'], ['comps', 'Components'],
 ] as const;
 /** The views behind Inspect (F1). They open over any page's preview and are never a page's home. The Decisions log, the
@@ -481,7 +483,7 @@ export const TABS: readonly { readonly id: TabId; readonly label: string; readon
 /** The place a tab click lands on: the tab, or its first sub-page. */
 export const placeOfTab = (id: TabId): Place => {
   const t = TABS.find((x) => x.id === id)!;
-  return t.subs ? { tab: id, sub: t.subs[0].id } : { tab: id };
+  return t.subs ? { tab: id, sub: must(t.subs[0], `${id}'s first sub-page`).id } : { tab: id };
 };
 
 /** Every place, in tab order: a tab without sub-pages, or each sub-page of a tab with them. */

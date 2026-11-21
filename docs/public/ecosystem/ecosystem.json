@@ -343,7 +343,11 @@
           "code-input",
           "page-nav-item",
           "page-nav",
-          "popover"
+          "skeleton",
+          "popover",
+          "menu-item",
+          "menu-group",
+          "menu"
         ]
       }
     },

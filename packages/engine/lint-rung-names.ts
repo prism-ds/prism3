@@ -390,6 +390,9 @@ const NO_SIZE_AXIS: Record<string, string> = {
   'banner': 'a banner has no size RUNG — its axes are `tone` and `edge` (contained or full-bleed), and the brief names no size; density moves its padding and gaps (`densitySpacing`), and the nested buttons carry their own small rung (#2579)',
   '_breadcrumb-separator': 'one 16px mark (`icon.size.xs`) at both breadcrumb sizes (#2666, owner call 6 A, kept by Q382 A), bound under a non-`size.*` key; its axis is `type`, chevron or slash, so there is no ladder to compare. The item it sits in carries the size',
   'toast': 'one size: the brief names none and the owner approved one (#2668 call 11 A). It is built 360 wide as a literal (`placementWidth`), its type is one role (`type.body.sm.default`, #3165), its floor one rung (`size.md.height`, Q3165.1 A), its glyph one rung (`icon.size.sm`), and its nested Button and IconButton.Neutral are fixed at small; there is no size ladder to compare against the tier',
+  'menu': 'one size: the panel takes its items\' one size (#4007, Q-FL2 on OD-M3 A); built 240 wide as a literal (`placementWidth`), with no size ladder to compare against the tier',
+  'menu-group': 'one size: a heading over the items, one type role (`type.label.sm.emphasis`), with no size ladder (#4007)',
+  'menu-item': 'one size (#4007, Q-FL2 on OD-M3 A: Compact density gives the dense menu): its floor is one rung (`size.md.min-height`), its glyphs one rung (`icon.size.sm`), its label and secondary text one role each',
   'popover': 'one size: the proposal names none and the owner approved one member (#4008, Q-FL2 on OD-P2 A). It is built 320 wide as a literal (`placementWidth`), its title and body are one role each, and its nested close button is fixed at small; there is no size ladder to compare against the tier',
   'button-group': 'a layout of Buttons has no size RUNG of its own — its axis is `layout`, its gaps are `space.*` steps, and each nested Button is medium and measured under its own name; a size axis for smaller actions is held for the owner (#2661)',
   'divider': 'a rule has no size RUNG — its axis is `orientation`, its thickness is one border-width role (`border-width.hairline`), and its length is a NOMINAL standalone placeholder (`container.narrow` across, `size.md.height` tall) a host stretches; there is no size ladder to compare against the tier (#2455)',
@@ -521,6 +524,8 @@ const DEFAULT_FIRST: Record<string, string> = {
   // #2983 (owner direction 2026-10-24): medium is today's status label, so it leads and every existing member lands
   // on it in place.
   badge: Q1B,
+  // #4109: the text skeleton's two body sizes, medium first (Q1 B).
+  skeleton: Q1B,
 };
 
 const SIZE_BY_FOLLOW_ONLY: Record<string, string> = {
@@ -566,7 +571,7 @@ const SIZE_IN_PROSE: Record<string, string> = {
  * this list whole — the forward half alone let nine size-axis defs sit unlisted, each droppable in silence.
  */
 const MUST_COVER = [
-  'icon', 'provider-logo', 'spinner', 'progress',
+  'icon', 'provider-logo', 'spinner', 'progress', 'skeleton',
   'button', 'button-destructive', 'button-neutral', 'wallet-button', 'sign-in-button',
   'icon-button', 'icon-button-destructive', 'icon-button-neutral',
   'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral',

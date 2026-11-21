@@ -696,7 +696,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "id": "radio-control",
     "name": "Radio.Control",
     "category": "form",
-    "summary": "Outlined radio ring; dot and brand ring on select. Nested by a radio row; no label.",
+    "summary": "Outlined radio ring; dot and action color on select. Nested by a radio row; no label.",
     "unit": "variants",
     "spacing": [],
     "page": "Radio",
@@ -1857,6 +1857,20 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     ]
   },
   {
+    "id": "skeleton",
+    "name": "Skeleton",
+    "category": "foundations",
+    "summary": "Content-shaped placeholder for a first load. Reserves the box so nothing shifts on arrival.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Skeleton",
+    "section": "Subcomponents",
+    "buildable": true,
+    "reason": null,
+    "members": 4,
+    "nests": []
+  },
+  {
     "id": "popover",
     "name": "Popover",
     "category": "overlay",
@@ -1872,6 +1886,64 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
       "flush-icon-button-neutral",
       "icon",
       "button-group"
+    ]
+  },
+  {
+    "id": "menu-item",
+    "name": "Menu.Item",
+    "category": "overlay",
+    "summary": "One action in a menu: a label, an optional icon, check, description, shortcut or submenu arrow.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "padding-x",
+        "ref": "space.150"
+      },
+      {
+        "key": "gap",
+        "ref": "space.100"
+      }
+    ],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 15,
+    "nests": [
+      "icon",
+      "focus-ring"
+    ]
+  },
+  {
+    "id": "menu-group",
+    "name": "Menu.Group",
+    "category": "overlay",
+    "summary": "A labeled run of items inside a menu: a section, or a set of radio choices.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 1,
+    "nests": [
+      "menu-item"
+    ]
+  },
+  {
+    "id": "menu",
+    "name": "Menu",
+    "category": "overlay",
+    "summary": "A list of actions on a raised panel, opened from a button. It closes once an action is chosen.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 1,
+    "nests": [
+      "menu-item"
     ]
   }
 ];

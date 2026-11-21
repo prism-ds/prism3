@@ -373,6 +373,26 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       + 'separator type a glyph, and no value would mean the same thing on both defs. The item picks it by its own '
       + '`separator` axis, which holds the same two values.',
   },
+  {
+    axis: 'type',
+    values: ['action', 'submenu'],
+    defs: ['menu-item'],
+    relation: 'disjoint',
+    reason:
+      'What a menu row does when chosen (#4007, owner decision Q-FL2 on OD-M3 A): runs an action, or opens a submenu, '
+      + 'which adds the arrow and its space. Checkbox and radio items are action members with the check toggles on, so '
+      + 'they are not values. `action` LEADS because it is the code default and Figma\'s default member. DISJOINT from '
+      + 'Badge\'s canonical set: no value would mean the same thing on both defs.',
+  },
+  {
+    axis: 'type',
+    values: ['section'],
+    defs: ['menu-group'],
+    relation: 'disjoint',
+    reason:
+      'One value (#4007, held for the owner): the engine projects no set without an axis, so Menu.Group\'s one member '
+      + 'carries `section`. A radio set draws the same. DISJOINT from Badge\'s canonical set.',
+  },
   // field-label's `indicator` axis left the register (#1338). It carried a three-way `[none/required/optional]`
   // axis whose most important value was ABSENCE, which is exactly why it never projected to Figma. The owner
   // decision (2026-09-13) reconciled it into Prism 2's `Required` BOOLEAN (default true) — a node-visibility toggle,
@@ -647,7 +667,7 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
     // stops reading as secondary wayfinding. Page navigation and its item join it (#3345, Q8 A): Breadcrumbs' pair, one
     // line of 14 or 16px body text. Badge joins it (#2983, owner direction 2026-10-24): the status label's
     // compact size beside today's, and nothing above it.
-    defs: ['switch-row', 'switch-control', 'breadcrumbs', 'breadcrumb-item', 'progress', 'badge', 'page-nav', 'page-nav-item'],
+    defs: ['switch-row', 'switch-control', 'breadcrumbs', 'breadcrumb-item', 'progress', 'badge', 'page-nav', 'page-nav-item', 'skeleton'],
     relation: 'subset',
     reason:
       'The ladder minus its top rung, for a def with no large form, led by medium as canonical is (#2752 Q1 B): a switch above medium stops reading '
@@ -704,6 +724,18 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
       + 'reads the same to a designer (round) without the sets being one ladder. `circular` is the brief\'s own word '
       + '(`variant: linear | circular`), the approved proposal\'s axis table, and MUI\'s `CircularProgress`. `linear` '
       + 'LEADS because it is the code default and Figma\'s default member (owner Q347).',
+  },
+  {
+    axis: 'shape',
+    values: ['text', 'circle', 'rect'],
+    defs: ['skeleton'],
+    relation: 'disjoint',
+    reason:
+      'Skeleton\'s three placeholders (#4109, owner decisions OD-S2 A and OD-S6 A): lines of text, a circle for an avatar, '
+      + 'a rectangle for media or a card. A whole drawing per value, like Progress\'s and unlike IconButton\'s corner '
+      + 'silhouette. DISJOINT, with one near-overlap named on purpose: `circle` here and `circular` on IconButton and '
+      + 'Progress both read as round. The approved proposal spells it `circle`, the brief\'s word, and the two sets never '
+      + 'meet on one def. `text` LEADS because it is the code default, so Figma\'s inserted member is the text skeleton.',
   },
   {
     axis: 'style',
@@ -1019,7 +1051,7 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
   {
     axis: 'placement',
     values: ['bottom'],
-    defs: ['popover'],
+    defs: ['popover', 'menu'],
     relation: 'subset',
     reason:
       'The side of its trigger a popover opens on (#4008, owner decision Q-FL2 on OD-P2 A and OD-X2 A): Dialog\'s word for '
@@ -1064,13 +1096,23 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
     axis: 'intent',
     values: ['neutral', 'success'],
     defs: ['toast'],
-    relation: 'sole',
+    relation: 'canonical',
     reason:
       'What a toast confirms (#2668, owner call 2 A): a plain confirmation, or a completed action with a circled check. '
       + 'No danger, warning or info: a message the user must see goes to a banner (call 1 A). `neutral` LEADS because it '
       + 'is the code default and Figma\'s default member. The axis returns here as a variant axis after #1225 retired it '
       + 'from the button families (where intent became the component): a toast\'s two intents differ in one glyph and its '
       + 'ink, not in a family of interactive colors, so they are members of one set. One def carries it.',
+  },
+  {
+    axis: 'intent',
+    values: ['default', 'destructive'],
+    defs: ['menu-item'],
+    relation: 'disjoint',
+    reason:
+      'What a menu action does (#4007, owner decision Q-FL2 on OD-M3 A): a plain action, or one that deletes or cannot '
+      + 'be undone, in the destructive ink. Disjoint from Toast\'s [neutral, success]: a toast reports, a menu item acts, '
+      + 'and neither has the other\'s values. `default` LEADS because it is the code default and Figma\'s default member.',
   },
   {
     axis: 'footer',
