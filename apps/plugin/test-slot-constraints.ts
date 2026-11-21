@@ -55,6 +55,10 @@ const EXPECTED: Record<string, { slotSettings?: Record<string, unknown>; preferr
   'dialog.body': {},
   // Open (#4008, as Dialog's): the body holds whatever the popover needs, so no limit and no preferred component.
   'popover.body': {},
+  // #4007 (OD-M3 A): Menu's items, one at least, the item, and the group and the Divider where the file has them; a group's items, one at least,
+  // the item only.
+  'menu.items': { slotSettings: { minChildren: 1, allowPreferredValuesOnly: true }, preferred: ['menu-item'], preferredWhenBuilt: ['menu-group', 'divider'] },
+  'menu-group.items': { slotSettings: { minChildren: 1, allowPreferredValuesOnly: true }, preferred: ['menu-item'] },
   // Open (#2579, as built; renamed from `body` by #3225): the rich body holds a short list or other rich content, so no
   // limit and no preferred component. The plain sentence is the body text property now.
   'banner.richBody': {},
@@ -63,6 +67,8 @@ const EXPECTED: Record<string, { slotSettings?: Record<string, unknown>; preferr
   'breadcrumbs.items': { slotSettings: { minChildren: 2, allowPreferredValuesOnly: true }, preferred: ['breadcrumb-item'] },
   // #3345 (Q8 A): two pages at least, six at most, a PageNav.Item only.
   'page-nav.items': { slotSettings: { minChildren: 2, maxChildren: 6, allowPreferredValuesOnly: true }, preferred: ['page-nav-item'] },
+  // #3055 (the approved proposal): two steps at least, a StepItem only.
+  'steps.items': { slotSettings: { minChildren: 2, allowPreferredValuesOnly: true }, preferred: ['step-item'] },
   // The Button group's buttons (#2661, owner decisions Q363.4 A and Q363.6 A): one to three, the Button family only, the
   // primary Button required, the Destructive and Neutral families offered when the file has them (Q386).
   'button-group.items': { slotSettings: { minChildren: 1, maxChildren: 3, allowPreferredValuesOnly: true }, preferred: ['button'], preferredWhenBuilt: ['button-destructive', 'button-neutral'] },

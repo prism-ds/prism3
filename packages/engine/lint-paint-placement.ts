@@ -306,7 +306,9 @@ const EXPECT_ANATOMY = [
   'segmented-control-segment', 'segmented-control', 'link', 'button-group', 'dialog', 'password-field', 'counter', 'pagination-item', 'pagination', 'progress', 'search-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', '_slider-thumb', 'slider',
   'code-input-cell', 'code-input', 'provider-logo', 'card-number-field', 'page-nav-item', 'page-nav',
   'skeleton',
-  'popover',
+  'popover', 'menu-item', 'menu-group', 'menu', 'tooltip',
+  // #3055: Steps and its step.
+  'step-item', 'steps',
 ];
 const EXPECT_PAINTERS = [
   'focus-ring', 'button', 'button-destructive', 'button-neutral', 'icon-button', 'icon-button-destructive',
@@ -327,6 +329,10 @@ const EXPECT_PAINTERS = [
   'toast',
   // #4008: the popover's raised panel, its fill and its hairline edge.
   'popover',
+  // #4007: the menu's raised panel (Popover's roles) and the item's highlight wash.
+  'menu', 'menu-item',
+  // #4009: the inverse bubble (its arrow takes the same fill as a glyph).
+  'tooltip',
   // #2427: the outline Counter's fill and edge. A ghost member's box resolves none of them.
   'counter',
   // #2428: the Code cell paints Text field's field chrome on its own box.
@@ -339,6 +345,8 @@ const EXPECT_PAINTERS = [
   'search-field',
   // #2343 PR 4: the Card number field paints as TextField does; its tile keeps its own paint.
   'card-number-field',
+  // #3055: the step's disc (fill and outline) and its line to the next step (the box indicator).
+  'step-item',
 ];
 const closedSet = (what: string, expected: string[], live: string[], remedy: string): void => {
   for (const id of expected.filter((x) => !live.includes(x))) {

@@ -122,6 +122,7 @@ import { canonicalShape, GlyphPathError } from './glyph-shape';
 import type { ComponentDef } from './component-schema';
 import { readFileSync } from 'node:fs';
 import { PROVIDER_LOGO_SOURCES } from './provider-logo-set';
+import { applyIconMap } from './icon-map';
 
 /**
  * The scope floor. `docs/34`: a gate with a scope asserts each promised surface is REPRESENTED, never
@@ -133,7 +134,10 @@ const MUST_COVER = [
   'icon.glyph', 'spinner.ringGlyph',
   // The icon INSTANCES (#2380): every icon-set glyph inside another component.
   'checkbox-control.checkGlyph', 'checkbox-control.dashGlyph', 'textarea.gripGlyph', 'tag.checkGlyph', 'tag.closeGlyph',
+  'step-item.checkGlyph', 'step-item.errorGlyph',
   'field-message.errorGlyph', 'field-message.warningGlyph', 'field-message.successGlyph',
+  // #4007: the menu item's check and submenu arrow.
+  'menu-item.checkGlyph', 'menu-item.chevronGlyph',
   'switch-control.onGlyph', 'switch-control.offGlyph', 'select.chevronGlyph', 'image-placeholder.markerGlyph',
   '_accordion-indicator.chevronDownGlyph', '_accordion-indicator.chevronUpGlyph', '_accordion-indicator.plusGlyph', '_accordion-indicator.minusGlyph',
   // Progress's own glyphs (#2670), measured by the RING_GLYPH arm.
@@ -142,6 +146,8 @@ const MUST_COVER = [
   'toast.successGlyph',
   // Avatar's last fallback (#4110, owner OD-A6 A): the glyph follows the shape.
   'avatar.personGlyph', 'avatar.organizationGlyph',
+  // Tooltip's arrows (#4009), measured by the ARROW_GLYPH arm.
+  'tooltip.topGlyph', 'tooltip.bottomGlyph', 'tooltip.startGlyph', 'tooltip.endGlyph',
   '_breadcrumb-separator.chevronGlyph', '_breadcrumb-separator.slashGlyph', 'breadcrumbs.backGlyph',
   // The provider logos (#2343), measured by the MARK arm against their own artboards.
   'provider-logo.glyph',
@@ -227,6 +233,28 @@ const RING_VAR_PX: Record<string, number> = { 'icon/size/md': 24, 'icon/size/xl'
 /** The stop dot's square in px (owner call 5: a 4px dot). */
 const STOP_PX = 4;
 
+/**
+ * TOOLTIP'S ARROW (#4009, OD-T6: an 8-unit arrow; OD-TB2 A, decided 2026-11-19: a right-angled tip half the base deep) — four
+ * component-owned glyphs of ONE filled triangle each, measured here against numbers typed in this file and never read
+ * from `component-glyphs.ts`, which is the subject:
+ *
+ *   · each arrow is built at a literal 8px square (`ARROW_PX`, `glyphPx`), binding no variable;
+ *   · its outline is exactly three corners: the two ends of the artboard edge that faces the bubble, and the tip at the
+ *     middle of the artboard, `ARROW_DEPTH` in from that edge, so the triangle points at the trigger;
+ *   · `points` is the side the tip faces, read from the placement: under a top bubble it points down;
+ *   · one arrow per member, at its own placement (`at`), compared with the def's `presentWhen` by value.
+ */
+const ARROW_GLYPH: Record<string, { glyph: string; points: 'down' | 'up' | 'left' | 'right'; at: Record<string, readonly string[]>; why: string }> = {
+  'tooltip.topGlyph': { glyph: 'tooltip-arrow-down', points: 'down', at: { placement: ['top'] }, why: 'under a bubble placed above its trigger, pointing down at it' },
+  'tooltip.bottomGlyph': { glyph: 'tooltip-arrow-up', points: 'up', at: { placement: ['bottom'] }, why: 'over a bubble placed below its trigger, pointing up at it' },
+  'tooltip.startGlyph': { glyph: 'tooltip-arrow-end', points: 'right', at: { placement: ['start'] }, why: 'at the end side of a bubble placed at the trigger\'s start, pointing at it (drawn left to right; code mirrors it)' },
+  'tooltip.endGlyph': { glyph: 'tooltip-arrow-start', points: 'left', at: { placement: ['end'] }, why: 'at the start side of a bubble placed at the trigger\'s end, pointing at it (drawn left to right; code mirrors it)' },
+};
+/** The arrow's square in px (OD-T6). */
+const ARROW_PX = 8;
+/** How far the tip sits in from the bubble's edge, in 24-unit artboard units: half the base (OD-TB2 A). */
+const ARROW_DEPTH = 12;
+
 /** The icon ladder in px, per rung variable — the owner's 16 / 20 / 24 / 32. */
 const RUNG_PX: Record<string, number> = { 'icon/size/xs': 16, 'icon/size/sm': 20, 'icon/size/md': 24, 'icon/size/lg': 32 };
 
@@ -292,7 +320,14 @@ const FIXED_GLYPH: Record<string, { glyph: string; at: Record<string, readonly s
   // between two fixed shapes is what Q382 decided.
   '_breadcrumb-separator.chevronGlyph': { glyph: 'chevron-right', at: { type: ['chevron'] }, why: 'the chevron look, pointing toward the current page; one fixed shape, mirrored in right-to-left in code, never a glyph a designer picks' },
   '_breadcrumb-separator.slashGlyph': { glyph: 'slash', at: { type: ['slash'] }, why: 'the slash look, a forward slash between steps; one fixed shape, not mirrored in right-to-left' },
+  // #3055 (owner decisions 2 and 4) — a complete step's check and an errored step's glyph, each one fixed shape gated
+  // on its own status.
+  'step-item.checkGlyph': { glyph: 'check', at: { status: ['complete'] }, why: 'a complete step\'s check, drawn in the filled disc in place of the number; the same check a checked checkbox draws, never a glyph a designer picks' },
+  'step-item.errorGlyph': { glyph: 'error-circle', at: { status: ['error'] }, why: 'an errored step\'s exclamation in a circle, in place of the disc; the mark the approved proposal names, never a glyph a designer picks' },
   // #2666 (owner call 11 A) — the small-screen path's chevron, pointing up the trail to the parent page.
+  // #4007 — the menu item's check (any item with the check toggle on) and its submenu arrow.
+  'menu-item.checkGlyph': { glyph: 'check', at: {}, why: 'the check on a checkable item that is on; one fixed shape, never a glyph a designer picks' },
+  'menu-item.chevronGlyph': { glyph: 'chevron-right', at: { type: ['submenu'] }, why: 'the submenu arrow, pointing toward the submenu; one fixed shape, mirrored in right-to-left in code' },
   'breadcrumbs.backGlyph': { glyph: 'chevron-left', at: { path: ['parent'] }, why: 'the up-a-level mark before the parent link, pointing back up the trail; one fixed shape, mirrored in right-to-left in code' },
   // #2417 (owner Q183) — the Accordion indicator's four glyphs, one per (indicator, expansion) pair. `glyph:
   // '{expansion}'` cannot express them: the vocabulary has no `collapsed` or `expanded` glyph, and the pair changes
@@ -852,6 +887,47 @@ for (const def of componentDefs as ComponentDef[]) {
       }
       continue;
     }
+    // TOOLTIP'S ARROWS (#4009), measured by their own arm against `ARROW_GLYPH` above.
+    const arrowRec = ARROW_GLYPH[key];
+    if (arrowRec) {
+      covered.add(key);
+      if (part.glyph !== arrowRec.glyph) { failures.push(`${def.id}.${partName}: the def draws glyph '${part.glyph ?? '(none)'}' and ARROW_GLYPH records '${arrowRec.glyph}'. One of the two moved.`); continue; }
+      if (!sameGate(arrowRec.at, (part.presentWhen ?? {}) as Record<string, readonly string[]>)) { failures.push(`${def.id}.${partName}: the def draws at ${JSON.stringify(part.presentWhen ?? {})} and ARROW_GLYPH records ${JSON.stringify(arrowRec.at)}. One of the two moved.`); continue; }
+      const W = vb.w, M = W / 2;
+      const want: Record<string, string[]> = {
+        down: [`0,0`, `${W},0`, `${M},${ARROW_DEPTH}`],
+        up: [`0,${W}`, `${W},${W}`, `${M},${W - ARROW_DEPTH}`],
+        right: [`0,0`, `0,${W}`, `${ARROW_DEPTH},${M}`],
+        left: [`${W},0`, `${W},${W}`, `${W - ARROW_DEPTH},${M}`],
+      };
+      let seen = 0;
+      for (const plan of set) {
+        const coord = plan.coord as Record<string, string | undefined>;
+        const at = JSON.stringify(coord);
+        const on = Object.entries(arrowRec.at).every(([a, vs]) => coord[a] !== undefined && vs.includes(coord[a]!)) ? 1 : 0;
+        const nodes = glyphNodes(plan).filter((g) => g.part === partName);
+        if (nodes.length !== on) { failures.push(`${def.id}.${partName} @ ${at}: ${nodes.length} GLYPH node(s), expected ${on} (gate ${JSON.stringify(arrowRec.at)}).`); continue; }
+        if (!on) continue;
+        seen++;
+        const node = nodes[0].node;
+        const els = [...(node.glyphSvg ?? '').matchAll(/<path\b[^>]*>/g)].map((m) => m[0]);
+        const attr = (e: string, a: string) => new RegExp(`\\s${a}="([^"]*)"`).exec(e)?.[1];
+        if (els.length !== 1) { failures.push(`${def.id}.${partName} @ ${at}: the document carries ${els.length} <path> element(s), expected exactly one filled triangle.`); continue; }
+        if (attr(els[0], 'fill') !== 'currentColor') failures.push(`${def.id}.${partName} @ ${at}: the triangle has fill="${attr(els[0], 'fill') ?? 'absent'}" — it takes the bubble's fill through the part's one ink.`);
+        let corners: string[] = [];
+        try { corners = [...new Set(lineVertices(attr(els[0], 'd') ?? '').map(([x, y]) => `${+x.toFixed(3)},${+y.toFixed(3)}`))]; }
+        catch (err) { failures.push(`${def.id}.${partName} @ ${at}: the outline could not be measured — ${(err as Error).message}`); continue; }
+        const exp = want[arrowRec.points];
+        if (corners.length !== 3 || !exp.every((c) => corners.includes(c)))
+          failures.push(`${def.id}.${partName} @ ${at}: ARROW SHAPE — the outline's corners are [${corners.join(' ')}], expected the triangle [${exp.join(' ')}]: the base along the edge facing the bubble and the tip ${ARROW_DEPTH} units in, pointing ${arrowRec.points}.`);
+        if (node.glyphPx !== ARROW_PX || node.bound?.width !== undefined)
+          failures.push(`${def.id}.${partName} @ ${at}: ARROW SIZE — built at ${node.glyphPx ?? '(no literal)'}px${node.bound?.width ? `, binding ${node.bound.width}` : ''}, expected a literal ${ARROW_PX}px square bound to no variable.`);
+        glyphChecks++;
+      }
+      if (!seen) failures.push(`${def.id}.${partName}: appeared at none of the set's ${set.length} members, so nothing was measured.`);
+      notes.push(`${key}: arrow '${arrowRec.glyph}' measured at ${seen} member(s)`);
+      continue;
+    }
     const ringRec = RING_GLYPH[key];
     if (ringRec) {
       covered.add(key);
@@ -1365,6 +1441,9 @@ for (const key of Object.keys(FIXED_GLYPH))
 for (const key of Object.keys(RING_GLYPH))
   if (!covered.has(key))
     failures.push(`STALE RING_GLYPH: '${key}' records a progress glyph '${RING_GLYPH[key].glyph}', and no def declares a vector part by that name.`);
+for (const key of Object.keys(ARROW_GLYPH))
+  if (!covered.has(key))
+    failures.push(`STALE ARROW_GLYPH: '${key}' records a tooltip arrow '${ARROW_GLYPH[key].glyph}', and no def declares a vector part by that name.`);
 for (const key of Object.keys(COMPOSED_GLYPH))
   if (!vectorParts.has(key))
     failures.push(`STALE COMPOSED_GLYPH: '${key}' records a composed '${COMPOSED_GLYPH[key].glyph}', and no def declares a vector part by that name.`);
@@ -1425,6 +1504,74 @@ let derivedChecks = 0;
     if (bent.length) failures.push(`DERIVED ${name}: SHAPE — not ${from} under one uniform scale (${+k.toFixed(5)}) and move: ${bent.join(', ')}, so the artwork was redrawn rather than resized`);
   }
   if (derivedChecks !== Object.keys(DERIVED_MARK).length) failures.push(`DERIVED: measured ${derivedChecks} of ${Object.keys(DERIVED_MARK).length} derived glyph(s) — the arm checked less than it lists`);
+}
+
+// ── BRAND ART (#3076, Q1 A: the proposal's Design B and its gate 5) ─────────────────────────────────────────────────
+// A brand's icon map carries its own art, and the brand's icon set is Prism3's names less the mapped ones plus each
+// brand glyph. The arms above read the CORE set only; this one projects the icon def through a brand's map and holds the
+// brand's set to the same measures: one filled path per member, the member's OWN outline (the brand's art where it has
+// one, Prism3's otherwise), non-zero ink inside the artboard, its fill rule kept, and no two members drawing one shape
+// unless DUPLICATE_SHAPES declares it. No example brand commits art (the PR's Q2 flag), so the brand is this fixture,
+// written in the absolute commands this file's walkers read. EXPECTED is typed here: the fixture's own art and the core
+// vocabulary, never `brandIconNames` or the projector's lookup. ACTUAL is the submitted `glyphSvg`, read back.
+const BRAND_ICONS = {
+  map: { plus: 'add', 'plus-filled': 'add', minus: 'subtract', 'minus-filled': 'subtract', check: 'checkmark', 'close-filled': 'close' } as Record<string, string>,
+  glyphs: {
+    add: { path: 'M11 4H13V11H20V13H13V20H11V13H4V11H11Z' },
+    subtract: { path: 'M4 11H20V13H4Z' },
+    checkmark: { path: 'M9.5 15.6L5.4 11.5L4 12.9L9.5 18.4L20 7.9L18.6 6.5Z' },
+    // Named like a Prism3 icon, so it redraws `icon/close` for this brand (Q5 A), and cuts with evenodd.
+    close: { path: 'M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6Z', fillRule: 'evenodd' as const },
+  } as Record<string, { path: string; fillRule?: 'evenodd' }>,
+};
+{
+  const iconDef = (componentDefs as ComponentDef[]).find((d) => d.id === ICON_DEF);
+  const partName = Object.entries(iconDef?.anatomy?.parts ?? {}).find(([, p]) => (p as { kind?: string }).kind === 'vector')?.[0];
+  if (!iconDef || !partName) failures.push(`BRAND ART: no '${ICON_DEF}' def with a vector part to project a brand's set through`);
+  else {
+    const want = new Map<string, { path: string; fillRule?: string }>();
+    for (const n of ICON_NAMES) if (!(n in BRAND_ICONS.map)) want.set(n, { path: (ICON_PATHS as Record<string, string>)[n] });
+    for (const [n, g] of Object.entries(BRAND_ICONS.glyphs)) want.set(n, g);
+    let plans: AnatomyPlan[] = [];
+    try { plans = figmaAnatomySet(applyIconMap(iconDef, BRAND_ICONS), { swapTarget: SWAP_TARGET }); }
+    catch (err) { failures.push(`BRAND ART: the icon def does not project under a brand's map — ${(err as Error).message}`); }
+    const drawn = new Map<string, string>();
+    for (const plan of plans) {
+      const member = (plan.coord as Record<string, string | undefined>).name ?? '(no name)';
+      const at = `BRAND ART ${ICON_DEF}.${partName} @ name=${member}`;
+      const exp = want.get(member);
+      if (!exp) { failures.push(`${at}: the brand's set builds a member it should not hold — a mapped Prism3 icon, or a name neither Prism3's nor the brand's`); continue; }
+      const nodes = glyphNodes(plan).filter((g) => g.part === partName);
+      const svg = nodes[0]?.node.glyphSvg;
+      const paths = typeof svg === 'string' ? [...svg.matchAll(/<path\b[^>]*>/g)].map((m) => m[0]) : [];
+      if (nodes.length !== 1 || paths.length !== 1) { failures.push(`${at}: ${nodes.length} GLYPH node(s) carrying ${paths.length} <path>(s), expected exactly one of each`); continue; }
+      const d = /\bd="([^"]*)"/.exec(paths[0])?.[1];
+      const fill = /\bfill="([^"]*)"/.exec(paths[0])?.[1];
+      const rule = /\bfill-rule="([^"]*)"/.exec(paths[0])?.[1];
+      if (d !== exp.path) { failures.push(`${at}: draws a path this member does not own — expected ${member in BRAND_ICONS.glyphs ? "the brand's art" : `ICON_PATHS['${member}']`} ('${exp.path.slice(0, 24)}…'), got '${(d ?? 'no d').slice(0, 24)}…'`); continue; }
+      if (!fill || fill === 'none' || fill === 'transparent') failures.push(`${at}: the <path> has fill="${fill ?? 'absent'}", so it draws nothing`);
+      if (member in BRAND_ICONS.glyphs && rule !== exp.fillRule) failures.push(`${at}: the brand's art declares fill rule '${exp.fillRule ?? 'nonzero'}' and the document carries '${rule ?? 'nonzero'}'`);
+      let ink: Box;
+      try { ink = inkBox(d); } catch (err) { failures.push(`${at}: the outline could not be measured — ${(err as Error).message}`); continue; }
+      if (ink.w <= 0 || ink.h <= 0) failures.push(`${at}: the outline measures ${ink.w}×${ink.h}, an invisible glyph`);
+      if (ink.x < vb.minX || ink.y < vb.minY || ink.x + ink.w > vb.minX + vb.w || ink.y + ink.h > vb.minY + vb.h)
+        failures.push(`${at}: the outline occupies ${ink.x},${ink.y} ${ink.w}×${ink.h}, outside the ${vb.w}×${vb.h} artboard`);
+      drawn.set(member, d);
+      glyphChecks++;
+    }
+    const missing = [...want.keys()].filter((n) => !drawn.has(n));
+    if (missing.length) failures.push(`BRAND ART: ${missing.length} member(s) the brand's set should hold drew nothing measurable — [${missing.slice(0, 6).join(', ')}${missing.length > 6 ? ', …' : ''}]`);
+    // Core ∪ brand: no two members draw one picture, unless the collision is one DUPLICATE_SHAPES already declares.
+    const byShape = new Map<string, string[]>();
+    for (const [n, d] of drawn) {
+      try { const k = canonicalShape(d); byShape.set(k, [...(byShape.get(k) ?? []), n].sort()); }
+      catch (e) { failures.push(`BRAND ART: the outline for '${n}' cannot be compared by shape — ${e instanceof GlyphPathError ? e.message : String(e)}`); }
+    }
+    for (const ns of byShape.values())
+      if (ns.length > 1 && !DUPLICATE_SHAPES[ns.join('|')])
+        failures.push(`BRAND ART: [${ns.join(', ')}] all draw ONE shape in the brand's set, and no DUPLICATE_SHAPES entry declares it — a brand glyph duplicating an icon the map leaves in place puts two of one picture in the file`);
+    notes.push(`BRAND ART ${ICON_DEF}.${partName}: ${drawn.size}/${want.size} member(s) of a mapped brand's set measured (${Object.keys(BRAND_ICONS.glyphs).length} brand glyph(s), ${Object.keys(BRAND_ICONS.map).length} mapped name(s)), ${byShape.size} distinct shape(s)`);
+  }
 }
 
 // The tile arm ran on something: a mark set with payment tiles and no file read as a tile is an arm that checked nothing.

@@ -152,6 +152,9 @@ export const TAXONOMY: Taxonomy = {
         // Popover (#4008, owner Q-FL2) — its own page under Components, beside Dialog (owner decision 5 on #4252,
         // 2026-11-19). It nests FlushIconButton.Neutral and the Button group.
         { page: 'Popover', defs: ['popover'] },
+        // Menu (#4007, owner Q-FL2) — its own page under Components, its item and group beside it (Q656 A: a part only its
+        // family nests shares that family's page). The item builds first, then the group, so both slots resolve on the page.
+        { page: 'Menu', defs: ['menu-item', 'menu-group', 'menu'], lead: 'menu' },
         // Banner (#2579, Q327) — its own page under Components. The proposal named a feedback section; none exists, so the
         // section is held as an owner item in the PR, as Link's was. It nests Button.Neutral and FlushIconButton.Neutral.
         { page: 'Banner', defs: ['banner'] },
@@ -163,9 +166,16 @@ export const TAXONOMY: Taxonomy = {
         // first, so the row's items slot resolves against it on the same page, as Breadcrumbs' does. Link builds wherever
         // its page sorts. Which section it sits in is held for the owner on the PR, as Link's was.
         { page: 'Page navigation', defs: ['page-nav-item', 'page-nav'], lead: 'page-nav' },
+        // Steps (#3055) — its own page under Components, after Page navigation. The step builds first, so the items slot
+        // resolves against it on the same page (Q656 A: a part only one component nests sits on its page). Link builds
+        // wherever its page sorts. Which section it sits in is held for the owner on the PR, as Page navigation's was.
+        { page: 'Steps', defs: ['step-item', 'steps'], lead: 'steps' },
         // Toast (#2668, owner call 12 A) — its own page under Components, sorted alphabetically (Q260 A). It nests the
         // Button and the FlushIconButton.Neutral, which the build places first wherever their pages sort.
         { page: 'Toast', defs: ['toast'] },
+        // Tooltip (#4009) — its own page under Components, sorted alphabetically (Q260 A). It nests nothing. Its own page is
+        // owner decision OD-TB3 A (2026-11-19).
+        { page: 'Tooltip', defs: ['tooltip'] },
         // Counter (#2427, owner decision Q283.14 A) — its own page, alphabetical under Components (between Checkbox and
         // Divider). It nests FlushIconButton.Neutral, whose page is under Subcomponents.
         { page: 'Counter', defs: ['counter'] },

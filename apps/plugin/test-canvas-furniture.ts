@@ -1018,13 +1018,13 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
   // THE SWITCH COVERS EVERY SET. The oracle is the def registry, never the engine's list: every def with Figma
   // properties builds a set, except the three that build single components (`emitAsComponents`), which have no grid:
   // Icon, Provider logo (#2343) and Spinner.
-  // A SET OF ONE MEMBER HAS NO GRID (#4008): Popover builds one member, so there is no row or column to label and it
+  // A SET OF ONE MEMBER HAS NO GRID (#4008): Popover, Menu and Menu.Group each build one member, so there is no row or column to label and each
   // takes no furniture. Named here, never derived, so a second one-member set fails the count by name.
-  const ONE_MEMBER = ['popover'];
+  const ONE_MEMBER = ['popover', 'menu', 'menu-group'];
   const withSet = componentDefs.filter((d) => d.figmaProperties && !d.figmaProperties.emitAsComponents && !ONE_MEMBER.includes(d.id)).map((d) => d.id);
   const single = componentDefs.filter((d) => d.figmaProperties?.emitAsComponents).map((d) => d.id);
-  ok(withSet.length === 62 && withSet.every(hasFurniture) && JSON.stringify(single) === JSON.stringify(['icon', 'provider-logo', 'spinner']) && !single.some(hasFurniture),
-    `rollout/switch: all 62 defs that build a set of more than one member have furniture; Icon, Provider logo and Spinner, single components, do not (off: ${JSON.stringify(withSet.filter((id) => !hasFurniture(id)))})`);
+  ok(withSet.length === 66 && withSet.every(hasFurniture) && JSON.stringify(single) === JSON.stringify(['icon', 'provider-logo', 'spinner']) && !single.some(hasFurniture),
+    `rollout/switch: all 66 defs that build a set of more than one member have furniture; Icon, Provider logo and Spinner, single components, do not (off: ${JSON.stringify(withSet.filter((id) => !hasFurniture(id)))})`);
   ok(ONE_MEMBER.every((id) => componentDefs.some((d) => d.id === id) && !hasFurniture(id)),
     `rollout/one member: ${ONE_MEMBER.join(', ')} builds a set of one member and has no furniture (${JSON.stringify(ONE_MEMBER.filter(hasFurniture))})`);
 
@@ -1131,11 +1131,15 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
     'Segmented control': ['segmented-control-segment', 'segmented-control'],
     Accordion: ['_accordion-indicator', 'accordion'],
     List: ['list-item', 'list'],
+    // #4007: Menu.Item builds first, then the group and the menu, whose slots hold it.
+    Menu: ['menu-item', 'menu-group', 'menu'],
     // #2666 Q382 A, #2989 Q656 A: the breadcrumb separator and step join the Breadcrumbs page, first, as the Accordion
     // indicator joins the Accordion's.
     Breadcrumbs: ['_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs'],
     // #3345: PageNav.Item builds first on the Page navigation page, as Breadcrumbs' item does.
     'Page navigation': ['page-nav-item', 'page-nav'],
+    // #3055: StepItem builds first on the Steps page, as Breadcrumbs' item does.
+    Steps: ['step-item', 'steps'],
     // #2665: Pagination.Item and the row.
     Pagination: ['pagination-item', 'pagination'],
     // #2669: the Slider's thumb builds first on its page.
@@ -1146,7 +1150,7 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
   // Sets only: Icons & assets holds two defs since #3148, Icon and Provider logo, and both build single components.
   const buildsSet = (id: string): boolean => !componentDefs.find((d) => d.id === id)?.figmaProperties?.emitAsComponents;
   const fromTaxonomy = Object.fromEntries(allLeaves().filter(({ leaf }) => leaf.defs.filter(buildsSet).length > 1).map(({ leaf }) => [leaf.page, [...leaf.defs]]));
-  ok(JSON.stringify(fromTaxonomy) === JSON.stringify(SHARED), `clearance/pages: the sixteen pages that hold more than one set (${JSON.stringify(Object.keys(fromTaxonomy))})`);
+  ok(JSON.stringify(fromTaxonomy) === JSON.stringify(SHARED), `clearance/pages: the seventeen pages that hold more than one set (${JSON.stringify(Object.keys(fromTaxonomy))})`);
   const box = (n: FNode) => ({ x: Number(n.x), y: Number(n.y), w: Number(n.width), h: Number(n.height) });
   const meets = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   for (const [name, ids] of Object.entries(SHARED)) {

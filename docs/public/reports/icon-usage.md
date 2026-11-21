@@ -29,6 +29,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 | icon | glyph | `{name}` | any (prop) | drawn | always |
 | image-placeholder | markerGlyph | `image` | icon set | drawn | always |
 | list-item | icon | `check` | icon set | swap default | type: icon |
+| menu-item | checkGlyph | `check` | icon set | drawn | always |
+|  | chevronGlyph | `chevron-right` | icon set | drawn | type: submenu |
 | pagination-item | gapGlyph | `more-horizontal-filled` | icon set | drawn | type: ellipsis |
 |  | nextGlyph | `chevron-right` | icon set | drawn | type: next |
 |  | previousGlyph | `chevron-left` | icon set | drawn | type: previous |
@@ -41,12 +43,18 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | trailingVisual | `close-filled` | icon set | swap default | always |
 | select | chevronGlyph | `chevron-down` | icon set | drawn | always |
 | spinner | ringGlyph | `spinner` | component-owned | drawn | always |
+| step-item | checkGlyph | `check` | icon set | drawn | status: complete |
+|  | errorGlyph | `error-circle` | icon set | drawn | status: error |
 | switch-control | offGlyph | `close` | icon set | drawn | selection: off |
 |  | onGlyph | `check` | icon set | drawn | selection: on |
 | tag | checkGlyph | `check` | icon set | drawn | selection: selected |
 |  | closeGlyph | `close` | icon set | drawn | type: dismissible |
 | textarea | gripGlyph | `resize-grip` | icon set | drawn | always |
 | toast | successGlyph | `check-circle` | icon set | drawn | intent: success |
+| tooltip | bottomGlyph | `tooltip-arrow-up` | component-owned | drawn | placement: bottom |
+|  | endGlyph | `tooltip-arrow-start` | component-owned | drawn | placement: end |
+|  | startGlyph | `tooltip-arrow-end` | component-owned | drawn | placement: start |
+|  | topGlyph | `tooltip-arrow-down` | component-owned | drawn | placement: top |
 
 ### Icon slots
 
@@ -66,6 +74,7 @@ Parts that take any icon from the set. The file nominates the default unless the
 | icon-button-neutral | icon |
 | link | trailingVisual |
 | list-item | icon |
+| menu-item | leadingVisual |
 | password-field | leadingVisual |
 | search-field | leadingVisual, trailingVisual |
 | segmented-control-segment | leadingVisual |
@@ -78,15 +87,15 @@ Parts that take any icon from the set. The file nominates the default unless the
 
 | Glyph | Drawn by |
 |---|---|
-| `check` | checkbox-control, list-item, switch-control, tag |
+| `check` | checkbox-control, list-item, menu-item, step-item, switch-control, tag |
 | `check-circle` | banner, field-message, toast |
 | `chevron-down` | _accordion-indicator, select |
 | `chevron-left` | breadcrumbs, pagination-item |
-| `chevron-right` | _breadcrumb-separator, pagination-item |
+| `chevron-right` | _breadcrumb-separator, menu-item, pagination-item |
 | `chevron-up` | _accordion-indicator |
 | `close` | switch-control, tag |
 | `close-filled` | search-field |
-| `error-circle` | banner, field-message |
+| `error-circle` | banner, field-message, step-item |
 | `image` | image-placeholder |
 | `info-circle` | banner |
 | `minus` | _accordion-indicator, checkbox-control |
@@ -99,6 +108,10 @@ Parts that take any icon from the set. The file nominates the default unless the
 | `search` | search-field |
 | `slash` | _breadcrumb-separator |
 | `spinner` | spinner |
+| `tooltip-arrow-down` | tooltip |
+| `tooltip-arrow-end` | tooltip |
+| `tooltip-arrow-start` | tooltip |
+| `tooltip-arrow-up` | tooltip |
 | `warning-triangle` | banner, field-message |
 
 ## Glyphs no component names (28)

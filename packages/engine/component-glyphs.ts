@@ -108,6 +108,8 @@ export const PROGRESS_GEOMETRY = {
  *  the two rings share one drawing method; the full ring is the spinner's annulus at full strength. */
 export const progressLayers = (band: number, full: boolean, g: { viewBox: number; value: number } = PROGRESS_GEOMETRY, value: number = g.value): GlyphLayer[] => {
   const [track, arc] = spinnerLayers({ viewBox: g.viewBox, radius: g.viewBox / 2 - band / 2, stroke: band, arc: value, track: 1 });
+  // `spinnerLayers` always returns the track then the arc; the guard is for `noUncheckedIndexedAccess` (#1182).
+  if (!track || !arc) throw new Error('progressLayers: spinnerLayers returned fewer than two layers');
   return full ? [{ id: 'track', d: track.d, fillRule: 'evenodd' }] : [arc];
 };
 
@@ -115,6 +117,32 @@ export const progressLayers = (band: number, full: boolean, g: { viewBox: number
 export const progressStopLayers = (viewBox: number = PROGRESS_GEOMETRY.viewBox): GlyphLayer[] => {
   const c = viewBox / 2;
   return [{ id: 'dot', d: `M${r3(viewBox)} ${r3(c)}A${r3(c)} ${r3(c)} 0 1 1 0 ${r3(c)}A${r3(c)} ${r3(c)} 0 1 1 ${r3(viewBox)} ${r3(c)}Z` }];
+};
+
+/** TOOLTIP'S ARROW (#4009, OD-T6 approved): a triangle in the bubble's fill, pointing at the trigger. Like the spinner it
+ *  is not an icon (an arrow in the icon set would be browsed and shipped as a glyph, and it means nothing off a bubble).
+ *  A vector part is square, so each arrow is drawn on the 24-unit artboard as a triangle whose BASE spans the whole edge
+ *  against the bubble and whose tip sits `depth` of the artboard in: built at 8px (`glyphPx`), an 8px base and a 4px
+ *  deep right-angled tip, with the far half of the square left clear. One glyph per side, named for the way it POINTS
+ *  (`down` sits under a bubble placed on top of its trigger). `start` and `end` are drawn left-to-right; code mirrors
+ *  them in right-to-left text with the placement. */
+export const TOOLTIP_ARROW_GEOMETRY = {
+  viewBox: 24,
+  /** How far in the tip sits, as a share of the base: 0.5 is a right-angled tip. */
+  depth: 0.5,
+} as const;
+
+export const tooltipArrowLayers = (points: 'down' | 'up' | 'start' | 'end', g: { viewBox: number; depth: number } = TOOLTIP_ARROW_GEOMETRY): GlyphLayer[] => {
+  const v = g.viewBox;
+  const c = v / 2;
+  const t = v * g.depth;
+  const d = {
+    down: `M0 0L${r3(v)} 0L${r3(c)} ${r3(t)}Z`,
+    up: `M0 ${r3(v)}L${r3(v)} ${r3(v)}L${r3(c)} ${r3(v - t)}Z`,
+    start: `M${r3(v)} 0L${r3(v)} ${r3(v)}L${r3(v - t)} ${r3(c)}Z`,
+    end: `M0 0L0 ${r3(v)}L${r3(t)} ${r3(c)}Z`,
+  }[points];
+  return [{ id: 'arrow', d }];
 };
 
 /** The registry `anatomy-figma.ts` resolves a `vector` part's `glyph` against before the icon set. */
@@ -127,4 +155,8 @@ export const COMPONENT_GLYPHS: Record<string, readonly GlyphLayer[]> = {
   'progress-ring-small': progressLayers(PROGRESS_GEOMETRY.band.small, true),
   'progress-ring-medium': progressLayers(PROGRESS_GEOMETRY.band.medium, true),
   'progress-stop': progressStopLayers(),
+  'tooltip-arrow-down': tooltipArrowLayers('down'),
+  'tooltip-arrow-up': tooltipArrowLayers('up'),
+  'tooltip-arrow-start': tooltipArrowLayers('start'),
+  'tooltip-arrow-end': tooltipArrowLayers('end'),
 };

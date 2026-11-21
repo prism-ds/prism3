@@ -345,7 +345,13 @@
           "page-nav-item",
           "page-nav",
           "skeleton",
-          "popover"
+          "popover",
+          "step-item",
+          "steps",
+          "menu-item",
+          "menu-group",
+          "menu",
+          "tooltip"
         ]
       }
     },

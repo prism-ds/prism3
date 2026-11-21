@@ -100,7 +100,7 @@
             "properties": {
               "brand": {
                 "$ref": "packages/engine/schema/theme-schema.json",
-                "description": "A BrandInput, the shape in packages/engine/schema/theme-schema.json, which tools/list sends compacted: each description cut to its one-line summary, every other keyword unchanged."
+                "description": "A BrandInput, the shape in packages/engine/schema/theme-schema.json, which tools/list sends compacted: one-line summaries for each top-level field and beneath the required ones, the rest of the prose left to list_levers describe, every other keyword unchanged."
               },
               "include": {
                 "type": "array",
@@ -1130,6 +1130,17 @@
           "source": "packages/engine/cli.ts#argv"
         }
       ]
+    },
+    {
+      "file": "packages/engine/oklch.ts",
+      "summary": "Prints a hex color as the OKLCH anchor a design.md takes (#4176, owner decision b, 2026-11-19).",
+      "usage": [
+        {
+          "text": "npx tsx packages/engine/oklch.ts '#2F6B4F' ['#…']",
+          "source": "packages/engine/oklch.ts#header"
+        }
+      ],
+      "flags": []
     },
     {
       "file": "packages/engine/mcp.ts",

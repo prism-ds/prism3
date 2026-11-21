@@ -77,6 +77,8 @@ import { tab } from './tab';
 import { tabs } from './tabs';
 import { pageNavItem } from './page-nav-item';
 import { pageNav } from './page-nav';
+import { stepItem } from './step-item';
+import { steps } from './steps';
 import { divider } from './divider';
 import { accordionIndicator } from './accordion-indicator';
 import { accordion } from './accordion';
@@ -92,6 +94,7 @@ import { passwordField } from './password-field';
 import { searchField } from './search-field';
 import { cardNumberField } from './card-number-field';
 import { toast } from './toast';
+import { tooltip } from './tooltip';
 import { breadcrumbSeparator } from './breadcrumb-separator';
 import { breadcrumbItem } from './breadcrumb-item';
 import { breadcrumbs } from './breadcrumbs';
@@ -100,6 +103,7 @@ import { sliderThumb, slider } from './slider';
 import { codeInputCell, codeInput } from './code-input';
 import { progress } from './progress';
 import { popover } from './popover';
+import { menuItem, menuGroup, menu } from './menu';
 
 /** Named access, kept ALONGSIDE the set rather than replaced by it. Most of `test.ts`'s component
  *  assertions are about one def's specific fields (`button.variants.appearance`,
@@ -107,7 +111,7 @@ import { popover } from './popover';
  *  be a worse call site, not a better one — a lookup that can return `undefined` standing in for a
  *  binding that cannot. The set is for iteration; these are for the assertions that are ABOUT one
  *  component. */
-export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, imagePlaceholder, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, avatar, skeleton, popover };
+export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, imagePlaceholder, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, avatar, skeleton, popover, stepItem, steps, menuItem, menuGroup, menu, tooltip };
 
 /** Every component def the engine defines. The one thing a projection should iterate. */
 export const componentDefs: readonly ComponentDef[] = [
@@ -290,4 +294,16 @@ export const componentDefs: readonly ComponentDef[] = [
   // `popover` (#4008, owner Q-FL2) — a non-modal panel anchored to its trigger. Nests the neutral flush icon button
   // (close) and the button group (footer), both above.
   popover,
+  // `step-item` and `steps` (#3055, owner decisions 2026-11-19) — one step and the indicator. The item nests `link`,
+  // above; Steps nests the item in its items slot, so it comes after it.
+  stepItem,
+  steps,
+  // `menu-item`, `menu-group` and `menu` (#4007, owner Q-FL2) — a list of actions on Popover's raised surface. The item
+  // nests `focus-ring`; the group and the menu nest the item in their items slots, so it builds first.
+  menuItem,
+  menuGroup,
+  menu,
+  // `tooltip` (#4009, owner Q-FL2) — a short label or description on the inverse surface, shown on hover and keyboard
+  // focus. It nests nothing; its arrow is a component-owned glyph.
+  tooltip,
 ];

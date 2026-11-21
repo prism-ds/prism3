@@ -370,6 +370,30 @@
         "icon"
       ]
     },
+    "menu-item": {
+      "glyphs": [
+        {
+          "part": "checkGlyph",
+          "glyph": "check",
+          "source": "icon set",
+          "how": "drawn"
+        },
+        {
+          "part": "chevronGlyph",
+          "glyph": "chevron-right",
+          "source": "icon set",
+          "how": "drawn",
+          "when": {
+            "type": [
+              "submenu"
+            ]
+          }
+        }
+      ],
+      "iconSlots": [
+        "leadingVisual"
+      ]
+    },
     "pagination-item": {
       "glyphs": [
         {
@@ -534,6 +558,33 @@
       ],
       "iconSlots": []
     },
+    "step-item": {
+      "glyphs": [
+        {
+          "part": "checkGlyph",
+          "glyph": "check",
+          "source": "icon set",
+          "how": "drawn",
+          "when": {
+            "status": [
+              "complete"
+            ]
+          }
+        },
+        {
+          "part": "errorGlyph",
+          "glyph": "error-circle",
+          "source": "icon set",
+          "how": "drawn",
+          "when": {
+            "status": [
+              "error"
+            ]
+          }
+        }
+      ],
+      "iconSlots": []
+    },
     "switch-control": {
       "glyphs": [
         {
@@ -629,6 +680,55 @@
         }
       ],
       "iconSlots": []
+    },
+    "tooltip": {
+      "glyphs": [
+        {
+          "part": "bottomGlyph",
+          "glyph": "tooltip-arrow-up",
+          "source": "component-owned",
+          "how": "drawn",
+          "when": {
+            "placement": [
+              "bottom"
+            ]
+          }
+        },
+        {
+          "part": "endGlyph",
+          "glyph": "tooltip-arrow-start",
+          "source": "component-owned",
+          "how": "drawn",
+          "when": {
+            "placement": [
+              "end"
+            ]
+          }
+        },
+        {
+          "part": "startGlyph",
+          "glyph": "tooltip-arrow-end",
+          "source": "component-owned",
+          "how": "drawn",
+          "when": {
+            "placement": [
+              "start"
+            ]
+          }
+        },
+        {
+          "part": "topGlyph",
+          "glyph": "tooltip-arrow-down",
+          "source": "component-owned",
+          "how": "drawn",
+          "when": {
+            "placement": [
+              "top"
+            ]
+          }
+        }
+      ],
+      "iconSlots": []
     }
   },
   "glyphs": {
@@ -644,6 +744,8 @@
     "check": [
       "checkbox-control",
       "list-item",
+      "menu-item",
+      "step-item",
       "switch-control",
       "tag"
     ],
@@ -663,6 +765,7 @@
     ],
     "chevron-right": [
       "_breadcrumb-separator",
+      "menu-item",
       "pagination-item"
     ],
     "chevron-up": [
@@ -677,7 +780,8 @@
     ],
     "error-circle": [
       "banner",
-      "field-message"
+      "field-message",
+      "step-item"
     ],
     "error-circle-filled": [],
     "external-link-filled": [],
@@ -738,6 +842,18 @@
     ],
     "spinner": [
       "spinner"
+    ],
+    "tooltip-arrow-down": [
+      "tooltip"
+    ],
+    "tooltip-arrow-end": [
+      "tooltip"
+    ],
+    "tooltip-arrow-start": [
+      "tooltip"
+    ],
+    "tooltip-arrow-up": [
+      "tooltip"
     ],
     "warning-triangle": [
       "banner",

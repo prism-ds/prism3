@@ -12,7 +12,7 @@
     "used": 292,
     "unusedSemantic": 260,
     "unusedPrimitive": 280,
-    "components": 66
+    "components": 71
   },
   "tokens": {
     "border-width.hairline": {
@@ -288,6 +288,17 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "border-width"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "border-width"
@@ -463,6 +474,34 @@
           "parts": {
             "container": {
               "members": 96,
+              "where": {}
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "connector-thickness",
+            "marker-stroke"
+          ],
+          "parts": {
+            "connectorH": {
+              "members": 8,
+              "where": {
+                "orientation": [
+                  "horizontal"
+                ]
+              }
+            },
+            "connectorV": {
+              "members": 8,
+              "where": {
+                "orientation": [
+                  "vertical"
+                ]
+              }
+            },
+            "marker": {
+              "members": 16,
               "where": {}
             }
           }
@@ -2043,6 +2082,17 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "border"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "selected.border.page.border.focus-visible",
@@ -2388,6 +2438,21 @@
             "separator.rule.border"
           ],
           "parts": {}
+        },
+        "step-item": {
+          "keys": [
+            "upcoming.border"
+          ],
+          "parts": {
+            "marker": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "upcoming"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -3657,6 +3722,43 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "disabled.icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "disabled"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "disabled.icon"
@@ -4404,6 +4506,38 @@
             },
             "label": {
               "members": 12,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "disabled.indicator",
+            "disabled.label"
+          ],
+          "parts": {
+            "description": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            },
+            "label": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            },
+            "shortcut": {
+              "members": 3,
               "where": {
                 "state": [
                   "disabled"
@@ -5330,6 +5464,17 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "fill"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "popover": {
           "keys": [
             "fill"
@@ -5691,6 +5836,21 @@
                 ],
                 "type": [
                   "determinate"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "error.icon"
+          ],
+          "parts": {
+            "errorGlyph": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "error"
                 ]
               }
             }
@@ -6253,6 +6413,29 @@
             "tone.secondary"
           ],
           "parts": {}
+        },
+        "step-item": {
+          "keys": [
+            "indicator"
+          ],
+          "parts": {
+            "connectorH": {
+              "members": 8,
+              "where": {
+                "orientation": [
+                  "horizontal"
+                ]
+              }
+            },
+            "connectorV": {
+              "members": 8,
+              "where": {
+                "orientation": [
+                  "vertical"
+                ]
+              }
+            }
+          }
         },
         "textarea": {
           "keys": [
@@ -6880,6 +7063,41 @@
               }
             }
           }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.icon.hover"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -6967,6 +7185,41 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.icon.pressed"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7093,6 +7346,43 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7407,6 +7697,27 @@
               }
             }
           }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.label.hover"
+          ],
+          "parts": {
+            "label": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -7431,6 +7742,27 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.label.pressed"
+          ],
+          "parts": {
+            "label": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7461,6 +7793,28 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.label"
+          ],
+          "parts": {
+            "label": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7984,6 +8338,49 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "default.icon.hover"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "unselected.next.icon.hover",
@@ -8192,6 +8589,49 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.icon.pressed"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
                 ]
               }
             }
@@ -8491,6 +8931,52 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 4,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 4,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
                 ]
               }
             }
@@ -8963,6 +9449,25 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "default.overlay.focus-visible",
+            "default.overlay.hover",
+            "destructive.overlay.focus-visible",
+            "destructive.overlay.hover"
+          ],
+          "parts": {
+            "row": {
+              "members": 6,
+              "where": {
+                "state": [
+                  "focus-visible",
+                  "hover"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "unselected.border.false.next.overlay.hover",
@@ -9103,6 +9608,22 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "default.overlay.pressed",
+            "destructive.overlay.pressed"
+          ],
+          "parts": {
+            "row": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "pressed"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "unselected.border.false.next.overlay.pressed",
@@ -9193,6 +9714,24 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.label.hover"
+          ],
+          "parts": {
+            "label": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
                 ]
               }
             }
@@ -9384,6 +9923,24 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.label.pressed"
+          ],
+          "parts": {
+            "label": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
                 ]
               }
             }
@@ -9588,6 +10145,25 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.label"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
                 ]
               }
             }
@@ -10153,6 +10729,23 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "complete.fill",
+            "current.fill"
+          ],
+          "parts": {
+            "marker": {
+              "members": 8,
+              "where": {
+                "status": [
+                  "complete",
+                  "current"
                 ]
               }
             }
@@ -10959,6 +11552,30 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "complete.icon",
+            "current.body"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "complete"
+                ]
+              }
+            },
+            "number": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "current"
+                ]
+              }
+            }
+          }
+        },
         "switch-control": {
           "keys": [
             "on.indicator"
@@ -11343,6 +11960,49 @@
             "container": {
               "members": 2,
               "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "fill"
+          ],
+          "parts": {
+            "bottomGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "bottom"
+                ]
+              }
+            },
+            "bubble": {
+              "members": 4,
+              "where": {}
+            },
+            "endGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "end"
+                ]
+              }
+            },
+            "startGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "start"
+                ]
+              }
+            },
+            "topGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "top"
+                ]
+              }
             }
           }
         }
@@ -15368,6 +16028,17 @@
               "where": {}
             }
           }
+        },
+        "tooltip": {
+          "keys": [
+            "label"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
+              "where": {}
+            }
+          }
         }
       }
     },
@@ -16166,6 +16837,23 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "current.label",
+            "error.label"
+          ],
+          "parts": {
+            "label": {
+              "members": 8,
+              "where": {
+                "status": [
+                  "current",
+                  "error"
+                ]
+              }
+            }
+          }
+        },
         "switch-row": {
           "keys": [
             "label"
@@ -16346,6 +17034,46 @@
               "where": {
                 "status": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "label"
+          ],
+          "parts": {
+            "heading": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "indicator"
+          ],
+          "parts": {
+            "description": {
+              "members": 12,
+              "where": {
+                "state": [
+                  "focus-visible",
+                  "hover",
+                  "pressed",
+                  "rest"
+                ]
+              }
+            },
+            "shortcut": {
+              "members": 12,
+              "where": {
+                "state": [
+                  "focus-visible",
+                  "hover",
+                  "pressed",
+                  "rest"
                 ]
               }
             }
@@ -16537,6 +17265,30 @@
                   "hover",
                   "pressed",
                   "rest"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "upcoming.body",
+            "upcoming.label"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "upcoming"
+                ]
+              }
+            },
+            "number": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "upcoming"
                 ]
               }
             }
@@ -18417,6 +19169,21 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "ring-offset"
+          ],
+          "parts": {
+            "focusRing": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "focus-visible"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "ring-offset"
@@ -18828,6 +19595,21 @@
           "parts": {
             "focusRing": {
               "members": 48,
+              "where": {
+                "state": [
+                  "focus-visible"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "ring-width"
+          ],
+          "parts": {
+            "focusRing": {
+              "members": 3,
               "where": {
                 "state": [
                   "focus-visible"
@@ -20018,6 +20800,43 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "size.medium.marker"
+          ],
+          "parts": {
+            "connectorCell": {
+              "members": 4,
+              "where": {
+                "orientation": [
+                  "horizontal"
+                ],
+                "size": [
+                  "medium"
+                ]
+              }
+            },
+            "errorGlyph": {
+              "members": 2,
+              "where": {
+                "size": [
+                  "medium"
+                ],
+                "status": [
+                  "error"
+                ]
+              }
+            },
+            "marker": {
+              "members": 8,
+              "where": {
+                "size": [
+                  "medium"
+                ]
+              }
+            }
+          }
+        },
         "tab-item": {
           "keys": [
             "size.large.icon"
@@ -20637,6 +21456,40 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 15,
+              "where": {}
+            },
+            "chevronGlyph": {
+              "members": 5,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "indicatorCell": {
+              "members": 15,
+              "where": {}
+            },
+            "leadingVisual": {
+              "members": 15,
+              "where": {}
+            },
+            "trailCell": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "size.medium.icon"
@@ -20793,6 +21646,43 @@
             },
             "ringGlyph": {
               "members": 1,
+              "where": {
+                "size": [
+                  "small"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "size.small.marker"
+          ],
+          "parts": {
+            "connectorCell": {
+              "members": 4,
+              "where": {
+                "orientation": [
+                  "horizontal"
+                ],
+                "size": [
+                  "small"
+                ]
+              }
+            },
+            "errorGlyph": {
+              "members": 2,
+              "where": {
+                "size": [
+                  "small"
+                ],
+                "status": [
+                  "error"
+                ]
+              }
+            },
+            "marker": {
+              "members": 8,
               "where": {
                 "size": [
                   "small"
@@ -21563,6 +22453,21 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "check-size"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 4,
+              "where": {
+                "status": [
+                  "complete"
+                ]
+              }
+            }
+          }
+        },
         "tab-item": {
           "keys": [
             "size.small.icon"
@@ -21864,6 +22769,17 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "popover": {
           "keys": [
             "radius"
@@ -21995,6 +22911,17 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "row": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "radius"
@@ -22043,6 +22970,17 @@
                   "medium"
                 ]
               }
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "bubble": {
+              "members": 4,
+              "where": {}
             }
           }
         },
@@ -22416,6 +23354,17 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "marker": {
+              "members": 16,
+              "where": {}
+            }
+          }
+        },
         "switch-control": {
           "keys": [
             "radius"
@@ -22673,6 +23622,17 @@
     "shadow.lg": {
       "type": "shadow",
       "components": {
+        "menu": {
+          "keys": [
+            "shadow"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "popover": {
           "keys": [
             "shadow"
@@ -23562,6 +24522,17 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "min-height"
+          ],
+          "parts": {
+            "row": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "password-field": {
           "keys": [
             "size.medium.height",
@@ -24271,6 +25242,18 @@
             }
           }
         },
+        "menu-group": {
+          "keys": [
+            "zero"
+          ],
+          "parts": {}
+        },
+        "menu-item": {
+          "keys": [
+            "zero"
+          ],
+          "parts": {}
+        },
         "page-nav-item": {
           "keys": [
             "gap"
@@ -24768,6 +25751,28 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "pad"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "heading-bottom"
+          ],
+          "parts": {
+            "headingCell": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "pagination": {
           "keys": [
             "gap"
@@ -24867,6 +25872,17 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "rail-gap"
+          ],
+          "parts": {
+            "rail": {
+              "members": 16,
+              "where": {}
+            }
+          }
+        },
         "tag": {
           "keys": [
             "size.large.dismissible.gap",
@@ -24909,6 +25925,17 @@
           "parts": {
             "controls": {
               "members": 2,
+              "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "pad-y"
+          ],
+          "parts": {
+            "bubble": {
+              "members": 4,
               "where": {}
             }
           }
@@ -25144,6 +26171,36 @@
           "parts": {
             "container": {
               "members": 32,
+              "where": {
+                "size": [
+                  "small"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "size.small.gap"
+          ],
+          "parts": {
+            "container": {
+              "members": 8,
+              "where": {
+                "size": [
+                  "small"
+                ]
+              }
+            }
+          }
+        },
+        "steps": {
+          "keys": [
+            "size.small.gap"
+          ],
+          "parts": {
+            "items": {
+              "members": 2,
               "where": {
                 "size": [
                   "small"
@@ -25576,6 +26633,36 @@
             }
           }
         },
+        "menu-group": {
+          "keys": [
+            "heading-top"
+          ],
+          "parts": {
+            "headingCell": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "gap"
+          ],
+          "parts": {
+            "leadCell": {
+              "members": 15,
+              "where": {}
+            },
+            "row": {
+              "members": 15,
+              "where": {}
+            },
+            "trailCell": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "padding-x"
@@ -25787,6 +26874,36 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "size.medium.gap"
+          ],
+          "parts": {
+            "container": {
+              "members": 8,
+              "where": {
+                "size": [
+                  "medium"
+                ]
+              }
+            }
+          }
+        },
+        "steps": {
+          "keys": [
+            "size.medium.gap"
+          ],
+          "parts": {
+            "items": {
+              "members": 2,
+              "where": {
+                "size": [
+                  "medium"
+                ]
+              }
+            }
+          }
+        },
         "switch-row": {
           "keys": [
             "size.medium.pad-y",
@@ -25943,6 +27060,17 @@
           "parts": {
             "container": {
               "members": 2,
+              "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "pad-x"
+          ],
+          "parts": {
+            "bubble": {
+              "members": 4,
               "where": {}
             }
           }
@@ -26165,6 +27293,29 @@
                   "small"
                 ]
               }
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "padding-x"
+          ],
+          "parts": {
+            "headingCell": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "padding-x",
+            "padding-y"
+          ],
+          "parts": {
+            "row": {
+              "members": 15,
+              "where": {}
             }
           }
         },
@@ -27178,6 +28329,35 @@
               }
             }
           }
+        },
+        "step-item": {
+          "keys": [
+            "size.small.connector"
+          ],
+          "parts": {
+            "connectorH": {
+              "members": 4,
+              "where": {
+                "orientation": [
+                  "horizontal"
+                ],
+                "size": [
+                  "small"
+                ]
+              }
+            },
+            "connectorV": {
+              "members": 4,
+              "where": {
+                "orientation": [
+                  "vertical"
+                ],
+                "size": [
+                  "small"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -27246,6 +28426,35 @@
                 ],
                 "type": [
                   "icon"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "size.medium.connector"
+          ],
+          "parts": {
+            "connectorH": {
+              "members": 4,
+              "where": {
+                "orientation": [
+                  "horizontal"
+                ],
+                "size": [
+                  "medium"
+                ]
+              }
+            },
+            "connectorV": {
+              "members": 4,
+              "where": {
+                "orientation": [
+                  "vertical"
+                ],
+                "size": [
+                  "medium"
                 ]
               }
             }
@@ -28003,6 +29212,26 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "size.medium.type"
+          ],
+          "parts": {
+            "label": {
+              "members": 6,
+              "where": {
+                "size": [
+                  "medium"
+                ],
+                "status": [
+                  "current",
+                  "error",
+                  "upcoming"
+                ]
+              }
+            }
+          }
+        },
         "text-field": {
           "keys": [
             "size.medium.type"
@@ -28483,6 +29712,21 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "secondary-type"
+          ],
+          "parts": {
+            "description": {
+              "members": 15,
+              "where": {}
+            },
+            "shortcut": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "password-field": {
           "keys": [
             "size.small.type"
@@ -28714,6 +29958,26 @@
             }
           }
         },
+        "step-item": {
+          "keys": [
+            "size.small.type"
+          ],
+          "parts": {
+            "label": {
+              "members": 6,
+              "where": {
+                "size": [
+                  "small"
+                ],
+                "status": [
+                  "current",
+                  "error",
+                  "upcoming"
+                ]
+              }
+            }
+          }
+        },
         "switch-row": {
           "keys": [
             "size.medium.text"
@@ -28804,6 +30068,17 @@
           "parts": {
             "message": {
               "members": 2,
+              "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "type"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
               "where": {}
             }
           }
@@ -30055,6 +31330,17 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "label-type"
+          ],
+          "parts": {
+            "label": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination": {
           "keys": [
             "size.medium.type"
@@ -30878,6 +32164,17 @@
             }
           }
         },
+        "menu-group": {
+          "keys": [
+            "heading-type"
+          ],
+          "parts": {
+            "heading": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "size.small.type.selected"
@@ -30996,6 +32293,22 @@
                   "blue",
                   "outline",
                   "white"
+                ]
+              }
+            }
+          }
+        },
+        "step-item": {
+          "keys": [
+            "number-type"
+          ],
+          "parts": {
+            "number": {
+              "members": 8,
+              "where": {
+                "status": [
+                  "current",
+                  "upcoming"
                 ]
               }
             }
@@ -33185,6 +34498,97 @@
       "declaredNotDrawn": [],
       "drawnNotDeclared": []
     },
+    "menu": {
+      "members": 1,
+      "axes": {
+        "placement": [
+          "bottom"
+        ]
+      },
+      "tokens": [
+        "border-width.hairline",
+        "color.border.secondary",
+        "color.foreground.raised",
+        "radius.lg",
+        "shadow.lg",
+        "space.050"
+      ],
+      "declaredNotDrawn": [],
+      "drawnNotDeclared": []
+    },
+    "menu-group": {
+      "members": 1,
+      "axes": {
+        "type": [
+          "section"
+        ]
+      },
+      "tokens": [
+        "color.text.secondary",
+        "space.0",
+        "space.050",
+        "space.100",
+        "space.150",
+        "type.label.sm.emphasis"
+      ],
+      "declaredNotDrawn": [
+        "space.0"
+      ],
+      "drawnNotDeclared": []
+    },
+    "menu-item": {
+      "members": 15,
+      "axes": {
+        "intent": [
+          "default",
+          "destructive"
+        ],
+        "state": [
+          "disabled",
+          "focus-visible",
+          "hover",
+          "pressed",
+          "rest"
+        ],
+        "type": [
+          "action",
+          "submenu"
+        ]
+      },
+      "tokens": [
+        "color.disabled.icon",
+        "color.disabled.text",
+        "color.interactive.destructive.icon.hover",
+        "color.interactive.destructive.icon.pressed",
+        "color.interactive.destructive.icon.rest",
+        "color.interactive.destructive.text.hover",
+        "color.interactive.destructive.text.pressed",
+        "color.interactive.destructive.text.rest",
+        "color.interactive.neutral.icon.hover",
+        "color.interactive.neutral.icon.pressed",
+        "color.interactive.neutral.icon.rest",
+        "color.interactive.neutral.overlay.hover",
+        "color.interactive.neutral.overlay.pressed",
+        "color.interactive.neutral.text.hover",
+        "color.interactive.neutral.text.pressed",
+        "color.interactive.neutral.text.rest",
+        "color.text.secondary",
+        "focus.ring.offset",
+        "focus.ring.width",
+        "icon.size.sm",
+        "radius.md",
+        "size.md.min-height",
+        "space.0",
+        "space.100",
+        "space.150",
+        "type.body.sm.default",
+        "type.label.md.default"
+      ],
+      "declaredNotDrawn": [
+        "space.0"
+      ],
+      "drawnNotDeclared": []
+    },
     "page-nav": {
       "members": 2,
       "axes": {
@@ -34017,6 +35421,68 @@
       ],
       "drawnNotDeclared": []
     },
+    "step-item": {
+      "members": 16,
+      "axes": {
+        "orientation": [
+          "horizontal",
+          "vertical"
+        ],
+        "size": [
+          "medium",
+          "small"
+        ],
+        "status": [
+          "complete",
+          "current",
+          "error",
+          "upcoming"
+        ]
+      },
+      "tokens": [
+        "border-width.hairline",
+        "color.border.tertiary",
+        "color.icon.danger",
+        "color.icon.secondary",
+        "color.interactive.primary.fill.rest",
+        "color.interactive.primary.on-fill",
+        "color.text.primary",
+        "color.text.secondary",
+        "icon.size.md",
+        "icon.size.sm",
+        "icon.size.xs",
+        "radius.round",
+        "space.050",
+        "space.075",
+        "space.100",
+        "space.400",
+        "space.600",
+        "type.body.md.default",
+        "type.body.sm.default",
+        "type.label.sm.emphasis"
+      ],
+      "declaredNotDrawn": [],
+      "drawnNotDeclared": []
+    },
+    "steps": {
+      "members": 4,
+      "axes": {
+        "orientation": [
+          "horizontal",
+          "vertical"
+        ],
+        "size": [
+          "medium",
+          "small"
+        ]
+      },
+      "tokens": [
+        "space.075",
+        "space.100"
+      ],
+      "declaredNotDrawn": [],
+      "drawnNotDeclared": []
+    },
     "switch-control": {
       "members": 40,
       "axes": {
@@ -34419,6 +35885,27 @@
         "space.200",
         "type.body.sm.default",
         "type.body.sm.line-box"
+      ],
+      "declaredNotDrawn": [],
+      "drawnNotDeclared": []
+    },
+    "tooltip": {
+      "members": 4,
+      "axes": {
+        "placement": [
+          "bottom",
+          "end",
+          "start",
+          "top"
+        ]
+      },
+      "tokens": [
+        "color.inverse.background.primary",
+        "color.inverse.text.primary",
+        "radius.md",
+        "space.050",
+        "space.100",
+        "type.body.sm.default"
       ],
       "declaredNotDrawn": [],
       "drawnNotDeclared": []

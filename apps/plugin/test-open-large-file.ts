@@ -951,9 +951,18 @@ console.log('\n  Capture baseline and Adopt (#3189)');
   //   · `check/drops`: a hand edit made after the pass, heard as Figma's `documentchange`, is in the check's answer: the
   //     edited set is read again. Mutation: the listener's drop removed → `check/drops`.
   // Measured, not asserted: the check's host calls on a fresh read of every set.
-  // 950,000 since Avatar (#4110) joined Skeleton (#4109): the template's 66 sets make 906,466 calls, 891,164 at 65. The
-  // regressions this cap stands for read every set again, which is 2.09M at 66 sets, so it still fails each by name.
-  const CHECK_CAP = 950_000;
+  // #3055: 900,000 → 950,000. Steps and StepItem, landing with Popover, took the template to 66 sets, and the check grew
+  // with them to 905,404 calls (882,494 at 64 sets), linear in the members it reads. With Skeleton (#4109) the template
+  // holds 67 sets and the check 913,510 calls, so 900,000 fails on the merged tree and 950,000 holds. The regressions
+  // this cap exists for stay far above it: the fresh read of every set measures 2.10M, and `main` before #3313 made 2.6M.
+  // #4007: 950,000 since Menu, Menu.Item and Menu.Group took the template to 66 sets (904,870 measured; 900,000 held 63). The
+  // mutations above still land at 2.1M and more, so the cap keeps its margin over them.
+  // Steps merged onto Menu: 70 sets, 946,063 calls (fresh read 2,144,328). 950,000 still holds, with about 4,000 to spare,
+  // so the next set added will likely need to raise it.
+  // Steps merged onto Tooltip (#4009): 950,000 → 1,000,000. 71 sets, 956,255 calls (fresh read 2,155,572), so 950,000
+  // fails on the merged tree. 1,000,000 leaves about 44,000, some five sets at about 8,000 calls a set, and the
+  // regressions this cap exists for still land at 2.1M and more.
+  const CHECK_CAP = 1_000_000;
   const checkOf = async (): Promise<{ msg: any; calls: number; progress: { msg: any; turn: number; i: number }[]; answerAt: number }> => {
     const at = posted.length;
     calls = 0; callsIn.clear();
