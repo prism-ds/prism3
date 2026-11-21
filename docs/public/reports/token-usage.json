@@ -12,7 +12,7 @@
     "used": 291,
     "unusedSemantic": 266,
     "unusedPrimitive": 280,
-    "components": 65
+    "components": 69
   },
   "tokens": {
     "border-width.hairline": {
@@ -284,6 +284,17 @@
           "parts": {
             "container": {
               "members": 216,
+              "where": {}
+            }
+          }
+        },
+        "menu": {
+          "keys": [
+            "border-width"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
               "where": {}
             }
           }
@@ -2021,6 +2032,17 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "border"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "selected.border.page.border.focus-visible",
@@ -3635,6 +3657,43 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "disabled.icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "disabled"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "disabled.icon"
@@ -4382,6 +4441,38 @@
             },
             "label": {
               "members": 12,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "disabled.indicator",
+            "disabled.label"
+          ],
+          "parts": {
+            "description": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            },
+            "label": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "disabled"
+                ]
+              }
+            },
+            "shortcut": {
+              "members": 3,
               "where": {
                 "state": [
                   "disabled"
@@ -5304,6 +5395,17 @@
           "parts": {
             "panel": {
               "members": 16,
+              "where": {}
+            }
+          }
+        },
+        "menu": {
+          "keys": [
+            "fill"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
               "where": {}
             }
           }
@@ -6829,6 +6931,41 @@
               }
             }
           }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.icon.hover"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -6916,6 +7053,41 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.icon.pressed"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7042,6 +7214,43 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7356,6 +7565,27 @@
               }
             }
           }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.label.hover"
+          ],
+          "parts": {
+            "label": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "action"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -7380,6 +7610,27 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.label.pressed"
+          ],
+          "parts": {
+            "label": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7410,6 +7661,28 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "destructive.label"
+          ],
+          "parts": {
+            "label": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "destructive"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "action"
                 ]
               }
             }
@@ -7933,6 +8206,49 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "default.icon.hover"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "unselected.next.icon.hover",
@@ -8141,6 +8457,49 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.icon.pressed"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 1,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
                 ]
               }
             }
@@ -8440,6 +8799,52 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 4,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ]
+              }
+            },
+            "chevronGlyph": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "leadingVisual": {
+              "members": 4,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
                 ]
               }
             }
@@ -8912,6 +9317,25 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "default.overlay.focus-visible",
+            "default.overlay.hover",
+            "destructive.overlay.focus-visible",
+            "destructive.overlay.hover"
+          ],
+          "parts": {
+            "row": {
+              "members": 6,
+              "where": {
+                "state": [
+                  "focus-visible",
+                  "hover"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "unselected.border.false.next.overlay.hover",
@@ -9052,6 +9476,22 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "default.overlay.pressed",
+            "destructive.overlay.pressed"
+          ],
+          "parts": {
+            "row": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "pressed"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "unselected.border.false.next.overlay.pressed",
@@ -9142,6 +9582,24 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.label.hover"
+          ],
+          "parts": {
+            "label": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "hover"
                 ]
               }
             }
@@ -9333,6 +9791,24 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.label.pressed"
+          ],
+          "parts": {
+            "label": {
+              "members": 2,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "pressed"
                 ]
               }
             }
@@ -9537,6 +10013,25 @@
                 ],
                 "surface": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "default.label"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "state": [
+                  "focus-visible",
+                  "rest"
                 ]
               }
             }
@@ -11292,6 +11787,49 @@
             "container": {
               "members": 2,
               "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "fill"
+          ],
+          "parts": {
+            "bottomGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "bottom"
+                ]
+              }
+            },
+            "bubble": {
+              "members": 4,
+              "where": {}
+            },
+            "endGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "end"
+                ]
+              }
+            },
+            "startGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "start"
+                ]
+              }
+            },
+            "topGlyph": {
+              "members": 1,
+              "where": {
+                "placement": [
+                  "top"
+                ]
+              }
             }
           }
         }
@@ -15317,6 +15855,17 @@
               "where": {}
             }
           }
+        },
+        "tooltip": {
+          "keys": [
+            "label"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
+              "where": {}
+            }
+          }
         }
       }
     },
@@ -16280,6 +16829,46 @@
               "where": {
                 "status": [
                   "default"
+                ]
+              }
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "label"
+          ],
+          "parts": {
+            "heading": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "indicator"
+          ],
+          "parts": {
+            "description": {
+              "members": 12,
+              "where": {
+                "state": [
+                  "focus-visible",
+                  "hover",
+                  "pressed",
+                  "rest"
+                ]
+              }
+            },
+            "shortcut": {
+              "members": 12,
+              "where": {
+                "state": [
+                  "focus-visible",
+                  "hover",
+                  "pressed",
+                  "rest"
                 ]
               }
             }
@@ -18351,6 +18940,21 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "ring-offset"
+          ],
+          "parts": {
+            "focusRing": {
+              "members": 3,
+              "where": {
+                "state": [
+                  "focus-visible"
+                ]
+              }
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "ring-offset"
@@ -18762,6 +19366,21 @@
           "parts": {
             "focusRing": {
               "members": 48,
+              "where": {
+                "state": [
+                  "focus-visible"
+                ]
+              }
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "ring-width"
+          ],
+          "parts": {
+            "focusRing": {
+              "members": 3,
               "where": {
                 "state": [
                   "focus-visible"
@@ -20416,6 +21035,40 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "icon"
+          ],
+          "parts": {
+            "checkGlyph": {
+              "members": 15,
+              "where": {}
+            },
+            "chevronGlyph": {
+              "members": 5,
+              "where": {
+                "intent": [
+                  "default"
+                ],
+                "type": [
+                  "submenu"
+                ]
+              }
+            },
+            "indicatorCell": {
+              "members": 15,
+              "where": {}
+            },
+            "leadingVisual": {
+              "members": 15,
+              "where": {}
+            },
+            "trailCell": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "size.medium.icon"
@@ -21553,6 +22206,17 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "popover": {
           "keys": [
             "radius"
@@ -21662,6 +22326,17 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "row": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "radius"
@@ -21710,6 +22385,17 @@
                   "medium"
                 ]
               }
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "radius"
+          ],
+          "parts": {
+            "bubble": {
+              "members": 4,
+              "where": {}
             }
           }
         },
@@ -22296,6 +22982,17 @@
     "shadow.lg": {
       "type": "shadow",
       "components": {
+        "menu": {
+          "keys": [
+            "shadow"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "popover": {
           "keys": [
             "shadow"
@@ -23185,6 +23882,17 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "min-height"
+          ],
+          "parts": {
+            "row": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "password-field": {
           "keys": [
             "size.medium.height",
@@ -23883,6 +24591,18 @@
             }
           }
         },
+        "menu-group": {
+          "keys": [
+            "zero"
+          ],
+          "parts": {}
+        },
+        "menu-item": {
+          "keys": [
+            "zero"
+          ],
+          "parts": {}
+        },
         "page-nav-item": {
           "keys": [
             "gap"
@@ -24369,6 +25089,28 @@
             }
           }
         },
+        "menu": {
+          "keys": [
+            "pad"
+          ],
+          "parts": {
+            "panel": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "heading-bottom"
+          ],
+          "parts": {
+            "headingCell": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
         "pagination": {
           "keys": [
             "gap"
@@ -24510,6 +25252,17 @@
           "parts": {
             "controls": {
               "members": 2,
+              "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "pad-y"
+          ],
+          "parts": {
+            "bubble": {
+              "members": 4,
               "where": {}
             }
           }
@@ -25177,6 +25930,36 @@
             }
           }
         },
+        "menu-group": {
+          "keys": [
+            "heading-top"
+          ],
+          "parts": {
+            "headingCell": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "gap"
+          ],
+          "parts": {
+            "leadCell": {
+              "members": 15,
+              "where": {}
+            },
+            "row": {
+              "members": 15,
+              "where": {}
+            },
+            "trailCell": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination-item": {
           "keys": [
             "padding-x"
@@ -25547,6 +26330,17 @@
               "where": {}
             }
           }
+        },
+        "tooltip": {
+          "keys": [
+            "pad-x"
+          ],
+          "parts": {
+            "bubble": {
+              "members": 4,
+              "where": {}
+            }
+          }
         }
       }
     },
@@ -25766,6 +26560,29 @@
                   "small"
                 ]
               }
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "padding-x"
+          ],
+          "parts": {
+            "headingCell": {
+              "members": 1,
+              "where": {}
+            }
+          }
+        },
+        "menu-item": {
+          "keys": [
+            "padding-x",
+            "padding-y"
+          ],
+          "parts": {
+            "row": {
+              "members": 15,
+              "where": {}
             }
           }
         },
@@ -28084,6 +28901,21 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "secondary-type"
+          ],
+          "parts": {
+            "description": {
+              "members": 15,
+              "where": {}
+            },
+            "shortcut": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "password-field": {
           "keys": [
             "size.small.type"
@@ -28405,6 +29237,17 @@
           "parts": {
             "message": {
               "members": 2,
+              "where": {}
+            }
+          }
+        },
+        "tooltip": {
+          "keys": [
+            "type"
+          ],
+          "parts": {
+            "label": {
+              "members": 4,
               "where": {}
             }
           }
@@ -29638,6 +30481,17 @@
             }
           }
         },
+        "menu-item": {
+          "keys": [
+            "label-type"
+          ],
+          "parts": {
+            "label": {
+              "members": 15,
+              "where": {}
+            }
+          }
+        },
         "pagination": {
           "keys": [
             "size.medium.type"
@@ -30418,6 +31272,17 @@
                   "small"
                 ]
               }
+            }
+          }
+        },
+        "menu-group": {
+          "keys": [
+            "heading-type"
+          ],
+          "parts": {
+            "heading": {
+              "members": 1,
+              "where": {}
             }
           }
         },
@@ -32683,6 +33548,97 @@
       "declaredNotDrawn": [],
       "drawnNotDeclared": []
     },
+    "menu": {
+      "members": 1,
+      "axes": {
+        "placement": [
+          "bottom"
+        ]
+      },
+      "tokens": [
+        "border-width.hairline",
+        "color.border.secondary",
+        "color.foreground.raised",
+        "radius.lg",
+        "shadow.lg",
+        "space.050"
+      ],
+      "declaredNotDrawn": [],
+      "drawnNotDeclared": []
+    },
+    "menu-group": {
+      "members": 1,
+      "axes": {
+        "type": [
+          "section"
+        ]
+      },
+      "tokens": [
+        "color.text.secondary",
+        "space.0",
+        "space.050",
+        "space.100",
+        "space.150",
+        "type.label.sm.emphasis"
+      ],
+      "declaredNotDrawn": [
+        "space.0"
+      ],
+      "drawnNotDeclared": []
+    },
+    "menu-item": {
+      "members": 15,
+      "axes": {
+        "intent": [
+          "default",
+          "destructive"
+        ],
+        "state": [
+          "disabled",
+          "focus-visible",
+          "hover",
+          "pressed",
+          "rest"
+        ],
+        "type": [
+          "action",
+          "submenu"
+        ]
+      },
+      "tokens": [
+        "color.disabled.icon",
+        "color.disabled.text",
+        "color.interactive.destructive.icon.hover",
+        "color.interactive.destructive.icon.pressed",
+        "color.interactive.destructive.icon.rest",
+        "color.interactive.destructive.text.hover",
+        "color.interactive.destructive.text.pressed",
+        "color.interactive.destructive.text.rest",
+        "color.interactive.neutral.icon.hover",
+        "color.interactive.neutral.icon.pressed",
+        "color.interactive.neutral.icon.rest",
+        "color.interactive.neutral.overlay.hover",
+        "color.interactive.neutral.overlay.pressed",
+        "color.interactive.neutral.text.hover",
+        "color.interactive.neutral.text.pressed",
+        "color.interactive.neutral.text.rest",
+        "color.text.secondary",
+        "focus.ring.offset",
+        "focus.ring.width",
+        "icon.size.sm",
+        "radius.md",
+        "size.md.min-height",
+        "space.0",
+        "space.100",
+        "space.150",
+        "type.body.sm.default",
+        "type.label.md.default"
+      ],
+      "declaredNotDrawn": [
+        "space.0"
+      ],
+      "drawnNotDeclared": []
+    },
     "page-nav": {
       "members": 2,
       "axes": {
@@ -33917,6 +34873,27 @@
         "space.200",
         "type.body.sm.default",
         "type.body.sm.line-box"
+      ],
+      "declaredNotDrawn": [],
+      "drawnNotDeclared": []
+    },
+    "tooltip": {
+      "members": 4,
+      "axes": {
+        "placement": [
+          "bottom",
+          "end",
+          "start",
+          "top"
+        ]
+      },
+      "tokens": [
+        "color.inverse.background.primary",
+        "color.inverse.text.primary",
+        "radius.md",
+        "space.050",
+        "space.100",
+        "type.body.sm.default"
       ],
       "declaredNotDrawn": [],
       "drawnNotDeclared": []
