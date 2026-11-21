@@ -23,6 +23,8 @@ import { groundsOf } from './grounds';
 import { INVERSE_GAPS, INVERSE_GAP_PATHS } from './inverse-coverage';
 import { isInverseRole } from './inverse-roles';
 import { parseDesignMd, parseYamlSubset, toDesignMd } from './design-md';
+import { applyIconMap } from './icon-map';
+import { iconArtDuplicates } from './icon-art';
 import { parseStandardDesignMd, standardToBrandInput, applyXPrism3, isStandardDesignMd, xPrism3Warnings } from './standard-design-md';
 import { classifyColors } from './classify-colors';
 import { SLIDER_STOPS, TRAITS, TRAIT_OPPOSITES, resolveVocabulary } from './vocabulary';
@@ -4402,6 +4404,7 @@ for (const b of brands) {
       toast: { keys: [], sizes: [], bare: ['pad-y', 'pad-x', 'pad-end', 'gap', 'glyph-gap'] },
       // #4007: the menu item's inline padding and gap, one size.
       'menu-item': { keys: [], sizes: [], bare: ['padding-x', 'gap'] },
+      tooltip: { keys: [], sizes: [], bare: ['pad-y', 'pad-x'] },
       // Divider (#3051, #3143): the labeled divider's label-to-line gap, across a row and down a column.
       divider: { keys: [], sizes: [], bare: ['horizontal.gap', 'vertical.gap'] },
       'breadcrumb-item': { keys: ['gap'], sizes: ['small', 'medium'] },
@@ -4451,6 +4454,7 @@ for (const b of brands) {
       // Toast (#2668, the proposal's §8 approved by call 13 A): comfortable is 8/16/8 padding, 8 to the controls, 12 glyph to message.
       toast: { compact: 'bare 6/12/6/6/8', comfortable: 'bare 8/16/8/8/12', spacious: 'bare 12/20/12/12/16' },
       'menu-item': { compact: 'bare 8/6', comfortable: 'bare 12/8', spacious: 'bare 16/12' },
+      tooltip: { compact: 'bare 2/6', comfortable: 'bare 4/8', spacious: 'bare 6/12' },
       // Divider (#3051, Q3051.4 A; #3143, Q3143.3 A): the label-to-line gap, horizontal / vertical. Comfortable is the
       // owner's space.300, 24px, across a row and space.150, 12px, down a column; the vertical one moves 8/12/16.
       divider: { compact: 'bare 20/8', comfortable: 'bare 24/12', spacious: 'bare 32/16' },
@@ -21579,6 +21583,8 @@ arm: {
       'text-field': 2, textarea: 2, 'password-field': 2, 'code-input': 2, 'search-field': 2, 'card-number-field': 2, select: 2, 'checkbox-row': 2, 'checkbox-group': 2, 'tag-group': 2,
       'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, menu: 2, 'menu-item': 9, 'menu-group': 3, banner: 2, toast: 2, pagination: 2, slider: 2,
       'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, skeleton: 3, veil: 3, 'image-placeholder': 3,
+      // Tooltip (#4009, generation priority 3, decided in Q-FL2): supports another component, as Badge does.
+      tooltip: 3,
       'flush-icon-button-neutral': 4, 'flush-icon-button': 5, 'flush-icon-button-destructive': 5,
       'checkbox-control': 6, 'radio-control': 6, 'switch-control': 6, 'field-label': 6, 'field-message': 6, 'focus-ring': 6,
       'tab-item': 9, 'list-item': 9, 'segmented-control-segment': 9, '_accordion-indicator': 9, 'code-input-cell': 9, 'radio-row': 9, 'pagination-item': 9, '_slider-thumb': 9,
@@ -33060,7 +33066,7 @@ arm: {
     && cs.files.get('./cs/component-contracts.json') === cs.files.get('./cs/component-defs.json'),
     `#1325 export_theme: include:[componentSpecs] writes exactly the component contracts, their compatibility copy (the same bytes) and the Specs projection (${[...cs.files.keys()].join(', ')})`);
   const csDoc = JSON.parse(cs.files.get('./cs/component-defs.json') ?? '{}');
-  ok(csDoc.brand?.id === xbrand.id && csDoc.format === 'prism3-component-defs/1.6' && Object.keys(csDoc.components ?? {}).length >= 40,
+  ok(csDoc.brand?.id === xbrand.id && csDoc.format === 'prism3-component-defs/1.7' && Object.keys(csDoc.components ?? {}).length >= 40,
     `export_theme: the component-defs export is the brand's (${csDoc.brand?.id}), in its format, with every component (${Object.keys(csDoc.components ?? {}).length})`);
 
   // A bad brand must fail BEFORE anything is written — a partial export is worse than none.
@@ -34407,7 +34413,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'menu-item'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'menu-item', 'tooltip'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -42742,6 +42748,126 @@ arm: {
   ok(validateComponentDef(td).errors.length === 0, `#2668 toast validates clean (${validateComponentDef(td).errors.slice(0, 2).join('; ')})`);
 }
 
+// ------------------------------------------------------------------- #4009: the tooltip
+// The proposal on #4009 with every OD at its recommendation, and the owner's Q-FL2 record on #4007 and #4009
+// (2026-11-19): K6 B (label mode on an icon-only trigger), K7 B (a fade plus a small scale), K8 A (an owned positioning
+// layer), OD-X2 A (logical sides), OD-T6 (the numbers with no token, as placeholders). EXPECTED is typed here as literals
+// from those records; ACTUAL is the projected plan and, for contrast, the committed emission under `out/`, read as files,
+// never through the def. Mutations: the bubble's fill to `color.background.primary` → `#4009 tooltip bubble`; the arrow
+// boolean dropped → `#4009 tooltip properties`; the scale entrance removed from codeOnly → `#4009 tooltip code-side`.
+{
+  const td = componentDefs.find((d) => d.id === 'tooltip')!;
+  const plans = figmaAnatomySet(td, { swapTarget: 'FPO-default-icon' });
+  type TN = { name: string; type: string; children: TN[]; bound?: Record<string, string>; paints?: Record<string, string>; layoutMode?: string; textStyle?: string; glyphPx?: number; visibleProp?: string; descendantFills?: string; effectStyle?: string };
+  const find = (n: TN, name: string): TN | undefined => (n.name === name ? n : n.children.map((c) => find(c, name)).find(Boolean));
+
+  // THE SHAPE (OD-X2 A, OD-T2 A, OD-T3 A): 4 members, top first; no size, no state, no alignment axis.
+  ok(JSON.stringify(plans.map(planComponentName)) === JSON.stringify(['placement=top', 'placement=bottom', 'placement=start', 'placement=end']) && figmaVariantCount(td) === 4,
+    `#4009 tooltip: 4 members, placement top, bottom, start, end (OD-X2 A, OD-T3 A) (got ${plans.map(planComponentName).join(' | ')})`);
+  ok(JSON.stringify(td.variants) === JSON.stringify({ placement: ['top', 'bottom', 'start', 'end'] }) && td.states.length === 0 && !td.figmaProperties?.stateAxis
+    && td.props.find((p) => p.name === 'placement')?.default === 'top' && td.props.find((p) => p.name === 'align')?.default === 'center',
+    `#4009 tooltip: placement [top, bottom, start, end] only, top the code default, align center in code, no state axis (got ${JSON.stringify(td.variants)})`);
+  ok(td.name === 'Tooltip' && td.category === 'overlay' && JSON.stringify(td.aliases) === JSON.stringify(['hint', 'infotip', 'info-tip']) && td.ai.generationPriority === 3,
+    `#4009 tooltip: named Tooltip, category overlay, aliases hint, infotip and info-tip, generation priority 3 (got ${td.name}, ${td.category}, ${JSON.stringify(td.aliases)}, ${td.ai.generationPriority})`);
+
+  // THE BUBBLE (OD-X1, OD-T6): the inverse surface, radius md, padding 4 / 8, no border, no shadow.
+  const bubbleBad = plans.filter((p) => {
+    const b = find(p.root as TN, 'bubble');
+    return !(b && b.paints?.fills === 'color/inverse/background/primary' && !b.paints?.strokes && !b.effectStyle
+      && b.bound?.topLeftRadius === 'radius/md' && b.bound?.bottomRightRadius === 'radius/md'
+      && b.bound?.paddingTop === 'space/050' && b.bound?.paddingBottom === 'space/050' && b.bound?.paddingLeft === 'space/100' && b.bound?.paddingRight === 'space/100');
+  }).map(planComponentName);
+  ok(bubbleBad.length === 0, `#4009 tooltip bubble: inverse.background.primary with no border and no shadow, radius/md, padding 4/8 (OD-X1, OD-T6)${bubbleBad.length ? ` — WRONG: ${bubbleBad.join(', ')}` : ''}`);
+
+  // THE LABEL (OD-T6): inverse.text.primary in the 14px body style.
+  const labelBad = plans.filter((p) => { const l = find(p.root as TN, 'label'); return !(l && l.paints?.fills === 'color/inverse/text/primary' && l.textStyle === 'body/sm/default'); }).map(planComponentName);
+  ok(labelBad.length === 0, `#4009 tooltip label: inverse.text.primary in body/sm/default (OD-T6)${labelBad.length ? ` — WRONG: ${labelBad.join(', ')}` : ''}`);
+
+  // THE ARROW (OD-T2 A, OD-T6): one per member, on the bubble's trigger side, 8px literal, in the bubble's fill.
+  const SIDE: Record<string, { part: string; dir: string; order: string[] }> = {
+    top: { part: 'topGlyph', dir: 'VERTICAL', order: ['bubble', 'topGlyph'] },
+    bottom: { part: 'bottomGlyph', dir: 'VERTICAL', order: ['bottomGlyph', 'bubble'] },
+    start: { part: 'startGlyph', dir: 'HORIZONTAL', order: ['bubble', 'startGlyph'] },
+    end: { part: 'endGlyph', dir: 'HORIZONTAL', order: ['endGlyph', 'bubble'] },
+  };
+  const arrowBad = plans.filter((p) => {
+    const r = p.root as TN, s = SIDE[(p.coord as Record<string, string>).placement], g = s && find(r, s.part);
+    return !(s && g && g.type === 'GLYPH' && r.layoutMode === s.dir && JSON.stringify(r.children.map((c) => c.name)) === JSON.stringify(s.order)
+      && g.glyphPx === 8 && g.descendantFills === 'color/inverse/background/primary' && g.visibleProp === 'arrow');
+  }).map(planComponentName);
+  ok(arrowBad.length === 0, `#4009 tooltip arrow: one 8px arrow per member on the trigger side, in inverse.background.primary, shown by the arrow toggle (OD-T2 A, OD-T6)${arrowBad.length ? ` — WRONG: ${arrowBad.join(', ')}` : ''}`);
+
+  // THE PROPERTIES (OD-T2 A): the label text and the arrow toggle, on by default; lowercase names (Q345).
+  ok(JSON.stringify(planSetProperties(plans)) === JSON.stringify([{ name: 'label', type: 'TEXT', default: 'Tooltip text' }, { name: 'arrow', type: 'BOOLEAN', default: true }]),
+    `#4009 tooltip properties: label "Tooltip text", arrow on (OD-T2 A) (got ${JSON.stringify(planSetProperties(plans))})`);
+  ok(JSON.stringify(td.composition?.composesWith) === '[]', `#4009 tooltip nests nothing: its arrow is a component-owned glyph (got ${JSON.stringify(td.composition?.composesWith)})`);
+
+  // THE CODE-SIDE CONTRACT, each stated in codeOnly, the props or accessibility as literals.
+  const co = codeOnlyText(td.anatomy!.codeOnly).join('\n');
+  const kind = td.props.find((p) => p.name === 'kind');
+  // K7 A holds the motion to a fade, however a size change is worded (Delta review N2 at 0c32bc9c): the word scale, a
+  // grow, shrink or zoom, a transform, or a percentage, in the code motion entry or any of the motion field's lines.
+  const SIZE_CHANGE = /\bscal(?:e|es|ed|ing)\b|\b(?:grow|shrink|zoom)|\btransform|\d\s*%/i;
+  const tdMotionEntry = codeOnlyText(td.anatomy!.codeOnly).find((t) => /^motion — /.test(t)) ?? '';
+  const contract: [string, boolean][] = [
+    ['role tooltip, described by default', /`role="tooltip"`/.test(co) && /`aria-describedby`/.test(co) && kind?.default === 'description'],
+    ['label mode on an icon-only trigger, with no aria-label (K6 B)', JSON.stringify(kind?.values) === '["description","label"]' && /`aria-labelledby` pointing at it and no `aria-label`/.test(co)],
+    ['Escape hides it without moving focus, and it never takes focus (OD-T1 A)', /Escape hides it without moving focus/.test(co) && /It never takes focus/.test(co)],
+    ['at once on keyboard focus, after the delay on hover, at once in the skip window (OD-T4 A)', /after `delay`, at once on keyboard focus/.test(co) && /within the shared skip window/.test(co)],
+    ['a fade alone with no scale, no animation in the skip window, the reduced fade both ways (K7 A)', /show: opacity 0 to 1, a fade alone with no scale/.test(co) && !/scale from/.test(co) && [tdMotionEntry.replace('a fade alone with no scale', ''), td.motion?.enter ?? '', td.motion?.exit ?? '', td.motion?.reduceMotion ?? ''].every((t) => !SIZE_CHANGE.test(t)) && tdMotionEntry !== '' && /Inside the skip window it appears with no animation/.test(co) && /both ways fade on `motion\.duration-reduced\.fast`/.test(co)],
+    ['an owned positioning layer on the platform, no library (K8 A)', /`popover="manual"`/.test(co) && /CSS anchor positioning/.test(co) && /No positioning library/.test(co)],
+    ['max width 240, offset space.100 (OD-T6)', /up to 240px/.test(co) && /offset `space\.100` from the trigger to the arrow\\'s tip|offset `space\.100` from the trigger to the arrow's tip/.test(co)],
+    ['logical sides that mirror in right-to-left (OD-X2 A)', /start and end are logical/.test(co)],
+    ['never native disabled on the trigger', /never native `disabled`/.test(co)],
+  ];
+  const contractBad = contract.filter(([, v]) => !v).map(([k]) => k);
+  ok(contractBad.length === 0, `#4009 tooltip code-side contract, stated: ${contract.map(([k]) => k).join('; ')}${contractBad.length ? ` — MISSING: ${contractBad.join('; ')}` : ''}`);
+
+  // CONTRAST, over every committed brand × mode: the label on the bubble, and the bubble (and so the arrow) against the
+  // page. Read from `out/<brand>.tokens.json`, resolving aliases, never through the def.
+  {
+    const OUT = resolve(HERE, 'out');
+    const brands = readdirSync(OUT).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f) && !f.includes('.base.') && !f.includes('.overlay.'));
+    const PAIRS: [string, string, number, string][] = [
+      ['color.inverse.text.primary', 'color.inverse.background.primary', 4.5, 'label on the bubble'],
+      ['color.inverse.background.primary', 'color.background.primary', 3, 'the bubble and arrow against the page'],
+    ];
+    const misses: string[] = [];
+    let checked = 0;
+    for (const f of brands) {
+      const doc = JSON.parse(readFileSync(resolve(OUT, f), 'utf8'));
+      const rootKey = Object.keys(doc).find((k) => !k.startsWith('$'))!;
+      const leaf = (path: string) => path.split('.').reduce((o: any, k) => o?.[k], doc[rootKey]);
+      const modes = ['light', ...Object.keys(leaf('color.inverse.background.primary')?.$extensions?.prism3?.modes ?? {})];
+      const valueAt = (path: string, mode: string, depth = 0): string | undefined => {
+        const l = leaf(path);
+        if (!l || depth > 12) return undefined;
+        const v = mode !== 'light' && l.$extensions?.prism3?.modes?.[mode] ? l.$extensions.prism3.modes[mode].$value : l.$value;
+        if (typeof v !== 'string') return undefined;
+        const m = /^\{(.+)\}$/.exec(v);
+        return m ? valueAt(m[1].replace(new RegExp(`^${rootKey}\\.`), ''), mode, depth + 1) : v;
+      };
+      const rgbOf = (v: string | undefined): RGB | undefined => {
+        if (!v) return undefined;
+        if (/^#[0-9a-f]{6}$/i.test(v)) return hexToRgb(v);
+        const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(v);
+        return m ? hexToRgb(`#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`) : undefined;
+      };
+      for (const mode of modes) for (const [fg, bg, floor, what] of PAIRS) {
+        const a = rgbOf(valueAt(fg, mode)), b = rgbOf(valueAt(bg, mode));
+        if (!a || !b) { misses.push(`${f}/${mode} ${what}: unresolved (${valueAt(fg, mode)} on ${valueAt(bg, mode)})`); continue; }
+        const ratio = contrast(a, b);
+        checked++;
+        if (ratio < floor) misses.push(`${f}/${mode} ${what}: ${ratio.toFixed(2)}:1 under ${floor}:1`);
+      }
+    }
+    ok(brands.length >= 5 && checked >= brands.length * 4 * PAIRS.length && misses.length === 0,
+      `#4009 tooltip contrast: ${PAIRS.length} inverse pairs clear their floors in every committed brand × mode (${brands.length} brands, ${checked} ratios)${misses.length ? ` — MISS: ${misses.slice(0, 4).join('; ')}` : ''}`);
+  }
+
+  ok(validateComponentDef(td).errors.length === 0, `#4009 tooltip validates clean (${validateComponentDef(td).errors.slice(0, 2).join('; ')})`);
+}
+
 // ------------------------------------------------------------------- #3165: the toast's message at 14px
 // Owner request (#3165): the message is 14px, `type.body.sm`, not 16. Q3165.1 A: the card takes a floor at the
 // ladder's medium rung, so a one-line toast with no action still lands on the control-height ladder rather than at
@@ -45677,6 +45803,130 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   // The accept side: rising floors, a fractional one among them, still build.
   const rising = refusal(() => brandTheme(withBps([0, 768.5, 1024])));
   ok(rising === '', `#3872 rising breakpoints [0, 768.5, 1024] still build (got ${JSON.stringify(rising)})`);
+}
+
+// #3076 — THE BRAND ICON MAP (owner decision 2026-11-18, A, both; Q1–Q8 at their recommendations). A brand names which of
+// its own icons stands in for each Prism3 icon and carries the art; `applyIconMap` rewrites every def before projection.
+// EXPECTED is typed here from #3076's own table of where the core icons are used (plus the counter, the proposal's
+// finding 2) and from the rules the proposal lists; ACTUAL is the projected plans and `brandTheme`'s refusals. Neither
+// is read from `icon-map.ts` (docs/34).
+{
+  const MAP = { plus: 'add', 'plus-filled': 'add', minus: 'subtract', 'minus-filled': 'subtract', check: 'checkmark', 'close-filled': 'close' };
+  const ADD = 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z';
+  const GLYPHS = { add: { path: ADD }, subtract: { path: 'M4 11h16v2H4z' }, checkmark: { path: 'M9.5 15.6 5.4 11.5 4 12.9l5.5 5.5L20 7.9l-1.4-1.4z' }, close: { path: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z', fillRule: 'evenodd' as const } };
+  const ICONS = { map: MAP, glyphs: GLYPHS };
+  const refs = (defs: readonly ComponentDef[]): Map<string, Set<string>> => {
+    const out = new Map<string, Set<string>>();
+    const walk = (id: string, n: any): void => {
+      for (const t of [n.nestTarget, n.swapTarget, ...(n.nestOverrides ?? []).map((o: any) => o.value)])
+        if (typeof t === 'string' && t.startsWith('icon/')) { if (!out.has(t)) out.set(t, new Set()); out.get(t)!.add(id); }
+      for (const c of n.children ?? []) walk(id, c);
+    };
+    for (const d of defs) for (const p of figmaAnatomySet(d, {})) walk(d.id, p.root);
+    return out;
+  };
+  const mapped = componentDefs.map((d) => applyIconMap(d, ICONS));
+  const got = refs(mapped);
+  // No generated component instances a mapped Prism3 icon, through a glyph, a slot's default or an override.
+  for (const core of ['plus', 'plus-filled', 'minus', 'minus-filled', 'check', 'close-filled'])
+    ok(!got.has(`icon/${core}`), `#3076 no generated component instances icon/${core} once it is mapped (found in ${[...(got.get(`icon/${core}`) ?? [])].join(', ')})`);
+  // Each place #3076 lists now instances the brand's icon there.
+  const WANT: [string, string][] = [
+    ['_accordion-indicator', 'icon/add'], ['_accordion-indicator', 'icon/subtract'],
+    ['checkbox-control', 'icon/checkmark'], ['checkbox-control', 'icon/subtract'],
+    ['list-item', 'icon/checkmark'], ['search-field', 'icon/close'], ['switch-control', 'icon/checkmark'], ['tag', 'icon/checkmark'],
+    ['counter', 'icon/add'], ['counter', 'icon/subtract'],
+  ];
+  for (const [id, target] of WANT) ok(got.get(target)?.has(id) === true, `#3076 ${id} instances ${target} under the map`);
+  // The icon set: each mapped name gone, each brand glyph built from the brand's art, a redrawn Prism3 name kept (Q5 A).
+  const iconPlans = figmaAnatomySet(mapped.find((d) => d.id === 'icon')!, {});
+  const memberOf = (n: string) => iconPlans.find((p) => planComponentName(p) === `name=${n}`);
+  for (const core of Object.keys(MAP)) ok(!memberOf(core), `#3076 the icon set builds no icon/${core} once it is mapped`);
+  ok(JSON.stringify(memberOf('add') ?? null).includes(ADD), '#3076 the icon set builds icon/add from the brand\'s art');
+  const closeDoc = JSON.stringify(memberOf('close') ?? null);
+  ok(closeDoc.includes(GLYPHS.close.path) && closeDoc.includes('evenodd'), '#3076 a brand glyph named close redraws icon/close with the brand\'s art and its fill rule (Q5 A)');
+  ok(iconPlans.length === 46 - 6 + 3, `#3076 the icon set is Prism3's 46 less the 6 mapped plus the 3 new brand names (got ${iconPlans.length})`);
+  // The icon def's own `name` property lists the same set its axis builds, so a reader of the materialized def (the
+  // export's spec, an agent) sees no mapped name offered and every brand name.
+  const nameProp = mapped.find((d) => d.id === 'icon')!.props.find((p) => p.name === 'name')?.values ?? [];
+  ok(nameProp.length === 43 && !nameProp.includes('plus') && !nameProp.includes('check') && ['add', 'subtract', 'checkmark', 'close'].every((n) => nameProp.includes(n)),
+    `#3076 the mapped icon def's name property offers the brand's 43 names, no mapped one (got ${nameProp.length}: ${nameProp.slice(-4).join(', ')})`);
+  // No map, no change: every def comes back as the same object, so every plan is the one component-surface.json pins.
+  const same = componentDefs.filter((d) => applyIconMap(d, undefined) !== d || applyIconMap(d, {}) !== d || applyIconMap(d, { map: {}, glyphs: {} }) !== d).map((d) => d.id);
+  ok(same.length === 0, `#3076 a brand with no icon map leaves every def as authored (rewrote ${same.join(', ')})`);
+  // The rules, each refused by name at the choke point every entry path passes through.
+  const base = { id: 'icons3076', primary: { l: 0.55, c: 0.15, h: 260 }, neutral: { hue: 260, chroma: 0.01 } } as unknown as BrandInput;
+  const refusal = (icons: unknown): string => { try { brandTheme({ ...base, icons } as unknown as BrandInput); return ''; } catch (e) { return (e as Error).message; } };
+  ok(refusal(ICONS) === '', `#3076 a valid map with art builds (got ${JSON.stringify(refusal(ICONS))})`);
+  const RULES: [string, unknown, string][] = [
+    ['a key that is not a Prism3 icon', { map: { plsu: 'add' }, glyphs: GLYPHS }, 'icons.map.plsu'],
+    ['a chain', { map: { plus: 'minus', minus: 'subtract' }, glyphs: GLYPHS }, 'icons.map.plus'],
+    ['a self-map', { map: { check: 'check' } }, 'icons.map.check'],
+    ['a target with no art', { map: { check: 'tick' } }, 'icons.map.check'],
+    ['art for a mapped name', { map: { plus: 'add' }, glyphs: { ...GLYPHS, plus: { path: ADD } } }, 'icons.glyphs.plus'],
+    ['art that is not one path', { glyphs: { add: { path: '<path d="M0 0"/>' } } }, 'icons.glyphs.add.path'],
+    ['a glyph name in the wrong shape', { glyphs: { Add_Icon: { path: ADD } } }, 'icons.glyphs.Add_Icon'],
+    ['a glyph named like one a component draws itself', { glyphs: { spinner: { path: ADD } } }, 'icons.glyphs.spinner'],
+    ['a fill rule other than evenodd', { glyphs: { add: { path: ADD, fillRule: 'nonzero' } } }, 'icons.glyphs.add.fillRule'],
+    // The art itself, measured offline (Q1 A, the proposal's Design B: one path on the 24×24 artboard, with ink).
+    ['art drawn on a 512 artboard, as most icon packages ship it', { map: { plus: 'add' }, glyphs: { add: { path: 'M0 0h512v512H0z' } } }, 'icons.glyphs.add.path'],
+    ['a move with no numbers', { glyphs: { add: { path: 'M' } } }, 'icons.glyphs.add.path'],
+    ['art that draws nothing', { glyphs: { add: { path: 'M4 4' } } }, 'icons.glyphs.add.path'],
+    ['path characters that do not parse', { glyphs: { add: { path: 'M,,,eee---' } } }, 'icons.glyphs.add.path'],
+    ['an arc that leaves the artboard between two endpoints inside it', { glyphs: { add: { path: 'M1 2A11 11 0 0 1 23 2Z' } } }, 'icons.glyphs.add.path'],
+  ];
+  for (const [what, icons, names] of RULES) ok(refusal(icons).includes(names), `#3076 ${what} is refused, naming ${names} (got ${JSON.stringify(refusal(icons))})`);
+  // Art an icon package ships in its own grammar still builds: arcs, relative commands, and a curve whose handles leave the
+  // artboard while the curve stays on it (its ink, measured by hand: 2..22 across, 0..12 down).
+  for (const [what, path] of [['a circle drawn with relative arcs', 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20z'], ['a curve whose handles leave the artboard', 'M2 12C2 -4 22 -4 22 12Z'], ['smooth and quadratic curves', 'M4 12s2-4 4 0t4 0Q14 8 16 12z']])
+    ok(refusal({ glyphs: { add: { path } } }) === '', `#3076 ${what} builds as brand art (got ${JSON.stringify(refusal({ glyphs: { add: { path } } }))})`);
+  // The contract describes the block: a valid one passes the schema, an unknown key in it does not.
+  ok(validateBrandInput({ ...base, icons: ICONS }).length === 0, `#3076 theme-schema.json accepts the icons block (${validateBrandInput({ ...base, icons: ICONS }).join('; ')})`);
+  ok(validateBrandInput({ ...base, icons: { maps: MAP } }).some((e) => e.includes('icons.maps')), '#3076 theme-schema.json refuses an unknown key in the icons block');
+  // The schema holds the engine's name shapes: lowercase words joined by hyphens, or a Prism3 icon as a map value.
+  ok(validateBrandInput({ ...base, icons: { map: { plus: 'Add' } } }).some((e) => e.includes('icons.map.plus')), '#3076 theme-schema.json refuses a map value outside the icon-name shape');
+  ok(validateBrandInput({ ...base, icons: { glyphs: { Add_Icon: { path: ADD } } } }).some((e) => e.includes('icons.glyphs.Add_Icon')), '#3076 theme-schema.json refuses a glyph name outside the icon-name shape');
+  ok(validateBrandInput({ ...base, icons: { map: { check: 'FPO-default-icon' } } }).length === 0, `#3076 theme-schema.json accepts a Prism3 icon as a map value (${validateBrandInput({ ...base, icons: { map: { check: 'FPO-default-icon' } } }).join('; ')})`);
+  // The design.md round trip (#3984's rule, for this block): three round trips keep it deep-equal, art and all.
+  let rt: any = { ...base, icons: ICONS };
+  for (let i = 0; i < 3; i++) rt = parseDesignMd(toDesignMd(rt)).input;
+  ok(JSON.stringify(rt.icons) === JSON.stringify(ICONS), `#3076 three design.md round trips keep the icons block (got ${JSON.stringify(rt.icons)})`);
+  // The brand's component export carries the map for a code consumer, and is still valid against its schema.
+  const xdoc = exportComponentDefs(componentDefs, { brand: { ...base, icons: ICONS } as BrandInput }) as any;
+  ok(JSON.stringify(xdoc.brand?.settings?.icons) === JSON.stringify(ICONS), '#3076 the brand\'s component export carries settings.icons');
+  ok(!('icons' in (exportComponentDefs(componentDefs, { brand: base }) as any).brand.settings), '#3076 a brand without a map exports no settings.icons');
+  // `def` is the authored def in every export; the brand's materialization is the `spec`, whose Icon axis follows the map.
+  const iconAxis = xdoc.components?.icon?.spec?.axes?.find((x: any) => x.name === 'name');
+  ok(!!iconAxis && !iconAxis.values.includes('plus') && iconAxis.values.includes('add'), `#3076 the exported Icon spec's name axis follows the map (got ${JSON.stringify(iconAxis?.values?.slice(-4))})`);
+  // `.ai.json` records the map for an agent reading component docs, which name Prism3 icons; a brand without one carries none.
+  const mappedTheme = brandTheme({ ...base, icons: ICONS } as BrandInput);
+  const aiIcons = (buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree) as any).icons;
+  ok(aiIcons?.map?.plus === 'add' && aiIcons?.map?.['close-filled'] === 'close' && aiIcons.names.includes('checkmark') && !aiIcons.names.includes('check'),
+    `#3076 .ai.json carries the brand's icon map and its icon set (got ${JSON.stringify(aiIcons)?.slice(0, 160)})`);
+  ok(!('icons' in (buildAiMetadata(brandTheme(base), buildTree(brandTheme(base)).tree) as any)), '#3076 .ai.json carries no icons block for a brand without a map');
+  const aiSchema = JSON.parse(readFileSync(resolve(HERE, 'schema', 'ai-metadata.schema.json'), 'utf8'));
+  const aiErrs = validateJsonSchema(aiSchema, buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree));
+  ok(aiErrs.length === 0, `#3076 a mapped brand's .ai.json is valid against ai-metadata.schema.json (${aiErrs.slice(0, 3).join('; ')})`);
+  // ONE SCHEMA VERSION, ONE SHAPE. #2857 took `prism3-ai-metadata/0.6` for `motion_presets`, so the icons block is the
+  // next version, 0.7. Both lines are typed here, never read from ai-metadata.ts: a merge that leaves both fields under
+  // one id (git merges the two identical `0.6` lines silently) fails this arm by name.
+  const aiDoc = buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree) as any;
+  ok(aiDoc.$schema === 'prism3-ai-metadata/0.7' && aiSchema.$id === 'prism3-ai-metadata/0.7' && 'icons' in aiDoc && 'motion_presets' in aiDoc,
+    `#3076 the icons block takes its own sidecar schema version, 0.7, after #2857's motion_presets took 0.6 (got $schema ${aiDoc.$schema}, $id ${aiSchema.$id})`);
+  const xErrs = validateJsonSchema(JSON.parse(readFileSync(resolve(HERE, 'schema', 'component-defs.schema.json'), 'utf8')), JSON.parse(JSON.stringify(xdoc)));
+  ok(xErrs.length === 0, `#3076 a mapped brand's component export is valid against component-defs.schema.json (${xErrs.slice(0, 3).join('; ')})`);
+  // DUPLICATE ART IS REPORTED, NEVER REFUSED (owner decision 2026-11-20 A). Each brand glyph below is typed by hand as a
+  // respelling of a core icon the map leaves in place (core `minus` reversed in relative commands, core `slash` in
+  // relative commands), plus `checkmark` drawn as core `check`, which the map takes out of the set. EXPECTED is the
+  // groups named here; ACTUAL is `iconArtDuplicates` over the projected icon set.
+  const DUP = { map: { plus: 'add', check: 'checkmark' }, glyphs: { add: { path: ADD }, checkmark: { path: 'M10.0007 15.1709L19.1931 5.97852L20.6073 7.39273L10.0007 17.9993L3.63672 11.6354L5.05093 10.2212L10.0007 15.1709Z' }, dash: { path: 'M19 13h-14v-2h14z' }, oblique: { path: 'M14.03 4h2.14l-6.2 16H7.83z' } } };
+  ok(refusal(DUP) === '', `#3076 a brand whose art duplicates an icon in its set still builds (got ${JSON.stringify(refusal(DUP))})`);
+  const iconDef = componentDefs.find((d) => d.id === 'icon')!;
+  const dups = iconArtDuplicates(figmaAnatomySet(applyIconMap(iconDef, DUP), {}));
+  ok(JSON.stringify(dups) === JSON.stringify([['dash', 'minus', 'minus-filled'], ['oblique', 'slash']]),
+    `#3076 duplicate art: the brand glyphs that draw a core icon's shape are named with it, relative spellings included, and a mapped-away icon is not (got ${JSON.stringify(dups)})`);
+  ok(iconArtDuplicates(figmaAnatomySet(iconDef, {})).length === 0, `#3076 duplicate art: Prism3's own duplicates are not the brand's to report (got ${JSON.stringify(iconArtDuplicates(figmaAnatomySet(iconDef, {})))})`);
+  ok(iconArtDuplicates(iconPlans).length === 0, `#3076 duplicate art: a brand whose art draws no icon's shape reports nothing (got ${JSON.stringify(iconArtDuplicates(iconPlans))})`);
 }
 
 // #3505 — the dependency-advisory register holds each accepted or awaited `npm audit` advisory with a review date,

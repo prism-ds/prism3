@@ -347,7 +347,8 @@
           "popover",
           "menu-item",
           "menu-group",
-          "menu"
+          "menu",
+          "tooltip"
         ]
       }
     },
