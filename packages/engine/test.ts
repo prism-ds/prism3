@@ -19265,7 +19265,16 @@ arm: {
       // K2: the highlight against the panel, recomputed from the emitted trees (never from the def's own claim). It does
       // not clear 3:1 in any committed brand and mode, so K2 is A: a focus-visible item draws the FocusRing as well.
       const OUT = join(HERE, 'out');
-      const rgb = (v: string): number[] => {
+      // The handoff writes a literal color as a DTCG 2025.10 Color-module object (#4123): read its sRGB `components`
+      // and `alpha` (absent = 1). Never its `hex`, which drops alpha; any other colorSpace is refused by name. A string
+      // (an older handoff) is still read as `#hex` / `rgb()`.
+      let objectReads = 0;
+      const rgb = (v: string | { colorSpace?: string; components?: number[]; alpha?: number }): number[] => {
+        if (v && typeof v === 'object') {
+          if (v.colorSpace !== 'srgb' || !Array.isArray(v.components) || v.components.length !== 3) throw new Error(`#4007 K2: a color object outside srgb [r,g,b] is not read: ${JSON.stringify(v)}`);
+          objectReads++;
+          return [...v.components, v.alpha ?? 1];
+        }
         const m = /^rgba?\(([^)]*)\)$/.exec(v);
         if (m) { const q = m[1].split(',').map(Number); return [q[0] / 255, q[1] / 255, q[2] / 255, q.length > 3 ? q[3] : 1]; }
         const h = v.replace('#', '');
@@ -19281,7 +19290,7 @@ arm: {
         for (const m of modes) {
           const ov = m === 'light' ? {} : JSON.parse(readFileSync(join(OUT, `${brand}.${m}.overlay.tokens.json`), 'utf8'));
           const at = (t: any, p: string) => p.split('.').reduce((o, k) => o?.[k], t?.[root])?.$value;
-          const res = (p: string): string => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
+          const res = (p: string): any => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
           const panel = rgb(res('color.foreground.raised'));
           const wash = rgb(res('color.interactive.neutral.overlay.hover'));
           const comp = [0, 1, 2].map((i) => wash[i] * wash[3] + panel[i] * (1 - wash[3]));
@@ -19289,6 +19298,12 @@ arm: {
           best = Math.max(best, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)); cells++;
         }
       }
+      // #4123: the reader is held on the handoff's object form, typed here, and on the committed handoff actually reaching
+      // it (two object reads per cell), so a reader that only parses strings fails here by name.
+      const committedObjectReads = objectReads;
+      const typed = (() => { try { return rgb({ colorSpace: 'srgb', components: [0.2, 0.4, 0.6], alpha: 0.5 }); } catch { return null; } })();
+      ok(JSON.stringify(typed) === JSON.stringify([0.2, 0.4, 0.6, 0.5]) && cells > 0 && committedObjectReads === 2 * cells,
+        `#4123 K2 reader: the #4007 K2 arm reads a DTCG 2025.10 color object (srgb components + alpha), and every committed panel and wash it read was one (got ${JSON.stringify(typed)}; ${committedObjectReads} object reads over ${cells} cells)`);
       ok(cells >= 20 && best < 3, `#4007 K2: the item highlight (neutral hover wash over the raised panel) stays under 3:1 against the panel in every brand and mode, so the ring is drawn (best ${best.toFixed(2)}:1 over ${cells} cells)`);
       const ring = item.anatomy.parts.focusRing;
       ok(ring?.kind === 'absolute' && ring.nests === 'focus-ring' && ring.when === 'focus-visible' && item.tokens['default.overlay.focus-visible'] === 'color.interactive.neutral.overlay.hover',

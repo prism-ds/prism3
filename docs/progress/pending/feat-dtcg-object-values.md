@@ -38,3 +38,10 @@ tracking), since no committed brand exercises those; both rows fail by name with
 `test.ts` `#4123` shadcn rows project a synthetic handoff spelled both ways and every committed handoff; with the
 string-only guard put back they fail by name, and `check:shadcn`, `lint-shadcn-contrast` and `lint-shadcn-roundtrip`
 throw.
+
+**Main's Menu arm read the handoff as strings.** #4007's K2 arm in `test.ts` (from main, merged here) parses
+`out/*.base.tokens.json` and each overlay with its own `#hex` / `rgb()` reader, and threw `v.replace is not a function`
+on the first color object in the merge queue. It now reads a color object from its srgb `components` and `alpha`
+(never `hex`, which drops alpha; any other space refused by name). `test.ts` `#4123 K2 reader` holds a typed object
+and requires every panel and wash it read to be one. With the object branch removed the suite throws as before; with
+the branch reading `hex` instead, `#4123 K2 reader` and `#4007 K2` fail by name.
