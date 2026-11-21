@@ -13,7 +13,7 @@
  */
 import { rgbToOklch, oklchToRgb, hex, hexToRgb, contrast, luminance, maxChroma, inGamut, deltaE2000, dualContrastWindow, composite, RGB, storedOklch, formatRatio, floorRatio } from './color';
 import { generateRamp, autoPlaceStep, STEP_NUMS } from './ramp';
-import { radiusScale, ICON_SIZES, sizeRefPx, componentSizes, controlSizes, dimensionGrid, spaceScale, densitySpace, SPACE_BASE, GRID_BASE, MIN_TARGET_PX, AAA_TARGET_PX } from './scale';
+import { radiusScale, ICON_SIZES, ICON_PAIRED, sizeRefPx, componentSizes, controlSizes, dimensionGrid, spaceScale, densitySpace, SPACE_BASE, GRID_BASE, MIN_TARGET_PX, AAA_TARGET_PX } from './scale';
 import { codeOnlyText } from './code-only-register';
 import { at, deref, pxOf, buildTree, familyOf, aliasFaults, type AliasFault } from './tree';
 import { brandTheme, buildDims, RESERVED_ROOTS, BrandInput, inRedTerritory, normalizeDisabledStrategy, normalizeDisabledMin, derivedRungFor, LINE_HEIGHT_KEYS, LETTER_SPACING_KEYS, TRACKING_SHIFT_KEYS, LINE_HEIGHT_LADDER, LETTER_SPACING_LADDER, lineHeightStepKey, letterSpacingStepKey, weightAvailability, defaultTypeMode, type Theme } from './theme';
@@ -107,6 +107,12 @@ import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, dirname, join, relative } from 'node:path';
+// #1946 5b C: what a design.md round trip owes back: the brand as sent, plus `surfaces.<name>` as {} for each custom mode
+// with none (the export writes the key so an import can tell a file written before #1946). Typed here, not imported.
+const owedBack = (x: any): any => {
+  const missing = (x.customModes ?? []).map((c: any) => c.name).filter((n: string) => !Object.prototype.hasOwnProperty.call(x.surfaces ?? {}, n));
+  return missing.length ? { ...x, surfaces: { ...(x.surfaces ?? {}), ...Object.fromEntries(missing.map((n: string) => [n, {}])) } } : x;
+};
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** The `icon/<glyph>` components a plan nests (#2380) — FIXTURE SETUP for the stub file, so a paste that is
@@ -3577,8 +3583,25 @@ for (const b of brands) {
   // The ladder pairs 1:1 with the component-size names, which is what lets the anatomy layer (#327)
   // map control size -> icon size by identity instead of reconciling two differently-shaped scales.
   const sizeNames = nbTheme().dims.sizes.map((s: any) => s.name).join(',');
-  ok(ICON_SIZES.map((s) => s.name).join(',') === sizeNames,
-    `#324 icon steps pair 1:1 with size.* names (icon ${ICON_SIZES.map((s) => s.name).join('/')} vs size ${sizeNames})`);
+  ok(ICON_PAIRED.join(',') === sizeNames && ICON_PAIRED.every((n) => ICON_SIZES.some((s) => s.name === n)),
+    `#324 icon steps pair 1:1 with size.* names (paired ${ICON_PAIRED.join('/')} vs size ${sizeNames})`);
+  // #4110 (owner OD-A3 A): exactly one step runs past the pairing, the 64px x-large avatar.
+  const unpaired = ICON_SIZES.filter((s) => !ICON_PAIRED.includes(s.name));
+  ok(unpaired.length === 1 && unpaired[0].name === '2xl' && unpaired[0].px === 64,
+    `#4110 the icon ladder's one unpaired step is 2xl at 64px (got ${unpaired.map((s) => `${s.name}=${s.px}`).join(', ') || 'none'})`);
+  // #4110 delta review: docs/30's "Additions since 15.0.0" table and version.ts' contract history are two hand-written
+  // records of one fact. A merge renumbered Avatar's raise to 15.3.0 in version.ts and left the docs row at 15.2.0,
+  // which version.ts gives to #2857. Each table row's version must open a version.ts block that cites the row's PR.
+  {
+    const doc30 = readFileSync(resolve(HERE, '../../docs/30-versioning-and-compatibility.md'), 'utf8');
+    const versionTs = readFileSync(resolve(HERE, './version.ts'), 'utf8');
+    const table = doc30.split('### Additions since 15.0.0')[1]?.split('\n## ')[0] ?? '';
+    const rows = [...table.matchAll(/^\| (\d+\.\d+\.\d+) \| \(#(\d+)/gm)].map((m) => ({ v: m[1], pr: m[2] }));
+    const blockOf = (v: string) => versionTs.match(new RegExp(`/\\*\\*\\n \\* ${v.replace(/\./g, '\\.')} \\(([\\s\\S]*?)\\*/`))?.[1] ?? '';
+    const wrong = rows.filter((r) => !new RegExp(`#${r.pr}\\b`).test(blockOf(r.v)));
+    ok(rows.some((r) => r.pr === '4110') && wrong.length === 0,
+      `#4110 docs/30's contract additions table names each raise at the version version.ts records it under (${rows.length} rows${wrong.length ? ` — wrong: ${wrong.map((r) => `${r.v} (#${r.pr})`).join(', ')}` : ''})`);
+  }
 }
 
 
@@ -6563,9 +6586,9 @@ arm: {
   ok(/aria-label/.test(usage) && /aria-hidden/.test(usage), "#4019: the follow-link example names the link by aria-label and hides the mark");
 }
 
-// USER-ADDED CUSTOM MODES (Phase C1) — a custom mode `{ name, base }` LIVE-INHERITS a customizable
-// built-in (light/dark): it re-derives EXACTLY like its base each build, then its own overrides/
-// modeAnchors deviate it. Reserved/duplicate/bad-base/bad-slug names throw; byte-identical when absent.
+// USER-ADDED CUSTOM MODES (Phase C1) — a custom mode `{ name, base }` derives with its base's appearance
+// (light/dark), then its own overrides/modeAnchors deviate it; since #1946 it never reads its base's
+// per-mode input (the block after this one). Reserved/duplicate/bad-base/bad-slug names throw; byte-identical when absent.
 {
   const roleKey = 'interactive.primary.fill.rest';
   const root = 'prism';
@@ -6612,16 +6635,181 @@ arm: {
   ok(threw(() => brandTheme({ ...base, customModes: [{ name: 'dark', base: 'light' }] } as unknown as BrandInput)), 'C1(e): a reserved built-in name (dark) throws');
   ok(threw(() => brandTheme({ ...base, customModes: [{ name: 'x', base: 'dark' }, { name: 'x', base: 'dark' }] } as unknown as BrandInput)), 'C1(e): a duplicate custom mode name throws');
   ok(threw(() => brandTheme({ ...base, customModes: [{ name: 'y', base: 'hc-light' }] } as unknown as BrandInput)), 'C1(e): a non-customizable base (hc-light) throws');
-  ok(threw(() => brandTheme({ ...base, modes: ['light'], customModes: [{ name: 'z', base: 'dark' }] } as unknown as BrandInput)), "C1(e): a base not in the brand's generated modes throws");
+  // A base the brand does not generate no longer throws (#1946): a custom mode is a snapshot, so its source may be off.
+  ok(!threw(() => brandTheme({ ...base, modes: ['light'], customModes: [{ name: 'z', base: 'dark' }] } as unknown as BrandInput)), "C1(e): a base not in the brand's generated modes is taken (#1946: the custom mode stands alone)");
   ok(threw(() => brandTheme({ ...base, customModes: [{ name: 'Marketing Dark', base: 'dark' }] } as unknown as BrandInput)), 'C1(e): a non-slug name (Marketing Dark) throws');
 
   // (f) design.md round-trip preserves customModes through parse∘serialize.
-  ok(JSON.stringify(stable(parseDesignMd(toDesignMd(withCustom)).input)) === JSON.stringify(stable(withCustom)),
+  ok(JSON.stringify(stable(parseDesignMd(toDesignMd(withCustom)).input)) === JSON.stringify(stable(owedBack(withCustom))),
     'C1(f): parseDesignMd(toDesignMd(inputWithCustomModes)) preserves customModes');
 
   // (g) byte-identical guard — a brand with no customModes (or []) matches the field-absent build.
   ok(JSON.stringify(buildTree(brandTheme(base)).tree) === JSON.stringify(buildTree(brandTheme({ ...base, customModes: [] } as unknown as BrandInput)).tree),
     'C1(g): an empty customModes array produces byte-identical output (the primary guard)');
+}
+
+// #1946 (owner decision 2026-11-18, A): a custom mode is a SNAPSHOT. Its per-mode input lives under its own name,
+// copied from the mode it started from at creation; nothing reads the source's per-mode input again. So editing the
+// source, or turning it off, leaves the custom mode as it was, and `base` is kept as the record of where it started.
+// The expected values are the custom mode's own resolved roles before the source moves, read off the engine; each
+// arm then moves ONE thing in the source and compares.
+{
+  const base = { id: 's1946', modes: ['light', 'dark'], primary: { l: 0.55, c: 0.18, h: 285 }, neutral: { hue: 285, chroma: 0.01 } } as unknown as BrandInput;
+  const pstep = brandTheme(base).palettes.find((p) => p.palette === 'primary')!.steps[4]!.key;
+  const pstep2 = brandTheme(base).palettes.find((p) => p.palette === 'primary')!.steps[6]!.key;
+  // Dark's per-mode input, and the custom mode's copy of it (what Studio's creation writes, typed here).
+  const darkInput = {
+    overrides: { 'text.link.default': { palette: 'primary', step: pstep } },
+    modeAnchors: { primary: 300 },
+    modeLevers: { density: 'compact' },
+    surfaces: { base: 900 },
+  };
+  const at = (mode: string, v: any) => ({ dark: structuredClone(v), [mode]: structuredClone(v) });
+  const snap = {
+    ...base, customModes: [{ name: 'promo', base: 'dark' }],
+    overrides: at('promo', darkInput.overrides), modeAnchors: at('promo', darkInput.modeAnchors),
+    modeLevers: at('promo', darkInput.modeLevers), surfaces: at('promo', darkInput.surfaces),
+  } as unknown as BrandInput;
+  // What a mode resolves to: its color roles, plus every value the emitted tree carries for it (`$extensions.prism3.modes
+  // [m]`), so a non-color per-mode setting (density moves dims, not roles) is measured too.
+  const rolesOf = (input: BrandInput, m: string) => {
+    const roles = resolveAllModes(brandTheme(input)).find((r) => r.mode === m)?.roles ?? null;
+    const perMode: string[] = [];
+    const walk = (n: any, path: string): void => {
+      if (!n || typeof n !== 'object') return;
+      const v = n.$extensions?.prism3?.modes?.[m];
+      if (v !== undefined) perMode.push(`${path}=${JSON.stringify(v)}`);
+      for (const k of Object.keys(n)) if (!k.startsWith('$')) walk(n[k], `${path}.${k}`);
+    };
+    walk(buildTree(brandTheme(input)).tree, '');
+    return JSON.stringify({ roles, perMode });
+  };
+  const promo0 = rolesOf(snap, 'promo');
+  ok(JSON.parse(promo0).roles !== null && JSON.stringify(JSON.parse(promo0).roles) === JSON.stringify(JSON.parse(rolesOf(snap, 'dark')).roles)
+    && JSON.parse(promo0).perMode.length === JSON.parse(rolesOf(snap, 'dark')).perMode.length,
+    '#1946: a custom mode holding a copy of dark\'s per-mode input resolves exactly as dark does at creation');
+  // Each source edit, one at a time: the custom mode's roles do not move.
+  const edits: [string, (b: any) => void][] = [
+    ['an override', (b) => { b.overrides.dark['text.link.default'] = { palette: 'primary', step: pstep2 }; }],
+    ['an anchor', (b) => { b.modeAnchors.dark.primary = 100; }],
+    ['a per-mode setting', (b) => { b.modeLevers.dark.density = 'spacious'; }],
+    ['the page surface', (b) => { b.surfaces.dark.base = 800; }],
+  ];
+  for (const [what, edit] of edits) {
+    const next = structuredClone(snap) as any;
+    edit(next);
+    ok(rolesOf(next, 'dark') !== rolesOf(snap, 'dark'), `#1946: editing ${what} in dark moves dark (the edit is real)`);
+    ok(rolesOf(next, 'promo') === promo0, `#1946: editing ${what} in dark after creation leaves the custom mode as it was`);
+  }
+  // Dark turned off, its per-mode input dropped (as Studio's Dark off does): the brand builds, and the custom mode holds.
+  const darkOff = structuredClone(snap) as any;
+  darkOff.modes = ['light'];
+  for (const k of ['overrides', 'modeAnchors', 'modeLevers', 'surfaces']) delete darkOff[k].dark;
+  let offErr = '';
+  try { buildTree(brandTheme(darkOff)); } catch (e) { offErr = (e as Error).message; }
+  ok(offErr === '', `#1946: turning off the mode a custom mode started from is taken (${offErr || 'built'})`);
+  ok(offErr === '' && rolesOf(darkOff, 'promo') === promo0, '#1946: with its source off, the custom mode resolves exactly as before');
+  // The custom mode reads its OWN surfaces, never its base's: a dark surface alone does not reach it.
+  const own = { ...base, customModes: [{ name: 'promo', base: 'dark' }], surfaces: { dark: { base: 900 } } } as unknown as BrandInput;
+  const bgOf = (input: BrandInput, m: string) => resolveAllModes(brandTheme(input)).find((r) => r.mode === m)!.roles['background.primary']!.path;
+  ok(bgOf(own, 'dark') !== bgOf(own, 'promo'), `#1946: dark's surface does not reach a custom mode based on dark (dark ${bgOf(own, 'dark')}, promo ${bgOf(own, 'promo')})`);
+  const ownSurf = { ...base, customModes: [{ name: 'promo', base: 'dark' }], surfaces: { promo: { base: 900 } } } as unknown as BrandInput;
+  ok(bgOf(ownSurf, 'promo') === bgOf(own, 'dark') && bgOf(ownSurf, 'dark') !== bgOf(ownSurf, 'promo'),
+    `#1946: a custom mode's own surfaces.<name> sets its page (${bgOf(ownSurf, 'promo')})`);
+  // Provenance: `base` survives the build and the design.md round trip, with every copied per-mode key.
+  ok(JSON.stringify(brandTheme(darkOff).customModes) === '[{"name":"promo","base":"dark"}]', '#1946: the custom mode keeps the record of the mode it started from');
+  const rt = parseDesignMd(toDesignMd(snap)).input;
+  ok(JSON.stringify(rt.customModes) === JSON.stringify(snap.customModes)
+    && ['overrides', 'modeAnchors', 'modeLevers', 'surfaces'].every((k) => JSON.stringify((rt as any)[k]?.promo) === JSON.stringify((snap as any)[k].promo))
+    && rolesOf(rt, 'promo') === promo0,
+    '#1946: design.md round trip keeps the custom mode, its provenance and its copied per-mode input, and it resolves the same');
+  const schemaErrs = validateBrandInput(snap);
+  ok(schemaErrs.length === 0, `#1946: the schema takes surfaces keyed by a custom mode (${schemaErrs.join('; ') || 'valid'})`);
+  // The schema takes any `surfaces` key now, so brandTheme refuses one no mode reads, naming it: a typo, a derived
+  // mode, or a custom mode with no customModes entry. A declared custom mode's key is still taken (above).
+  const surfErr = (surfaces: Record<string, unknown>, customModes?: unknown): string => {
+    try { brandTheme({ ...base, ...(customModes ? { customModes } : {}), surfaces } as unknown as BrandInput); return ''; } catch (e) { return (e as Error).message; }
+  };
+  for (const [key, cms] of [['drak', undefined], ['hc-light', undefined], ['wireframe', undefined], ['custom-1', [{ name: 'promo', base: 'dark' }]]] as const) {
+    const msg = surfErr({ [key]: { base: 900 } }, cms);
+    ok(msg.startsWith(`surfaces.${key}: '${key}' is not light, dark or a custom mode of this brand`),
+      `#1946: a surfaces key no mode reads (${key}) is refused, naming it (${msg || 'taken'})`);
+  }
+  ok(surfErr({ promo: { base: 900 } }, [{ name: 'promo', base: 'dark' }]) === '' && surfErr({ light: { base: 50 }, dark: { base: 900 } }) === '',
+    '#1946: surfaces keyed by light, dark or a declared custom mode are taken');
+  // O2 A (owner decision 2026-11-19): a brand SAVED before #1946 migrates once, on read. Before #1946 a custom mode
+  // followed its base's surfaces live, so the saved blob (v2, typed here as it was stored) holds no surfaces.<name>.
+  // EXPECTED: each custom mode's page is its base's page, as the pre-#1946 engine drew it (custom modes read the
+  // family's surfaces then), and the copy is surfaces[base], typed here. ACTUAL: the engine's own read of the blob.
+  const saved = { ...base, customModes: [{ name: 'promo', base: 'dark' }, { name: 'paper', base: 'light' }], surfaces: { light: { base: 50 }, dark: { base: 900 } } };
+  const v2 = JSON.stringify({ v: 2, input: saved });
+  let read: any = null, readErr = '';
+  try { read = deserializeBrandInput(v2); } catch (e) { readErr = (e as Error).message; }
+  ok(read !== null && JSON.stringify(read.surfaces) === '{"light":{"base":50},"dark":{"base":900},"promo":{"base":900},"paper":{"base":50}}',
+    `#1946: a brand saved before snapshots (v2) loads with surfaces[base] copied to each custom mode (${readErr || JSON.stringify(read?.surfaces)})`);
+  ok(read !== null && bgOf(read, 'promo') === bgOf(read, 'dark') && bgOf(read, 'paper') === bgOf(read, 'light') && bgOf(read, 'promo') !== bgOf(read, 'paper'),
+    `#1946: after the migration each saved custom mode keeps the page it showed (promo ${read ? bgOf(read, 'promo') : '-'} = dark, paper ${read ? bgOf(read, 'paper') : '-'} = light)`);
+  ok(JSON.stringify(saved.surfaces) === '{"light":{"base":50},"dark":{"base":900}}', '#1946: the migration does not write into the blob it read');
+  // Once: what this build writes is v3, and a v3 custom mode with no surfaces of its own is a snapshot that took none.
+  // Reading it copies nothing, so a later change to its base's surfaces never reaches it through a reload.
+  ok(JSON.parse(serializeBrandInput(read ?? saved)).v === 3, '#1946: a migrated brand is written back as v3, so it migrates once');
+  const v3 = deserializeBrandInput(JSON.stringify({ v: 3, input: saved })) as any;
+  ok(JSON.stringify(v3?.surfaces) === '{"light":{"base":50},"dark":{"base":900}}', `#1946: a v3 brand's custom mode with no surfaces of its own is not given its base's on load (${JSON.stringify(v3?.surfaces)})`);
+  const own2 = deserializeBrandInput(JSON.stringify({ v: 2, input: { ...saved, surfaces: { ...saved.surfaces, promo: { base: 800 } } } })) as any;
+  ok(JSON.stringify(own2?.surfaces?.promo) === '{"base":800}', '#1946: a saved custom mode that has surfaces of its own keeps them (the copy is only where absent)');
+  // #4072 delta review S1 (a): a v2 brand whose custom mode's base has no surfaces of its own (every example sets only
+  // surfaces.light) loads, copying nothing, so that mode draws its base's defaults as the pre-#1946 engine did.
+  let lightOnly: any = null, lightOnlyErr = '';
+  try { lightOnly = deserializeBrandInput(JSON.stringify({ v: 2, input: { ...saved, customModes: [{ name: 'promo', base: 'dark' }], surfaces: { light: { base: 50 } } } })); }
+  catch (e) { lightOnlyErr = `${(e as Error).name}: ${(e as Error).message}`; }
+  ok(lightOnly !== null && JSON.stringify(lightOnly.surfaces) === '{"light":{"base":50}}',
+    `#1946: a saved custom mode whose base has no surfaces loads, and nothing is copied to it (${lightOnlyErr || JSON.stringify(lightOnly?.surfaces)})`);
+  // (b): the copy is the custom mode's own. An in-session edit writes the loaded object in place (setPath), so a copy
+  // shared by reference would bring the live link #1946 removed back until the next save.
+  const edited = deserializeBrandInput(v2) as any;
+  edited.surfaces.dark.base = 800;
+  ok(JSON.stringify(edited.surfaces.promo) === '{"base":900}',
+    `#1946: after a migrated read, an edit to the base's surfaces does not reach the custom mode's copy (${JSON.stringify(edited.surfaces.promo)})`);
+  // Nit N1: a custom-mode name that is also an Object.prototype key ('constructor' fits the name pattern) migrates too.
+  const proto = deserializeBrandInput(JSON.stringify({ v: 2, input: { ...saved, customModes: [{ name: 'constructor', base: 'dark' }] } })) as any;
+  ok(Object.prototype.hasOwnProperty.call(proto?.surfaces ?? {}, 'constructor') && JSON.stringify(proto.surfaces.constructor) === '{"base":900}',
+    `#1946: a saved custom mode named like a prototype key ('constructor') is migrated too (${JSON.stringify(proto?.surfaces)})`);
+  // Nit N2: the base is read as an own key of surfaces, never off Object.prototype. A stored blob is untrusted, so a
+  // base like 'constructor' must copy nothing rather than throw or copy the prototype's function. '__proto__' is pinned
+  // too (#4072 delta review N3): surfaces['__proto__'] is Object.prototype, not a function, so a guard that only
+  // refused functions would pass 'constructor' and still copy {} for it. 'toString' is another inherited function.
+  for (const protoKey of ['constructor', '__proto__', 'toString']) {
+    let protoBase: any = null, protoBaseErr = '';
+    try { protoBase = deserializeBrandInput(JSON.stringify({ v: 2, input: { ...saved, customModes: [{ name: 'promo', base: protoKey }] } })); }
+    catch (e) { protoBaseErr = `${(e as Error).name}: ${(e as Error).message}`; }
+    ok(protoBase !== null && JSON.stringify(protoBase.surfaces) === '{"light":{"base":50},"dark":{"base":900}}',
+      `#1946: a saved custom mode whose base names a prototype key ('${protoKey}') loads with nothing copied (${protoBaseErr || JSON.stringify(protoBase?.surfaces)})`);
+  }
+  // 5b C (owner decision 2026-11-21): a design.md carries no version, so the export always writes surfaces.<name> for
+  // every custom mode, and an import reads a custom mode with no such key as written before #1946 (the schema refused
+  // the key then): only that mode is given a copy of its base's surfaces, as a v2 saved brand is. A key that is
+  // present, {} included, is taken as is. EXPECTED pages and copies are typed here; ACTUAL is the engine's round trip.
+  // (1) Export then import: promo was made from dark while dark had no surfaces, and dark's page moved afterwards. The
+  // export says promo has surfaces of its own (none), so the import does not hand it dark's new page.
+  const movedBase = { ...base, customModes: [{ name: 'promo', base: 'dark' }], surfaces: { dark: { base: 800 } } } as unknown as BrandInput;
+  const tripped = parseDesignMd(toDesignMd(movedBase)).input as any;
+  ok(Object.prototype.hasOwnProperty.call(tripped.surfaces ?? {}, 'promo') && JSON.stringify(tripped.surfaces.promo) === '{}'
+    && bgOf(tripped, 'promo') === bgOf(movedBase, 'promo') && bgOf(tripped, 'promo') !== bgOf(tripped, 'dark'),
+    `#1946 5b C: an exported custom mode keeps its own surfaces through import after its base's page moved (surfaces ${JSON.stringify(tripped.surfaces)}, promo ${bgOf(tripped, 'promo')}, dark ${bgOf(tripped, 'dark')})`);
+  ok(JSON.stringify((movedBase as any).surfaces) === '{"dark":{"base":800}}', '#1946 5b C: the export does not write into the brand it was given');
+  // (2) A design.md written before #1946, typed here: no surfaces.<name>, so each custom mode gets its base's copy and
+  // draws the page the pre-#1946 engine drew it with (its family's).
+  const fm = (lines: string[]) => `---\nid: d\nmodes: [light, dark]\nprimary: { l: 0.55, c: 0.18, h: 285 }\nneutral: { hue: 285, chroma: 0.01 }\n${lines.join('\n')}\n---\n`;
+  const oldMd = parseDesignMd(fm(['customModes: [{ name: promo, base: dark }, { name: paper, base: light }]', 'surfaces: { light: { base: 50 }, dark: { base: 800 } }'])).input as any;
+  ok(JSON.stringify(oldMd.surfaces) === '{"light":{"base":50},"dark":{"base":800},"promo":{"base":800},"paper":{"base":50}}'
+    && bgOf(oldMd, 'promo') === bgOf(oldMd, 'dark') && bgOf(oldMd, 'paper') === bgOf(oldMd, 'light'),
+    `#1946 5b C: a design.md written before snapshots (no surfaces.<name>) imports with its base's surfaces copied to each custom mode (${JSON.stringify(oldMd.surfaces)})`);
+  // (3) A key that is present is the file's word: {} and a set value are each taken as is, while a mode without one
+  // beside them is still given its base's.
+  const newMd = parseDesignMd(fm(['customModes: [{ name: promo, base: dark }, { name: neon, base: dark }, { name: paper, base: light }]', 'surfaces: { light: { base: 50 }, dark: { base: 800 }, promo: {}, neon: { base: 900 } }'])).input as any;
+  ok(JSON.stringify(newMd.surfaces) === '{"light":{"base":50},"dark":{"base":800},"promo":{},"neon":{"base":900},"paper":{"base":50}}'
+    && bgOf(newMd, 'promo') !== bgOf(newMd, 'dark'),
+    `#1946 5b C: an import's explicit surfaces.<name> ({} or set) is not overwritten by its base's; only a mode with none is given a copy (${JSON.stringify(newMd.surfaces)})`);
 }
 
 // PER-MODE RADIUS LEVER (Phase D) — a customizable mode overrides the `radius` scale; the engine
@@ -8907,7 +9095,7 @@ arm: {
   ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { shadow: { tint: { amount: 2 } } } } } as unknown as BrandInput)), 'D-shadow(f): a shadow tint amount of 2 (>1) throws');
 
   // (g) design.md round-trip preserves modeLevers.shadow through parse∘serialize.
-  ok(JSON.stringify(stable(parseDesignMd(toDesignMd(perMode)).input)) === JSON.stringify(stable(perMode)),
+  ok(JSON.stringify(stable(parseDesignMd(toDesignMd(perMode)).input)) === JSON.stringify(stable(owedBack(perMode))),
     'D-shadow(g): parseDesignMd(toDesignMd(input)) preserves modeLevers.shadow');
 
   // (h) validateBrandInput ACCEPTS per-mode shadow — RETURNS an empty error array (never throws).
@@ -9655,6 +9843,41 @@ for (const scale of ['default', 'expressive'] as const) {
   ok(validateBrandInput({ ...inp, typography: { tracking: { display: 'loose' } } }).length > 0, '#3077 tracking A: the schema refuses a role outside the nine');
   // (f) opt-in: an empty pin map builds the same theme as none.
   ok(JSON.stringify(tBrand('tr3077-e', { tracking: {} }).typography) === JSON.stringify(tBrand('tr3077-e', {}).typography), '#3077 tracking A: an empty pin map changes nothing');
+}
+// #3079 (owner decision 2026-11-18 A, Q3079.4 A): `typography.leading`, the twin of the tracking pin above — every
+// composite in a category on one named line-height role, replacing the size-derived rung and its nudge, for that
+// category only. Expected rungs are literals.
+{
+  const roles = (t: ReturnType<typeof tBrand>, g: string) => [...new Set(t.typography.composites.filter((c) => c.group === g).map((c) => `${c.sizePx}:${c.lineHeight}`))].join(' ');
+  // Title's derived rung changes with its size; a +1 nudge moves both halves, so no nudge gives title one value.
+  const base = tBrand('ld3079-base', { leadingShift: { title: 1, body: -1 } });
+  ok(roles(base, 'title') === '18:cozy 20:cozy 24:cozy 28:compact 32:compact 40:compact',
+    `#3079 leading: control — unpinned title follows its size and its +1 nudge, two values (got ${roles(base, 'title')})`);
+  const pinned = tBrand('ld3079-pin', { leadingShift: { title: 1, body: -1 }, leading: { title: 'loose' } });
+  // (a) the pin replaces the derived rung AND the nudge: every title size is loose.
+  ok(roles(pinned, 'title') === '18:loose 20:loose 24:loose 28:loose 32:loose 40:loose',
+    `#3079 leading: a title pin puts every title size on loose, over the size split and the +1 nudge (got ${roles(pinned, 'title')})`);
+  // (b) for the pinned category only.
+  const rest = (t: ReturnType<typeof tBrand>) => JSON.stringify(t.typography.composites.filter((c) => c.group !== 'title'));
+  ok(rest(pinned) === rest(base), '#3079 leading: a title pin leaves every non-title composite exactly as the unpinned build has it');
+  // (c) the pin is not a new start for the nudge: body pinned to normal with a +1 nudge stays normal.
+  const onPath = tBrand('ld3079-onpath', { leadingShift: { body: 1 }, leading: { body: 'normal' } });
+  ok(roles(onPath, 'body') === '12:normal 14:normal 16:normal 18:normal',
+    `#3079 leading: a body pin on normal ignores the +1 body nudge (got ${roles(onPath, 'body')})`);
+  // (d) refused by name.
+  const refusal = (ty: any): string => { try { tBrand('ld3079r-' + JSON.stringify(ty), ty); return '(built)'; } catch (e) { return (e as Error).message; } };
+  ok(/^typography\.leading: 'heading' is not a type category/.test(refusal({ leading: { heading: 'cozy' } })),
+    `#3079 leading: an unknown category is refused by name (got: ${refusal({ leading: { heading: 'cozy' } }).slice(0, 100)})`);
+  ok(/^typography\.leading\.title: 'open' is not a line height role/.test(refusal({ leading: { title: 'open' } })),
+    `#3079 leading: an unknown role is refused by name (got: ${refusal({ leading: { title: 'open' } }).slice(0, 100)})`);
+  // (e) the schema takes the seven and refuses others.
+  const inp = { id: 'v', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } } as any;
+  ok(validateBrandInput({ ...inp, typography: { leading: { title: 'cozy', code: 'loose' } } }).length === 0, '#3079 leading: the schema accepts cozy and loose pins');
+  ok(validateBrandInput({ ...inp, typography: { leading: { title: 'open' } } }).length > 0, '#3079 leading: the schema refuses a role outside the seven');
+  // (f) opt-in: an empty pin map builds the same theme as none.
+  ok(JSON.stringify(tBrand('ld3079-e', { leading: {} }).typography) === JSON.stringify(tBrand('ld3079-e', {}).typography), '#3079 leading: an empty pin map changes nothing');
+  // (g) the note names it.
+  ok(pinned.notes.includes('typography: line height pinned per text type: title loose. Every size in a pinned text type uses that line height, in place of the size-based one and its nudge.'), '#3079 leading: the notes name the pin');
 }
 // C2 (#328): the ceiling names a RUNG, so the surviving rung COUNT is invariant under typeScale.
 // The old px ceiling was compared against already-shifted sizes, so `96` kept 4 rungs under
@@ -21421,6 +21644,98 @@ arm: {
     const whereMissed = whereCases.filter(([, d, re]) => !errs(d).some((e) => re.test(e))).map(([why]) => why);
     ok(whereMissed.length === 0, `#2343 PR 5 variantWhere: the validator refuses each unsafe joint mapping by name (missed: ${whereMissed.join(', ') || 'none'})`);
   }
+  // #4110 — AVATAR, each owner decision held against a literal from the approved proposal (OD-A1 to OD-A8, all A).
+  // EXPECTED is typed here from the proposal; ACTUAL is read off the projected plans and the emitted trees, never off the
+  // def's own tables (docs/34).
+  {
+    const av = componentDefs.find((d) => d.id === 'avatar')!;
+    const plans = figmaAnatomySet(av) as any[];
+    const kid = (n: any, name: string): any => (n.children ?? []).find((c: any) => c.name === name);
+    const find = (n: any, name: string): any => n.name === name ? n : (n.children ?? []).map((c: any) => find(c, name)).find(Boolean);
+    // The set: 5 sizes × 2 shapes × 3 types, the wireframe's 30 members.
+    ok(plans.length === 30, `#4110 avatar: the Figma set is 30 members, 5 sizes × 2 shapes × 3 types (got ${plans.length})`);
+    // OD-A3 A: 20 / 24 / 32 / 40 / 64px, the first four on the icon ladder and x-large on the one minted step.
+    const BOX: Record<string, [string, number]> = { 'x-small': ['icon/size/sm', 20], small: ['icon/size/md', 24], medium: ['icon/size/lg', 32], large: ['icon/size/xl', 40], 'x-large': ['icon/size/2xl', 64] };
+    const wrongBox = plans.filter((p) => p.root.bound?.width !== BOX[p.size]?.[0] || p.root.bound?.height !== BOX[p.size]?.[0]
+      || kid(p.root, 'mask')?.bound?.width !== BOX[p.size]?.[0]);
+    ok(wrongBox.length === 0, `#4110 avatar OD-A3 A: the container and the mask bind the icon ladder at four sizes and icon.size.2xl at x-large${wrongBox.length ? ` — ${wrongBox.slice(0, 3).map((p) => `${p.size} ${p.root.bound?.width}`).join(', ')}` : ''}`);
+    const pxRows = (['prism3', 'aurora', 'harbor'] as const).map((b) => {
+      const th = exampleTheme(b, () => brandTheme(exampleBrands()[b] as BrandInput));
+      const t = th && (buildTree(th).tree as any);
+      const root = t && t[Object.keys(t)[0]];
+      return [b, Object.fromEntries(Object.entries(BOX).map(([z, [v]]) => [z, root?.icon?.size?.[v.split('/')[2]]?.$extensions?.prism3?.px]))] as [string, Record<string, number>];
+    });
+    const offPx = pxRows.filter(([, r]) => Object.entries(BOX).some(([z, [, px]]) => r[z] !== px));
+    ok(pxRows.length === 3 && offPx.length === 0, `#4110 avatar OD-A3 A: the five sizes resolve to 20/24/32/40/64px in every example brand${offPx.length ? ` — ${offPx.map(([b, r]) => `${b} ${JSON.stringify(r)}`).join('; ')}` : ''}`);
+    // OD-A2 A: a circle is round at every size; a square takes radius.sm below medium and radius.md from medium up.
+    const CORNER = (shape: string, size: string) => shape === 'circular' ? 'radius/round' : ['x-small', 'small'].includes(size) ? 'radius/sm' : 'radius/md';
+    const wrongCorner = plans.filter((p) => ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].some((c) => kid(p.root, 'mask')?.bound?.[c] !== CORNER(p.coord.shape, p.size)));
+    ok(wrongCorner.length === 0, `#4110 avatar OD-A2 A: the mask's corner is round on a circle, radius.sm on a square below medium and radius.md from medium up${wrongCorner.length ? ` — ${wrongCorner.slice(0, 3).map((p) => `${p.size}/${p.coord.shape} ${kid(p.root, 'mask')?.bound?.topLeftRadius}`).join(', ')}` : ''}`);
+    // The structural decision: only the mask clips, and the presence ring sits outside it, pinned to the container's corner.
+    const wrongClip = plans.filter((p) => p.root.clipsContent === true || kid(p.root, 'mask')?.clipsContent !== true
+      || !kid(p.root, 'presenceRing') || find(kid(p.root, 'mask'), 'presenceRing') || kid(p.root, 'presenceRing')?.cornerInset !== 'space/0');
+    ok(wrongClip.length === 0, `#4110 avatar: the container clips nothing, the mask clips, and the presence ring is the container's child pinned into its corner at space/0, outside the mask (${wrongClip.length} wrong)`);
+    // OD-A7 A: presence nests Badge at type=dot, its tone exposed, off by default.
+    const wrongDot = plans.filter((p) => { const d = find(p.root, 'presenceDot'); const r = kid(p.root, 'presenceRing');
+      return d?.nestTarget !== 'badge' || d?.nestVariant?.type !== 'dot' || JSON.stringify(d?.nestExpose) !== '["tone"]' || r?.visible !== false || r?.paints?.fills !== 'color/background/primary'; });
+    ok(wrongDot.length === 0, `#4110 avatar OD-A7 A: presence is a Badge at type=dot with its tone exposed, in a ring of color/background/primary, hidden by default (${wrongDot.length} wrong)`);
+    // OD-A6 A: the glyph follows the shape, at the icon member only; the initials show at the initials member only.
+    const wrongContent = plans.filter((p) => {
+      const m = kid(p.root, 'mask'); const names = (m?.children ?? []).map((c: any) => c.name).join(',');
+      const want = p.coord.type === 'initials' ? 'initials' : p.coord.type === 'icon' ? (p.coord.shape === 'circular' ? 'personGlyph' : 'organizationGlyph') : '';
+      const glyph = find(p.root, want);
+      return names !== want || (p.coord.type === 'icon' && glyph?.nestTarget !== (p.coord.shape === 'circular' ? 'icon/person' : 'icon/organization'));
+    });
+    ok(wrongContent.length === 0, `#4110 avatar OD-A6 A: the mask holds the initials at type=initials, the person glyph in a circle and the organization glyph in a square at type=icon, and nothing at type=image${wrongContent.length ? ` — ${wrongContent.slice(0, 3).map((p) => `${p.size}/${JSON.stringify(p.coord)}`).join(', ')}` : ''}`);
+    // OD-A5 A: one neutral backdrop, and the initials clear 4.5:1 on it in every brand and mode.
+    const wrongPaint = plans.filter((p) => kid(p.root, 'mask')?.paints?.fills !== 'color/background/tertiary');
+    ok(wrongPaint.length === 0, `#4110 avatar OD-A5 A: every member's backdrop is color/background/tertiary (${wrongPaint.length} wrong)`);
+    const avThemes: [string, any][] = loadedRows([
+      ['prism3', exampleTheme('prism3', () => brandTheme(exampleBrands()['prism3'] as BrandInput))],
+      ['nb', nbTheme()],
+      ['aurora', exampleTheme('aurora', () => brandTheme(exampleBrands()['aurora'] as BrandInput))],
+      ['harbor', exampleTheme('harbor', () => brandTheme(exampleBrands()['harbor'] as BrandInput))],
+      ['wendys', exampleTheme('wendys', () => brandTheme(standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input))],
+    ]);
+    // The pair is read off the plans, what the def binds, not typed here: a rebound ink or backdrop is the pair measured
+    // (#4110 review). Each distinct (ink, backdrop) pair at the initials members is measured in every brand and mode.
+    const role = (v: unknown): string => typeof v === 'string' ? v.replace(/^color\//, '').replace(/\//g, '.') : '';
+    const pairs = [...new Set(plans.filter((p) => p.coord.type === 'initials')
+      .map((p) => `${role(find(p.root, 'initials')?.paints?.fills)}|${role(kid(p.root, 'mask')?.paints?.fills)}`))];
+    const low: string[] = []; let cells = 0;
+    for (const pair of pairs) {
+      const [ink, ground] = pair.split('|');
+      for (const [b, th] of avThemes) for (const m of resolveAllModes(th)) {
+        const x = m.roles[ink], y = m.roles[ground];
+        if (!x?.hex || !y?.hex) { low.push(`${b}/${m.mode} ${ink} on ${ground}: missing`); continue; }
+        cells++;
+        const r = contrast(hexToRgb(x.hex), hexToRgb(y.hex));
+        if (r < 4.5) low.push(`${b}/${m.mode} ${ink} on ${ground} ${r.toFixed(2)}`);
+      }
+    }
+    ok(pairs.length === 1 && cells === 20 && low.length === 0, `#4110 avatar: the initials' ink clears 4.5:1 on the backdrop the def binds (${pairs.join(', ').replace(/\|/g, ' on ')}) in all ${cells} of 20 brand × mode cells${low.length ? ` — ${low.join('; ')}` : ''}`);
+    // Owner decision (2026-11-20): presence maps online = success, away = warning, busy = danger, offline = neutral.
+    // EXPECTED is the decision, typed here; ACTUAL is read from the shipped spec, `out/components/avatar.md`: the
+    // `presence` prop row a developer reads and the presence-dot anatomy line a designer reads, never the def's notes,
+    // which do not ship (#4110 delta review). Each tone must also be one Badge's `tone` axis offers.
+    {
+      const PRESENCE: Record<string, string> = { online: 'success', away: 'warning', busy: 'danger', offline: 'neutral' };
+      const md = readFileSync(resolve(HERE, './out/components/avatar.md'), 'utf8').split('\n');
+      const parse = (line: string | undefined): Record<string, string> =>
+        Object.fromEntries([...(line ?? '').matchAll(/\b(online|away|busy|offline) = (\w+)/g)].map((m) => [m[1], m[2]]));
+      const shipped: [string, Record<string, string>][] = [
+        ['presence prop', parse(md.find((l) => l.startsWith('| `presence` |')))],
+        ['presence dot', parse(md.find((l) => /\*\*Presence dot\*\*/.test(l)))],
+      ];
+      const badgeTones = componentDefs.find((d) => d.id === 'badge')?.variants?.tone ?? [];
+      const presenceValues = av.props.find((p) => p.name === 'presence')?.values ?? [];
+      const offMap = shipped.filter(([, m]) => JSON.stringify(m) !== JSON.stringify(PRESENCE)).map(([w, m]) => `${w} ${JSON.stringify(m)}`);
+      const notTone = Object.values(PRESENCE).filter((t) => !badgeTones.includes(t));
+      const notValue = JSON.stringify(presenceValues) !== JSON.stringify(Object.keys(PRESENCE));
+      ok(offMap.length === 0 && notTone.length === 0 && !notValue, `#4110 avatar: the shipped spec maps presence online = success, away = warning, busy = danger, offline = neutral, in the presence prop and the presence dot, on Badge's tones${offMap.length ? ` — ${offMap.join('; ')}` : ''}${notTone.length ? ` — not a Badge tone: ${notTone.join(', ')}` : ''}${notValue ? ` — presence values ${JSON.stringify(presenceValues)}` : ''}`);
+    }
+  }
+
   // #2713 — `ai.generationPriority` follows the build-component skill's written scale. Before it, each def's
   // number was set alone, so parts an agent must never generate on their own ranked from 2 to 9 and the
   // focus ring sat level with Text field. The tier of each def is a HAND-WRITTEN literal here, not read
@@ -21448,6 +21763,8 @@ arm: {
       'page-nav': 2, 'page-nav-item': 9,
       // Provider logo (#2343): a glyph other components carry, placed alone only in a row of accepted cards.
       'provider-logo': 3,
+      // Avatar (#4110): a top-level component that supports another, a list row, a card or a comment.
+      avatar: 3,
     };
     const prio = (d: ComponentDef) => d.ai.generationPriority;
     const offScale = componentDefs.filter((d) => !SCALE.includes(prio(d) as number));
@@ -24239,6 +24556,8 @@ arm: {
       // SIGNINBUTTON (#2343 PR 5): the label emphasis style per size, on Apple and Facebook; Google's label sets a literal
       // font instead (Q-S7 A), so its members carry no style and are not in this grid.
       { def: componentDefs.find((d) => d.id === 'sign-in-button')!, part: 'label', axes: { size: 3 }, at: { provider: 'apple', style: 'black' } },
+      // AVATAR (#4110, OD-A4 A): the initials on three label rungs across five sizes, at the initials member only.
+      { def: componentDefs.find((d) => d.id === 'avatar')!, part: 'initials', axes: { size: 3 }, at: { type: 'initials' } },
     ];
 
     // DIRECTION 1 — the authored table is the corpus. Discovered by walking every def's anatomy for a
@@ -33984,8 +34303,9 @@ arm: {
     // 41 since the textarea's `resize-grip` joined the set (2026-09-25); 42 since the hamburger `menu` did
     // (Q253 A, 2026-10-12); 43 since the breadcrumb `slash` did (Q382 A, 2026-10-16): each a new shape, so both counts
     // move by one and the three collisions below stay the only ones.
-    ok(byShape.size === 43,
-      `glyph-shape: the vocabulary's ${ICON_NAMES.length} names draw 43 distinct RENDERED shapes (got ${byShape.size}) — 44 distinct path STRINGS, so string comparison is off by one`);
+    // 45 since Avatar's `person` and `organization` did (#4110, OD-A6 A), two new shapes.
+    ok(byShape.size === 45,
+      `glyph-shape: the vocabulary's ${ICON_NAMES.length} names draw 45 distinct RENDERED shapes (got ${byShape.size}) — 46 distinct path STRINGS, so string comparison is off by one`);
     const groups = [...byShape.values()].filter((g) => g.length > 1).map((g) => g.join('|')).sort();
     ok(groups.join(' , ') === 'close|close-filled , minus|minus-filled , plus|plus-filled',
       `glyph-shape: and they are exactly the three -fill/-line pairs the source set draws identically (got [${groups.join('] [')}]) — a count of three would also pass on three collisions somewhere else`);
@@ -34421,7 +34741,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'step-item', 'menu-item', 'tooltip'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'avatar', 'step-item', 'menu-item', 'tooltip'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -36092,6 +36412,9 @@ arm: {
     // (the provider's own words), so the glyph centers against the only line, as Button's icon does.
     'sign-in-button.container':
       "a sign-in button is one fixed height and its label is the provider's one-line wording, which never wraps, so the glyph centers against the only line, as on Button.",
+    // `avatar` (#4110): the mask holds one or two initials, which never wrap, or a glyph, never both, in a fixed square.
+    'avatar.mask':
+      "an avatar's initials are one or two letters on one line, never wrapped, in a fixed square, so a centered glyph or line is the only case.",
     // `step-item` (#3055): the disc centers its one number (or the check, or the error glyph; gated on status, never two
     // at once) inside a fixed square, so there is no wrapping block to float against.
     'step-item.marker':
@@ -41245,6 +41568,8 @@ arm: {
     'sign-in-button.style': { prop: 'style', map: { undefined: 'black' }, reason: 'style defaults per provider in code (black, light, blue; Q-S4 A), so no one value answers it; the first member is Apple\'s default, black' },
     // #3051 (owner Q3051.1 A): code has no labeled prop. A non-empty `label` is the labeled divider; unset, the plain rule.
     'divider.labeled': { prop: 'label', map: { undefined: 'false' }, reason: 'a divider is labeled by setting `label`; with no label it is the plain rule' },
+    // #4110: code has no type prop. With no `src` the chain shows the initials of the required `name`, the first member.
+    'avatar.type': { prop: 'src', map: { undefined: 'initials' }, reason: 'with no photo, an avatar shows the initials of its required name; the image and the glyph follow from src and name at run time' },
     'breadcrumbs.path': { prop: 'responsive', map: { undefined: 'full', false: 'full', true: 'full' }, reason: 'Breadcrumbs renders the trail by default; `responsive` only swaps in the parent link below 480px' },
   };
   // NO RECORDED EXCEPTIONS (#2752, owner decisions Q1 B and Q2 A, 2026-10-16): every size ladder leads with medium and
@@ -45854,12 +46179,13 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(JSON.stringify(memberOf('add') ?? null).includes(ADD), '#3076 the icon set builds icon/add from the brand\'s art');
   const closeDoc = JSON.stringify(memberOf('close') ?? null);
   ok(closeDoc.includes(GLYPHS.close.path) && closeDoc.includes('evenodd'), '#3076 a brand glyph named close redraws icon/close with the brand\'s art and its fill rule (Q5 A)');
-  ok(iconPlans.length === 46 - 6 + 3, `#3076 the icon set is Prism3's 46 less the 6 mapped plus the 3 new brand names (got ${iconPlans.length})`);
+  // 48 since Avatar (#4110) added `person` and `organization` to Prism3's set.
+  ok(iconPlans.length === 48 - 6 + 3, `#3076 the icon set is Prism3's 48 less the 6 mapped plus the 3 new brand names (got ${iconPlans.length})`);
   // The icon def's own `name` property lists the same set its axis builds, so a reader of the materialized def (the
   // export's spec, an agent) sees no mapped name offered and every brand name.
   const nameProp = mapped.find((d) => d.id === 'icon')!.props.find((p) => p.name === 'name')?.values ?? [];
-  ok(nameProp.length === 43 && !nameProp.includes('plus') && !nameProp.includes('check') && ['add', 'subtract', 'checkmark', 'close'].every((n) => nameProp.includes(n)),
-    `#3076 the mapped icon def's name property offers the brand's 43 names, no mapped one (got ${nameProp.length}: ${nameProp.slice(-4).join(', ')})`);
+  ok(nameProp.length === 45 && !nameProp.includes('plus') && !nameProp.includes('check') && ['add', 'subtract', 'checkmark', 'close'].every((n) => nameProp.includes(n)),
+    `#3076 the mapped icon def's name property offers the brand's 45 names, no mapped one (got ${nameProp.length}: ${nameProp.slice(-4).join(', ')})`);
   // No map, no change: every def comes back as the same object, so every plan is the one component-surface.json pins.
   const same = componentDefs.filter((d) => applyIconMap(d, undefined) !== d || applyIconMap(d, {}) !== d || applyIconMap(d, { map: {}, glyphs: {} }) !== d).map((d) => d.id);
   ok(same.length === 0, `#3076 a brand with no icon map leaves every def as authored (rewrote ${same.join(', ')})`);
@@ -46299,6 +46625,50 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(files.get('./e/acme.base.tokens.json') === JSON.stringify(projected.base, null, 2) + '\n'
     && files.get('./e/acme.dark.overlay.tokens.json') === JSON.stringify(projected.overlays.find((o) => o.mode === 'dark')?.tree, null, 2) + '\n',
     '#4144 the base + overlay files are the projection of the tree written beside them, as the CLI writes it');
+}
+
+// #4204 (owner decision 1 b, 2026-11-19) — the helper line under a label is one thing under two prop names, `description` on
+// the selection rows and `helpText` on the fields, until the next contract bump unifies them. Both are described by the same
+// lead sentence, typed here, and each def keeps its own guidance after it. The props are found by name across the registry
+// and asserted represented, so a def that adds one joins the arm. Mutation: one prop's lead reworded → this arm, by name.
+{
+  const LEAD = 'Helper text, read by assistive tech through aria-describedby.';
+  const ROWS = ['checkbox-row', 'radio-row', 'switch-row'];
+  const helpers = componentDefs.flatMap((d) => (d.props ?? []).filter((p) => p.name === 'helpText' || (p.name === 'description' && ROWS.includes(d.id))).map((p) => ({ def: d.id, prop: p.name, text: p.description ?? '' })));
+  const off = helpers.filter((h) => !h.text.startsWith(LEAD + ' '));
+  ok(helpers.length >= 12 && ROWS.every((r) => helpers.some((h) => h.def === r && h.prop === 'description')) && off.length === 0,
+    `#4204 the helper-text props open with one sentence: ${helpers.length} of them (${off.map((h) => `${h.def}.${h.prop}: "${h.text.slice(0, 50)}"`).join(' | ') || 'all hold'})`);
+  // Decision 2 a: two words, "inactive" (focusable, aria-disabled) and "disabled", defined once in Button's guidance and
+  // reused. Counter and Pagination.Item said "unavailable" for the same state. Every string the three defs ship is read.
+  const strings = (x: unknown): string[] => typeof x === 'string' ? [x] : Array.isArray(x) ? x.flatMap(strings) : x && typeof x === 'object' ? Object.values(x).flatMap(strings) : [];
+  const three = ['button', 'counter', 'pagination-item'].map((id) => componentDefs.find((d) => d.id === id));
+  const said = three.flatMap((d) => strings(d).filter((t) => /\bunavailable\b/i.test(t)).map((t) => `${d?.id}: "${t.slice(0, 60)}"`));
+  const defined = strings(three[0]?.docs).some((t) => t.startsWith('Use isInactive for a control the user can still unblock'));
+  ok(three.every(Boolean) && said.length === 0 && defined,
+    `#4204 Button defines inactive and disabled, and Counter and Pagination.Item say "inactive", never "unavailable" (${said.join(' | ') || 'none'}; defined ${defined})`);
+  // Owner decision on #4363 (2026-11-20, A): the definition takes a semicolon, as the issue's DRAFT did, not a colon.
+  // The decided line is typed here, not read from the def, and checked in the def and in each emitted Button page.
+  const DECIDED = 'Use isInactive for a control the user can still unblock, such as Submit on an unfinished form; it stays focusable and says why. Use disabled only when the control doesn\'t apply right now';
+  const inDef = strings(three[0]?.docs).includes(DECIDED);
+  const pages = ['button', 'button-neutral', 'button-destructive'].filter((p) => !readFileSync(resolve(HERE, `out/components/${p}.md`), 'utf8').includes(`- ${DECIDED}\n`));
+  ok(inDef && pages.length === 0,
+    `#4204 Button's inactive/disabled definition reads as decided, with the semicolon (def ${inDef}; pages without it: ${pages.join(', ') || 'none'})`);
+  // Review of #4363: "inactive" is the code-side word. A Counter anatomy note that tells the designer which state to set
+  // names the Figma state, so it must be a value on the nested button's exposed state axis, read from the nested def
+  // itself (not a list typed here). Both stepper notes are required to be represented. Mutation: "inactive" put back
+  // in one note → this arm, by name.
+  const nestedStates = Object.entries(counter.anatomy.parts).flatMap(([id, p]) => {
+    const m = /designer's to set: ([\w-]+)/.exec((p as { note?: string }).note ?? '');
+    if (!m) return [];
+    const nest = (p as { nests?: string }).nests;
+    const exposed = (p as { nesting?: { expose?: string[] } }).nesting?.expose ?? [];
+    const axis = componentDefs.find((d) => d.id === nest)?.figmaProperties?.stateAxis;
+    const onAxis = exposed.includes('state') && axis?.name === 'state' && axis.values.includes(m[1]);
+    return [{ id, word: m[1], onAxis, values: axis?.values.join(' | ') ?? `no state axis on ${nest}` }];
+  });
+  const offAxis = nestedStates.filter((n) => !n.onAxis);
+  ok(['decrement', 'increment'].every((id) => nestedStates.some((n) => n.id === id)) && offAxis.length === 0,
+    `#4204 Counter's designer-set button state names a value on the nested button's state axis (${offAxis.map((n) => `${n.id}: "${n.word}" not in ${n.values}`).join('; ') || `${nestedStates.length} hold`})`);
 }
 
 // #4193 decision 1 (owner, 2026-11-19): each lever's ⓘ in the UI is one line of at most 90 characters (voice standard
