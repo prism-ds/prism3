@@ -62,7 +62,7 @@ A contrast miss is reported, never blocked. On **Foreground fills**, for example
 - After a reload, Studio still knows you have edits: choosing another brand asks before it replaces them. <!-- src: apps/studio/src/persist-local.ts:120-136#8ee40881 -->
 - In the Figma plugin, the brand is kept in the Figma file each time Update file writes the theme, and the plugin restores it when the file opens again. <!-- src: apps/plugin/src/apply-theme.ts:191-193#ede61fb0 --> <!-- src: apps/plugin/src/main.ts:2211-2218#e56247fc -->
 
-If a stored brand can't be opened, the web Studio offers it as a `design.md` download instead of discarding it. <!-- src: apps/studio/src/entry.ts:130-159 -->
+If a stored brand can't be opened, the web Studio offers it as a `design.md` download instead of discarding it. <!-- src: apps/studio/src/entry.ts:133-162#6cbbdc42 -->
 
 ## Import and export a design.md brief
 
