@@ -959,7 +959,10 @@ console.log('\n  Capture baseline and Adopt (#3189)');
   // mutations above still land at 2.1M and more, so the cap keeps its margin over them.
   // Steps merged onto Menu: 70 sets, 946,063 calls (fresh read 2,144,328). 950,000 still holds, with about 4,000 to spare,
   // so the next set added will likely need to raise it.
-  const CHECK_CAP = 950_000;
+  // Steps merged onto Tooltip (#4009): 950,000 → 1,000,000. 71 sets, 956,255 calls (fresh read 2,155,572), so 950,000
+  // fails on the merged tree. 1,000,000 leaves about 44,000, some five sets at about 8,000 calls a set, and the
+  // regressions this cap exists for still land at 2.1M and more.
+  const CHECK_CAP = 1_000_000;
   const checkOf = async (): Promise<{ msg: any; calls: number; progress: { msg: any; turn: number; i: number }[]; answerAt: number }> => {
     const at = posted.length;
     calls = 0; callsIn.clear();
