@@ -30,8 +30,9 @@ preset either (no open PR carries one).
 
 **Fallout, all mechanical.** Button, IconButton and TextField had Tooltip in `composition.planned`; it moves to
 `ai.commonPartners` (FieldMessage's to `alternativeTo`, which Tooltip names back), and IconButton's usage drops "(not
-built yet)". The prism3-build-ui skill's worked example of a missing component was Tooltip; it is Menu now (owner,
-2026-11-19: Popover is being built in #4252). Dialog's placement value set becomes the canonical entry, Tooltip's an overlapping one sharing `bottom` and `end`.
+built yet)". The prism3-build-ui skill's worked example of a missing component was Tooltip; it is a split button now
+(`split-button`, planned under Button with no def). Menu, the owner's first choice (2026-11-19), shipped in #4260, and
+a date picker (2026-11-20) fails #3472, which keeps date controls out of that section; owner, 2026-11-21. Dialog's placement value set becomes the canonical entry, Tooltip's an overlapping one sharing `bottom` and `end`.
 Every hand-listed gate register takes Tooltip (hit target excluded: never a pointer target; no size axis; outside Control
 shape: a surface), and the canvas furniture switch, the page taxonomy and the studio groups test list it.
 
@@ -44,7 +45,7 @@ shape: a surface), and the canvas furniture switch, the page taxonomy and the st
 - **N1 A:** `docs.do` reads "Use label mode when an icon-only control has a tooltip".
 - **Popover and Tooltip list each other in `alternativeTo`**, replacing the `planned` entries. The list must be
   symmetric and name registered defs. Popover (#4252) merged first, so both halves land here: Popover's
-  `alternativeTo` is `dialog, tooltip` and its `planned` is `menu`; Tooltip's `alternativeTo` is `field-message,
+  `alternativeTo` is `dialog, tooltip, menu` and its `planned` is empty (Menu, #4260, merged in between); Tooltip's `alternativeTo` is `field-message,
   popover` and its `planned` is empty.
 
 **Landing second, after Popover (#4252).** The 27-file collision is resolved by the recipe on #4252: both components'
