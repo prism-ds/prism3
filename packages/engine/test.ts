@@ -16786,11 +16786,13 @@ arm: {
     // catalog call. Checked against the literal required sets, and against both real results.
     const llOut = tools.find((t) => t.name === 'list_levers')?.outputSchema;
     const branches = ((llOut?.anyOf ?? []) as { required?: string[] }[]).map((b) => (b.required ?? []).join(','));
-    ok(branches.join(' | ') === 'levers,nonLeverFields,required | described',
-      `MCP: list_levers outputSchema is anyOf [catalog fields] | [described] (got: ${branches.join(' | ') || 'none'})`);
+    // #4147 added the third shape, `summary: true`'s compact catalog.
+    ok(branches.join(' | ') === 'levers,nonLeverFields,required | described | summary,nonLeverFields,required',
+      `MCP: list_levers outputSchema is anyOf [catalog fields] | [described] | [summary fields] (got: ${branches.join(' | ') || 'none'})`);
     const satisfies = (obj: any): boolean => ((llOut?.anyOf ?? []) as { required?: string[] }[]).some((b) => (b.required ?? []).every((k) => obj && k in obj));
-    ok(satisfies(callTool('list_levers', {}, brandSchema).structuredContent) && satisfies(callTool('list_levers', { describe: ['id'] }, brandSchema).structuredContent),
-      'MCP: both list_levers result shapes (catalog, describe) satisfy its outputSchema');
+    ok(satisfies(callTool('list_levers', {}, brandSchema).structuredContent) && satisfies(callTool('list_levers', { describe: ['id'] }, brandSchema).structuredContent)
+      && satisfies(callTool('list_levers', { summary: true }, brandSchema).structuredContent),
+      'MCP: every list_levers result shape (catalog, describe, summary) satisfies its outputSchema');
   }
 
   // list_levers now covers the WHOLE input surface, not just the UI knobs. This is the gate on the
@@ -16815,7 +16817,7 @@ arm: {
   const payload = JSON.parse(themed.content[0].text);
   ok(payload.contracts.checks > 0 && payload.contracts.pass === payload.contracts.checks && payload.contracts.failures.length === 0, `MCP: theme_brand reports all ${payload.contracts.checks} contrast contracts passing`);
   ok(payload.aliases.broken.length === 0 && payload.aliases.resolved === payload.aliases.total, 'MCP: theme_brand reports every alias resolving');
-  ok(payload.tokens === undefined && payload.aiMetadata === undefined, 'MCP: theme_brand withholds the token tree + ai metadata by default (they measure ~1,350,000 characters together)');
+  ok(payload.tokens === undefined && payload.aiMetadata === undefined, 'MCP: theme_brand withholds the token tree + ai metadata by default (they measure ~1,000,000 characters together)');
   ok(typeof payload.hint === 'string' && payload.omitted.includes('tokens'), 'MCP: theme_brand SAYS what it withheld and how to ask for it');
   // The default result has to be small enough to actually spend on.
   ok(themed.content[0].text.length < 20_000, `MCP: the default theme_brand result stays under 20,000 chars (${themed.content[0].text.length.toLocaleString()})`);
@@ -45917,10 +45919,10 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(f.length > 0 && f.every((x) => typeof x === 'object' && typeof x.role === 'string' && typeof x.mode === 'string'
       && typeof x.ratio === 'number' && typeof x.against === 'string' && typeof x.min === 'number' && x.ratio < x.min),
     `#4200 theme_brand reports each contract failure as { role, mode, ratio, against, min } (got ${JSON.stringify(f.slice(0, 2))})`);
-  ok(t.hint?.startsWith('Not included: tokens (~890,000 characters') && /Add them with include/.test(t.hint),
+  ok(t.hint?.startsWith('Not included: tokens (~440,000 characters') && /Add them with include/.test(t.hint),
     `#4200 the omitted-sections hint says what is not included and how to add it, from one size figure (got ${JSON.stringify(t.hint)})`);
   const desc = toolDefs({}).find((d: any) => d.name === 'theme_brand')!.description as string;
-  ok(desc.includes('roughly 890,000 and 590,000 characters') && /agent link takes the same object as `input`/.test(desc),
+  ok(desc.includes('roughly 440,000 and 560,000 characters') && /agent link takes the same object as `input`/.test(desc),
     `#4200 theme_brand states the one size figure the hint uses, and names the agent link's \`input\` alias`);
 }
 
