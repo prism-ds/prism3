@@ -25,7 +25,7 @@ import { contrast, formatRatio } from './color';
 import { Theme, brandTheme, BrandInput } from './theme';
 import { nbTheme } from './nb-fixture';
 import { resolveAllModes, ModeResult } from './modes';
-import { buildOverlaySet } from './emit-dtcg-overlay';
+import { buildOverlaySet, buildWebBase } from './emit-dtcg-overlay';
 import { buildAiMetadata } from './ai-metadata';
 import { parseDesignMd } from './design-md';
 import { buildTree, Stats } from './tree';
@@ -71,6 +71,9 @@ export const emitTheme = (theme: Theme, outDir: string, opts: { build?: string }
   for (const { mode, tree } of projected.overlays) {
     writeFileSync(fileIn(`${theme.id}.${mode}.overlay.tokens.json`), JSON.stringify(tree, null, 2) + '\n');
   }
+  // #4155 (owner decision B): the WEB flavor of the base, which only the web build reads. Each typeface carries its
+  // fallback stack as the DTCG array; the base above stays single-family for every other platform.
+  writeFileSync(fileIn(`${theme.id}.web.base.tokens.json`), JSON.stringify(buildWebBase(built.tree), null, 2) + '\n');
   return built;
 };
 
@@ -111,6 +114,9 @@ const validate = (data: any, schema: any, defs: any, path = ''): string[] => {
     const apSchema = ap && typeof ap === 'object' && !Array.isArray(ap) ? ap : undefined;
     if (ap === false) for (const k of Object.keys(data)) if (!(k in props)) e.push(`${path ? path + '.' : ''}${k}: unknown property (not in contract)`);
     // `true` and absent stay permissive — only the object form carries a sub-schema to apply.
+    // `propertyNames` (#3076): every key validated as a string against the sub-schema, so an open-keyed map can name its
+    // keys' shape (`icons.glyphs`) rather than leave it to the engine's refusal alone.
+    if (schema.propertyNames) for (const k of Object.keys(data)) e.push(...validate(k, { type: 'string', ...schema.propertyNames }, defs, `${path ? path + '.' : ''}${k} (key)`));
     for (const [k, v] of Object.entries(data)) {
       const sub = props[k] ?? apSchema;
       if (sub) e.push(...validate(v, sub, defs, path ? `${path}.${k}` : k));

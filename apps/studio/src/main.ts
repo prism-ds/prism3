@@ -19,7 +19,7 @@
  * volatile region (ramps or preview), so knob focus is never lost; a failed brand
  * combination is caught and surfaced with the last-good render preserved.
  */
-import { brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION } from '@prism3/engine';
+import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION } from '@prism3/engine';
 import { componentSpecsFileNames, loadComponentSpecsExporter } from './state/component-specs-export';
 import { hostCommit, type CheckedSetView, type HostCommit } from './write-adapter';
 import { AGENT_OP, initialHostSession, reduce, topicsFor, brandEffectFor, type HostSession, type OpKey } from './state/host-session';
@@ -34,6 +34,7 @@ import type { UpdateFileLend } from './shell/update-file';
 import type { ReportLend } from './shell/report';
 import type { CollisionsLend } from './shell/collisions';
 import { withEarlier } from './state/collisions';
+import { migratedLine, migrateStoredInput } from './state/legacy-input';
 import type { StatusLend } from './shell/status-strip';
 import { agentHeard, heard, startStripRun, stepEnded, stripVerdict, stripView, withReading, rowState, STRIP_COPY, type StripAgent, type StripRead, type StripRun, type StripVerdict } from './state/status-strip';
 import type { DocumentationLend } from './shell/documentation';
@@ -68,6 +69,7 @@ import { displayNameOf, entryOf } from './state/component-groups';
 import { brandControlShape } from './state/shape-input';
 import { shownName } from './state/brand-input';
 import { stillOffered, type UndoLoad } from './state/undo-load';
+import { leaveGuard } from './state/leave-guard';
 // The Elevation and Motion writes moved to `state/depth-motion-input.ts` (UI redesign S9.1), and every Elevation and
 // Motion control to `domains/depth.ts` (S9.2); the Type writes to `state/type-input.ts` and every Type control to
 // `domains/type.ts` (S6.1 to S6.3). Nothing here writes either any more.
@@ -122,7 +124,9 @@ const syncErrorBar = (): void => {
   // The strip hides with `hidden`, not an inline `display`: the chrome carries no runtime inline values (`test:chrome`).
   // A refused RESTORE is not a change that didn't apply, and what is on screen is not the designer's last
   // theme but the boot demo (#1989). So it says whose brand failed, and why the two writes are off.
-  if (restoreFailure) globalErr.show(RESTORE_BAR[restoreFailure.kind](restoreFailure.reason));
+  // #4222 (owner A): an engine refusal is written for whoever edits the design.md, so the line is the strip's own frame
+  // and the refusal sits behind Details; the host's own words for an unreadable blob stay on the line.
+  if (restoreFailure) globalErr.show(RESTORE_BAR[restoreFailure.kind](restoreFailure.reason), null, restoreFailure.kind === 'unreadable' ? null : restoreFailure.reason);
   // Owner Q189 A (#2146): a brand that arrives starting above 0px gets a one-click fix beside the line.
   else if (lastError) globalErr.show(`That change didn't apply: ${lastError} — you are seeing the last theme that resolved.`,
     firstBreakpointFix(lastError));
@@ -134,6 +138,8 @@ const syncErrorBar = (): void => {
   ]);
   // #3697 R9: the file's brand, held because it arrived after the designer acted, with the action that loads it.
   else if (heldRestore) globalErr.show(LATE_RESTORE.line, { label: LATE_RESTORE.action, run: takeHeldRestore });
+  // #4206: a stored brand migrated at load says what changed, until it is closed, a brand loads, or a Theme write lands.
+  else if (migratedNote) globalErr.show(migratedNote, { label: 'Close', run: closeMigratedNote, hook: 'restore-migrated-close' });
   else globalErr.show(null);
   syncChromeHeight();   // the bar lives in the chrome; showing it moves everything sticky below
 };
@@ -378,7 +384,12 @@ const setHost = (patch: Partial<HostSession>): void => { host = { ...host, ...pa
 // lose a case silently, and `apps/plugin/test-build-verdict.mjs` now reads every topic's surface back.
 /** The host's fonts, for a renderer whose own `host` names its element (#3138: the Style guide's type sample). */
 const hostFonts = (): HostFonts => host;
-export const handleHostMessage: Parameters<HostCommit['onHostMessage']>[0] = (m) => {
+export const handleHostMessage: Parameters<HostCommit['onHostMessage']>[0] = (raw) => {
+  // #4206 (owner A): a brand stored before a validation tightened is migrated to the shape the engine takes now, before
+  // `reduce` checks it, and the strip says what changed once it loads. A current brand comes through untouched.
+  const mg = raw.kind === 'restore-input' ? migrateStoredInput(raw.input) : null;
+  const migrated = mg?.notes.length ? migratedLine(mg.notes) : null;
+  const m: typeof raw = mg && migrated && raw.kind === 'restore-input' ? { ...raw, input: mg.input } : raw;
   const prev = host;
   host = reduce(prev, m);
   // #2879: any answer to the restore ends "Reading this file"; the library answer opens its home below.
@@ -398,6 +409,8 @@ export const handleHostMessage: Parameters<HostCommit['onHostMessage']>[0] = (m)
   if (m.kind === 'updates-off') commit.requestFileSets(panelBrand(updatesOffTheme));
   const effect = brandEffectFor(m, prev, host);
   // #3697 R9: a Theme write that landed stores the panel's brand in the file, so the held one is no longer the file's.
+  // #4206: once a Theme write lands, the file holds the migrated brand, so the note has nothing left to ask.
+  if (migratedNote && m.kind === 'apply-result' && m.ok) { migratedNote = null; syncErrorBar(); }
   if (heldRestore && m.kind === 'apply-result' && m.ok) {
     heldRestore = null;
     if (pendingLoad?.origin.kind === 'file') pendingLoad = null;   // its confirm goes with the offer it stood for
@@ -415,11 +428,12 @@ export const handleHostMessage: Parameters<HostCommit['onHostMessage']>[0] = (m)
   // (#3394's override sync, which it sends only while the panel's brand is the one it wrote) still loads.
   const late = effect === 'loadBrand' && m.kind === 'restore-input' && !bootRestoreSeen && userActed();
   if (m.kind === 'restore-input' || m.kind === 'restore-input-empty' || m.kind === 'restore-input-error' || m.kind === 'restore-input-library') bootRestoreSeen = true;
-  if (late) { heldRestore = structuredClone(m.input as BrandInput); syncErrorBar(); }
+  if (late) { heldRestore = structuredClone(m.input as BrandInput); heldMigrated = migrated; syncErrorBar(); }
   else if (effect === 'loadBrand' && m.kind === 'restore-input') {
-    heldRestore = null;
+    heldRestore = null; heldMigrated = null;
     loadBrand(m.input as BrandInput, { kind: 'file' });
     if (lastError) { restoreFailure = { kind: 'unresolved', reason: lastError, brand: failedBrandOf(brandState) }; build(); }
+    else if (migrated) { migratedNote = migrated; syncErrorBar(); }
   }
   // #1994: the two restores that load nothing. `reduce` dropped a blob `brandTheme` refuses with no effect,
   // so its reason is read again here; an unreadable one arrives as the host's own message. Only while
@@ -546,7 +560,7 @@ const renderPreviewContracts = (host: HTMLElement): void => {
   const failing = rp.contracts.filter((ct) => rp.modes.some((m) => ct.byMode[m] && !ct.byMode[m]!.pass));
   const instances = rp.contracts.reduce((n, ct) => n + rp.modes.filter((m) => ct.byMode[m] && !ct.byMode[m]!.pass).length, 0);
   const sec = palSection('Contrast contracts',
-    `Every declared a11y pair (${rp.contracts.length}), computed on the resolved colors across all modes. The per-control badges on each editing page verify the active mode at the point of edit; the per-page tables scope this to what that page governs.`);
+    `Every declared contrast pair (${rp.contracts.length}), measured in every mode. Badges on each page check the mode being edited.`);   // #4190 V2 A
   const tally = el('p', failing.length ? 'pv-tally no' : 'pv-tally ok',
     failing.length
       ? `${failing.length} of ${rp.contracts.length} pairs fall below their floor — ${instances} mode${instances === 1 ? '' : 's'} affected.`
@@ -820,6 +834,8 @@ const renderPreviewTokens = (host: HTMLElement, repaint: () => void): void => {
   const seg = el('div', mix('pvseg', 'tok-seg'));
   for (const [k, label] of [['primitive', 'Primitives'], ['semantic', 'Semantics']] as Array<[TokTier, string]>) {
     const b = hook(el('button', 'pvseg-b' + (tokTier === k ? ' on' : ''), label), `token-tier-${k}`) as HTMLButtonElement;
+    // #2492: the selected tier is said, not only drawn (`.on`).
+    b.setAttribute('aria-pressed', String(tokTier === k));
     b.onclick = () => { if (tokTier !== k) { tokTier = k; tokCat = ''; repaint(); } };
     seg.append(b);
   }
@@ -913,7 +929,7 @@ const renderPreviewStyleGuide = (host: HTMLElement, repaint: () => void): void =
   const ground = (sec: HTMLElement): HTMLElement => sharedGround(c, sec, surf);
 
   const bar = el('div', 'sg-surfbar');
-  const sel = hook(selectEl('cap'), 'style-guide-ground');
+  const sel = hook(selectEl('cap'), 'style-guide-ground'); sel.className = 'p3-select p3-sg-ground';   // #4188: the chrome's select, the levers' size
   for (const o of SG_SURFACES) sel.append(optionEl(o.key, o.label, o.key === surf.key));
   // The repaint is the caller's (Brand's preview, UI redesign S3), so the select redraws the Style guide in
   // place, never through a legacy tier.
@@ -1326,6 +1342,7 @@ const replaceWorking = (put: () => void): void => {
   undoLoad = null;
   // #1994: a brand loading is what ends a `rejected` or `unreadable` restore failure (see `restoreFailure`).
   if (restoreFailure && restoreFailure.kind !== 'unresolved') restoreFailure = null;
+  migratedNote = null;   // #4206: the note is about the brand this load replaces
   try { put(); } finally { loading = false; }
   brandMenuOpen = false; importOpen = false; importErr = null; importText = ''; pendingLoad = null;
   startReopened = false;   // a load is a choice: the start window closes with it (S12)
@@ -1356,6 +1373,19 @@ const endUndoOnEdit = (): void => {
 };
 subscribe('brand', endUndoOnEdit);
 subscribe('identity', endUndoOnEdit);
+
+/** #3982 (Q-WS1 A): the browser's leave-page prompt, armed while the brand has unsaved edits, by the rule the replace
+ *  confirm asks (`needsOverwriteConfirm`), and disarmed otherwise (`state/leave-guard.ts`). Web only: closing the
+ *  plugin is Figma's to handle, and its panel is not a page the designer navigates away from. */
+const leaving = commit.isFigma ? null : leaveGuard(window);
+/** Arms or disarms the leave prompt from the current provenance. Exported for `entry.ts`, which calls it once after
+ *  `initSession`: a reload that restores unsaved edits (#3880) publishes no topic, so without that call the prompt
+ *  would stay off until the next edit while the replace confirm already asks. Not called here at module load:
+ *  `provenance` is not set until `initSession` runs. */
+export const syncLeaving = (): void => leaving?.sync(needsOverwriteConfirm(brandState, provenance));
+subscribe('brand', syncLeaving);
+subscribe('identity', syncLeaving);
+subscribe('origin', syncLeaving);
 
 /** Trigger a client-side file download (Blob → object URL → anchor click). */
 const download = (filename: string, text: string, mime: string): void => {
@@ -1487,7 +1517,7 @@ const stageLoad = (input: BrandInput, origin: Origin): void => {
 const originLabel = (o: Origin, where: 'arriving' | 'atRisk'): string => {
   switch (o.kind) {
     case 'none': return 'this brand';
-    case 'example': return `the ${o.id} example`;
+    case 'example': return `the ${BRANDS[o.id]?.name ?? o.id} example`;   // #4191 T3: the name the picker shows
     case 'new': return where === 'arriving' ? 'a new brand' : 'this new brand';
     case 'import': return `“${o.label}”`;
     case 'file': return 'this file’s brand';
@@ -1516,7 +1546,7 @@ const barRead = (): BarView => ({
   brand: { name: shownName(brandState), hex: hex(oklchToRgb(brandState.primary)) },
   menuOpen: brandMenuOpen,
   // The Examples marker is computed at render, from `brandState.id` (#1075's subject went with the menu's fields).
-  examples: Object.keys(BRANDS).map((name) => ({ name, hex: hex(oklchToRgb(BRANDS[name].primary)), current: name === brandState.id })),
+  examples: Object.keys(BRANDS).map((name) => ({ name, label: BRANDS[name].name ?? name, hex: hex(oklchToRgb(BRANDS[name].primary)), current: name === brandState.id, desc: EXAMPLE_DESCRIPTIONS[name] ?? '' })),
   confirm: pendingLoad && (pendingLoad.origin.kind === 'example' || pendingLoad.origin.kind === 'import')
     ? { at: pendingLoad.origin.kind, text: overwriteText(pendingLoad) } : null,
   importOpen, importText, importErr,
@@ -1540,7 +1570,7 @@ const exportView = (): ExportView => {
     ensureThemeFresh();                   // #1196 — the preview must show the current namespace, same as the download
     const tree = buildTree(theme).tree;   // `theme` is the last-good — always valid, never throws
     const files = exportFileNames(tree, slug(), exportSettings, exportMetadata);
-    right.push({ kind: 'cap', text: files.length === 1 ? 'You get 1 file' : `You get ${files.length} files` });
+    right.push({ kind: 'cap', text: files.length === 1 ? '1 file' : `${files.length} files` });   // #4190 V5 A: the system's voice
     // Every name, up to a point, then a count; `title` keeps the full list one hover away.
     right.push({ kind: 'files', text: files.length <= 4 ? files.join('\n') : `${files.slice(0, 3).join('\n')}\n+${files.length - 3} more`, title: files.join('\n') });
     if (restoreFailure) right.push({ kind: 'note', text: TOKENS_NONE, hook: 'export-restore-note' });
@@ -1551,16 +1581,16 @@ const exportView = (): ExportView => {
   } else if (exportArtifact === 'component-specs') {
     const names = componentSpecsFileNames(slug());
     if (names) {
-      right.push({ kind: 'cap', text: `You get ${names.length} files` });
+      right.push({ kind: 'cap', text: `${names.length} files` });
       right.push({ kind: 'files', text: names.join('\n') });
     } else right.push({ kind: 'note', text: SPECS_WEB_OFF });
     if (restoreFailure) right.push({ kind: 'note', text: SPECS_NONE, hook: 'export-restore-note' });
   } else {
     if (briefInput()) {
-      right.push({ kind: 'cap', text: 'You get 1 file' });
+      right.push({ kind: 'cap', text: '1 file' });
       right.push({ kind: 'files', text: `${briefSlug()}.design.md` });
     }
-    right.push({ kind: 'note', text: 'A handful of anchors — the color, the type, the few decisions this brand is built from. The engine regrows the rest.' });
+    right.push({ kind: 'note', text: 'The few inputs this brand is generated from: colors, type and key settings. The engine derives everything else.' });
     // #1994: say whose brand this is when it is not the one on screen, or why there is none to export.
     if (restoreFailure) right.push({ kind: 'note', text: restoreFailure.brand ? BRIEF_IS_FAILED : BRIEF_NONE, hook: 'export-restore-note' });
   }
@@ -1582,7 +1612,7 @@ const exportView = (): ExportView => {
     none: settings.length ? null : exportArtifact === 'component-specs' ? SPECS_NO_SETTINGS : 'Nothing to set — the brief is written one way.',
     right,
     // #3553 Q-UI8 A: the word alone; the bar draws the vendored download icon before it.
-    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component contracts' : 'Download tokens', off },
+    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component specs' : 'Download tokens', off },
   };
 };
 
@@ -1619,6 +1649,10 @@ const barActions: BarActions = {
     if (p.origin.kind === 'file' && heldRestore === p.input) heldRestoreLoaded();   // #3697 Q-R9.1 A: the offer's confirm
   },
   cancelReplace: () => { pendingLoad = null; barChanged(); },
+  // #3982 (Q-WS1 A): the Export area's own downloads, of the brand at risk. They touch neither `pendingLoad` nor the
+  // menu, so the confirm stays open and nothing loads until the designer answers it.
+  saveBrief: () => exportDesignMd(),
+  saveTokens: () => exportTokens(),
   undoLoad: () => undoLastLoad(),
   toggleExport: () => { exportMenuOpen = !exportMenuOpen; brandMenuOpen = false; importOpen = false; barChanged(); },
   closeExport: () => { exportMenuOpen = false; barChanged(); },
@@ -1682,7 +1716,7 @@ const styleGuidePendingText = (): string => {
 };
 /** The phase line while an agent's update check, update, baseline capture or Adopt runs (#2265, #2283). None of
  *  them is a build, so none may read as one. Approved words (Q114 A). */
-const CHECK_TEXT: Readonly<Record<string, string>> = { 'update-components': 'Checking the sets…', 'update-components:confirmed': 'Updating the sets…', 'capture-baseline': 'Recording the sets as built…', 'adopt-members': 'Adopting members…' };
+const CHECK_TEXT: Readonly<Record<string, string>> = { 'update-components': 'Checking the sets…', 'update-components:confirmed': 'Updating the sets…', 'capture-baseline': 'Saving what was built…', 'adopt-members': 'Updating variants…' };
 /** The phase line before a build's first boundary reports (#2088). A build the panel started names its set,
  *  by the catalog's display name for the id it posted (`componentDef`); one an agent started is a set the panel
  *  was not told, so the line names none (the owner's wording, 2026-10-05). Before #2088 this said "Button"
@@ -1696,8 +1730,8 @@ const firstPhase = (): string => {
  *  are `componentPendingText`'s, with the fraction moved to the progress bar. */
 const componentPhase = (p: HostSession['componentProgress']): Pick<OpReading, 'phase' | 'progress'> =>
   !p ? { phase: firstPhase(), progress: null }
-    : p.phase === 'retry' ? { phase: 'Retrying property links…', progress: null }
-      : { phase: p.phase === 'build' ? 'Building members…' : 'Wiring references…', progress: { done: p.done, total: p.total } };
+    : p.phase === 'retry' ? { phase: 'Linking properties again…', progress: null }
+      : { phase: p.phase === 'build' ? 'Building variants…' : 'Linking nested sets…', progress: { done: p.done, total: p.total } };
 const IDLE: OpReading = { state: 'idle', ref: null, verdict: null, summary: null, phase: null, progress: null, agent: false };
 /** True while the agent's command for `k` runs and its verdict has not landed. */
 const agentRunning = (k: OpKey): boolean => !!host.agentRun && host.agentRun.op === k && !host.agentRun.settled;
@@ -1739,11 +1773,11 @@ const readbackOf = (): Omit<OpReading, 'phase' | 'progress' | 'agent'> | null =>
   const o = host.seedOutcome;
   const err = host.restoreError;
   if (!o && !err) return null;
-  const refused = err ? `Saved brand not restored — ${err}` : null;
+  const refused = err ? `Saved brand not restored: ${String(err).replace(/[.\s]+$/, '')}. Load an example or import a design.md.` : null;
   if (!o) return { state: 'bad', ref: err, verdict: SHORT.notRestored, summary: refused };
   const [text, ok] = o.state === 'error' ? [o.message, false]
-    : o.state === 'absent' ? ['No existing Prism3 theme in this file — start from the knobs.', true]
-      : [isUnrecoverable(o) ? `${o.detail} — knobs not stored in this file, so these are defaults` : o.detail, o.contractOk];
+    : o.state === 'absent' ? ['No Prism3 theme in this file. The settings start from defaults.', true]
+      : [isUnrecoverable(o) ? `${o.detail.replace(/[.\s]+$/, "")}. The settings aren't stored in this file, so they start from defaults.` : o.detail, o.contractOk];
   const verdict = o.state === 'error' ? SHORT.failed
     : o.state === 'absent' ? SHORT.noTheme
       : o.contractOk ? SHORT.clean
@@ -1886,6 +1920,10 @@ let restoreFailure: RestoreFailure | null = null;
 let bootRestoreSeen = false;
 /** #3697 R9: the file's brand, held because the boot read arrived after the designer had acted; null when none is held. */
 let heldRestore: BrandInput | null = null;
+/** #4206: the migration note for the held brand, shown once it loads; and the note for the brand on screen. */
+let heldMigrated: string | null = null;
+let migratedNote: string | null = null;
+const closeMigratedNote = (): void => { migratedNote = null; syncErrorBar(); };
 /** #3697 R9: the designer has acted — chosen a brand (the sibling guards' identity test) or edited the placeholder. */
 const userActed = (): boolean => provenance !== bootProvenance || isDirty(brandState, bootProvenance);
 /** #3697 R9: the strip's offer while a late restore is held. OWNER DECISION: copy — a DRAFT to `docs/voice-standard.md`,
@@ -1909,6 +1947,8 @@ const takeHeldRestore = (): void => {
 const heldRestoreLoaded = (): void => {
   heldRestore = null;
   if (lastError) { restoreFailure = { kind: 'unresolved', reason: lastError, brand: failedBrandOf(brandState) }; build(); }
+  else if (heldMigrated) migratedNote = heldMigrated;
+  heldMigrated = null;
   syncErrorBar();
 };
 /** The file's failed brand as a design.md, or null when it cannot be written as one. */
@@ -1919,14 +1959,14 @@ const BRIEF_IS_FAILED = "This is the file's saved brand, which didn't open, not 
 const BRIEF_NONE = "Nothing to export: this file's saved brand couldn't be read.";
 const TOKENS_NONE = "Off after a failed restore: these tokens would be the demo brand's, not this file's.";
 /** #3425 (DRAFT wording for the owner, Q3425.1); "component contracts" since #1325 (Q-CC1 A, DRAFT). */
-const SPECS_NONE = "Off after a failed restore: these component contracts would be the demo brand's, not this file's.";
-const SPECS_NO_SETTINGS = "Nothing to set — the component contracts follow this brand's component settings.";
-const SPECS_WEB_OFF = 'In the Figma plugin: the component contracts are built from the component definitions, which the web Studio leaves out.';   // a fallback no host reaches since #3429: the plugin provides the exporter, the web a loader
-/** The error bar after a failed restore, by kind (owner, 2026-10-02). `unresolved` says "resolves" because a
- *  rebuild that resolves also ends it; the other two end only when a brand loads. */
+const SPECS_NONE = "Off after a failed restore: these component specs would be the demo brand's, not this file's.";
+const SPECS_NO_SETTINGS = "Nothing to set — the component specs follow this brand's component settings.";
+const SPECS_WEB_OFF = 'In the Figma plugin: the component specs are built from the component definitions, which the web Studio leaves out.';   // a fallback no host reaches since #3429: the plugin provides the exporter, the web a loader
+/** The error bar after a failed restore, by kind (owner, 2026-10-02). Every kind says "until a brand loads": the
+ *  owner's words (#4222, 2026-11-19), though a rebuild that resolves also ends `unresolved`. */
 const RESTORE_BAR: Record<RestoreFailure['kind'], (reason: string) => string> = {
-  unresolved: (r) => `This file's saved brand didn't resolve: ${r} Update file and Clean up are off until a brand resolves. Load an example or import a design.md to continue.`,
-  rejected: (r) => `This file's saved brand didn't resolve: ${r} Update file and Clean up are off until a brand loads. Load an example or import a design.md to continue.`,
+  unresolved: () => "This file's saved brand didn't resolve. Update file and Clean up are off until a brand loads. Load an example or import a design.md to continue.",
+  rejected: () => "This file's saved brand didn't resolve. Update file and Clean up are off until a brand loads. Load an example or import a design.md to continue.",
   unreadable: (r) => `This file's saved brand couldn't be read: ${r} Update file and Clean up are off until a brand loads. Load an example or import a design.md to continue.`,
 };
 /** The tooltip on every write that is off after a failed restore: one wording for every kind (owner). */
@@ -2189,7 +2229,7 @@ const startStep = (): void => {
   const step = updateRun ? stepOf(updateRun) : null;
   if (!step || !updateRun) return;
   if (stripRun) stripRun = heard(stripRun, Date.now());
-  const busy = 'Another run of this step is out. Try again when it ends.';
+  const busy = 'This step is already running. Try again when it ends.';
   if (step === 'setup') { runFileSetup(); if (host.fileSetupState !== 'pending') { endStep(false, busy); return; } }
   else if (step === 'theme') { runApply(); if (host.applyState !== 'pending') { endStep(false, busy); return; } }
   else if (step === 'update') {
@@ -2445,7 +2485,10 @@ const syncStart = (): void => {
   // A home holds the first run, so the start window opens over one only from its button (`homeStart`).
   const want: StartMode | null = firstRun() ? (shown ? (homeStart ? 'home' : null) : 'first') : startReopened ? 'reopen' : null;
   if (startWindow && want && startWindow.mode === want) return;
-  startWindow?.dismiss(null);
+  // A load closes the window with focus inside it (#4216): focus goes to the brand switcher, which names the brand just
+  // loaded and is where the reopen's X returns. A window that replaces this one takes focus itself, and an X's own
+  // return (`close` below, `toHome`) moves it on after this.
+  startWindow?.dismiss(want ? null : frame?.barMain.querySelector<HTMLElement>('[data-p3="brand-switcher"]') ?? null);
   startWindow = null;
   if (!want || !frame) return;
   // The X (Q613 6 A, 7 A): a reopen returns to the brand, a window over a home returns to it, and the plugin's first run

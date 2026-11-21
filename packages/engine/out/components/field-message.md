@@ -40,7 +40,6 @@ Place directly below a field to carry persistent helper guidance (default status
 
 - Show the format/constraint in the default status before the user can fail
 - Pair the status with an icon so it is never color-only
-- Let the host own `aria-describedby` + `aria-invalid`; keep this node presentational
 
 ### Don't
 
@@ -79,10 +78,12 @@ Say what is wrong and how to fix it, with the constraint stated: "Enter a valid 
 
 ## Related components
 
-- **Instead, consider:** `toast`, `banner`
+- **Instead, consider:** `toast`, `banner`, `tooltip`
 - **Often used with:** `text-field`, `textarea`, `select`, `checkbox-row`, `counter`, `field-label`, `icon`
 
 ## Building it in code
+
+- Let the host own `aria-describedby` + `aria-invalid`; keep this node presentational
 
 ### Props
 

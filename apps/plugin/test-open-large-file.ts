@@ -56,6 +56,9 @@
  * Mutations failing by name: `guarded` no longer dropping the read or moving `presentGen` → `open/write-shared`; the
  * older read's answer cached without the generation check → `open/write-cache`.
  *
+ * #4237, `update/levers-once`: the brand's theme built once per Update check and twice per apply, never once a set.
+ *   Mutation failing by name: `materializerFor(brandInput)(d)` inside `updateTargets`' loop → `update/levers-once`.
+ *
  * #3177, THE UPDATE CHECK AND APPLY over every set, each on the stand-in with its pages unloaded: `update/check-no-walk`,
  * `update/apply-no-walk` (no whole-file search during either), `update/search-yields` (one page searched per turn),
  * `update/one-read` (each page read once per run, and by the apply once more after a write to the set on it) and
@@ -588,8 +591,18 @@ const update = async (label: string, msg: unknown, answer: string): Promise<{ ms
   return out;
 };
 {
+  const { brandLeverBuilds } = await import('./src/brand-def');
+  const b0 = brandLeverBuilds();
   const check = await update('check', { type: 'update-check-request', defs: setIds, input: stored }, 'update-check');
+  const b1 = brandLeverBuilds();
   const apply = check ? await update('apply', { type: 'update-sets', defs: setIds, previewHash: check.msg.previewHash, handEdits: 'keep', input: stored }, 'component-update-result') : null;
+  const b2 = brandLeverBuilds();
+  // #4237 (review of #4261): the brand's theme is built once per run, never once per set, held by a count of the builds
+  // (`brandLeverBuilds`) rather than by how `updateTargets` is spelled. The check builds it once (`updateTargets`); the
+  // apply twice (`updateTargets`, then `ledgerNow` constructing its materializer), over all 50 sets. Literals. The
+  // stand-in apply never calls `ledgerNow`'s per-def closure, so `+2` counts that materializer built, not used: a per-set
+  // rebuild inside that closure is outside this arm's reach (delta review of #4261).
+  ok(b1 - b0 === 1 && b2 - b1 === 2, `update/levers-once: the check builds the brand's theme once and the apply twice, over ${SETS} sets, never once a set (check ${b1 - b0}, apply ${b2 - b1})`);
   ok(!!check && check.searches === 0, `update/check-no-walk: the Update check over ${SETS} sets searches no whole file in one turn (${check ? `${check.searches} whole-file searches` : 'no answer'})`);
   ok(!!apply && apply.searches === 0, `update/apply-no-walk: the apply under the check's hash searches no whole file in one turn (${apply ? `${apply.searches} whole-file searches` : 'no answer'})`);
   ok(!!check && !!apply && check.worst <= 1 && apply.worst <= 1, `update/search-yields: no turn of the check or the apply searches more than one page (worst ${check?.worst ?? '—'} and ${apply?.worst ?? '—'})`);
@@ -938,7 +951,9 @@ console.log('\n  Capture baseline and Adopt (#3189)');
   //   · `check/drops`: a hand edit made after the pass, heard as Figma's `documentchange`, is in the check's answer: the
   //     edited set is read again. Mutation: the listener's drop removed → `check/drops`.
   // Measured, not asserted: the check's host calls on a fresh read of every set.
-  const CHECK_CAP = 900_000;
+  // #4007: 950,000 since Menu, Menu.Item and Menu.Group took the template to 66 sets (904,870 measured; 900,000 held 63). The
+  // mutations above still land at 2.1M and more, so the cap keeps its margin over them.
+  const CHECK_CAP = 950_000;
   const checkOf = async (): Promise<{ msg: any; calls: number; progress: { msg: any; turn: number; i: number }[]; answerAt: number }> => {
     const at = posted.length;
     calls = 0; callsIn.clear();

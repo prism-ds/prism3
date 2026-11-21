@@ -265,7 +265,7 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     const { page, errors } = await openPanel();
     await hooks.click(page.locator('[data-p3="brand-switcher"]').first());
     const pick = page.locator('[data-p3="brand-menu-example"]').first();
-    const picked = ((await pick.textContent()) ?? '').trim();
+    const picked = ((await pick.locator('.p3-menu-label').textContent()) ?? '').trim();
     await hooks.click(pick);
     await page.waitForTimeout(150);
     const chosen = (await readStart(page)).brandSel ?? '';
@@ -367,7 +367,7 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     for (let i = 0; i < 5; i++) await lever.press('ArrowRight');
     await hooks.click(page.locator('[data-p3="brand-switcher"]').first());
     const pick = page.locator('[data-p3="brand-menu-example"]').first();
-    const pickName = ((await pick.textContent()) ?? '').trim();
+    const pickName = ((await pick.locator('.p3-menu-label').textContent()) ?? '').trim();
     await hooks.click(pick);
     await hooks.click(page.locator('[data-p3="overwrite-replace"]').first());
     const chosenLoaded = pickName !== '' && await switcherReads(pickName);
@@ -657,7 +657,7 @@ console.log('\n5b. a late file read loads nothing once its window has closed (A1
     const before = await confirmText(page);
     await release(page);
     const after = await confirmText(page);
-    ok(held && /the aurora example/.test(before ?? '') && after === before,
+    ok(held && /the Aurora example/.test(before ?? '') && after === before,
       `#2503 an example chosen while a file read is held keeps its confirm naming the aurora example after the read finishes — held ${held}, before "${before}", after "${after}"`);
     await page.close();
   }

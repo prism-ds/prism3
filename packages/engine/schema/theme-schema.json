@@ -302,6 +302,12 @@
       "default": "floor",
       "description": "OPTIONAL. The ground the page's secondary ink is fitted against (owner Q-TXT1 A). 'floor' (default): `text.secondary` and `icon.secondary` clear their bar on the contrast floor, `background.secondary` unless `floorStep` moves it. 'page': they clear it on `background.primary` only, the lightest secondary that still passes on the page, and may fall below it on `background.secondary`. 'page' applies in light and dark; high contrast and the inverse band keep their floor. No token name changes."
     },
+    "interactiveGround": {
+      "type": "string",
+      "enum": ["floor", "page"],
+      "default": "floor",
+      "description": "OPTIONAL. The darkest ground the brand's controls may sit on (#3339). 'floor' (default): every interactive contrast check (the interactive fills, disabled text and icon, field borders, the destructive outline and the field status borders) is measured on the contrast floor, `background.secondary` unless `floorStep` moves it. 'page': they are measured on `background.primary` (on the inverse band, `inverse.background.primary`), so they run as light as the page allows and may fall below their bar on `background.secondary`. The brand commits to no controls there, or on a card on that step. 'page' applies in light and dark; high contrast keeps the floor. No token name changes."
+    },
     "glassRoles": {
       "type": "object",
       "description": "OPTIONAL. Brand-added glass roles (#3073): `color.glass.<name>`, each a translucent fill beside the shipped `color.glass.surface` (white or black glass). The key is the role name, lower-case kebab-case, never `surface`. Each names exactly one color source, `role` (a semantic role whose palette color is read per mode, such as `foreground.primary`, the card ground) or `palette` (one palette color, such as `neutral.050`, `white` or `black`), plus `alpha`, a whole percent from 1 to 99. The engine emits it as a palette alpha step, so a Figma fill bound to it stays translucent. Brand-dependent: never part of the guaranteed token names.",
@@ -379,6 +385,23 @@
           "additionalProperties": { "type": "string", "enum": ["linear", "standard", "decelerate", "accelerate", "expressive", "calm"] },
           "propertyNames": { "enum": ["default", "enter", "exit", "emphasized"] },
           "description": "OPTIONAL. Which CURVE each motion role resolves to, brand-wide. The per-mode re-point in modeLevers.<mode>.easings deviates from THIS, so without it a mode could override a baseline nobody could set. Absent entries keep the engine default (default→standard, enter→decelerate, exit→accelerate, emphasized→expressive). Deep-validated by brandTheme()."
+        },
+        "presets": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "enum": ["instant", "fast", "normal", "moderate", "slow", "slower", "long", "longer", "longest"] },
+          "propertyNames": { "enum": ["state", "fade", "crossfade", "move", "reveal", "draw", "surface", "expand", "step", "settle"] },
+          "description": "OPTIONAL (#2857). Which step of the duration scale each motion preset plays on, brand-wide. A preset binds the step (motion.duration.<step>), never its own duration token. Absent entries keep the engine's default mapping. An unknown preset or step is refused by name. Deep-validated by brandTheme()."
+        },
+        "brandOnly": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "object", "additionalProperties": false, "required": ["kind", "damping", "stiffness"], "properties": { "kind": { "const": "spring" }, "damping": { "type": "number", "minimum": 0 }, "stiffness": { "type": "number", "minimum": 0 } } },
+              { "type": "object", "additionalProperties": false, "required": ["kind", "baseMs", "msPerPx"], "properties": { "kind": { "const": "distance" }, "baseMs": { "type": "number", "minimum": 0 }, "msPerPx": { "type": "number", "minimum": 0 }, "minMs": { "type": "number", "minimum": 0 }, "maxMs": { "type": "number", "minimum": 0 } } },
+              { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "const": "gesture" }, "coastTauMs": { "type": "number", "minimum": 0 }, "rubberBand": { "type": "number", "minimum": 0, "maximum": 1 }, "parallax": { "type": "number", "minimum": 0 } } }
+            ]
+          },
+          "description": "OPTIONAL (#2857). The brand-only motion group: one-offs this brand needs that are not guaranteed names. Each entry is emitted under motion.brand.<name> for this brand only, as a custom-typed leaf: a spring (damping, stiffness), a duration scaled by the distance moved (baseMs plus msPerPx, clamped to minMs and maxMs), or gesture physics (a coast time constant coastTauMs, a rubber-band coefficient, a parallax ratio). The fields are DRAFT."
         }
       }
     },
@@ -607,6 +630,28 @@
     "tagStyle": { "type": "string", "enum": ["pill", "underline"], "default": "pill", "description": "OPTIONAL. The shape every tag draws. 'pill' is a rounded outline; 'underline' is one line under the tag, 1px at rest and 2px when selected or under the pointer, with square corners and no fill in any state. Default 'pill'." },
     "dialogTitleSize": { "type": "string", "enum": ["large", "medium", "small"], "default": "large", "description": "OPTIONAL. The title size of every dialog, centered or a sheet: 'large' binds type.label.lg.emphasis, 'medium' type.label.md.emphasis, 'small' type.label.sm.emphasis. Default 'large'." },
     "bannerStyle": { "type": "string", "enum": ["tinted", "outlined"], "default": "tinted", "description": "OPTIONAL. The surface every banner draws: 'tinted' fills it with the tone's tint (color.foreground.{tone}-subtle); 'outlined' fills it with the page color (color.background.primary). Both keep the 1px edge in the tone (color.border.{tone}). Default 'tinted'." },
+    "icons": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OPTIONAL. The brand's own icons in generated components. 'map' names which brand icon stands in for each Prism3 icon, everywhere a component uses it; a mapped Prism3 icon is no longer built into the brand's file. 'glyphs' carries the brand's art, one path each on a 24×24 artboard; a glyph named like a Prism3 icon redraws it. A key in 'map' must be a Prism3 icon, its value a Prism3 icon or a key in 'glyphs', and a value may not itself be mapped.",
+      "properties": {
+        "map": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^([a-z0-9]+(-[a-z0-9]+)*|FPO-default-icon)$" }, "description": "Prism3 icon name → the icon that replaces it, for example { plus: add, check: checkmark }." },
+        "glyphs": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": { "type": "string", "pattern": "^\\s*[Mm][MmZzLlHhVvCcSsQqTtAa0-9eE.,\\s+-]*$", "description": "One SVG path's data on the 0 0 24 24 artboard, filled." },
+              "fillRule": { "type": "string", "enum": ["evenodd"], "description": "OPTIONAL. 'evenodd' for art with counters cut out; leave it out for the default." }
+            }
+          },
+          "description": "Icon name → the brand's art for it."
+        }
+      }
+    },
     "currentIndicator": { "type": "string", "enum": ["full", "partial"], "default": "partial", "description": "OPTIONAL. The 2px bar under the current page's link (Link at current, so every PageNav item): 'partial' is round(0.5 x the title's width), centered under it; 'full' runs under the whole title. The thickness is 2px either way. Default 'partial'." },
     "buttonIcons": { "type": "string", "enum": ["attached", "edges"], "default": "attached", "description": "OPTIONAL. Button icons: 'attached' beside the label, or 'edges' with the label centered between them." },
     "buttonContentSize": { "type": "string", "enum": ["match", "smaller"], "default": "match", "description": "OPTIONAL. 'smaller': a medium button takes the small label and icon." },

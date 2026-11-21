@@ -211,16 +211,23 @@ export const lastChangedKey = (defId: string, r: PanelReleases = {}): string => 
  */
 export interface AnatomyMark { n: number; part: string; path: string[]; container: boolean; parts: number; run: string[] }
 
-/** THE FAMILY A DEF'S PANEL COVERS (#2927, owner decision Q551 A on Q1): the defs on its taxonomy page that draw canvas
- *  furniture, in page order, and the one that leads (`leadOf`). A def on no page is a family of one. Null for a def
- *  with no furniture, which draws no panel. */
+/** THE FAMILY A DEF'S PANEL COVERS (#2927, owner decision Q551 A on Q1): the defs on its taxonomy page that build a
+ *  set, in page order, and the one that leads (`leadOf`). A def on no page is a family of one. Null for a def that
+ *  builds no set, which draws no panel. A set of one member (Popover, Menu, Menu.Group; #4008, #4007) has no canvas
+ *  furniture, because it has no grid to label, and still has its panel: the switch was the furniture list until then,
+ *  when every set had a grid. */
 export interface PanelFamily { page: string; lead: string; members: string[] }
+const buildsSet = (defId: string): boolean => {
+  if (CANVAS_FURNITURE.has(defId)) return true;
+  const d = componentDefs.find((x) => x.id === defId);
+  return !!d?.figmaProperties && !d.figmaProperties.emitAsComponents;
+};
 export const panelFamily = (defId: string): PanelFamily | null => {
-  if (!CANVAS_FURNITURE.has(defId)) return null;
+  if (!buildsSet(defId)) return null;
   const found = leafForDef(defId);
   if (!found) return { page: defId, lead: defId, members: [defId] };
   const lead = leadOf(found.leaf) ?? defId;
-  return CANVAS_FURNITURE.has(lead) ? { page: found.leaf.page, lead, members: found.leaf.defs.filter((d) => CANVAS_FURNITURE.has(d)) } : null;
+  return buildsSet(lead) ? { page: found.leaf.page, lead, members: found.leaf.defs.filter(buildsSet) } : null;
 };
 /** Whether `defId`'s set carries its family's panel: only the lead's does. */
 export const leadsPanel = (defId: string): boolean => panelFamily(defId)?.lead === defId;
@@ -396,7 +403,7 @@ export const planDocPanel = (def: ComponentDef, ctx: { modes?: readonly string[]
         break;
       }
       case 'styles':
-        blocks.push({ type: 'Paragraph', text: 'Every member is in the set to the left.', size: SIZE });
+        blocks.push({ type: 'Paragraph', text: 'Every variant is in the set to the left.', size: SIZE });
         for (const a of s.axes) blocks.push({ type: 'Chips', label: sentence(a.axis), chips: a.values.map(sentence), note: a.kind === 'runtime' ? 'Changes while in use' : 'Chosen once, when placed' });
         if (s.states.length) blocks.push({ type: 'Chips', label: 'States', chips: s.states.map(sentence) });
         break;
@@ -1703,8 +1710,8 @@ export const drawDocPanel = async (
     delete out.marked;
     const hit = hits[0];
     out.skipped.push(updateMakesRoom(set, hits, kids)
-      ? `No usage panel for ${def.id}: "${hit.name ?? 'a layer'}" sits right of the set, where the panel goes. Run Update to make room, then the panel is drawn`
-      : `No usage panel for ${def.id}: "${hit.name ?? 'a layer'}" sits right of the set, where the panel goes. Move it, then build or update again`);
+      ? `No usage panel for ${def.id}: "${hit.name ?? 'a layer'}" sits right of the set, where the panel goes. Run Update file to make room, then the panel is drawn`
+      : `No usage panel for ${def.id}: "${hit.name ?? 'a layer'}" sits right of the set, where the panel goes. Move it, then build again or run Update file`);
     return out;
   }
   writeBlocked(parent, String(set.id ?? ''), null);

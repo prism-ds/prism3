@@ -26,7 +26,7 @@
  */
 import { currentMode, lastError, rebuild, rp, searchQuery, setCurrentMode, setPage, setSearchHits, subscribe, theme } from '../state/store';
 import {
-  MODE_NAME, MODE_ROWS, PERSONALITY_WORDS, ROOT_RE, addCustomMode, currentRoot, customModes, hcDarkLocked, modesOn, namespaceNote,
+  MODE_NAME, MODE_ROWS, PERSONALITY_ORDER_LINE, PERSONALITY_WORDS, ROOT_RE, addCustomMode, currentRoot, customModes, hcDarkLocked, modesOn, namespaceNote,
   personality, planModeOff, removeCustomMode, renameCustomMode, renameNamespace, setCustomBase, setModeOff, setModeOn, setName, setPersonality, shownName,
   customModesBasedOn,
   traitLevers, modeDrops,
@@ -161,8 +161,10 @@ export const mountBrandLevers = (host: HTMLElement, cleanups: (() => void)[]): v
       chips.append(c.el);
       return c;
     });
-    const sub = subLine('');
-    b.ctl.append(chips, sub);
+    const sub = hook(subLine(''), 'personality-fills');
+    // #3976: the order rule, said once and always; the words on, below it, are listed in the order they were picked.
+    const order = hook(subLine(PERSONALITY_ORDER_LINE), 'personality-order');
+    b.ctl.append(chips, order, sub);
     return {
       nodes: [b.el],
       drawn: [{ block: b, keys: ['personality'], sync: () => {
@@ -262,7 +264,7 @@ export const mountBrandLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     const v = verdictOf(theme, rp.modes);
     const pairs = plan.off.reduce((n, m) => n + (v.per.find((p) => p.mode === m)?.n ?? 0), 0);
     const body: (string | HTMLElement)[] = [];
-    if (plan.off.length > 1) body.push(`High contrast dark follows dark, so it turns off too. The two modes’ ${plural(pairs, 'pair')} leave the verdict (${v.total} becomes ${v.total - pairs}).`);
+    if (plan.off.length > 1) body.push(`High contrast dark follows dark, so it turns off too. The two modes’ ${plural(pairs, 'pair')} leave the contrast check (${v.total} becomes ${v.total - pairs}).`);
     if (plan.drops.length) {
       const ul = hook(h('ul', 'p3-confirm-list'), 'mode-off-drops');
       for (const d of plan.drops) ul.append(h('li', undefined, d));
