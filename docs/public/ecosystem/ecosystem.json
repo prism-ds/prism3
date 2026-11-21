@@ -345,6 +345,8 @@
           "page-nav",
           "skeleton",
           "popover",
+          "step-item",
+          "steps",
           "menu-item",
           "menu-group",
           "menu",
