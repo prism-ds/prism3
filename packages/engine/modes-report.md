@@ -1289,7 +1289,7 @@ Component sizes — t-shirt, density `comfortable` (control heights; each compon
 
 # Theme: prism3 (pds3.* / hex)
 
-- custom modes: brand-b (based on light) — each rebuilds from its base on every build; overrides and modeAnchors adjust it.
+- custom modes: brand-b (started from light) — each keeps the copy of that mode's settings taken when it was made, and later changes to that mode do not reach it.
 - modeLevers: global levers overridden in brand-b (radius, font family, weight, line height, letter spacing, motion tempo, shadow, density) — rebuilt the same way as the base; the token set is unchanged.
 - namespace: tokens emit under 'pds3.*' instead of the default 'prism.*'.
 - primary: the brand color is pinned at step 600 (hue 266.75) — the ramp is built around it.

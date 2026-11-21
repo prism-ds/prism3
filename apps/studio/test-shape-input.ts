@@ -36,7 +36,9 @@ const ok = (cond: boolean, label: string): void => {
  *  whole per-mode map, and they build every mode they use themselves. Brand B's own cascade is test-brand-input's. */
 const withoutBrandB = (b: BrandInput): BrandInput => {
   const { customModes: _c, modePalettes: _p, modeLevers: _l, ...rest } = structuredClone(b);
-  return { ...rest, brandColors: (rest.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
+  // Brand B's own surfaces (its snapshot of light's, #1946) go with it: no mode reads them once it is gone.
+  const { 'brand-b': _s, ...surfaces } = (rest.surfaces ?? {}) as Record<string, unknown>;
+  return { ...rest, ...(rest.surfaces ? { surfaces: surfaces as BrandInput['surfaces'] } : {}), brandColors: (rest.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
 };
 const brands = { ...(exampleBrands as Record<string, BrandInput>), prism3: withoutBrandB((exampleBrands as Record<string, BrandInput>).prism3) };
 let loaded = '';
