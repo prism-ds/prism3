@@ -16,7 +16,9 @@ The first time Studio opens, a start window offers three ways in. <!-- src: apps
 | **Import a design.md** | Loads a whole brand from a `design.md` brief. Paste it into the box and choose **Import**, or choose **Upload…** to pick a file. <!-- src: apps/studio/src/shell/start.ts:225-237 --> |
 
 To come back to these later, open the brand menu at the left of the top bar and choose **New brand**. The same menu lists the examples, each with its few words, and has **Import design.md…**. <!-- src: apps/studio/src/shell/bar.ts:227-253 -->
-After you load an example or import a brief over a brand you had edited, **Undo load** appears beside the brand switcher and puts that brand back, edits included. It stays until your next edit or load. <!-- src: apps/studio/src/shell/bar.ts:150-154 -->
+After you load an example or import a brief over a brand you had edited, **Undo load** appears beside the brand switcher and puts that brand back, edits included. It stays until your next edit or load. <!-- src: apps/studio/src/shell/bar.ts:154-158 -->
+
+If opening another brand would replace edits that aren't saved anywhere else, Studio asks first. Before you choose **Replace brand** or **Cancel**, you can keep a copy with **Download design.md** or **Download tokens**; a download leaves the question open. <!-- src: apps/studio/src/state/leave-guard.ts:25-28 --> <!-- src: apps/studio/src/shell/bar.ts:280-302 --> On the web, the browser also asks before you leave the page while the brand has unsaved edits. <!-- src: apps/studio/src/main.ts:1377-1388#b587cb67 -->
 
 *[Screenshot placeholder: the start window with its three cards.]*
 
@@ -64,10 +66,10 @@ If a stored brand can't be opened, the web Studio offers it as a `design.md` dow
 
 ## Import and export a design.md brief
 
-A `design.md` is a brand written as a short document: settings at the top, prose below. <!-- src: packages/engine/mcp.ts:361 -->
+A `design.md` is a brand written as a short document: settings at the top, prose below. <!-- src: packages/engine/mcp.ts:409 -->
 Studio reads both the Prism3 form and the standard design.md form, <!-- src: apps/studio/src/state/start-input.ts:176-190#569bb71c --> which lists colors as a flat `colors:` map. <!-- src: packages/engine/standard-design-md.ts:109-110 -->
 
-- Import: **Import design.md…** in the brand menu, then paste the brief and choose **Load**, or choose **Upload .md**. The **Import a design.md** card in the start window works the same way. <!-- src: apps/studio/src/shell/bar.ts:238-294 -->
-- Export: open **Export** in the rail, choose **Brand brief**, then **Download brief**. The file is named `<brand>.design.md`. The brief has no settings: "Nothing to set — the brief is written one way." <!-- src: apps/studio/src/export-settings.ts:114 --> <!-- src: apps/studio/src/main.ts:1528-1555 -->
+- Import: **Import design.md…** in the brand menu, then paste the brief and choose **Import**, or choose **Upload…**. The **Import a design.md** card in the start window works the same way, with the same two buttons. <!-- src: apps/studio/src/shell/bar.ts:242-311 -->
+- Export: open **Export** in the rail, choose **Brand brief**, then **Download brief**. The file is named `<brand>.design.md`. The brief has no settings: "Nothing to set — the brief is written one way." <!-- src: apps/studio/src/export-settings.ts:114 --> <!-- src: apps/studio/src/main.ts:1546-1573 -->
 
 A brief is the way to hand a brand to someone else, or to an agent: importing it rebuilds the same brand. For token files, see [Export tokens](export-tokens.md).

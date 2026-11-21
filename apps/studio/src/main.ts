@@ -69,6 +69,7 @@ import { displayNameOf, entryOf } from './state/component-groups';
 import { brandControlShape } from './state/shape-input';
 import { shownName } from './state/brand-input';
 import { stillOffered, type UndoLoad } from './state/undo-load';
+import { leaveGuard } from './state/leave-guard';
 // The Elevation and Motion writes moved to `state/depth-motion-input.ts` (UI redesign S9.1), and every Elevation and
 // Motion control to `domains/depth.ts` (S9.2); the Type writes to `state/type-input.ts` and every Type control to
 // `domains/type.ts` (S6.1 to S6.3). Nothing here writes either any more.
@@ -1373,6 +1374,19 @@ const endUndoOnEdit = (): void => {
 subscribe('brand', endUndoOnEdit);
 subscribe('identity', endUndoOnEdit);
 
+/** #3982 (Q-WS1 A): the browser's leave-page prompt, armed while the brand has unsaved edits, by the rule the replace
+ *  confirm asks (`needsOverwriteConfirm`), and disarmed otherwise (`state/leave-guard.ts`). Web only: closing the
+ *  plugin is Figma's to handle, and its panel is not a page the designer navigates away from. */
+const leaving = commit.isFigma ? null : leaveGuard(window);
+/** Arms or disarms the leave prompt from the current provenance. Exported for `entry.ts`, which calls it once after
+ *  `initSession`: a reload that restores unsaved edits (#3880) publishes no topic, so without that call the prompt
+ *  would stay off until the next edit while the replace confirm already asks. Not called here at module load:
+ *  `provenance` is not set until `initSession` runs. */
+export const syncLeaving = (): void => leaving?.sync(needsOverwriteConfirm(brandState, provenance));
+subscribe('brand', syncLeaving);
+subscribe('identity', syncLeaving);
+subscribe('origin', syncLeaving);
+
 /** Trigger a client-side file download (Blob → object URL → anchor click). */
 const download = (filename: string, text: string, mime: string): void => {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -1598,7 +1612,7 @@ const exportView = (): ExportView => {
     none: settings.length ? null : exportArtifact === 'component-specs' ? SPECS_NO_SETTINGS : 'Nothing to set — the brief is written one way.',
     right,
     // #3553 Q-UI8 A: the word alone; the bar draws the vendored download icon before it.
-    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component contracts' : 'Download tokens', off },
+    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component specs' : 'Download tokens', off },
   };
 };
 
@@ -1635,6 +1649,10 @@ const barActions: BarActions = {
     if (p.origin.kind === 'file' && heldRestore === p.input) heldRestoreLoaded();   // #3697 Q-R9.1 A: the offer's confirm
   },
   cancelReplace: () => { pendingLoad = null; barChanged(); },
+  // #3982 (Q-WS1 A): the Export area's own downloads, of the brand at risk. They touch neither `pendingLoad` nor the
+  // menu, so the confirm stays open and nothing loads until the designer answers it.
+  saveBrief: () => exportDesignMd(),
+  saveTokens: () => exportTokens(),
   undoLoad: () => undoLastLoad(),
   toggleExport: () => { exportMenuOpen = !exportMenuOpen; brandMenuOpen = false; importOpen = false; barChanged(); },
   closeExport: () => { exportMenuOpen = false; barChanged(); },
@@ -1758,8 +1776,8 @@ const readbackOf = (): Omit<OpReading, 'phase' | 'progress' | 'agent'> | null =>
   const refused = err ? `Saved brand not restored — ${err}` : null;
   if (!o) return { state: 'bad', ref: err, verdict: SHORT.notRestored, summary: refused };
   const [text, ok] = o.state === 'error' ? [o.message, false]
-    : o.state === 'absent' ? ['No existing Prism3 theme in this file — start from the knobs.', true]
-      : [isUnrecoverable(o) ? `${o.detail} — knobs not stored in this file, so these are defaults` : o.detail, o.contractOk];
+    : o.state === 'absent' ? ['No Prism3 theme in this file. The settings start from defaults.', true]
+      : [isUnrecoverable(o) ? `${o.detail.replace(/[.\s]+$/, "")}. The settings aren't stored in this file, so they start from defaults.` : o.detail, o.contractOk];
   const verdict = o.state === 'error' ? SHORT.failed
     : o.state === 'absent' ? SHORT.noTheme
       : o.contractOk ? SHORT.clean
@@ -1941,9 +1959,9 @@ const BRIEF_IS_FAILED = "This is the file's saved brand, which didn't open, not 
 const BRIEF_NONE = "Nothing to export: this file's saved brand couldn't be read.";
 const TOKENS_NONE = "Off after a failed restore: these tokens would be the demo brand's, not this file's.";
 /** #3425 (DRAFT wording for the owner, Q3425.1); "component contracts" since #1325 (Q-CC1 A, DRAFT). */
-const SPECS_NONE = "Off after a failed restore: these component contracts would be the demo brand's, not this file's.";
-const SPECS_NO_SETTINGS = "Nothing to set — the component contracts follow this brand's component settings.";
-const SPECS_WEB_OFF = 'In the Figma plugin: the component contracts are built from the component definitions, which the web Studio leaves out.';   // a fallback no host reaches since #3429: the plugin provides the exporter, the web a loader
+const SPECS_NONE = "Off after a failed restore: these component specs would be the demo brand's, not this file's.";
+const SPECS_NO_SETTINGS = "Nothing to set — the component specs follow this brand's component settings.";
+const SPECS_WEB_OFF = 'In the Figma plugin: the component specs are built from the component definitions, which the web Studio leaves out.';   // a fallback no host reaches since #3429: the plugin provides the exporter, the web a loader
 /** The error bar after a failed restore, by kind (owner, 2026-10-02). Every kind says "until a brand loads": the
  *  owner's words (#4222, 2026-11-19), though a rebuild that resolves also ends `unresolved`. */
 const RESTORE_BAR: Record<RestoreFailure['kind'], (reason: string) => string> = {
@@ -2467,7 +2485,10 @@ const syncStart = (): void => {
   // A home holds the first run, so the start window opens over one only from its button (`homeStart`).
   const want: StartMode | null = firstRun() ? (shown ? (homeStart ? 'home' : null) : 'first') : startReopened ? 'reopen' : null;
   if (startWindow && want && startWindow.mode === want) return;
-  startWindow?.dismiss(null);
+  // A load closes the window with focus inside it (#4216): focus goes to the brand switcher, which names the brand just
+  // loaded and is where the reopen's X returns. A window that replaces this one takes focus itself, and an X's own
+  // return (`close` below, `toHome`) moves it on after this.
+  startWindow?.dismiss(want ? null : frame?.barMain.querySelector<HTMLElement>('[data-p3="brand-switcher"]') ?? null);
   startWindow = null;
   if (!want || !frame) return;
   // The X (Q613 6 A, 7 A): a reopen returns to the brand, a window over a home returns to it, and the plugin's first run
