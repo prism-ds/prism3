@@ -247,6 +247,14 @@
             "usagePanelLead": "page-nav"
           },
           {
+            "name": "↳ Steps",
+            "components": [
+              "step-item",
+              "steps"
+            ],
+            "usagePanelLead": "steps"
+          },
+          {
             "name": "↳ Toast",
             "components": [
               "toast"
@@ -3609,6 +3617,82 @@
         "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/popover.md"
       },
       {
+        "id": "step-item",
+        "name": "StepItem",
+        "figmaName": "step-item",
+        "kind": "component set",
+        "page": "↳ Steps",
+        "section": "Components",
+        "members": 16,
+        "variantProperties": [
+          {
+            "name": "status",
+            "values": [
+              "upcoming",
+              "current",
+              "complete",
+              "error"
+            ]
+          },
+          {
+            "name": "orientation",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "number",
+            "type": "TEXT"
+          },
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "connector",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/step-item.md"
+      },
+      {
+        "id": "steps",
+        "name": "Steps",
+        "figmaName": "steps",
+        "kind": "component set",
+        "page": "↳ Steps",
+        "section": "Components",
+        "members": 4,
+        "variantProperties": [
+          {
+            "name": "orientation",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/steps.md"
+      },
+      {
         "id": "menu-item",
         "name": "Menu.Item",
         "figmaName": "menu-item",
@@ -3964,6 +4048,17 @@
         "property": "body"
       },
       {
+        "component": "steps",
+        "property": "items",
+        "settings": {
+          "minChildren": 2,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "step-item"
+        ]
+      },
+      {
         "component": "menu-group",
         "property": "items",
         "settings": {
@@ -4174,6 +4269,8 @@
       "sign-in-button",
       "page-nav-item",
       "page-nav",
+      "step-item",
+      "steps",
       "skeleton",
       "menu-item",
       "tooltip"
