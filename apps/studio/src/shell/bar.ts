@@ -28,6 +28,7 @@
  * had focus is found again by its hook and its place among the controls with that hook, and focused again.
  */
 import { subscribe } from '../state/store';
+import { SAVE_FIRST } from '../state/leave-guard';
 import { glyph, h, hook, isLeaving, leave, unleave } from './dom';
 import { must } from '../must';
 
@@ -88,6 +89,9 @@ export type BarActions = {
   readonly importFile: (file: File) => void;
   readonly replace: () => void;
   readonly cancelReplace: () => void;
+  /** #3982: the confirm's downloads, the Export area's design.md and token set. Neither closes the confirm. */
+  readonly saveBrief: () => void;
+  readonly saveTokens: () => void;
   /** #1037: put back the brand the last load replaced. */
   readonly undoLoad: () => void;
   readonly toggleExport: () => void;
@@ -271,10 +275,23 @@ export const mountBar = (lend: BarLend, placed: BarPlaced, cleanups: (() => void
     return menu;
   };
 
-  /** The overwrite confirm (#160, #722, #1033): its sentence, then Replace brand and Cancel. */
+  /** The overwrite confirm (#160, #722, #1033): its sentence, the two downloads (#3982, Q-WS1 A), then Replace brand
+   *  and Cancel. A download leaves the confirm as it is: the designer saves, then answers. */
   const confirmBox = (text: string): HTMLElement => {
     const box = h('div', 'p3-confirm');
     box.append(hook(h('p', 'p3-confirm-line', text), 'overwrite-confirm'));
+    const save = h('div', 'p3-confirm-row');
+    for (const [label, hk, run] of [
+      [SAVE_FIRST.brief, 'overwrite-save-brief', act.saveBrief],
+      [SAVE_FIRST.tokens, 'overwrite-save-tokens', act.saveTokens],
+    ] as const) {
+      const b = hook(h('button', 'p3-btn p3-btn-page'), hk);
+      b.append(glyph('download'), h('span', 'p3-btn-label', label));
+      b.type = 'button';
+      b.onclick = () => run();
+      save.append(b);
+    }
+    box.append(save);
     const row = h('div', 'p3-confirm-row');
     const rep = hook(h('button', 'p3-btn p3-btn-primary', 'Replace brand'), 'overwrite-replace');
     rep.type = 'button';
@@ -305,8 +322,8 @@ export const mountBar = (lend: BarLend, placed: BarPlaced, cleanups: (() => void
     fi.type = 'file';
     fi.accept = lend.importAccept;
     fi.onchange = () => { const f = fi.files?.[0]; if (f) act.importFile(f); };
-    up.append(glyph('upload'), h('span', undefined, 'Upload .md'), fi);
-    const load = hook(h('button', 'p3-btn p3-btn-primary', 'Load'), 'import-load');
+    up.append(glyph('upload'), h('span', undefined, 'Upload…'), fi);  // #4191 T1 (owner decision 2026-11-19, A): the start window's labels and weight, "Upload…" and the page button "Import".
+    const load = hook(h('button', 'p3-btn p3-btn-page', 'Import'), 'import-load');
     load.type = 'button';
     load.onclick = () => act.importLoad(ta.value);
     row.append(up, load);
