@@ -7,7 +7,7 @@ Everything in this guide works in both places. Writing the brand to a Figma file
 
 ## Start a brand
 
-The first time Studio opens, a start window offers three ways in. <!-- src: apps/studio/src/shell/start.ts:167-225#de4c818b -->
+The first time Studio opens, a start window offers three ways in. <!-- src: apps/studio/src/shell/start.ts:167-226#387884c8 -->
 
 | Card | What it does |
 |---|---|
@@ -15,7 +15,7 @@ The first time Studio opens, a start window offers three ways in. <!-- src: apps
 | **Explore an example** | Opens one of the example brands, fully built. A few words under each example say what it is, such as "Muted teal, calm, square." <!-- src: apps/studio/src/shell/start.ts:202 --> <!-- src: packages/engine/example-registry.ts:16-21 --> |
 | **Import a design.md** | Loads a whole brand from a `design.md` brief. Paste it into the box and choose **Import**, or choose **Upload…** to pick a file. <!-- src: apps/studio/src/shell/start.ts:225-237 --> |
 
-To come back to these later, open the brand menu at the left of the top bar and choose **New brand**. The same menu lists the examples, each with its few words, and has **Import design.md…**. <!-- src: apps/studio/src/shell/bar.ts:227-253 -->
+To come back to these later, open the brand menu at the left of the top bar and choose **New brand**. The same menu lists the examples, each with its few words, and has **Import design.md…**. <!-- src: apps/studio/src/shell/bar.ts:231-257 -->
 After you load an example or import a brief over a brand you had edited, **Undo load** appears beside the brand switcher and puts that brand back, edits included. It stays until your next edit or load. <!-- src: apps/studio/src/shell/bar.ts:154-158 -->
 
 If opening another brand would replace edits that aren't saved anywhere else, Studio asks first. Before you choose **Replace brand** or **Cancel**, you can keep a copy with **Download design.md** or **Download tokens**; a download leaves the question open. <!-- src: apps/studio/src/state/leave-guard.ts:25-28 --> <!-- src: apps/studio/src/shell/bar.ts:280-302 --> On the web, the browser also asks before you leave the page while the brand has unsaved edits. <!-- src: apps/studio/src/main.ts:1377-1388#b587cb67 -->
@@ -39,7 +39,7 @@ A lever is one brand setting, such as the primary color, the type scale or the c
 
 Component settings, such as how buttons place their icons, are in the **Components** area, beside the list of component sets. See [Build components](build-components.md). <!-- src: apps/studio/src/shell/pages.ts:385-426 -->
 
-Some sections start folded. Open them with the "Show N advanced" button under the section list. <!-- src: apps/studio/src/domains/color-palettes.ts:338 -->
+Some sections start folded. Open them with the "Show N advanced settings" button under the section list. <!-- src: apps/studio/src/ui/lever-kit.ts:425 -->
 
 **Personality** words fill the settings you have not set yet. Settings you set win. <!-- src: apps/studio/src/shell/pages.ts:161 -->
 Picking a word turns its opposite off: soft and sharp, dense and generous, calm and energetic, bold and restrained. Where two words fill the same setting, the first one picked wins. <!-- src: packages/engine/vocabulary.ts:149-154#26cbcd4d --> <!-- src: apps/studio/src/state/brand-input.ts:79-94#5e35eb13 -->
@@ -67,7 +67,7 @@ If a stored brand can't be opened, the web Studio offers it as a `design.md` dow
 ## Import and export a design.md brief
 
 A `design.md` is a brand written as a short document: settings at the top, prose below. <!-- src: packages/engine/mcp.ts:409 -->
-Studio reads both the Prism3 form and the standard design.md form, <!-- src: apps/studio/src/state/start-input.ts:176-190#569bb71c --> which lists colors as a flat `colors:` map. <!-- src: packages/engine/standard-design-md.ts:109-110 -->
+Studio reads both the Prism3 form and the standard design.md form, <!-- src: apps/studio/src/state/start-input.ts:182-196#a5f87d82 --> which lists colors as a flat `colors:` map. <!-- src: packages/engine/standard-design-md.ts:109-110 -->
 
 - Import: **Import design.md…** in the brand menu, then paste the brief and choose **Import**, or choose **Upload…**. The **Import a design.md** card in the start window works the same way, with the same two buttons. <!-- src: apps/studio/src/shell/bar.ts:242-311 -->
 - Export: open **Export** in the rail, choose **Brand brief**, then **Download brief**. The file is named `<brand>.design.md`. The brief has no settings: "Nothing to set — the brief is written one way." <!-- src: apps/studio/src/export-settings.ts:114 --> <!-- src: apps/studio/src/main.ts:1546-1573 -->
