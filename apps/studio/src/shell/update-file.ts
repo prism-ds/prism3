@@ -155,7 +155,7 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
   const seen = new Set<string>();
   /** #3129: the control the next repaint focuses, set by a removal whose own button the repaint drops. */
   let refocus: string | null = null;
-  /** #4217: a control an answer still out will draw (Clean up's result line, after Delete). Until it lands, focus waits
+  /** #4217: a control an answer still out will draw (Clean up's result line, after Remove). Until it lands, focus waits
    *  on the dialog rather than falling to its first control. */
   let awaitKey: string | null = null;
   /** #4218: the refusal last announced (its def, direction and words), so a repaint draws the line without saying it
@@ -733,11 +733,11 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     if (p.busy) body.push(card(hook(h('p', 'p3-upd-line', UPDATE_COPY.cleanChecking), 'clean-checking')));
     else if (p.preview) {
       body.push(card(hook(h('p', 'p3-upd-summary', p.preview.summary), 'clean-prune-summary')));
-      const del = btn('p3-btn p3-btn-primary', 'clean-prune-confirm', 'prune', `Delete ${p.preview.count} item${p.preview.count === 1 ? '' : 's'}`, () => { awaitKey = 'prune-result'; lend.pruneDelete(); });
+      const del = btn('p3-btn p3-btn-primary', 'clean-prune-confirm', 'prune', `Remove ${p.preview.count} item${p.preview.count === 1 ? '' : 's'}`, () => { awaitKey = 'prune-result'; lend.pruneDelete(); });
       if (r.off) { del.disabled = true; del.title = r.off; }
       foot.push(del);
     } else if (p.verdict) {
-      // #4217: focusable from script only, so Delete's answer can take focus where Delete was.
+      // #4217: focusable from script only, so Remove's answer can take focus where Remove was.
       const res = hook(h('p', 'p3-upd-summary', p.verdict.count === 0 && !p.verdict.applied ? UPDATE_COPY.cleanNone : p.verdict.summary), 'clean-prune-result');
       res.dataset.key = 'prune-result';
       res.tabIndex = -1;

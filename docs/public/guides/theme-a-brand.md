@@ -7,7 +7,7 @@ Everything in this guide works in both places. Writing the brand to a Figma file
 
 ## Start a brand
 
-The first time the studio opens, a start window offers three ways in. <!-- src: apps/studio/src/shell/start.ts:167-225#de4c818b -->
+The first time the studio opens, a start window offers three ways in. <!-- src: apps/studio/src/shell/start.ts:167-226#387884c8 -->
 
 | Card | What it does |
 |---|---|
@@ -38,7 +38,7 @@ A lever is one brand setting, such as the primary color, the type scale or the c
 
 Component settings, such as how buttons place their icons, are in the **Components** area, beside the list of component sets. See [Build components](build-components.md). <!-- src: apps/studio/src/shell/pages.ts:385-426 -->
 
-Some sections start folded. Open them with the "Show N advanced" button under the section list. <!-- src: apps/studio/src/domains/color-palettes.ts:338 -->
+Some sections start folded. Open them with the "Show N advanced settings" button under the section list. <!-- src: apps/studio/src/ui/lever-kit.ts:427 -->
 
 **Personality** words fill the settings you have not set yet. Settings you set win. <!-- src: apps/studio/src/shell/pages.ts:161 -->
 Picking a word turns its opposite off: soft and sharp, dense and generous, calm and energetic, bold and restrained. Where two words fill the same setting, the first one picked wins. <!-- src: packages/engine/vocabulary.ts:149-154#26cbcd4d --> <!-- src: apps/studio/src/state/brand-input.ts:79-94#5e35eb13 -->
@@ -59,14 +59,14 @@ A contrast miss is reported, never blocked. On **Foreground fills**, for example
 
 - On the web, the studio keeps your working brand in this browser and reopens it next time. <!-- src: apps/studio/src/persist-local.ts:39-102#8ee27da6 -->
 - It also keeps what the brand started from, so edits you made before a reload still count after it: choosing another brand asks first, as it did before the reload. <!-- src: apps/studio/src/persist-local.ts:120-136#8ee40881 -->
-- In the Figma plugin, the brand is kept in the Figma file each time Update file writes the theme, and the plugin restores it when the file opens again. <!-- src: apps/plugin/src/apply-theme.ts:191-193#ede61fb0 --> <!-- src: apps/plugin/src/main.ts:2211-2218#e56247fc -->
+- In the Figma plugin, the brand is kept in the Figma file each time Update file writes the theme, and the plugin restores it when the file opens again. <!-- src: apps/plugin/src/apply-theme.ts:191-193#ede61fb0 --> <!-- src: apps/plugin/src/main.ts:2217-2224#e56247fc -->
 
 If a stored brand can't be opened, the web studio offers it as a `design.md` download instead of discarding it. <!-- src: apps/studio/src/entry.ts:133-162 -->
 
 ## Import and export a design.md brief
 
 A `design.md` is a brand written as a short document: settings at the top, prose below. <!-- src: packages/engine/mcp.ts:409 -->
-The studio reads both the Prism3 form and the standard design.md form, <!-- src: apps/studio/src/state/start-input.ts:176-190#569bb71c --> which lists colors as a flat `colors:` map. <!-- src: packages/engine/standard-design-md.ts:109-110 -->
+The studio reads both the Prism3 form and the standard design.md form, <!-- src: apps/studio/src/state/start-input.ts:188-202#a5f87d82 --> which lists colors as a flat `colors:` map. <!-- src: packages/engine/standard-design-md.ts:109-110 -->
 
 - Import: **Import design.md…** in the brand menu, then paste the brief and choose **Import**, or choose **Upload…**. The **Import a design.md** card in the start window works the same way, with the same two buttons. <!-- src: apps/studio/src/shell/bar.ts:242-311 -->
 - Export: open **Export** in the rail, choose **Brand brief**, then **Download brief**. The file is named `<brand>.design.md`. The brief has no settings: "Nothing to set — the brief is written one way." <!-- src: apps/studio/src/export-settings.ts:114 --> <!-- src: apps/studio/src/main.ts:1546-1573 -->
