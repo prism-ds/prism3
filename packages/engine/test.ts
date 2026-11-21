@@ -9817,6 +9817,41 @@ for (const scale of ['default', 'expressive'] as const) {
   // (f) opt-in: an empty pin map builds the same theme as none.
   ok(JSON.stringify(tBrand('tr3077-e', { tracking: {} }).typography) === JSON.stringify(tBrand('tr3077-e', {}).typography), '#3077 tracking A: an empty pin map changes nothing');
 }
+// #3079 (owner decision 2026-11-18 A, Q3079.4 A): `typography.leading`, the twin of the tracking pin above — every
+// composite in a category on one named line-height role, replacing the size-derived rung and its nudge, for that
+// category only. Expected rungs are literals.
+{
+  const roles = (t: ReturnType<typeof tBrand>, g: string) => [...new Set(t.typography.composites.filter((c) => c.group === g).map((c) => `${c.sizePx}:${c.lineHeight}`))].join(' ');
+  // Title's derived rung changes with its size; a +1 nudge moves both halves, so no nudge gives title one value.
+  const base = tBrand('ld3079-base', { leadingShift: { title: 1, body: -1 } });
+  ok(roles(base, 'title') === '18:cozy 20:cozy 24:cozy 28:compact 32:compact 40:compact',
+    `#3079 leading: control — unpinned title follows its size and its +1 nudge, two values (got ${roles(base, 'title')})`);
+  const pinned = tBrand('ld3079-pin', { leadingShift: { title: 1, body: -1 }, leading: { title: 'loose' } });
+  // (a) the pin replaces the derived rung AND the nudge: every title size is loose.
+  ok(roles(pinned, 'title') === '18:loose 20:loose 24:loose 28:loose 32:loose 40:loose',
+    `#3079 leading: a title pin puts every title size on loose, over the size split and the +1 nudge (got ${roles(pinned, 'title')})`);
+  // (b) for the pinned category only.
+  const rest = (t: ReturnType<typeof tBrand>) => JSON.stringify(t.typography.composites.filter((c) => c.group !== 'title'));
+  ok(rest(pinned) === rest(base), '#3079 leading: a title pin leaves every non-title composite exactly as the unpinned build has it');
+  // (c) the pin is not a new start for the nudge: body pinned to normal with a +1 nudge stays normal.
+  const onPath = tBrand('ld3079-onpath', { leadingShift: { body: 1 }, leading: { body: 'normal' } });
+  ok(roles(onPath, 'body') === '12:normal 14:normal 16:normal 18:normal',
+    `#3079 leading: a body pin on normal ignores the +1 body nudge (got ${roles(onPath, 'body')})`);
+  // (d) refused by name.
+  const refusal = (ty: any): string => { try { tBrand('ld3079r-' + JSON.stringify(ty), ty); return '(built)'; } catch (e) { return (e as Error).message; } };
+  ok(/^typography\.leading: 'heading' is not a type category/.test(refusal({ leading: { heading: 'cozy' } })),
+    `#3079 leading: an unknown category is refused by name (got: ${refusal({ leading: { heading: 'cozy' } }).slice(0, 100)})`);
+  ok(/^typography\.leading\.title: 'open' is not a line height role/.test(refusal({ leading: { title: 'open' } })),
+    `#3079 leading: an unknown role is refused by name (got: ${refusal({ leading: { title: 'open' } }).slice(0, 100)})`);
+  // (e) the schema takes the seven and refuses others.
+  const inp = { id: 'v', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } } as any;
+  ok(validateBrandInput({ ...inp, typography: { leading: { title: 'cozy', code: 'loose' } } }).length === 0, '#3079 leading: the schema accepts cozy and loose pins');
+  ok(validateBrandInput({ ...inp, typography: { leading: { title: 'open' } } }).length > 0, '#3079 leading: the schema refuses a role outside the seven');
+  // (f) opt-in: an empty pin map builds the same theme as none.
+  ok(JSON.stringify(tBrand('ld3079-e', { leading: {} }).typography) === JSON.stringify(tBrand('ld3079-e', {}).typography), '#3079 leading: an empty pin map changes nothing');
+  // (g) the note names it.
+  ok(pinned.notes.includes('typography: line height pinned per text type: title loose. Every size in a pinned text type uses that line height, in place of the size-based one and its nudge.'), '#3079 leading: the notes name the pin');
+}
 // C2 (#328): the ceiling names a RUNG, so the surviving rung COUNT is invariant under typeScale.
 // The old px ceiling was compared against already-shifted sizes, so `96` kept 4 rungs under
 // compact/default but only 3 under expressive — a brand lever silently changing the type SET.
@@ -46537,6 +46572,50 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(files.get('./e/acme.base.tokens.json') === JSON.stringify(projected.base, null, 2) + '\n'
     && files.get('./e/acme.dark.overlay.tokens.json') === JSON.stringify(projected.overlays.find((o) => o.mode === 'dark')?.tree, null, 2) + '\n',
     '#4144 the base + overlay files are the projection of the tree written beside them, as the CLI writes it');
+}
+
+// #4204 (owner decision 1 b, 2026-11-19) — the helper line under a label is one thing under two prop names, `description` on
+// the selection rows and `helpText` on the fields, until the next contract bump unifies them. Both are described by the same
+// lead sentence, typed here, and each def keeps its own guidance after it. The props are found by name across the registry
+// and asserted represented, so a def that adds one joins the arm. Mutation: one prop's lead reworded → this arm, by name.
+{
+  const LEAD = 'Helper text, read by assistive tech through aria-describedby.';
+  const ROWS = ['checkbox-row', 'radio-row', 'switch-row'];
+  const helpers = componentDefs.flatMap((d) => (d.props ?? []).filter((p) => p.name === 'helpText' || (p.name === 'description' && ROWS.includes(d.id))).map((p) => ({ def: d.id, prop: p.name, text: p.description ?? '' })));
+  const off = helpers.filter((h) => !h.text.startsWith(LEAD + ' '));
+  ok(helpers.length >= 12 && ROWS.every((r) => helpers.some((h) => h.def === r && h.prop === 'description')) && off.length === 0,
+    `#4204 the helper-text props open with one sentence: ${helpers.length} of them (${off.map((h) => `${h.def}.${h.prop}: "${h.text.slice(0, 50)}"`).join(' | ') || 'all hold'})`);
+  // Decision 2 a: two words, "inactive" (focusable, aria-disabled) and "disabled", defined once in Button's guidance and
+  // reused. Counter and Pagination.Item said "unavailable" for the same state. Every string the three defs ship is read.
+  const strings = (x: unknown): string[] => typeof x === 'string' ? [x] : Array.isArray(x) ? x.flatMap(strings) : x && typeof x === 'object' ? Object.values(x).flatMap(strings) : [];
+  const three = ['button', 'counter', 'pagination-item'].map((id) => componentDefs.find((d) => d.id === id));
+  const said = three.flatMap((d) => strings(d).filter((t) => /\bunavailable\b/i.test(t)).map((t) => `${d?.id}: "${t.slice(0, 60)}"`));
+  const defined = strings(three[0]?.docs).some((t) => t.startsWith('Use isInactive for a control the user can still unblock'));
+  ok(three.every(Boolean) && said.length === 0 && defined,
+    `#4204 Button defines inactive and disabled, and Counter and Pagination.Item say "inactive", never "unavailable" (${said.join(' | ') || 'none'}; defined ${defined})`);
+  // Owner decision on #4363 (2026-11-20, A): the definition takes a semicolon, as the issue's DRAFT did, not a colon.
+  // The decided line is typed here, not read from the def, and checked in the def and in each emitted Button page.
+  const DECIDED = 'Use isInactive for a control the user can still unblock, such as Submit on an unfinished form; it stays focusable and says why. Use disabled only when the control doesn\'t apply right now';
+  const inDef = strings(three[0]?.docs).includes(DECIDED);
+  const pages = ['button', 'button-neutral', 'button-destructive'].filter((p) => !readFileSync(resolve(HERE, `out/components/${p}.md`), 'utf8').includes(`- ${DECIDED}\n`));
+  ok(inDef && pages.length === 0,
+    `#4204 Button's inactive/disabled definition reads as decided, with the semicolon (def ${inDef}; pages without it: ${pages.join(', ') || 'none'})`);
+  // Review of #4363: "inactive" is the code-side word. A Counter anatomy note that tells the designer which state to set
+  // names the Figma state, so it must be a value on the nested button's exposed state axis, read from the nested def
+  // itself (not a list typed here). Both stepper notes are required to be represented. Mutation: "inactive" put back
+  // in one note → this arm, by name.
+  const nestedStates = Object.entries(counter.anatomy.parts).flatMap(([id, p]) => {
+    const m = /designer's to set: ([\w-]+)/.exec((p as { note?: string }).note ?? '');
+    if (!m) return [];
+    const nest = (p as { nests?: string }).nests;
+    const exposed = (p as { nesting?: { expose?: string[] } }).nesting?.expose ?? [];
+    const axis = componentDefs.find((d) => d.id === nest)?.figmaProperties?.stateAxis;
+    const onAxis = exposed.includes('state') && axis?.name === 'state' && axis.values.includes(m[1]);
+    return [{ id, word: m[1], onAxis, values: axis?.values.join(' | ') ?? `no state axis on ${nest}` }];
+  });
+  const offAxis = nestedStates.filter((n) => !n.onAxis);
+  ok(['decrement', 'increment'].every((id) => nestedStates.some((n) => n.id === id)) && offAxis.length === 0,
+    `#4204 Counter's designer-set button state names a value on the nested button's state axis (${offAxis.map((n) => `${n.id}: "${n.word}" not in ${n.values}`).join('; ') || `${nestedStates.length} hold`})`);
 }
 
 // #4193 decision 1 (owner, 2026-11-19): each lever's ⓘ in the UI is one line of at most 90 characters (voice standard

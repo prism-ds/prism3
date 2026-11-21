@@ -983,6 +983,7 @@ const NOTE_SWEEP: [string, Record<string, unknown>][] = [
   ['outline wash under no hover fill', { outlineInteraction: 'none', outlineWash: { hover: 5 } }],
   ['grid margins off the spacing scale (#3052; md was 44 until space.550, #3408)', { layout: { marginOverrides: { md: 36, lg: 45 } } }],
   ['caption sizes and letter spacing pins (#3077)', { typography: { sizes: { caption: { md: 10 } }, tracking: { display: 'open', label: 'open' } } }],
+  ['line height pins (#3079)', { typography: { leading: { title: 'cozy', body: 'relaxed' } } }],
   ['a trait pre-empted by another', { personality: ['soft', 'sharp'] }],
   // Every trait the schema advertises, so each trait's approved `why` is scanned too.
   ...((Array.isArray(traitEnum) ? traitEnum : []) as string[]).map((t): [string, Record<string, unknown>] => [`personality '${t}'`, { personality: [t] }]),
@@ -1044,6 +1045,7 @@ const PRODUCERS: Producer[] = [
   { id: 'typography: sizeFloor 8', re: /^typography: sizeFloor 8 /, kind: 'site' },
   { id: 'typography: caption sizes', re: /^typography: caption sizes set by the brand: /, kind: 'site' },
   { id: 'typography: tracking pins', re: /^typography: letter spacing pinned per text type: /, kind: 'site' },
+  { id: 'typography: leading pins', re: /^typography: line height pinned per text type: /, kind: 'site' },
   { id: 'disabled: full', re: /^disabled: 'full' — /, kind: 'site' },
   { id: 'disabled: reduced', re: /^disabled: 'reduced' \(default\) — /, kind: 'site' },
   { id: 'overlays: default', re: /^interactive overlays: 'overlay-neutral' \(default\)/, kind: 'site' },
@@ -1086,7 +1088,8 @@ const NOTES_UNREACHABLE = ['typography: empty display tier (the "below the usual
 // never reaches: one the sweep reaches is an unclaimed note already. A literal per file, written here.
 // theme-brand.ts (`brandTheme`, in theme.ts until #3698 R5 split it per axis): 45 note pushes (#3052 added the grid-link notes' spread) + the one that copies vocabulary.ts's notes in. vocabulary.ts: 2.
 // #3284 added a pinned-action note (52). #4133 added the one that copies hex-anchors.ts's notes in (53), and hex-anchors.ts's own push.
-const NOTE_PUSH_SITES: Record<string, number> = { 'packages/engine/theme-brand.ts': 53, 'packages/engine/vocabulary.ts': 2, 'packages/engine/hex-anchors.ts': 1 };
+// #3079 added the line height pin's note (54).
+const NOTE_PUSH_SITES: Record<string, number> = { 'packages/engine/theme-brand.ts': 54, 'packages/engine/vocabulary.ts': 2, 'packages/engine/hex-anchors.ts': 1 };
 // The rules a NOTE must also pass, beyond §2 and `normative`. Each is a thing an engine note has carried.
 const ALLCAPS_OK = new Set(['AA', 'AAA', 'WCAG', 'OKLCH', 'HC']);
 const NOTE_RULES: { rule: string; re: RegExp }[] = [
