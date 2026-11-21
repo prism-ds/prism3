@@ -176,7 +176,9 @@ await new Promise((r) => setTimeout(r, 3000));
   // The size ceiling that keeps discovery affordable — the schema must be inlined once, not per tool.
   // 60,000 is our own ceiling, not raised (#1368). Since #1760 it fails 5,000 chars BEFORE that wall,
   // room for ~20 more levers, and the inline schema carries one-line summaries so a lever's full prose
-  // never counts here. Kept in lockstep with test.ts, which also holds the per-summary cap.
+  // never counts here. Kept in lockstep with test.ts, which also holds the per-summary cap. At 54,509 and 491
+  // under the alarm (2026-11-21) the owner chose to scale again rather than move it: the inline copy now drops
+  // the descriptions beneath every optional field (54,897 → 41,731), and test.ts holds where prose stays.
   const listChars = JSON.stringify(list.tools ?? []).length;
   ok(listChars <= 55_000, `conformance: tools/list keeps 5,000 chars of headroom under its 60,000 ceiling (${listChars.toLocaleString()} chars; fails above 55,000)`);
 
@@ -567,6 +569,20 @@ await new Promise((r) => setTimeout(r, 3000));
   // Matched past the first sentence, so only the full text passes (#2053 retired the lever; the text says so).
   ok(/is always emitted/.test(described?.properties?.radiusHairline?.description ?? ''),
     'journey ①b: list_levers describe returns a field\'s full description over the wire');
+  // ①c What tools/list no longer carries, `describe` does (2026-11-21): a description beneath an optional
+  // field is absent from the inline schema and comes back in full over the wire. A required field keeps its
+  // sub-field summaries inline, so a first call can be written from tools/list alone.
+  const listed = (await server.reply(server.send('tools/list'))).result?.tools ?? [];
+  const inlineBrand = listed.find((t: any) => t.name === 'theme_brand')?.inputSchema?.properties?.brand;
+  const familiesFull = (await server.callJson('list_levers', { describe: ['typography'] })).payload.described?.properties?.typography?.properties?.families?.description;
+  ok(typeof inlineBrand?.properties?.typography?.description === 'string'
+    && inlineBrand?.properties?.typography?.properties?.families !== undefined
+    && !('description' in inlineBrand.properties.typography.properties.families)
+    && typeof familiesFull === 'string' && familiesFull.length > 0,
+    'journey ①c: a description beneath an optional field is dropped from tools/list and returned by list_levers describe');
+  ok(typeof inlineBrand?.properties?.neutral?.properties?.hue?.oneOf?.[0]?.description === 'string'
+    && typeof inlineBrand?.$defs?.oklch?.properties?.l?.description === 'string',
+    'journey ①c: the required fields (and the oklch shape they use) keep their sub-field summaries in tools/list');
 
   // ② Generate from a brief, the way an agent working from prose would.
   const brief = ['---', 'id: journey', 'primary: { l: 0.58, c: 0.17, h: 265 }', 'neutral: { hue: 265, chroma: 0.008 }',
@@ -615,6 +631,34 @@ await new Promise((r) => setTimeout(r, 3000));
   const bogus = await server.callJson('theme_from_brief', { brief: 'no frontmatter, just prose' });
   ok(bogus.isError, 'journey ⑥: a malformed brief is an actionable tool error the model can retry');
   ok(/frontmatter/i.test(JSON.stringify(bogus.payload)), 'journey ⑥: the error says what was wrong with it');
+
+  // ⑦ A STANDARD-dialect brief (a flat `colors:` hex map, `typography:` tokens, an `x-prism3:` block), the
+  // shape an extraction exports. The CLI reads it; the tool refused it as a malformed BrandInput (#4118).
+  const stdBrief = ['---', 'version: alpha', 'name: Lumen Coffee', 'x-prism3:', '  root: lcds', '  density: compact', '  tempo: brisk',
+    'colors:', '  primary: "#6B3E26"', '  secondary: "#D9A441"', '  neutral-900: "#2A2522"', '  neutral-100: "#F4F0EC"',
+    '  white: "#FFFFFF"', '  error: "#B3261E"', 'typography:', '  body: { fontFamily: Inter, fontSize: 16px, fontWeight: 400 }',
+    '  body-alt: { fontFamily: Georgia, fontSize: 14px, fontWeight: 400 }',
+    '---', '# Lumen Coffee'].join('\n');
+  const std = await server.callJson('theme_from_brief', { brief: stdBrief });
+  ok(!std.isError, `#4118 theme_from_brief generates from a standard-dialect brief (${std.isError ? JSON.stringify(std.payload).slice(0, 200) : 'ok'})`);
+  ok(std.payload?.dialect === 'standard' && std.payload?.derivedBrandInput?.id === 'lumen-coffee',
+    '#4118 theme_from_brief reports the standard dialect and the id it slugged from the name');
+  ok(std.payload?.derivedBrandInput?.root === 'lcds' && (std.payload?.xApplied ?? []).includes('density=compact'),
+    '#4118 theme_from_brief applies the x-prism3 levers and lists them in xApplied');
+  ok(JSON.stringify(std.payload?.xWarnings ?? []).includes("'tempo'"),
+    '#4118 theme_from_brief names the x-prism3 key it skipped in xWarnings, as the CLI does');
+  // #4137 (#4265) put typography faces on the same xWarnings channel. The tool description's xWarnings clause must
+  // name every channel the PAYLOAD carries: CLAIM is the description's own sentence, ACTUAL is each warning's
+  // `<channel>:` prefix as the converter wrote it, so a new channel with no description edit fails here.
+  const channels = [...new Set(((std.payload?.xWarnings ?? []) as string[]).map((w) => w.split(':')[0]))];
+  const fromBrief = (((await server.reply(server.send('tools/list'))).result?.tools ?? []) as any[]).find((t) => t.name === 'theme_from_brief');
+  const xClause = String(fromBrief?.description ?? '').split('For a standard brief')[1]?.split('. ')[0] ?? '';
+  ok(channels.length >= 2 && channels.every((c) => xClause.includes(c)),
+    `#4118 theme_from_brief's description names every kind of skip xWarnings reports (${channels.join(', ')} vs "${xClause.slice(0, 160)}")`);
+  ok(Array.isArray(std.payload?.classification) && std.payload.classification.length > 0,
+    '#4118 theme_from_brief returns the color classification, so a misread swatch is visible');
+  ok(gen.payload.dialect === undefined && gen.payload.xWarnings === undefined,
+    '#4118 theme_from_brief keeps an engine-native brief off the standard converter');
 }
 
 server.stop();

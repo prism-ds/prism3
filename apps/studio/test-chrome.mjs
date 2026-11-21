@@ -2720,7 +2720,7 @@ if (runs('7')) console.log(`\nHomes (V1, V12) — one home per page, never moved
 /** Concept v6's homes, typed here (never imported from `src/shell/pages.ts`): each place's view id and the
  *  title the preview header shows for it. */
 const EXPECT_HOME = {
-  brand: ['guide', 'Style guide'], 'color-palettes': ['palettes', 'Palettes'], 'color-fills': ['surfaces', 'Surfaces & fills'],
+  brand: ['guide', 'Brand overview'], 'color-palettes': ['palettes', 'Palettes'], 'color-fills': ['surfaces', 'Surfaces & fills'],
   'color-interactive': ['interactive', 'Interactive'], type: ['type', 'Type'], shape: ['shape', 'Shape'],   // #3553 Q-UI9 A: the tab's own word
   depth: ['depth', 'Depth & motion'], layout: ['layout', 'Layout'], components: ['comps', 'Components'],
 };
@@ -3173,7 +3173,7 @@ const BUSY_OVERLAP = (sel) => {
 const BUSY_OVERLAP_MAX = 0;
 /** The drawer's note, per host: concept v6's plugin line, and the studio's own. Literal. */
 if (runs('10')) {
-const DRAWER_NOTE = { figma: 'Results of Apply, Build and Prune appear here after they run.', web: 'Nothing has run in this session.' };
+const DRAWER_NOTE = { figma: 'Each Update file run, and the steps it takes, appear here.', web: 'Nothing has run in this session.' };
 } // 10
 /** An agent-link state the main thread could publish, and the status line it must read as (today's words). */
 const AGENT_ON = { v: 1, on: true, since: '2026-10-01T09:00:00.000Z', engineVersion: 'x', build: 'x', pollMs: 1000, transports: { mailbox: true, bridge: false }, lastCommand: null, inboxError: null };
@@ -3388,9 +3388,9 @@ for (const host of ['web', 'figma']) {
         // polish (after the brand switcher, before Update file), and not on the rail. Its label is the word "Agent" at 1280 and
         // the agent glyph at 380 (#3553 Q-UI10 A; Q3083.6 A had dropped it there, a bare toggle). MUTATION: `agent` back in the
         // rail's `foot` and `minimize` back on the bar in `frame.ts` → this arm, by name, at every width and theme.
-        ok(a0.inBar && !a0.onRail && a0.afterBrand && a0.beforeUpdate && a0.name === 'Agent' && a0.role === 'switch' && a0.checked === 'false' && a0.pressed === null && !a0.dot
-          && a0.label === (narrow ? 'glyph:agent' : 'Agent'),
-          `Q731 #3083 ${where}: the Agent switch sits on the top bar, after the brand switcher and before Update file, where Minimize was, never on the rail; a switch named "Agent", aria-checked false, no dot, its label ${narrow ? 'the agent glyph at 380' : 'the word'} (#3553 Q-UI10 A) (${JSON.stringify(a0)})`);
+        ok(a0.inBar && !a0.onRail && a0.afterBrand && a0.beforeUpdate && a0.name === 'Agent link' && a0.role === 'switch' && a0.checked === 'false' && a0.pressed === null && !a0.dot
+          && a0.label === (narrow ? 'glyph:agent' : 'Agent link'),
+          `Q731 #3083 ${where}: the Agent switch sits on the top bar, after the brand switcher and before Update file, where Minimize was, never on the rail; a switch named "Agent link" (#4184), aria-checked false, no dot, its label ${narrow ? 'the agent glyph at 380' : 'the word'} (#3553 Q-UI10 A) (${JSON.stringify(a0)})`);
         hooks.absent(ok, { seen: chip.inBar, state: 'the Agent tile on the top bar' }, !chip.old && !chip.popover && chip.strays.length === 0,
           `D6 ${where}: the old chips are gone — no bottom-left chip, no Agent chip or popover, and nothing outside the frame names an agent or holds a button (found ${JSON.stringify(chip.strays)}, #p3-agent-link ${chip.old ? 'present' : 'absent'}, chip or popover ${chip.popover ? 'present' : 'absent'})`);
         const slot = await page.evaluate(() => { const s0 = document.querySelector('[data-p3="bar-agent"]'); s0.__p3Mark = 'slot'; return true; });
@@ -3423,7 +3423,7 @@ for (const host of ['web', 'figma']) {
         if (at) await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
         await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
         const a1 = await agentState();
-        ok(a1.name === 'Agent' && a1.role === 'switch' && a1.checked === 'true' && a1.pressed === null && !a1.dot, `T7 #3083 ${where}: the main thread's state turns the switch on: named "Agent", aria-checked true, no dot (the switch's on state says it) (${JSON.stringify(a1)})`);
+        ok(a1.name === 'Agent link' && a1.role === 'switch' && a1.checked === 'true' && a1.pressed === null && !a1.dot, `T7 #3083 ${where}: the main thread's state turns the switch on: named "Agent link", aria-checked true, no dot (the switch's on state says it) (${JSON.stringify(a1)})`);
         const mc = await measure(page, `${where} / Agent on`, host, w);
         check(mc, `${where} / Agent on`, columnOf(host, w), narrow ? INSPECT_NARROW_FLOOR : PLACE_FLOOR, { extra: ['[data-p3="agent-toggle"]'] });
         await shot('agent');
@@ -3520,8 +3520,9 @@ for (const host of ['web', 'figma']) {
         const mw = await takeWrites(page);
         ok(isWire(mw, { type: 'minimize-ui', minimized: true }), `#2949 ${where}: Minimize asks the main thread to minimize (posted ${JSON.stringify(mw)})`);
         await page.evaluate(() => { document.querySelector('[data-p3="frame"]').__p3Mark = 'frame'; });
-        const LONGEST = 'Agent listening · last: update-components 59m ago';
-        await postMsg(page, { type: 'agent-link-state', state: { ...AGENT_ON, lastCommand: { id: 'x', cmd: 'update-components', ok: true, headline: '✓ done',
+        // #4185 D: the longest command in operation words (Clean up usage panels), with the age in the status line's form.
+        const LONGEST = 'Agent listening · last: Clean up usage panels 59 min ago';
+        await postMsg(page, { type: 'agent-link-state', state: { ...AGENT_ON, lastCommand: { id: 'x', cmd: 'panels-clean', ok: true, headline: '✓ done',
           finishedAt: await page.evaluate(() => new Date(Date.now() - 59 * 60000 - 30000).toISOString()) } } });
         await postMsg(page, { type: 'ui-minimized', minimized: true });
         await page.setViewportSize({ width: 480, height: 40 });
@@ -3536,7 +3537,7 @@ for (const host of ['web', 'figma']) {
           const box = (n) => { const b = n?.getBoundingClientRect(); return b ? [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] : null; };
           return { drawn: !!st && !st.hidden && getComputedStyle(st).display !== 'none', rect: r ? [Math.round(r.width), Math.round(r.height)] : null,
             appDrawn: !!app && getComputedStyle(app).display !== 'none', text: t?.textContent ?? null, whole: !!t && t.scrollWidth <= t.clientWidth,
-            restore: rs?.getAttribute('aria-label') ?? null, off: off?.textContent ?? null, focus: document.activeElement?.getAttribute('data-p3') ?? null,
+            restore: rs?.getAttribute('aria-label') ?? null, off: off?.textContent ?? null, offName: off?.getAttribute('aria-label') ?? null, focus: document.activeElement?.getAttribute('data-p3') ?? null,
             // #3083: Restore, Minimize's counterpart, is its icon alone too: no text, its name as its tooltip, centered, over the floor.
             restoreBare: (() => { if (!rs) return null; const b = rs.getBoundingClientRect(), ic = rs.querySelector('svg')?.getBoundingClientRect();
               return { text: rs.textContent.trim(), tip: rs.getAttribute('title'), w: b.width, h: b.height,
@@ -3548,8 +3549,8 @@ for (const host of ['web', 'figma']) {
           `#2949 ${where}: minimized, the strip fills the 480×40 window and the panel is not drawn (${JSON.stringify({ drawn: s1.drawn, app: s1.appDrawn, rect: s1.rect })})`);
         ok(s1.text === LONGEST && s1.whole && s1.inside,
           `#2949 ${where}: the strip reads "${LONGEST}", whole, every part inside the strip (${JSON.stringify({ text: s1.text, whole: s1.whole, inside: s1.inside })})`);
-        ok(s1.restore === 'Restore' && s1.off === 'Turn off' && s1.focus === 'agent-strip-restore',
-          `#2949 ${where}: the strip carries Restore and Turn off, and focus moves to Restore (${JSON.stringify({ restore: s1.restore, off: s1.off, focus: s1.focus })})`);
+        ok(s1.restore === 'Restore' && s1.off === 'Turn off' && s1.offName === 'Turn off Agent link' && s1.focus === 'agent-strip-restore',
+          `#2949 ${where}: the strip carries Restore and Turn off, named Turn off Agent link (#4184), and focus moves to Restore (${JSON.stringify({ restore: s1.restore, off: s1.off, offName: s1.offName, focus: s1.focus })})`);
         const rb = s1.restoreBare;
         ok(!!rb && rb.text === '' && rb.tip === 'Restore' && rb.w >= 24 && rb.h >= 24 && rb.dx !== null && rb.dx <= 0.5 && rb.dy <= 0.5,
           `#3083 ${where}: the strip's Restore, Minimize's counterpart, is its icon alone, centered, named and titled "Restore", at least 24 × 24 (${JSON.stringify(rb)})`);
@@ -3557,7 +3558,7 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'agent-started', id: 'm1', cmd: 'update-components' });
         await page.waitForFunction(() => /^Agent running/.test(document.querySelector('[data-p3="agent-strip-text"]')?.textContent ?? ''), null, { timeout: 5000 }).catch(() => {});
         const s2 = await stripState();
-        ok(/^Agent running update-components… \d+s$/.test(s2.text ?? '') && s2.whole, `#2949 ${where}: while a command runs the strip reads "Agent running update-components… <age>" (${JSON.stringify(s2.text)})`);
+        ok(/^Agent running Update file… \d+s$/.test(s2.text ?? '') && s2.whole, `#2949 ${where}: while a command runs the strip reads "Agent running Update file… <age>" (#4185) (${JSON.stringify(s2.text)})`);
         await postMsg(page, { type: 'agent-finished', id: 'm1', cmd: 'update-components' });
         await hooks.click(page.locator('[data-p3="agent-strip-restore"]'), WAIT);
         const rw = await takeWrites(page);
@@ -3579,7 +3580,7 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'agent-link-state', state: { ...AGENT_ON, on: false, since: null } });
         await page.waitForFunction(() => document.querySelector('[data-p3="agent-toggle"]')?.getAttribute('aria-checked') === 'false', null, { timeout: 5000 }).catch(() => {});
         const a2 = await agentState();
-        ok(a2.name === 'Agent' && a2.role === 'switch' && a2.checked === 'false' && !a2.dot, `T7 #3083 ${where}: the published off state turns the switch off, aria-checked false (${JSON.stringify(a2)})`);
+        ok(a2.name === 'Agent link' && a2.role === 'switch' && a2.checked === 'false' && !a2.dot, `T7 #3083 ${where}: the published off state turns the switch off, aria-checked false (${JSON.stringify(a2)})`);
         const m2 = await minTile();
         ok(m2.shown && m2.name === 'Minimize', `#2909 ${where}: with the link off again, Minimize is still drawn (the owner's direction of 2026-10-24) (${JSON.stringify(m2)})`);
         await takeWrites(page);
@@ -3765,8 +3766,8 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'agent-finished', id: 'ag533', cmd: 'build-components' });
         await page.waitForFunction(() => window.__runEnded.length > 0, null, { timeout: 5000 }).catch(() => {});
         const endedAfter = await page.evaluate(() => window.__runEnded.slice());
-        ok(JSON.stringify(endedAfter) === '["Prune stale finished."]',
-          `#533 ${where}: once the agent's build ends too, the prune's end posts one run-ended, "Prune stale finished." (posted ${JSON.stringify(endedAfter)})`);
+        ok(JSON.stringify(endedAfter) === '["Clean up finished."]',
+          `#533 ${where}: once the agent's build ends too, the prune's end posts one run-ended, "Clean up finished." (posted ${JSON.stringify(endedAfter)})`);
         await hooks.click(page.locator('[data-p3="update-x"]'), WAIT);
         // #3467 (Q3 A, Q4 A): a set-up file whose read lists something Set up file owns is offered Set up file, unticked, its
         // line naming what the file lacks; a set-up file whose read lists nothing is not. Literals. (mutation: the shell's
@@ -11790,14 +11791,31 @@ for (const { w, h } of WIDTHS) {
         }
         // ── the overwrite confirm (web) and the prune review (plugin), measured as chrome (#2124 review, finding 3d) ──
         if (w === 1280 && host === 'web') {
+          // #3982 (Q-WS1 A): the browser's leave-page prompt is armed only while the brand has unsaved edits. Read by
+          // dispatching a cancelable `beforeunload`: an armed page cancels it. Before the edit, then after it.
+          const leaveAsks = () => page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+          const cleanAsks = await leaveAsks();
+          ok(cleanAsks === false, `${where} / #3982 leaving an untouched brand does not ask (beforeunload cancelled: ${cleanAsks})`);
           await page.evaluate(() => window.__prism3TestEdit('id', 'edited-brand'));
+          const dirtyAsks = await leaveAsks();
+          ok(dirtyAsks === true, `${where} / #3982 leaving a brand with unsaved edits asks first (beforeunload cancelled: ${dirtyAsks})`);
           await hooks.click(page.locator('[data-p3="brand-switcher"]'));
           await hooks.click(page.locator('[data-p3="brand-menu-example"]').filter({ hasText: 'aurora' }));
           await hooks.need(page, '[data-p3="overwrite-confirm"]');
           const mo = await measure(page, `${where} / overwrite confirm`, host, w);
-          check(mo, `${where} / overwrite confirm`, column, PLACE_FLOOR, { extra: ['[data-p3="overwrite-replace"]', '[data-p3="overwrite-cancel"]'] });
+          check(mo, `${where} / overwrite confirm`, column, PLACE_FLOOR, { extra: ['[data-p3="overwrite-save-brief"]', '[data-p3="overwrite-save-tokens"]', '[data-p3="overwrite-replace"]', '[data-p3="overwrite-cancel"]'] });
           const oc = await page.evaluate(INK_PROBE, '[data-p3="overwrite-confirm"]');
           ok(oc.r >= TEXT_MIN, `${where} / overwrite confirm: its sentence's contrast ${oc.r}:1, at least ${TEXT_MIN}:1`);
+          // #3982: the confirm offers both downloads, typed here, and a download leaves the confirm open.
+          const saves = await page.evaluate(() => ['overwrite-save-brief', 'overwrite-save-tokens'].map((k) => document.querySelector(`[data-p3="brand-menu"] [data-p3="${k}"]`)?.textContent?.trim() ?? null));
+          ok(JSON.stringify(saves) === JSON.stringify(['Download design.md', 'Download tokens']),
+            `${where} / #3982 the replace confirm offers Download design.md and Download tokens (${JSON.stringify(saves)})`);
+          if (saves[0]) {
+            const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), hooks.click(page.locator('[data-p3="overwrite-save-brief"]'))]);
+            const stays = await page.locator('[data-p3="brand-menu"] [data-p3="overwrite-confirm"]').count();
+            ok(!!dl && dl.suggestedFilename().endsWith('.design.md') && stays === 1,
+              `${where} / #3982 Download design.md writes the brief and leaves the confirm open (${dl?.suggestedFilename() ?? 'no download'}; confirm drawn ${stays})`);
+          }
           await hooks.click(page.locator('[data-p3="overwrite-cancel"]'));
           await page.keyboard.press('Escape');
         }
@@ -12021,12 +12039,12 @@ for (const host of ['web', 'figma']) {
             const f = await page.evaluate(SWITCH_PROBE);
             const at = `29b ${host} ${f.theme} ${w}`;
             const state = on ? 'on' : 'off';
-            ok(f.role === 'switch' && f.name === 'Agent' && f.checked === String(on) && !f.retired,
-              `${at}: #3083 Q3083.5 B: with the link ${state}, the Agent control is a switch named "Agent", aria-checked ${on}, with no tile mark and no dot (${JSON.stringify(f)})`);
+            ok(f.role === 'switch' && f.name === 'Agent link' && f.checked === String(on) && !f.retired,
+              `${at}: #3083 Q3083.5 B: with the link ${state}, the Agent control is a switch named "Agent link" (#4184), aria-checked ${on}, with no tile mark and no dot (${JSON.stringify(f)})`);
             ok(JSON.stringify(f.track) === JSON.stringify([36, 20]) && f.knobIn && !!f.hit && f.hit[0] >= TARGET_MIN && f.hit[1] >= TARGET_MIN,
               `${at}: #3083 Q3083.7 B: the Agent switch's track is the bar-only 36 × 20, its knob inside it, and its hit target ${TARGET_MIN}px or more each way (track ${JSON.stringify(f.track)}, knob inside ${f.knobIn}, hit ${JSON.stringify(f.hit)})`);
-            ok(f.label === (narrowBar ? 'glyph:agent' : 'Agent'),
-              `${at}: #3553 Q-UI10 A: the Agent switch's label is ${narrowBar ? 'the agent glyph at 380 (Q3083.6 A had dropped it, a bare toggle)' : 'the word "Agent" at 1280'} (label ${JSON.stringify(f.label)})`);
+            ok(f.label === (narrowBar ? 'glyph:agent' : 'Agent link'),
+              `${at}: #3553 Q-UI10 A: the Agent switch's label is ${narrowBar ? 'the agent glyph at 380 (Q3083.6 A had dropped it, a bare toggle)' : 'the word "Agent link" at 1280 (#4184)'} (label ${JSON.stringify(f.label)})`);
             const knobOn = ratio(f.knob, f.fill);
             if (on) {
               const trackOn = ratio(f.fill, f.ground);
@@ -13383,6 +13401,48 @@ for (const host of ['web', 'figma']) {
           status: document.querySelector('[data-p3="search-status"]')?.textContent ?? '' };
       });
       ok(r.source && r.anchorBlocks === 0, `${where}: unpinned, searching "${q}" reaches the Neutral source group, where Pinned is chosen (${JSON.stringify(r)})`);
+    } catch (e) {
+      ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}`);
+    } finally { await ctx.close(); }
+  }
+}
+
+// #2206 (the studio accessibility fix lane, 2026-11-20): pinned, the hue and chroma sliders are a read-only readout drawn
+// disabled, and the state line says so. In the accessibility tree each slider keeps its value and has that line as its
+// description, on both hosts. EXPECTED is the line's words, typed here; ACTUAL is CDP's computed description and value.
+// Mutation: the `aria-describedby` line removed (color-palettes.ts) → `#2206 … the hue readout is described by the state line …`.
+{
+  const PN2206_STATE = 'A pinned neutral sets the ramp: #5c6670. Hue and chroma are its readout.';
+  const axSlider = async (page, sel) => {
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send('Accessibility.enable');
+      const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
+      if (!nodeId) return null;
+      const n = (await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })).nodes.find((x) => !x.ignored);
+      return { role: n?.role?.value ?? '', desc: n?.description?.value ?? '', value: String(n?.value?.value ?? ''),
+        disabled: !!n?.properties?.find((p) => p.name === 'disabled')?.value?.value };
+    } finally { await cdp.detach(); }
+  };
+  for (const host of ['web', 'figma']) {
+    const where = `#2206 ${host} light 1280`;
+    const { ctx, page, errors } = await open({ host, theme: 'light', w: 1280, h: 900 });
+    try {
+      const before = await axSlider(page, '[data-p3="neutral-hue-slider"]');
+      ok(before && before.desc === '', `${where}: unpinned, the hue slider has no pinned description (${JSON.stringify(before)})`);
+      await hooks.click(page.locator('[data-p3="neutral-source-pinned"]'));
+      await hooks.need(page, '[data-p3="neutral-anchor-hex"]');
+      const f = page.locator('[data-p3="neutral-anchor-hex"]');
+      await f.fill('#5c6670');
+      await f.press('Enter');
+      await page.waitForFunction((t) => document.querySelector('[data-p3="lever-neutral-hue"] .p3-lever-state')?.textContent.trim() === t, PN2206_STATE, { timeout: 5000 }).catch(() => {});
+      for (const [what, sel] of [['hue', '[data-p3="neutral-hue-slider"]'], ['chroma', '[data-p3="neutral-chroma-slider"]']]) {
+        const r = await axSlider(page, sel);
+        ok(!!r && r.role === 'slider' && r.disabled && r.value !== '' && r.desc === PN2206_STATE,
+          `${where}: pinned, the ${what} readout is described by the state line and keeps its value (${JSON.stringify(r)})`);
+      }
+      ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
     } catch (e) {
       ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}`);
     } finally { await ctx.close(); }
@@ -17938,6 +17998,85 @@ console.log(`\n#2487 names, landmarks, the selected segment and the display-only
     }
   }
 }
+// #2492 and #4223 (the studio accessibility fix lane, 2026-11-20).
+//   · #2492: Inspect › Token list's Primitives and Semantics buttons say which is selected: the accessibility tree reports
+//     the selected one pressed and the other not pressed, and the two swap when the other is chosen.
+//   · #4223: the preview body is a Tab stop exactly when it scrolls and holds nothing a keyboard can reach, Chromium's own
+//     rule written out for Safari. Read on every place, both hosts, at 1280 and 380 (the preview pane shown).
+// INDEPENDENCE (docs/34). EXPECTED is typed here: the pressed values, and the rule worked out from the body's measured
+// overflow and a focusable list written in this file. ACTUAL is CDP's `pressed` property and the body's own `tabindex`.
+// Mutations, each failing here by name: the `aria-pressed` line removed (main.ts) → `#2492 … the selected tier is
+// pressed …`; the body's stop never set (frame.ts) → `#4223 … the preview body is a Tab stop exactly when …`.
+{
+  const pressedOf = async (page, sel) => {
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send('Accessibility.enable');
+      const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel });
+      if (!nodeId) return 'absent';
+      const n = (await cdp.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })).nodes.find((x) => !x.ignored);
+      return String(n?.properties?.find((p) => p.name === 'pressed')?.value?.value ?? 'none');
+    } finally { await cdp.detach(); }
+  };
+  const BODY_REACH = 'button, select, textarea, input:not([type="hidden"]), a[href], [contenteditable="true"], [tabindex]:not([tabindex="-1"]), [role="slider"], [role="radio"], [role="tab"], [role="checkbox"], [role="switch"], [role="button"]';
+  const bodyRead = (page) => page.evaluate((reach) => {
+    const b = document.querySelector('[data-p3="preview-body"]');
+    if (!b || !b.getClientRects().length) return null;
+    const scrolls = b.scrollHeight > b.clientHeight + 1 || b.scrollWidth > b.clientWidth + 1;
+    const reachable = [...b.querySelectorAll(reach)].filter((n) => n.tabIndex >= 0 && !n.disabled && n.getClientRects().length > 0).length;
+    return { scrolls, reachable, tabindex: b.getAttribute('tabindex') };
+  }, BODY_REACH);
+  for (const host of ['web', 'figma']) {
+    const where = `#2492 ${host} light 1280`;
+    const { ctx, page, errors } = await open({ host, theme: 'light', w: 1280, h: 900 });
+    try {
+      await goPlace(page, 'brand');
+      await hooks.click(page.locator('[data-p3="inspect-open"]'), WAIT);
+      await hooks.click(page.locator('[data-p3="inspect-option-tokens"]'), WAIT);
+      await hooks.click(page.locator('[data-p3="token-tier-semantic"]'), WAIT);
+      await hooks.need(page, '[data-p3="token-path-full"]');
+      const s = [await pressedOf(page, '[data-p3="token-tier-semantic"]'), await pressedOf(page, '[data-p3="token-tier-primitive"]')];
+      ok(s[0] === 'true' && s[1] === 'false', `${where}: Inspect › Token list, the selected tier is pressed and the other is not, Semantics chosen (semantic ${s[0]}, primitive ${s[1]})`);
+      await hooks.click(page.locator('[data-p3="token-tier-primitive"]'), WAIT);
+      await page.waitForFunction(() => !document.querySelector('[data-p3="token-path-full"]'), null, { timeout: 5000 }).catch(() => {});
+      const p = [await pressedOf(page, '[data-p3="token-tier-semantic"]'), await pressedOf(page, '[data-p3="token-tier-primitive"]')];
+      ok(p[0] === 'false' && p[1] === 'true', `${where}: Inspect › Token list, the selected tier is pressed and the other is not, Primitives chosen (semantic ${p[0]}, primitive ${p[1]})`);
+      ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+    } catch (e) {
+      ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}`);
+    } finally { await ctx.close(); }
+  }
+  for (const host of ['web', 'figma']) {
+    for (const w of [1280, 380]) {
+      const where = `#4223 ${host} light ${w}`;
+      const { ctx, page, errors } = await open({ host, theme: 'light', w, h: 900 });
+      let step = 'boot';
+      try {
+        const seen = { stop: 0, held: 0 };
+        for (const place of NEW_PAGES) {
+          step = place;
+          await goPlace(page, place);
+          if (w === 380) await hooks.click(page.locator('[data-p3="pane-toggle-preview"]'), WAIT);
+          await settle(page);
+          await page.waitForTimeout(120);
+          const r = await bodyRead(page);
+          if (!r) { ok(false, `${where} / ${place}: the preview body is drawn and shown (read nothing)`); continue; }
+          const want = r.scrolls && r.reachable === 0;
+          if (want) seen.stop++; else if (r.scrolls) seen.held++;
+          ok((r.tabindex === '0') === want,
+            `${where} / ${place}: the preview body is a Tab stop exactly when it scrolls and holds nothing a keyboard reaches (${JSON.stringify(r)})`);
+          if (w === 380) await hooks.click(page.locator('[data-p3="pane-toggle-settings"]'), WAIT);
+        }
+        ok(seen.stop > 0, `${where}: some place drew a scrolling preview body with nothing to reach, so the stop was measured (${JSON.stringify(seen)})`);
+        ok(seen.held > 0, `${where}: some place drew a scrolling preview body that holds controls, so the stop's absence was measured (${JSON.stringify(seen)})`);
+        ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+      } catch (e) {
+        ok(false, `${where}: the case stopped at "${step}" — ${stopped(e)}`);
+      } finally { await ctx.close(); }
+    }
+  }
+}
 } // 45
 // =============================================================================================
 // §46 — DRAG AND REBUILD SPEED (#2487 PR 2: B1, A9, A10, A13; the merged review, comment 6098371348 §4)
@@ -18759,7 +18898,7 @@ for (const host of ['web', 'figma']) for (const theme of ['light', 'dark']) {
         `${where}: Q699 A: the checklist's due read and its check each send the brand the panel holds (${askedSets.length} file-sets-request; ${[...askedSets, ...asked].map((m) => wireDiff(m.input, PANEL_BRAND)).join(', ')})`);
       const sets = [
         { def: 'button', hash: 'hb', members: 648, update: 12, add: 0, drop: 0, handEdited: 2, noBaseline: 0, blocked: false, upToDate: false, breaks: '1 change affects files that use this library: 1 layer removed, which breaks those files: overrides on it are lost.',
-          changes: { count: 1, lines: ['Button · content/check · removed from 12 members — breaks files that use this library: overrides on it are lost.'] } },
+          changes: { count: 1, lines: ['Button · content/check · removed from 12 variants — breaks files that use this library: overrides on it are lost.'] } },
         { def: 'select', hash: 'hs', members: 30, update: 0, add: 0, drop: 0, handEdited: 0, noBaseline: 0, blocked: false, upToDate: true },
       ];
       // #3302 (the owner's Q3302.1–.3 A, 2026-11-02; the strings approved as written): the check's progress in the
@@ -18831,7 +18970,7 @@ for (const host of ['web', 'figma']) for (const theme of ['light', 'dark']) {
           last: call?.parentElement?.getAttribute('data-p3') === 'update-foot-msg' && call.parentElement.nextElementSibling?.getAttribute('data-p3') === 'update-foot-actions', go: document.querySelector('[data-p3="update-go"]')?.textContent ?? null };
       });
       ok(lib.title === 'Files that use this library' && lib.sub === '1 change in this update reaches them at the next library publish:'
-        && JSON.stringify(lib.lines) === JSON.stringify(['Button · content/check · removed from 12 members — breaks files that use this library: overrides on it are lost.'])
+        && JSON.stringify(lib.lines) === JSON.stringify(['Button · content/check · removed from 12 variants — breaks files that use this library: overrides on it are lost.'])
         && lib.last && lib.go === 'Update, including 1 library change',
         `${where}: #3711 Q-UF2 A: a callout above the button names the library change, and the button carries the count (${JSON.stringify(lib)})`);
       // #3083 (the owner's Q3083.3 A and Q3083.4 A, 2026-10-28): the hand-edits choice is a compact select, "Hand edits",
@@ -18884,7 +19023,7 @@ for (const host of ['web', 'figma']) for (const theme of ['light', 'dark']) {
       // it. Theme is unticked here, so a set only Theme blocks is blocked too. Literals, DRAFT copy. MUTATION:
       // `blockedDueOf` returning [] (the blocked set left in Due, ticked) → this arm, by name.
       step = 'a blocked set';
-      const blockedSet = { ...sets[1], blocked: true, upToDate: false, reasons: ['Not in this file: icon/close. Build icon first, then run the update again'] };
+      const blockedSet = { ...sets[1], blocked: true, upToDate: false, reasons: ['Not in this file: icon/close. Build icon first, then run Update file again'] };
       await postMsg(page, { type: 'update-check', previewHash: 'H-1', missing: [], refused: [], sets: [sets[0], blockedSet] });
       await page.waitForFunction(() => !!document.querySelector('[data-p3="update-blocked-row"]'), null, { timeout: 5000 }).catch(() => {});
       const bl = await page.evaluate(() => ({
@@ -19528,8 +19667,9 @@ const S_IN_FILE = [
   ['row=subcomponents|Field Label', 'Field label'], ['row=subcomponents|Field Message', 'Field message'], ['row=subcomponents|Focus Ring', 'Focus ring'], ['setbox=icon', 'Icon'], ['row=subcomponents|Spinner', 'Spinner'],
 ];
 // #3306 Q3306.1 A, typed from the proposal's table: the sets of the families with two or more roots that the sample file
-// lacks, each with a box of its own (Icon is in the file, and Buttons is whole in it, so neither has one).
-const S_SPLIT_SETS = ['icon-button', 'icon-button-destructive', 'icon-button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'provider-logo'];
+// lacks, each with a box of its own (Icon is in the file, and Buttons is whole in it, so neither has one). Menu (#4007)
+// has two roots, Menu and Menu.Group, both nesting Menu.Item, so its three sets each have one.
+const S_SPLIT_SETS = ['icon-button', 'icon-button-destructive', 'icon-button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'provider-logo', 'menu', 'menu-group', 'menu-item'];
 // #3306 Q3306.2–4 A: the needed sets, worked out by hand from the catalog's nests: Dialog and Banner (queued) both nest
 // Flush icon button Neutral, and Banner nests Link; the file lacks both.
 const S_NEEDED = { 'flush-icon-button-neutral': 'FlushIconButton.Neutral, needed by 2 sets', link: 'Link, needed by Banner' };
@@ -22434,8 +22574,8 @@ if (runs('2069')) {
     ok(d0.modal === 'true' && d0.focusIn, `#2069 ${where}: Report a problem opens a modal with focus inside it (${JSON.stringify({ modal: d0.modal, focusIn: d0.focusIn })})`);
     ok(d0.box === false && !d0.text.includes('### Brand settings') && !d0.text.includes('pds3') && d0.text.includes('[brand]/color/background/primary'),
       `#2069 ${where}: the brand's settings are off by default, and its prefix reads [brand] (box ${d0.box})`);
-    ok(d0.text.includes('- Host: Figma plugin') && d0.text.includes('- Theme: ✗ 1 conflict') && /- Engine: \d+\.\d+\.\d+/.test(d0.text),
-      `#2069 ${where}: the report shows the host, the engine and the failed apply${d0.text.includes('- Theme: ✗ 1 conflict') ? '' : ` — ${JSON.stringify(d0.text.slice(0, 600))}`}`);
+    ok(d0.text.includes('- Host: Figma plugin') && d0.text.includes('- Apply theme: ✗ 1 conflict') && /- Engine: \d+\.\d+\.\d+/.test(d0.text),
+      `#2069 ${where}: the report shows the host, the engine and the failed apply${d0.text.includes('- Apply theme: ✗ 1 conflict') ? '' : ` — ${JSON.stringify(d0.text.slice(0, 600))}`}`);
     step = 'opt in';
     await hooks.click(page.locator('[data-p3="report-brand"]'), WAIT);
     const t1 = await page.evaluate(() => document.querySelector('[data-p3="report-text"]')?.value ?? '');
@@ -22488,8 +22628,8 @@ if (runs('2069')) {
       const d0 = await page.evaluate(() => ({ modal: document.querySelector('[data-p3="report-dialog"]')?.getAttribute('aria-modal'),
         box: document.querySelector('[data-p3="report-brand"]')?.checked, text: document.querySelector('[data-p3="report-text"]')?.value ?? '',
         focusIn: !!document.activeElement?.closest('[data-p3="report-dialog"]') }));
-      ok(d0.modal === 'true' && d0.focusIn && d0.box === false && d0.text.includes('- Host: Web studio') && d0.text.includes('- Nothing has run in this session.'),
-        `#3524 ${where}: the rail's Report a problem opens the dialog, modal, focus inside, the brand's settings off, the host the web studio (${JSON.stringify({ modal: d0.modal, focusIn: d0.focusIn, box: d0.box })})`);
+      ok(d0.modal === 'true' && d0.focusIn && d0.box === false && d0.text.includes('- Host: Web Studio') && d0.text.includes('- Nothing has run in this session.'),
+        `#3524 ${where}: the rail's Report a problem opens the dialog, modal, focus inside, the brand's settings off, the host the web Studio (${JSON.stringify({ modal: d0.modal, focusIn: d0.focusIn, box: d0.box })})`);
       step = 'open issue';
       await page.evaluate(() => { window.__clip = []; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t) => { window.__clip.push(String(t)); } } }); });
       await hooks.click(page.locator('[data-p3="report-open-issue"]'), WAIT);
@@ -23610,6 +23750,208 @@ if (runs('3938')) {
     } finally { await ctx.close(); }
   }
 } // 3938
+if (runs('focus-audit')) {
+  console.log(`\nKeyboard focus and names the overnight audit found (#4216, #4217, #4218, #4225, #4226, #4228)\n${'='.repeat(78)}`);
+  const active = (page) => page.evaluate(() => {
+    const a = document.activeElement;
+    return a && a !== document.body ? (a.getAttribute('data-p3') ?? a.tagName) : 'BODY';
+  });
+  // #4216: a load from the start window closed it with `dismiss(null)`, and focus fell to <body>. EXPECTED (typed
+  // here): the brand switcher, on every start path, both hosts. Mutation that fails here BY NAME: `syncStart`
+  // dismissing with `null` again → `#4216 … focus after the load`.
+  for (const host of ['web', 'figma']) {
+    const where = `4216 ${host} light 1280`;
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, colorScheme: 'light' });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(`uncaught: ${e.message}`));
+    let step = 'boot';
+    try {
+      if (host === 'web') await page.goto(`${ORIGIN}/index.html`, { waitUntil: 'networkidle' });
+      else {
+        await page.goto(`${ORIGIN}/plugin?figma=light`, { waitUntil: 'load' });
+        await page.evaluate(() => window.postMessage({ pluginMessage: { type: 'restore-input-empty' } }, '*'));
+      }
+      step = 'first run: Enter on Start from this color';
+      await hooks.need(page, '[data-p3="start-go"]');
+      await page.locator('[data-p3="start-go"]').focus();
+      await page.keyboard.press('Enter');
+      await hooks.need(page, '[data-p3="palettes-levers"]');
+      await settle(page);
+      const first = await active(page);
+      ok(first === 'brand-switcher', `#4216 ${where}: first run, Enter on Start from this color — focus after the load is the brand switcher (${first})`);
+      step = 'reopen: New brand, Enter on an example';
+      await hooks.click(page.locator('[data-p3="brand-switcher"]'));
+      await hooks.click(page.locator('[data-p3="brand-menu-new"]'));
+      const ex = page.locator('[data-p3="start-example"]').filter({ hasText: 'aurora' });
+      await hooks.need(page, '[data-p3="start-example"]');
+      await ex.focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => !document.querySelector('[data-p3="start-example"]'), null, { timeout: 5000 }).catch(() => {});
+      await settle(page);
+      const again = await active(page);
+      ok(again === 'brand-switcher', `#4216 ${where}: reopen, Enter on the aurora example — focus after the load is the brand switcher (${again})`);
+      ok(errors.length === 0, `${where}: 0 uncaught errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+    } catch (e) {
+      ok(false, `${where}: the case stopped at "${step}" — ${stopped(e)}`);
+    } finally { await ctx.close(); }
+  }
+  // #4225: a lever's ⓘ closes on Escape, with focus kept on it. EXPECTED (typed here): aria-expanded "false", the tip
+  // hidden, focus on the ⓘ. Mutation that fails here BY NAME: `infoTip` without its keydown → `#4225 …`.
+  // #4226: the Activity bar button's name is "Activity" (plugin; the studio mounts no drawer). Read from the
+  // accessibility tree, not the DOM. Mutation that fails here BY NAME: the hidden "Expand Activity" span back → `#4226 …`.
+  for (const host of ['web', 'figma']) {
+    const where = `focus-audit ${host} light 1280`;
+    const { ctx, page, errors } = await open({ host, theme: 'light', w: 1280, h: 860 });
+    let step = 'boot';
+    try {
+      step = 'the first lever ⓘ';
+      const info = page.locator('[data-p3="levers-pane"] [data-p3="lever-info"]').first();
+      await info.focus();
+      await page.keyboard.press('Enter');
+      const opened = await info.getAttribute('aria-expanded');
+      await page.keyboard.press('Escape');
+      const after = await info.evaluate((b) => ({
+        expanded: b.getAttribute('aria-expanded'),
+        tipHidden: document.getElementById(b.getAttribute('aria-controls') ?? '')?.hidden ?? null,
+        focused: document.activeElement === b,
+      }));
+      ok(opened === 'true' && after.expanded === 'false' && after.tipHidden === true && after.focused,
+        `#4225 ${where}: Escape closes an open ⓘ tip and keeps focus on the ⓘ (opened ${opened}, after ${JSON.stringify(after)})`);
+      if (host === 'figma') {
+        step = 'the Activity toggle';
+        const snap = await page.locator('[data-p3="activity-toggle"]').ariaSnapshot();
+        const name = /button "([^"]*)"/.exec(snap)?.[1] ?? null;
+        ok(name === 'Activity', `#4226 ${where}: the Activity bar button's accessible name is "Activity", with aria-expanded for its state (${JSON.stringify(snap.split('\n')[0])})`);
+      }
+      ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+    } catch (e) {
+      ok(false, `${where}: the case stopped at "${step}" — ${stopped(e)}`);
+    } finally { await ctx.close(); }
+  }
+  // #4217 and #4218, Update file in the plugin. Turn off, back on and Delete redraw the control the person used away;
+  // focus followed it to the dialog, and the next repaint put it on the X. EXPECTED (typed here): a turn off lands on
+  // the set's "Turn updates back on"; a turn back on, with no other set off, on the Components fold; Delete, on the
+  // result line once it lands. A refused turn on keeps focus on its button, its line is an alert, and the button is
+  // described by it. Mutations that fail here BY NAME: `movedFrom` returning null → `#4217 … turn off` and `… turn
+  // back on`; Delete without `awaitKey` → `#4217 … Delete`; the line without `role` → `#4218 …`.
+  {
+    const where = 'focus-audit figma light 1280, Update file';
+    const { ctx, page, errors } = await open({ host: 'figma', theme: 'light', w: 1280, h: 860 });
+    let step = 'boot';
+    // `tag` stays due throughout, so Components stays open (it folds itself once nothing is due or blocked, Q-UD3 A).
+    const sets = (due) => ({ type: 'file-sets', present: ['button', 'badge', 'tag'], setUp: true, due: { tag: { state: 'due', reason: 'definition' }, ...due } });
+    const key = () => page.evaluate(() => {
+      const a = document.activeElement;
+      return a && a !== document.body ? (a.dataset.key ?? a.getAttribute('data-p3') ?? a.tagName) : 'BODY';
+    });
+    try {
+      step = 'open Update file';
+      await hooks.click(page.locator('[data-p3="update-file"]'), WAIT);
+      await hooks.need(page, '[data-p3="update-dialog"]', WAIT);
+      await postMsg(page, sets({ button: { state: 'due', reason: 'definition' }, badge: { state: 'off', by: 'auto' } }));
+      await hooks.need(page, '[data-key="turn-on=badge"]', WAIT);
+      step = 'refused turn on';
+      // Every error line inserted from here on, with its role: a live region speaks as an alert is inserted.
+      await page.evaluate(() => {
+        window.__offLines = [];
+        new MutationObserver((recs) => { for (const r of recs) for (const n of r.addedNodes) if (n instanceof Element)
+          for (const e of n.matches('[data-p3="update-off-error"]') ? [n] : n.querySelectorAll('[data-p3="update-off-error"]')) window.__offLines.push([e.textContent, e.getAttribute('role')]); })
+          .observe(document.body, { childList: true, subtree: true });
+      });
+      await page.locator('[data-key="turn-on=badge"]').focus();
+      await page.keyboard.press('Enter');
+      await postMsg(page, { type: 'updates-off', def: 'badge', off: false, ok: false, error: 'the set is locked' });
+      await hooks.need(page, '[data-p3="update-off-error"]', WAIT);
+      await postMsg(page, sets({ button: { state: 'due', reason: 'definition' }, badge: { state: 'off', by: 'auto' } }));
+      await settle(page);
+      const refused = await page.evaluate(() => {
+        const e = document.querySelector('[data-p3="update-off-error"]');
+        const b = document.querySelector('[data-key="turn-on=badge"]');
+        return { inserted: window.__offLines, describes: !!e?.id && b?.getAttribute('aria-describedby') === e.id, focus: document.activeElement === b };
+      });
+      // The harness's host may refuse first by itself ("not written"), before the refusal posted above: each distinct
+      // refusal is said once, as it is first drawn, and never again on a repaint.
+      const texts = [...new Set(refused.inserted.map(([t]) => t))];
+      const once = texts.every((t) => { const rs = refused.inserted.filter(([x]) => x === t).map(([, r]) => r); return rs[0] === 'alert' && rs.filter((r) => r === 'alert').length === 1; });
+      ok(texts.includes('Turn updates back on: the set is locked.') && refused.inserted.length > texts.length && once && refused.describes && refused.focus,
+        `#4218 ${where}: a refused turn back on is announced once (the first line drawn is an alert, a repaint's is not), describes its button, and focus stays on the button (${JSON.stringify(refused)})`);
+      step = 'turn off';
+      await page.locator('[data-key="turn-off=button"]').focus();
+      await page.keyboard.press('Enter');
+      await postMsg(page, { type: 'updates-off', def: 'button', off: true, ok: true });
+      await postMsg(page, sets({ button: { state: 'off', by: 'designer' }, badge: { state: 'off', by: 'auto' } }));
+      await page.waitForFunction(() => !document.querySelector('[data-key="turn-off=button"]'), null, { timeout: 5000 }).catch(() => {});
+      await settle(page);
+      const offK = await key();
+      ok(offK === 'turn-on=button', `#4217 ${where}: after a turn off, focus is on the same set's "Turn updates back on" (${offK})`);
+      step = 'turn back on, twice';
+      for (const [id, rest] of [['button', { badge: { state: 'off', by: 'auto' } }], ['badge', {}]]) {
+        await page.locator(`[data-key="turn-on=${id}"]`).focus();
+        await page.keyboard.press('Enter');
+        await postMsg(page, { type: 'updates-off', def: id, off: false, ok: true });
+        await postMsg(page, sets({ button: { state: 'current' }, badge: { state: 'current' }, ...rest }));
+        await page.waitForFunction((k) => !document.querySelector(`[data-key="${k}"]`), `turn-on=${id}`, { timeout: 5000 }).catch(() => {});
+        await settle(page);
+      }
+      const onK = await key();
+      ok(onK === 'fold=components', `#4217 ${where}: after the last set is turned back on, focus is on the Components fold, not the X (${onK})`);
+      step = 'Clean up, Delete';
+      await hooks.click(page.locator('[data-p3="update-tab-clean"]'), WAIT);
+      await postMsg(page, { type: 'prune-result', ok: true, applied: false, count: 3, summary: '3 stale items: 3 variables.' });
+      await hooks.need(page, '[data-p3="clean-prune-confirm"]', WAIT);
+      await page.locator('[data-p3="clean-prune-confirm"]').focus();
+      await page.keyboard.press('Enter');
+      await settle(page);
+      const busyK = await key();
+      await postMsg(page, { type: 'prune-result', ok: true, applied: true, count: 3, summary: 'Removed 3 stale items.' });
+      await hooks.need(page, '[data-p3="clean-prune-result"]', WAIT);
+      await settle(page);
+      const delK = await key();
+      ok(delK === 'prune-result' && busyK !== 'x', `#4217 ${where}: after Delete, focus waits on the dialog and lands on the result line (while out ${busyK}, after ${delK})`);
+      ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+    } catch (e) {
+      ok(false, `${where}: the case stopped at "${step}" — ${stopped(e)}`);
+    } finally { await ctx.close(); }
+  }
+  // #4228: the agent link's pairing prompt, in the plugin's network build. "Not now" hid the box that held focus, and
+  // focus fell to <body>. The prompt shows only while the desktop bridge asks for a code, so a stand-in socket plays
+  // the bridge: it opens and sends its challenge, and with no token stored the relay asks for the code. EXPECTED
+  // (typed here): focus on the Agent switch after Not now. Mutation that fails here BY NAME: `renderPair` hiding the
+  // box without moving focus → `#4228 …`.
+  {
+    const where = 'focus-audit figma light 1280, the pairing prompt';
+    const prep = (page) => page.addInitScript(() => {
+      window.WebSocket = class {
+        constructor() {
+          this.readyState = 0;
+          setTimeout(() => { this.readyState = 1; this.onopen?.({}); this.onmessage?.({ data: JSON.stringify({ type: 'challenge', nonce: 'n0' }) }); }, 0);
+        }
+        send() {}
+        close() { this.readyState = 3; }
+      };
+    });
+    const { ctx, page, errors } = await open({ host: 'figma', theme: 'light', w: 1280, h: 860, prep });
+    let step = 'boot';
+    try {
+      step = 'the link on, no token';
+      await postMsg(page, { type: 'agent-link-state', state: AGENT_ON });
+      await postMsg(page, { type: 'agent-bridge-token', token: null });
+      await page.waitForFunction(() => document.querySelector('[data-p3="agent-pair"]')?.hidden === false, null, { timeout: 5000 }).catch(() => {});
+      const shown = await page.evaluate(() => document.activeElement?.getAttribute('data-p3') ?? null);
+      step = 'Not now';
+      await page.locator('[data-p3="agent-pair-later"]').focus();
+      await page.keyboard.press('Enter');
+      await settle(page);
+      const after = await page.evaluate(() => ({ hidden: document.querySelector('[data-p3="agent-pair"]')?.hidden ?? null, focus: document.activeElement === document.body ? 'BODY' : document.activeElement?.getAttribute('data-p3') ?? document.activeElement?.tagName }));
+      ok(shown === 'agent-pair-code' && after.hidden === true && after.focus === 'agent-toggle',
+        `#4228 ${where}: the prompt took focus into its field, and after Not now focus is on the Agent switch (shown with focus on ${shown}; after ${JSON.stringify(after)})`);
+      ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+    } catch (e) {
+      ok(false, `${where}: the case stopped at "${step}" — ${stopped(e)}`);
+    } finally { await ctx.close(); }
+  }
+} // focus-audit
 if (runs('markup-audit')) {
   console.log(`\nMarkup the overnight audit found: placeholders, Export's choices, the preview tables (#4220, #4221, #4223, #4224)\n${'='.repeat(78)}`);
   // In-page helpers, as strings so each evaluate can take them: an rgb() parse, sRGB contrast, and the opaque ground
