@@ -53,6 +53,7 @@ import { figmaArtifacts } from './emit-figma';
 import { scoreConsumption, scoreContractCompliance, UsedPair } from './eval';
 import { floorRatio } from './color';
 import { parseDesignMd } from './design-md';
+import { parseStandardDesignMd, isStandardDesignMd, standardToBrandInput } from './standard-design-md';
 import { ENGINE_VERSION } from './version';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
@@ -196,22 +197,69 @@ export const summarizeDescription = (d: string): string => {
   return d;
 };
 
-/** The brand schema as `tools/list` inlines it (#1760): every `description` cut to its summary, and
- *  every other keyword (types, enums, ranges, defaults, `required`, `$defs`, `$ref`, `$id`) left exactly
- *  as the file has it. Validation is unchanged because nothing but prose moves, and the full prose stays
- *  one call away: `list_levers` with `describe`.
+/** The brand schema as `tools/list` inlines it, compacted in two steps. Every keyword but `description`
+ *  (types, enums, ranges, defaults, `required`, `$defs`, `$ref`, `$id`) is left exactly as the file has it,
+ *  so validation is unchanged: only prose moves, and all of it stays one `list_levers` `describe` call away.
  *
- *  WHY, measured on the schema as #1759 left it: the inlined schema was 52,589 of `tools/list`'s 59,969
- *  characters, and 32,333 of those were description prose (191 descriptions). Structure alone was about
- *  17,000. So prose was the part growing, and the part every lever had been trimming to fit. Moving it
- *  out takes the list to 42,314 (measured). A new lever then costs its structure plus a one-line summary
- *  (`test.ts` caps a summary at 200 characters). Its full description, however long, costs nothing
- *  here. */
+ *  STEP 1 (#1760): each description cut to its summary. Measured on the schema as #1759 left it, the inlined
+ *  schema was 52,589 of `tools/list`'s 59,969 characters, 32,333 of them description prose. Cutting it took
+ *  the list to 42,314.
+ *
+ *  STEP 2 (owner decision 2026-11-21, "compress, not raise" again): prose stays inline only where an agent
+ *  needs it before its first call. That is the schema's own description, each TOP-LEVEL field's summary,
+ *  and the summaries beneath the REQUIRED fields (`id`, `primary`, `neutral`) and in the `$defs` they reach
+ *  (`oklch`), so a minimal valid call can be written from `tools/list` alone. Every other description, under
+ *  an optional field (its nested properties, items, `oneOf` branches) or in a `$defs` entry only optional
+ *  fields use, is dropped. By 2026-11 the list had grown back to 54,509, 491 under the 55,000 alarm (54,897 by merge), and
+ *  these deeper descriptions were most of what was growing. Dropping them took it to 41,731 (measured).
+ *  What an agent gives up is the prose under an optional field it has not chosen yet; that field's summary,
+ *  its whole structure and the enums, ranges and defaults that say what it accepts all stay. `list_levers`
+ *  with `describe` returns the field exactly as the file has it, every nested description and the `$defs`
+ *  it references included (`test.ts` and `mcp-test.ts` each hold an arm on that). A new optional lever now
+ *  costs its structure plus one summary, however much prose its sub-fields carry. */
 export const compactSchema = (schema: unknown): unknown => {
-  if (Array.isArray(schema)) return schema.map(compactSchema);
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
+  const root = schema as { properties?: Record<string, unknown>; required?: unknown; $defs?: Record<string, unknown> };
+  const required = new Set(Array.isArray(root.required) ? root.required as string[] : []);
+  const keptDefs = new Set(Object.keys(referencedDefs(
+    Object.fromEntries(Object.entries(root.properties ?? {}).filter(([k]) => required.has(k))), root.$defs ?? {})));
+  return Object.fromEntries(Object.entries(schema as Record<string, unknown>).map(([k, v]) => {
+    if (k === 'description' && typeof v === 'string') return [k, summarizeDescription(v)];
+    if ((k === 'properties' || k === '$defs') && v && typeof v === 'object' && !Array.isArray(v)) {
+      const keep = (name: string): boolean => (k === 'properties' ? required.has(name) : keptDefs.has(name));
+      return [k, Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([name, field]) =>
+        [name, keep(name) ? prose(field, true) : k === 'properties' ? ownSummaryOnly(field) : prose(field, false)]))];
+    }
+    return [k, prose(v, false)];
+  }));
+};
+
+/** An optional top-level field: its own description summarized, every description beneath it dropped. */
+const ownSummaryOnly = (field: unknown): unknown => {
+  if (!field || typeof field !== 'object' || Array.isArray(field)) return field;
+  const out = prose(field, false) as Record<string, unknown>;
+  const d = (field as Record<string, unknown>).description;
+  return typeof d === 'string' ? { ...out, description: summarizeDescription(d) } : out;
+};
+
+/** Keywords whose value is a map of NAMES to schemas, and keywords whose value is data, not a schema.
+ *  Under a name map a key is a field name, so a field called `default` or `description` is walked as a
+ *  schema; a data value (a `default` object, an `enum` list) is copied as it is. */
+const SCHEMA_MAPS = new Set(['properties', '$defs', 'patternProperties']);
+const DATA_KEYWORDS = new Set(['default', 'enum', 'const', 'examples']);
+
+/** A schema with every `description` keyword in it summarized (`keep`) or removed, and nothing else changed. */
+const prose = (schema: unknown, keep: boolean): unknown => {
+  if (Array.isArray(schema)) return schema.map((x) => prose(x, keep));
   if (!schema || typeof schema !== 'object') return schema;
-  return Object.fromEntries(Object.entries(schema as Record<string, unknown>).map(([k, v]) =>
-    [k, k === 'description' && typeof v === 'string' ? summarizeDescription(v) : compactSchema(v)]));
+  return Object.fromEntries(Object.entries(schema as Record<string, unknown>)
+    .filter(([k, v]) => keep || !(k === 'description' && typeof v === 'string'))
+    .map(([k, v]) => [k,
+      k === 'description' && typeof v === 'string' ? summarizeDescription(v)
+      : DATA_KEYWORDS.has(k) ? v
+      : SCHEMA_MAPS.has(k) && v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([n, x]) => [n, prose(x, keep)]))
+        : prose(v, keep)]));
 };
 
 /** Every `$defs` entry a schema fragment reaches through `$ref: "#/$defs/<name>"`, followed transitively,
@@ -305,7 +353,7 @@ export const toolDefs = (brandSchema: unknown) => [
     inputSchema: {
       type: 'object',
       properties: {
-        // Compacted (#1760): prose cut to one-line summaries, every other keyword verbatim.
+        // Compacted (#1760, then 2026-11-21): summaries for every top-level field and beneath the required ones, every other keyword verbatim.
         brand: compactSchema(brandSchema),
         include: {
           type: 'array', description: 'Sections to return, replacing the default ["notes"]. Add "tokens" and/or "aiMetadata" for the large payloads; pass [] for the verification result alone.',
@@ -358,7 +406,7 @@ export const toolDefs = (brandSchema: unknown) => [
   {
     name: 'theme_from_brief',
     title: 'Generate from a markdown brief',
-    description: 'Generate a token system from a design.md brief — YAML frontmatter plus prose — instead of a hand-assembled BrandInput. The natural entry point when working from a written brand description rather than known numbers: it parses the brief, reports the BrandInput it derived, and returns the same verification payload as theme_brand (with the same opt-in `include`). Call theme_brand directly when you already hold exact values.',
+    description: 'Generate a token system from a design.md brief — YAML frontmatter plus prose — instead of a hand-assembled BrandInput. The natural entry point when working from a written brand description rather than known numbers: it parses the brief in either dialect (engine-native frontmatter, or the standard shape: a flat colors: hex map, typography tokens and an optional x-prism3: block), reports the BrandInput it derived, and returns the same verification payload as theme_brand (with the same opt-in `include`). For a standard brief it also returns dialect: "standard", how each color was classified (classification), the x-prism3 keys it applied (xApplied), and what it skipped (xWarnings): unknown x-prism3 keys, and typography faces it does not read. Call theme_brand directly when you already hold exact values.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -799,19 +847,36 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
 
   if (name === 'theme_from_brief') {
     if (typeof args?.brief !== 'string') return text({ error: 'theme_from_brief requires `brief`: a design.md string' }, true);
-    let parsed;
     // A malformed brief is a TOOL error, not an RPC one — the model wrote it and can fix it, which is
     // exactly the case the spec says to report with isError so the client can feed it back.
-    try { parsed = parseDesignMd(args.brief); }
+    // #4118: the SAME dialect detection `cli.ts` runs. A standard design.md (a flat `colors:` hex map, the shape
+    // an extraction exports) goes through the standard converter; anything else is the engine-native dialect.
+    // Before this the tool ran only `parseDesignMd`, so every standard brief was refused as a malformed BrandInput.
+    let input: unknown;
+    let report: Record<string, unknown>;
+    try {
+      const std = parseStandardDesignMd(args.brief);
+      if (isStandardDesignMd(std)) {
+        const { input: converted, classification, xApplied, xWarnings } = standardToBrandInput(std);
+        input = converted;
+        report = { dialect: 'standard', classification: classification.log, xApplied, xWarnings };
+      } else {
+        // No report keys here: an engine-native brief returns exactly theme_brand's sections plus
+        // `derivedBrandInput` (#1868 holds the two key sets equal).
+        input = parseDesignMd(args.brief).input;
+        report = {};
+      }
+    }
     catch (e) { return text({ error: `could not parse the design.md brief: ${(e as Error).message}` }, true); }
     // Same default as theme_brand (#1868): the description promises the same payload, and an empty
     // default silently dropped the decisions log from every call that named no sections.
-    const result = themePayload(parsed.input, Array.isArray(args.include) ? args.include : [...DEFAULT_THEME_SECTIONS]);
+    const result = themePayload(input, Array.isArray(args.include) ? args.include : [...DEFAULT_THEME_SECTIONS]);
     if (result.isError) return result;
     // Report what the brief RESOLVED to. A brief is lossy by nature, and an agent cannot correct a
     // misreading it never sees — this is the field that makes the round trip debuggable.
     const payload = JSON.parse(result.content[0].text);
-    payload.derivedBrandInput = parsed.input;
+    payload.derivedBrandInput = input;
+    Object.assign(payload, report);
     return structured(payload);
   }
 

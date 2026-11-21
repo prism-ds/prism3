@@ -35,12 +35,14 @@ import { buildIdentity } from './build-identity';
 import { buildFigmaColor, buildFigmaFont, buildFigmaFontFluid, buildFigmaTextStyles, buildFigmaDims, buildFigmaLayout, buildFigmaShadow, buildFigmaGradient, buildFigmaGridStyles, fontStyleName, figName, parseColor, figmaArtifacts, COLOR_MODES, FONT_FLUID_MODES, LAYOUT_MODES } from './emit-figma';
 import type { FigmaCollectionFile } from './emit-figma';
 import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
+import { judgeBelowFloor, KNOWN_PENDING } from './lint-shadcn-contrast';
+import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES } from './emit-dtcg-overlay';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme } from './emit-dtcg';
 import { buildAiMetadata } from './ai-metadata';
 import { validate as validateJsonSchema } from './json-schema-lite';
-import { handleRpc, callTool, toolDefs, manifestRootKeys, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
+import { handleRpc, callTool, toolDefs, manifestRootKeys, summarizeDescription, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
 import { ENGINE_VERSION, CONTRACT_VERSION, classify, contractVersionDrift, satisfiesBump, DEPRECATIONS } from './version';
 import { renameMap, validateRenameMap, planVariableRenames, planCollectionRenames, composeVariableRenames, projectionsOf, PROJECTED_ROOTS, isRefusal, COLLECTION_RENAMES, type RenameMap } from './rename-map';
 import {
@@ -1208,6 +1210,8 @@ for (const hx of ['#000000', '#333333', '#7f7f7f', '#808080', '#ffffff']) {
     'color.ts': [/fmt === 'hex' \? Math\.round\(a \* 255\) \/ 255 : Math\.round\(a \* 100\) \/ 100/],
     // A dark-mode shadow layer's alpha, not a ratio.
     'theme-shadow.ts': [/const darkAlpha = .*Math\.round\(a \* \(0\.3 \+ 0\.09 \* i\) \* 100\) \/ 100/],
+    // #4128: a type style's tracking in px, to 0.01px, not a ratio.
+    'emit-dtcg-overlay.ts': [/const r = Math\.round\(mult \* sizePx \* 100\) \/ 100;/],
   };
   const engineSrc = readdirSync(HERE).filter((n) => n.endsWith('.ts') && n !== 'test.ts' && !n.endsWith('-test.ts') && !n.startsWith('lint-'));
   const engineRolled = engineSrc.flatMap((n) => readFileSync(resolve(HERE, n), 'utf8').split('\n').flatMap((text, i) =>
@@ -4402,6 +4406,9 @@ for (const b of brands) {
       // Toast (#2668): no size axis, so every key is bare. block / inline start / inline end / message-to-controls gap /
       // glyph-to-message gap. The action-to-close 4px is not listed: it stays at the floor.
       toast: { keys: [], sizes: [], bare: ['pad-y', 'pad-x', 'pad-end', 'gap', 'glyph-gap'] },
+      // #4007: the menu item's inline padding and gap, one size.
+      'menu-item': { keys: [], sizes: [], bare: ['padding-x', 'gap'] },
+      tooltip: { keys: [], sizes: [], bare: ['pad-y', 'pad-x'] },
       // Divider (#3051, #3143): the labeled divider's label-to-line gap, across a row and down a column.
       divider: { keys: [], sizes: [], bare: ['horizontal.gap', 'vertical.gap'] },
       'breadcrumb-item': { keys: ['gap'], sizes: ['small', 'medium'] },
@@ -4450,6 +4457,8 @@ for (const b of brands) {
       banner: { compact: 'bare 12/8/8', comfortable: 'bare 16/12/12', spacious: 'bare 20/16/16' },
       // Toast (#2668, the proposal's §8 approved by call 13 A): comfortable is 8/16/8 padding, 8 to the controls, 12 glyph to message.
       toast: { compact: 'bare 6/12/6/6/8', comfortable: 'bare 8/16/8/8/12', spacious: 'bare 12/20/12/12/16' },
+      'menu-item': { compact: 'bare 8/6', comfortable: 'bare 12/8', spacious: 'bare 16/12' },
+      tooltip: { compact: 'bare 2/6', comfortable: 'bare 4/8', spacious: 'bare 6/12' },
       // Divider (#3051, Q3051.4 A; #3143, Q3143.3 A): the label-to-line gap, horizontal / vertical. Comfortable is the
       // owner's space.300, 24px, across a row and space.150, 12px, down a column; the vertical one moves 8/12/16.
       divider: { compact: 'bare 20/8', comfortable: 'bare 24/12', spacious: 'bare 32/16' },
@@ -4502,6 +4511,7 @@ for (const b of brands) {
       // Banner (#2579): the glyph→content gap and the fixed title→body gap (one action since Q533.1, so no action gap).
       banner: ['gap', 'content-gap'],
       toast: ['gap', 'glyph-gap', 'controls-gap'],
+      'menu-item': ['gap'],
       // #3051, #3143: the labeled divider's label-to-line gap, each orientation's own key.
       divider: ['horizontal.gap', 'vertical.gap'],
       // #2709: the three defs with a density-following gap that joined after this list was written.
@@ -4581,6 +4591,8 @@ for (const b of brands) {
       toast: { prefix: 'bare', lt: [['gap', 'pad-x'], ['glyph-gap', 'pad-x']] },
       // #4008: the header, body and footer gap is tighter than the panel padding around them.
       popover: { prefix: 'bare', lt: [['gap', 'pad']] },
+      // #4007: the item's gap is tighter than its inline padding.
+      'menu-item': { prefix: 'bare', lt: [['gap', 'padding-x']] },
     };
     const GAP_TAILS = ['gap', 'check-gap'];
     // `pad` (#2579): Banner's one padding, block and inline alike.
@@ -16636,6 +16648,11 @@ arm: {
   // compacted top-level field measured a median ~220 characters, so 5,000 is room for ~20 more levers
   // at ~250 each. When this fails, the list is 5,000 short of the wall and still passes the hard
   // limit, so there is time to scale again rather than trim.
+  //
+  // It came close (2026-11-21): 54,509, 491 under the alarm, with two approved PRs each pushing it over.
+  // The owner chose to scale again, not to move the alarm, so the ceiling and the margin are unchanged and
+  // the inline copy dropped the descriptions beneath every OPTIONAL field (the required fields and the
+  // `$defs` they reach keep theirs), which took the list from 54,897 to 41,731. The arms below hold where prose stays.
   const listChars = JSON.stringify(tools).length;
   ok(listChars <= 55_000,
     `MCP: tools/list keeps 5,000 chars of headroom under its 60,000 ceiling, room for ~20 more levers (${listChars.toLocaleString()} chars; fails above 55,000)`);
@@ -16645,33 +16662,97 @@ arm: {
   // description must be a non-empty PREFIX of the file's (a summary truncates, never rewrites), at most
   // 200 characters. The cap is what makes the headroom above hold: a lever's inline cost is its
   // structure plus one sentence, however long its full description grows.
+  //
+  // 2026-11-21: and WHERE a description stays is the second step's rule, restated here from the file, not
+  // read from mcp.ts: the schema's own, every top-level field's own, everything beneath a REQUIRED field,
+  // and everything in a `$defs` entry a required field reaches through `$ref`. Every other description
+  // must be absent from the inline copy, and must come back, word for word, from `list_levers describe`.
   {
     const inline = tools.find((t) => t.name === 'theme_brand')?.inputSchema?.properties?.brand;
+    const fileRequired = new Set<string>((brandSchema as any).required ?? []);
+    const fileDefs0: Record<string, any> = (brandSchema as any).$defs ?? {};
+    const reachedDefs = new Set<string>();
+    const reach = (o: any): void => {
+      if (Array.isArray(o)) { o.forEach(reach); return; }
+      if (!o || typeof o !== 'object') return;
+      for (const [k, v] of Object.entries(o)) {
+        const name = k === '$ref' && typeof v === 'string' && v.startsWith('#/$defs/') ? v.slice('#/$defs/'.length) : null;
+        if (name !== null && name in fileDefs0 && !reachedDefs.has(name)) { reachedDefs.add(name); reach(fileDefs0[name]); }
+        else reach(v);
+      }
+    };
+    for (const k of fileRequired) reach((brandSchema as any).properties?.[k]);
+    ok(fileRequired.size > 0 && [...reachedDefs].sort().join(',') === 'oklch',
+      `MCP: the required fields reach exactly the oklch $defs entry, the one whose prose stays inline with them (got: ${[...reachedDefs].sort().join(',') || 'none'})`);
+    const DATA = new Set(['default', 'enum', 'const', 'examples']);
     const drift: string[] = [], notPrefix: string[] = [], tooLong: string[] = [], midSentence: string[] = [];
-    const walk = (a: any, b: any, path: string): void => {
+    const notDropped: string[] = [];
+    const dropped: { path: string[]; text: string }[] = [];
+    // `keep`: may this node's description stay? `segs`: the JSON path from the schema root.
+    const walk = (a: any, b: any, path: string, segs: string[], keep: boolean): void => {
       if (Array.isArray(b)) {
         if (!Array.isArray(a) || a.length !== b.length) { drift.push(path); return; }
-        b.forEach((x, i) => walk(a[i], x, `${path}/${i}`));
+        b.forEach((x, i) => walk(a[i], x, `${path}/${i}`, [...segs, String(i)], keep));
         return;
       }
       if (b && typeof b === 'object') {
         if (!a || typeof a !== 'object' || Array.isArray(a)) { drift.push(path); return; }
-        if (Object.keys(a).sort().join(',') !== Object.keys(b).sort().join(',')) drift.push(`${path} (keys)`);
+        const dropsHere = !keep && typeof b.description === 'string';
+        const want = Object.keys(b).filter((k) => !(dropsHere && k === 'description')).sort().join(',');
+        if (Object.keys(a).sort().join(',') !== want) drift.push(`${path} (keys)`);
         for (const k of Object.keys(b)) {
           if (k === 'description' && typeof b[k] === 'string') {
+            if (!keep) {
+              if ('description' in a) notDropped.push(`${path}/description`);
+              dropped.push({ path: [...segs, k], text: b[k] });
+              continue;
+            }
             const sum = a[k];
             if (typeof sum !== 'string' || !sum.trim() || !b[k].startsWith(sum)) notPrefix.push(`${path}/description`);
             else if (sum.length > 200) tooLong.push(`${path} (${sum.length})`);
             // Where the cut falls, checked without mcp.ts's sentence splitter: a summary is the whole
             // text, or it ends in "." and the full text goes on with whitespace (never mid-word).
             if (typeof sum === 'string' && sum !== b[k] && !(sum.endsWith('.') && /^\s/.test(b[k].slice(sum.length)))) midSentence.push(`${path}/description`);
-          } else walk(a[k], b[k], `${path}/${k}`);
+          } else if (segs.length > 0 && (k === 'properties' || k === '$defs' || k === 'patternProperties') && b[k] && typeof b[k] === 'object' && !Array.isArray(b[k])) {
+            // A map of NAMES to schemas: a field called `default` or `description` is a schema, not data.
+            const am = a[k] ?? {};
+            if (!am || typeof am !== 'object' || Object.keys(am).sort().join(',') !== Object.keys(b[k]).sort().join(',')) { drift.push(`${path}/${k} (keys)`); continue; }
+            for (const name of Object.keys(b[k])) walk(am[name], b[k][name], `${path}/${k}/${name}`, [...segs, k, name], keep);
+          } else if (DATA.has(k)) {
+            if (!isDeepStrictEqual(a[k], b[k])) drift.push(`${path}/${k}`);
+          } else if (segs.length === 0 && (k === 'properties' || k === '$defs') && b[k] && typeof b[k] === 'object') {
+            // The two places the rule changes: a top-level field keeps its own summary and, if required,
+            // everything beneath; a $defs entry keeps its prose if a required field reaches it.
+            const am = a[k] ?? {};
+            if (Object.keys(am).sort().join(',') !== Object.keys(b[k]).sort().join(',')) drift.push(`${path}/${k} (keys)`);
+            for (const name of Object.keys(b[k])) {
+              const fieldKeep = k === 'properties' ? fileRequired.has(name) : reachedDefs.has(name);
+              const fa = am[name], fb = b[k][name];
+              if (k === 'properties' && fb && typeof fb === 'object' && typeof fb.description === 'string' && !fieldKeep) {
+                // Its own summary stays; walk the rest with prose dropped.
+                const { description: fdA, ...restA } = fa ?? {};
+                const { description: fdB, ...restB } = fb;
+                walk({ description: fdA }, { description: fdB }, `${path}/${k}/${name}`, [k, name], true);
+                walk(restA, restB, `${path}/${k}/${name}`, [k, name], false);
+              } else walk(fa, fb, `${path}/${k}/${name}`, [k, name], fieldKeep);
+            }
+          } else walk(a[k], b[k], `${path}/${k}`, [...segs, k], keep);
         }
         return;
       }
       if (a !== b) drift.push(path);
     };
-    walk(inline, brandSchema, '#');
+    walk(inline, brandSchema, '#', [], true);
+    ok(notDropped.length === 0, `MCP: tools/list drops every description beneath an optional field and in every $defs entry no required field reaches (still inline: ${notDropped.slice(0, 5).join(', ') || 'none'})`);
+    // Each dropped description, looked up at its own path in `describe`'s answer: a field's under
+    // described.properties, a $defs entry's under described.$defs. Non-vacuous: the step drops something.
+    {
+      const everyField = callTool('list_levers', { describe: Object.keys((brandSchema as any).properties) }, brandSchema);
+      const got = everyField.isError ? {} : (everyField.structuredContent as any)?.described ?? {};
+      const lost = dropped.filter(({ path, text }) => path.reduce((o: any, seg) => (o == null ? o : o[seg]), got) !== text).map(({ path }) => path.join('/'));
+      ok(dropped.length >= 100 && lost.length === 0,
+        `MCP: every description tools/list drops comes back word for word from list_levers describe, at its own path (${dropped.length} dropped; not returned: ${lost.slice(0, 5).join(', ') || 'none'})`);
+    }
     ok(drift.length === 0, `MCP: the inline brand schema matches the file in every keyword but description — types, enums, ranges, defaults, $defs, $ref, $id (drift: ${drift.slice(0, 5).join(', ') || 'none'})`);
     ok(notPrefix.length === 0, `MCP: every inline schema description is a non-empty prefix of the file's full text (not: ${notPrefix.slice(0, 5).join(', ') || 'none'})`);
     ok(midSentence.length === 0, `MCP: every inline schema summary is the full text or ends at a "." the full text follows with whitespace — never cut mid-word (cut: ${midSentence.slice(0, 5).join(', ') || 'none'})`);
@@ -16684,8 +16765,11 @@ arm: {
       `MCP: strictInteractiveContrast's inline summary is its tag plus first sentence (got: ${inline?.properties?.strictInteractiveContrast?.description})`);
     ok(inline?.properties?.id?.description === "Brand identifier (e.g. 'aurora').",
       `MCP: an \`e.g.\` does not end a summary (got: ${inline?.properties?.id?.description})`);
-    ok(inline?.properties?.typography?.properties?.sizeOverrides?.description === 'OPTIONAL. Opt-in per-rung DESKTOP/MOBILE size override (#1587): group -> rung -> { desktop?, mobile? }.',
-      `MCP: a \`?\` inside an optional-key shape does not end a summary (got: ${inline?.properties?.typography?.properties?.sizeOverrides?.description})`);
+    // sizeOverrides sits under optional `typography`, so since 2026-11-21 its description is no longer inline;
+    // the splitter it exercised still cuts every summary that is, so the case is held on the function itself.
+    const sizeOverridesSummary = summarizeDescription((brandSchema as any).properties?.typography?.properties?.sizeOverrides?.description ?? '');
+    ok(sizeOverridesSummary === 'OPTIONAL. Opt-in per-rung DESKTOP/MOBILE size override (#1587): group -> rung -> { desktop?, mobile? }.',
+      `MCP: a \`?\` inside an optional-key shape does not end a summary (got: ${sizeOverridesSummary})`);
     ok(/list_levers with `describe`/.test(tools.find((t) => t.name === 'theme_brand')?.description ?? ''),
       'MCP: theme_brand says its field descriptions are summaries and names where the full text is');
 
@@ -19254,6 +19338,77 @@ arm: {
       // OD-P1 A: the role is a non-modal dialog.
       ok(/role="dialog"/.test(pop.accessibility?.role ?? '') && /no `aria-modal`/.test(pop.accessibility?.role ?? ''), '#4008 popover role (OD-P1 A): role="dialog" with no aria-modal');
     }
+    // ---- #4007 Menu: OD-X1 A, K2 measured, and the item's decisions, each against a literal or an emitted value ----
+    {
+      const pop = componentDefs.find((x) => x.id === 'popover')!;
+      const mnu = componentDefs.find((x) => x.id === 'menu')!;
+      const item = componentDefs.find((x) => x.id === 'menu-item')!;
+      // OD-X1 A: Menu's panel binds Popover's five raised-surface roles. Two defs compared, each authored on its own.
+      const SURFACE = ['fill', 'border', 'border-width', 'shadow', 'radius'];
+      const unequal = SURFACE.filter((k) => !mnu.tokens[k] || mnu.tokens[k] !== pop.tokens[k]);
+      ok(unequal.length === 0, `#4007 OD-X1: Menu and Popover bind the same raised-surface roles (${SURFACE.join(', ')})${unequal.length ? ` — differ: ${unequal.map((k) => `${k} ${mnu.tokens[k]} vs ${pop.tokens[k]}`).join('; ')}` : ''}`);
+      const mp = mnu.anatomy.parts.panel, pp = pop.anatomy.parts.panel;
+      ok(mp.kind === 'box' && pp.kind === 'box' && mp.paintSlots?.join() === pp.paintSlots?.join() && mp.strokeWidth === pp.strokeWidth && mp.elevation === pp.elevation && mp.radius === pp.radius,
+        '#4007 OD-X1: the two panels paint, stroke, cast and round from the same keys');
+      // K2: the highlight against the panel, recomputed from the emitted trees (never from the def's own claim). It does
+      // not clear 3:1 in any committed brand and mode, so K2 is A: a focus-visible item draws the FocusRing as well.
+      const OUT = join(HERE, 'out');
+      // The handoff writes a literal color as a DTCG 2025.10 Color-module object (#4123): read its sRGB `components`
+      // and `alpha` (absent = 1). Never its `hex`, which drops alpha; any other colorSpace is refused by name. A string
+      // (an older handoff) is still read as `#hex` / `rgb()`.
+      let objectReads = 0;
+      const rgb = (v: string | { colorSpace?: string; components?: number[]; alpha?: number }): number[] => {
+        if (v && typeof v === 'object') {
+          if (v.colorSpace !== 'srgb' || !Array.isArray(v.components) || v.components.length !== 3) throw new Error(`#4007 K2: a color object outside srgb [r,g,b] is not read: ${JSON.stringify(v)}`);
+          objectReads++;
+          return [...v.components, v.alpha ?? 1];
+        }
+        const m = /^rgba?\(([^)]*)\)$/.exec(v);
+        if (m) { const q = m[1].split(',').map(Number); return [q[0] / 255, q[1] / 255, q[2] / 255, q.length > 3 ? q[3] : 1]; }
+        const h = v.replace('#', '');
+        return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).concat(h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1);
+      };
+      const lum = (c: number[]) => [0, 1, 2].map((i) => (c[i] <= 0.04045 ? c[i] / 12.92 : ((c[i] + 0.055) / 1.055) ** 2.4)).reduce((a, x, i) => a + x * [0.2126, 0.7152, 0.0722][i], 0);
+      let best = 0, cells = 0;
+      for (const f of readdirSync(OUT).filter((n) => n.endsWith('.base.tokens.json'))) {
+        const brand = f.split('.')[0];
+        const base = JSON.parse(readFileSync(join(OUT, f), 'utf8'));
+        const root = Object.keys(base).find((k) => !k.startsWith('$'))!;
+        const modes = ['light', ...readdirSync(OUT).filter((n) => n.startsWith(`${brand}.`) && n.endsWith('.overlay.tokens.json')).map((n) => n.split('.')[1])];
+        for (const m of modes) {
+          const ov = m === 'light' ? {} : JSON.parse(readFileSync(join(OUT, `${brand}.${m}.overlay.tokens.json`), 'utf8'));
+          const at = (t: any, p: string) => p.split('.').reduce((o, k) => o?.[k], t?.[root])?.$value;
+          const res = (p: string): any => { let v = at(ov, p) ?? at(base, p); for (let i = 0; i < 10 && typeof v === 'string' && v.startsWith('{'); i++) { const q = v.slice(1, -1).replace(`${root}.`, ''); v = at(ov, q) ?? at(base, q); } return v; };
+          const panel = rgb(res('color.foreground.raised'));
+          const wash = rgb(res('color.interactive.neutral.overlay.hover'));
+          const comp = [0, 1, 2].map((i) => wash[i] * wash[3] + panel[i] * (1 - wash[3]));
+          const a = lum(comp), b = lum(panel);
+          best = Math.max(best, (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)); cells++;
+        }
+      }
+      // #4123: the reader is held on the handoff's object form, typed here, and on the committed handoff actually reaching
+      // it (two object reads per cell), so a reader that only parses strings fails here by name.
+      const committedObjectReads = objectReads;
+      const typed = (() => { try { return rgb({ colorSpace: 'srgb', components: [0.2, 0.4, 0.6], alpha: 0.5 }); } catch { return null; } })();
+      ok(JSON.stringify(typed) === JSON.stringify([0.2, 0.4, 0.6, 0.5]) && cells > 0 && committedObjectReads === 2 * cells,
+        `#4123 K2 reader: the #4007 K2 arm reads a DTCG 2025.10 color object (srgb components + alpha), and every committed panel and wash it read was one (got ${JSON.stringify(typed)}; ${committedObjectReads} object reads over ${cells} cells)`);
+      ok(cells >= 20 && best < 3, `#4007 K2: the item highlight (neutral hover wash over the raised panel) stays under 3:1 against the panel in every brand and mode, so the ring is drawn (best ${best.toFixed(2)}:1 over ${cells} cells)`);
+      const ring = item.anatomy.parts.focusRing;
+      ok(ring?.kind === 'absolute' && ring.nests === 'focus-ring' && ring.when === 'focus-visible' && item.tokens['default.overlay.focus-visible'] === 'color.interactive.neutral.overlay.hover',
+        '#4007 K2 A: a focus-visible item shows the highlight and the shared focus ring');
+      // OD-M3 A: 15 members, one size.
+      const members = figmaAnatomySet(item, { swapTarget: 'FPO-default-icon' });
+      ok(members.length === 15 && !item.variants?.size, `#4007 OD-M3: Menu.Item is 15 members and one size (${members.length})`);
+      // K1 B: menubar kept as an alias.
+      ok(mnu.aliases?.includes('menubar') === true, '#4007 K1 B: Menu keeps menubar as an alias');
+      // Owner direction (2026-11-18): two-line items align to the first line.
+      const row = item.anatomy.parts.row;
+      ok(row.kind === 'box' && row.layout?.align === 'start' && row.firstLine?.glyphCell === 'leadCell' && row.firstLine?.textCell === 'textCell',
+        '#4007 first line: the item row is top-aligned and centers its leading cell on the label\'s first line');
+      // K3 B: checkable items never close the menu.
+      ok(item.anatomy.codeOnly.some((e) => /checkbox or radio item toggles and the menu stays open, whatever the key/.test(e.description)),
+        '#4007 K3 B: the activation contract keeps the menu open for a checkbox or radio item, whatever the key');
+    }
     // ---- #3163: `PartDef.scroll`, the scroll region, and its two refusal arms, each pinned BY NAME (docs/34) ----
     // SUBJECT: Dialog's body as committed, then mutated. EXPECTED: the projection Q3130.8 A asks for (the body clips and
     // scrolls vertically on every member) and the authored refusal shapes. Delete either refusal from `anatomyErrors`
@@ -21265,8 +21420,10 @@ arm: {
       button: 1,
       'button-destructive': 2, 'button-neutral': 2, 'wallet-button': 2, 'sign-in-button': 2, 'icon-button': 2, 'icon-button-neutral': 2, icon: 2,
       'text-field': 2, textarea: 2, 'password-field': 2, 'code-input': 2, 'search-field': 2, 'card-number-field': 2, select: 2, 'checkbox-row': 2, 'checkbox-group': 2, 'tag-group': 2,
-      'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, banner: 2, toast: 2, pagination: 2, slider: 2,
-      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, veil: 3, 'image-placeholder': 3,
+      'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, menu: 2, 'menu-item': 9, 'menu-group': 3, banner: 2, toast: 2, pagination: 2, slider: 2,
+      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, skeleton: 3, veil: 3, 'image-placeholder': 3,
+      // Tooltip (#4009, generation priority 3, decided in Q-FL2): supports another component, as Badge does.
+      tooltip: 3,
       'flush-icon-button-neutral': 4, 'flush-icon-button': 5, 'flush-icon-button-destructive': 5,
       'checkbox-control': 6, 'radio-control': 6, 'switch-control': 6, 'field-label': 6, 'field-message': 6, 'focus-ring': 6,
       'tab-item': 9, 'list-item': 9, 'segmented-control-segment': 9, '_accordion-indicator': 9, 'code-input-cell': 9, 'radio-row': 9, 'pagination-item': 9, '_slider-thumb': 9,
@@ -23440,9 +23597,10 @@ arm: {
     // `segmented-control-segment` joins (#2418, Q269.4): an unselected option's hover and pressed are the neutral wash,
     // and its selected tint is the subtle-fill Tag binds, so a solid-tint or no-hover brand reaches it as it reaches a tag.
     // `pagination-item` joins (#2665): a page cell's hover and pressed are IconButton.Neutral ghost's neutral wash.
+    // `menu-item` joins (#4007): its highlight is the neutral wash, so the brand's wash steps reach it.
     // `code-input-cell` joined with #2428 and every field (text-field, password-field, search-field, select, textarea) left
     // with #2926: a field binds no wash, so the lever has nothing to reach on it.
-    ok(JSON.stringify(binders) === JSON.stringify(['button', 'button-destructive', 'button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral', 'pagination-item', 'segmented-control-segment', 'tag']),
+    ok(JSON.stringify(binders) === JSON.stringify(['button', 'button-destructive', 'button-neutral', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral', 'menu-item', 'pagination-item', 'segmented-control-segment', 'tag']),
       `#1608 the wash binders the lever reaches: button ×3, flush-icon-button ×3 (round), icon-button ×3, pagination-item, segmented-control-segment, tag, and no field (${binders.join(', ')})`);
     // #3071 (owner Q3071.4 A): the opaque fill reaches Button, Icon button and Flush icon button only. Tag, Segmented
     // control and Pagination keep the neutral wash: a fill on an unselected item reads as selected.
@@ -34094,7 +34252,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'menu-item', 'tooltip'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -35679,6 +35837,9 @@ arm: {
     + 'block and centring cannot float the icon mid-paragraph. Fixed on its counter axis as well, which is '
     + 'the mechanical half of the same fact: the row has no room to grow into a second line.';
   const CENTRE_OK: Record<string, string> = {
+    // #4007: the shortcut is one short line that never wraps; centered in the 20px trailing cell, it sits on the chevron's
+    // middle, which the top-aligned row keeps on the label's first line.
+    'menu-item.trailCell': 'a one-line shortcut beside a 20px chevron, inside a top-aligned row',
     'button.container': buttonCentreReason,
     // #1223 split the semantic intents into sibling components that share Button's exact anatomy, so the
     // same design fact exempts them — a Destructive or Neutral button label is the same short action phrase.
@@ -40593,6 +40754,49 @@ arm: {
   ok(missing.length === 0, `#2501: the axis order rule read every def it was raised on, each with values to order${missing.length ? ` — not read: ${missing.join(', ')}` : ''}`);
 }
 
+// ------------------------------------------------------------------- #4109: Skeleton
+// Each owner decision (OD-S1 to OD-S7, all A, 2026-11-19) held against a literal typed here from the proposal; ACTUAL is
+// the def and its projected plans, so a def that moves a member, a binding, a width or the announcement model fails by name.
+{
+  const def = componentDefs.find((d) => d.id === 'skeleton')!;
+  const set = figmaAnatomySet(def, {});
+  const at = (name: string) => set.find((p) => planComponentName(p) === name);
+  const findIn = (n: AnatomyPlan['root'], name: string): AnatomyPlan['root'] | undefined => n.name === name ? n : n.children.map((k) => findIn(k, name)).find(Boolean);
+  // OD-S6 A: four members, text at both sizes, circle and rect at medium only; text leads (the code default).
+  const NAMES = ['shape=text, size=medium', 'shape=text, size=small', 'shape=circle, size=medium', 'shape=rect, size=medium'];
+  ok(JSON.stringify(set.map(planComponentName)) === JSON.stringify(NAMES),
+    `#4109 skeleton (OD-S6 A): the set is text × [medium, small], circle and rect, text medium first (${set.map(planComponentName).join(' | ')})`);
+  // OD-S1 A: no `ghost` alias. OD-S2 A: one primitive with a shape axis, states [] (one visible condition).
+  ok(!def.aliases.includes('ghost') && JSON.stringify(def.variants.shape) === JSON.stringify(['text', 'circle', 'rect']) && def.states.length === 0,
+    `#4109 skeleton (OD-S1 A, OD-S2 A): no ghost alias, one def with shape [text, circle, rect], and no states`);
+  // OD-S4 A: every painted node takes the recessed neutral, nothing else.
+  const paints = set.flatMap((p) => planPaintVars(p.root));
+  ok(paints.length === 8 && paints.every((v) => v === 'color/background/tertiary'),
+    `#4109 skeleton (OD-S4 A): the 8 painted nodes (3 bars × 2 text members, the circle, the rect) all take color/background/tertiary (${[...new Set(paints)].join(', ')}; ${paints.length})`);
+  // The line row is one body line box tall (brief: bind to the type line height); OD-S5 A: the bar is inset by space.050
+  // above and below, so it is about two thirds of the line.
+  const LINE: Record<string, string> = { medium: 'type/body/md/line-box', small: 'type/body/sm/line-box' };
+  const lineOff = (['medium', 'small'] as const).filter((sz) => {
+    const r = at(`shape=text, size=${sz}`)?.root;
+    return !r || ['firstLine', 'middleLine', 'lastLine'].some((l) => { const b = findIn(r, l)?.bound ?? {}; return b.height !== LINE[sz] || b.paddingTop !== 'space/050' || b.paddingBottom !== 'space/050'; });
+  });
+  ok(lineOff.length === 0, `#4109 skeleton (OD-S5 A): every text line is one body line box tall with the bar inset space.050 above and below (off: ${lineOff.join(', ') || 'none'})`);
+  // The stepped ragged-right widths: 100 / 80 / 40% of the 320 build width.
+  const text = at('shape=text, size=medium')?.root;
+  ok(!!text && text.placementWidth === 320 && findIn(text, 'firstBar')?.layoutGrow === 1 && findIn(text, 'middleBar')?.minWidth === 256 && findIn(text, 'lastBar')?.minWidth === 128,
+    `#4109 skeleton: the text member is built 320 wide and its bars step 100 / 80 / 40% (firstBar grows, middleBar 256, lastBar 128)`);
+  // Corners: radius.sm on the bars, radius.md on the rect, radius.round on the circle; rect built 320×180, circle 40×40.
+  const corner = (name: string, part: string) => findIn(at(name)!.root, part)?.bound.topLeftRadius;
+  const rect = at('shape=rect, size=medium')?.root, circle = at('shape=circle, size=medium')?.root;
+  ok(corner('shape=text, size=medium', 'firstBar') === 'radius/sm' && corner('shape=rect, size=medium', 'block') === 'radius/md' && corner('shape=circle, size=medium', 'block') === 'radius/round'
+    && rect?.placementWidth === 320 && rect.placementHeight === 180 && circle?.placementWidth === 40 && circle.placementHeight === 40,
+    `#4109 skeleton: bars radius.sm, rect radius.md at 320×180, circle radius.round at 40×40`);
+  // OD-S3 A: the pulse period is motion.duration.sweep (no new token); OD-S7 A: Skeleton never speaks.
+  const announce = def.anatomy?.codeOnly.find((c) => c.class === 'announcement')?.description ?? '';
+  ok(def.tokens['motion.pulse'] === 'motion.duration.sweep' && /never speaks/.test(announce) && /aria-busy/.test(def.accessibility.aria) && /aria-hidden="true"/.test(def.accessibility.aria) && !def.props.some((p) => p.name === 'label'),
+    `#4109 skeleton (OD-S3 A, OD-S7 A): the pulse runs on motion.duration.sweep, every shape is aria-hidden, the region owns aria-busy and the status, and there is no label prop`);
+}
+
 // ------------------------------------------------------------------- #2428: Code input and its cell
 // Each owner decision held against a literal typed here from the decision (Q321, Q329, Q330, Q344, Q346, Q347/Q359);
 // ACTUAL is the projected plan, so a def that moves a size, a binding, the slot or a default fails the arm by name.
@@ -40852,6 +41056,9 @@ arm: {
     'pagination-item.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'the current page is marked by `current`, rendering aria-current="page", as Link does (#2665, #3554 Q-CC15 A)' },
     'page-nav-item.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'a page navigation item marks the current page by `current`, as Link does (#3345)' },
     'link.selection': { prop: 'current', map: off('unselected', 'selected'), reason: 'a link marks the current page by `current`, rendering aria-current="page" (#2872, Q507.3 A)' },
+    // #4007 (held for the owner): one member, so the group carries a one-value `type` the engine needs to project a set.
+    // Code has no type prop: every group is a section, with or without its heading, and a radio set is a section too.
+    'menu-group.type': { prop: 'heading', map: { undefined: 'section' }, reason: 'code has no type prop; a group is a section whether or not it sets `heading` (#4007: the one-value axis is how the engine projects one member)' },
     'accordion.expansion': { prop: 'defaultExpanded', map: off('collapsed', 'expanded'), reason: 'an accordion opens by `defaultExpanded`' },
     // #2666 (owner call 11 A): code has no path prop. `responsive` (default true) swaps the trail for the parent link
     // below 480px by a container query, and either value renders the trail at every wider width, so the code default
@@ -42378,6 +42585,126 @@ arm: {
   }
 
   ok(validateComponentDef(td).errors.length === 0, `#2668 toast validates clean (${validateComponentDef(td).errors.slice(0, 2).join('; ')})`);
+}
+
+// ------------------------------------------------------------------- #4009: the tooltip
+// The proposal on #4009 with every OD at its recommendation, and the owner's Q-FL2 record on #4007 and #4009
+// (2026-11-19): K6 B (label mode on an icon-only trigger), K7 B (a fade plus a small scale), K8 A (an owned positioning
+// layer), OD-X2 A (logical sides), OD-T6 (the numbers with no token, as placeholders). EXPECTED is typed here as literals
+// from those records; ACTUAL is the projected plan and, for contrast, the committed emission under `out/`, read as files,
+// never through the def. Mutations: the bubble's fill to `color.background.primary` → `#4009 tooltip bubble`; the arrow
+// boolean dropped → `#4009 tooltip properties`; the scale entrance removed from codeOnly → `#4009 tooltip code-side`.
+{
+  const td = componentDefs.find((d) => d.id === 'tooltip')!;
+  const plans = figmaAnatomySet(td, { swapTarget: 'FPO-default-icon' });
+  type TN = { name: string; type: string; children: TN[]; bound?: Record<string, string>; paints?: Record<string, string>; layoutMode?: string; textStyle?: string; glyphPx?: number; visibleProp?: string; descendantFills?: string; effectStyle?: string };
+  const find = (n: TN, name: string): TN | undefined => (n.name === name ? n : n.children.map((c) => find(c, name)).find(Boolean));
+
+  // THE SHAPE (OD-X2 A, OD-T2 A, OD-T3 A): 4 members, top first; no size, no state, no alignment axis.
+  ok(JSON.stringify(plans.map(planComponentName)) === JSON.stringify(['placement=top', 'placement=bottom', 'placement=start', 'placement=end']) && figmaVariantCount(td) === 4,
+    `#4009 tooltip: 4 members, placement top, bottom, start, end (OD-X2 A, OD-T3 A) (got ${plans.map(planComponentName).join(' | ')})`);
+  ok(JSON.stringify(td.variants) === JSON.stringify({ placement: ['top', 'bottom', 'start', 'end'] }) && td.states.length === 0 && !td.figmaProperties?.stateAxis
+    && td.props.find((p) => p.name === 'placement')?.default === 'top' && td.props.find((p) => p.name === 'align')?.default === 'center',
+    `#4009 tooltip: placement [top, bottom, start, end] only, top the code default, align center in code, no state axis (got ${JSON.stringify(td.variants)})`);
+  ok(td.name === 'Tooltip' && td.category === 'overlay' && JSON.stringify(td.aliases) === JSON.stringify(['hint', 'infotip', 'info-tip']) && td.ai.generationPriority === 3,
+    `#4009 tooltip: named Tooltip, category overlay, aliases hint, infotip and info-tip, generation priority 3 (got ${td.name}, ${td.category}, ${JSON.stringify(td.aliases)}, ${td.ai.generationPriority})`);
+
+  // THE BUBBLE (OD-X1, OD-T6): the inverse surface, radius md, padding 4 / 8, no border, no shadow.
+  const bubbleBad = plans.filter((p) => {
+    const b = find(p.root as TN, 'bubble');
+    return !(b && b.paints?.fills === 'color/inverse/background/primary' && !b.paints?.strokes && !b.effectStyle
+      && b.bound?.topLeftRadius === 'radius/md' && b.bound?.bottomRightRadius === 'radius/md'
+      && b.bound?.paddingTop === 'space/050' && b.bound?.paddingBottom === 'space/050' && b.bound?.paddingLeft === 'space/100' && b.bound?.paddingRight === 'space/100');
+  }).map(planComponentName);
+  ok(bubbleBad.length === 0, `#4009 tooltip bubble: inverse.background.primary with no border and no shadow, radius/md, padding 4/8 (OD-X1, OD-T6)${bubbleBad.length ? ` — WRONG: ${bubbleBad.join(', ')}` : ''}`);
+
+  // THE LABEL (OD-T6): inverse.text.primary in the 14px body style.
+  const labelBad = plans.filter((p) => { const l = find(p.root as TN, 'label'); return !(l && l.paints?.fills === 'color/inverse/text/primary' && l.textStyle === 'body/sm/default'); }).map(planComponentName);
+  ok(labelBad.length === 0, `#4009 tooltip label: inverse.text.primary in body/sm/default (OD-T6)${labelBad.length ? ` — WRONG: ${labelBad.join(', ')}` : ''}`);
+
+  // THE ARROW (OD-T2 A, OD-T6): one per member, on the bubble's trigger side, 8px literal, in the bubble's fill.
+  const SIDE: Record<string, { part: string; dir: string; order: string[] }> = {
+    top: { part: 'topGlyph', dir: 'VERTICAL', order: ['bubble', 'topGlyph'] },
+    bottom: { part: 'bottomGlyph', dir: 'VERTICAL', order: ['bottomGlyph', 'bubble'] },
+    start: { part: 'startGlyph', dir: 'HORIZONTAL', order: ['bubble', 'startGlyph'] },
+    end: { part: 'endGlyph', dir: 'HORIZONTAL', order: ['endGlyph', 'bubble'] },
+  };
+  const arrowBad = plans.filter((p) => {
+    const r = p.root as TN, s = SIDE[(p.coord as Record<string, string>).placement], g = s && find(r, s.part);
+    return !(s && g && g.type === 'GLYPH' && r.layoutMode === s.dir && JSON.stringify(r.children.map((c) => c.name)) === JSON.stringify(s.order)
+      && g.glyphPx === 8 && g.descendantFills === 'color/inverse/background/primary' && g.visibleProp === 'arrow');
+  }).map(planComponentName);
+  ok(arrowBad.length === 0, `#4009 tooltip arrow: one 8px arrow per member on the trigger side, in inverse.background.primary, shown by the arrow toggle (OD-T2 A, OD-T6)${arrowBad.length ? ` — WRONG: ${arrowBad.join(', ')}` : ''}`);
+
+  // THE PROPERTIES (OD-T2 A): the label text and the arrow toggle, on by default; lowercase names (Q345).
+  ok(JSON.stringify(planSetProperties(plans)) === JSON.stringify([{ name: 'label', type: 'TEXT', default: 'Tooltip text' }, { name: 'arrow', type: 'BOOLEAN', default: true }]),
+    `#4009 tooltip properties: label "Tooltip text", arrow on (OD-T2 A) (got ${JSON.stringify(planSetProperties(plans))})`);
+  ok(JSON.stringify(td.composition?.composesWith) === '[]', `#4009 tooltip nests nothing: its arrow is a component-owned glyph (got ${JSON.stringify(td.composition?.composesWith)})`);
+
+  // THE CODE-SIDE CONTRACT, each stated in codeOnly, the props or accessibility as literals.
+  const co = codeOnlyText(td.anatomy!.codeOnly).join('\n');
+  const kind = td.props.find((p) => p.name === 'kind');
+  // K7 A holds the motion to a fade, however a size change is worded (Delta review N2 at 0c32bc9c): the word scale, a
+  // grow, shrink or zoom, a transform, or a percentage, in the code motion entry or any of the motion field's lines.
+  const SIZE_CHANGE = /\bscal(?:e|es|ed|ing)\b|\b(?:grow|shrink|zoom)|\btransform|\d\s*%/i;
+  const tdMotionEntry = codeOnlyText(td.anatomy!.codeOnly).find((t) => /^motion — /.test(t)) ?? '';
+  const contract: [string, boolean][] = [
+    ['role tooltip, described by default', /`role="tooltip"`/.test(co) && /`aria-describedby`/.test(co) && kind?.default === 'description'],
+    ['label mode on an icon-only trigger, with no aria-label (K6 B)', JSON.stringify(kind?.values) === '["description","label"]' && /`aria-labelledby` pointing at it and no `aria-label`/.test(co)],
+    ['Escape hides it without moving focus, and it never takes focus (OD-T1 A)', /Escape hides it without moving focus/.test(co) && /It never takes focus/.test(co)],
+    ['at once on keyboard focus, after the delay on hover, at once in the skip window (OD-T4 A)', /after `delay`, at once on keyboard focus/.test(co) && /within the shared skip window/.test(co)],
+    ['a fade alone with no scale, no animation in the skip window, the reduced fade both ways (K7 A)', /show: opacity 0 to 1, a fade alone with no scale/.test(co) && !/scale from/.test(co) && [tdMotionEntry.replace('a fade alone with no scale', ''), td.motion?.enter ?? '', td.motion?.exit ?? '', td.motion?.reduceMotion ?? ''].every((t) => !SIZE_CHANGE.test(t)) && tdMotionEntry !== '' && /Inside the skip window it appears with no animation/.test(co) && /both ways fade on `motion\.duration-reduced\.fast`/.test(co)],
+    ['an owned positioning layer on the platform, no library (K8 A)', /`popover="manual"`/.test(co) && /CSS anchor positioning/.test(co) && /No positioning library/.test(co)],
+    ['max width 240, offset space.100 (OD-T6)', /up to 240px/.test(co) && /offset `space\.100` from the trigger to the arrow\\'s tip|offset `space\.100` from the trigger to the arrow's tip/.test(co)],
+    ['logical sides that mirror in right-to-left (OD-X2 A)', /start and end are logical/.test(co)],
+    ['never native disabled on the trigger', /never native `disabled`/.test(co)],
+  ];
+  const contractBad = contract.filter(([, v]) => !v).map(([k]) => k);
+  ok(contractBad.length === 0, `#4009 tooltip code-side contract, stated: ${contract.map(([k]) => k).join('; ')}${contractBad.length ? ` — MISSING: ${contractBad.join('; ')}` : ''}`);
+
+  // CONTRAST, over every committed brand × mode: the label on the bubble, and the bubble (and so the arrow) against the
+  // page. Read from `out/<brand>.tokens.json`, resolving aliases, never through the def.
+  {
+    const OUT = resolve(HERE, 'out');
+    const brands = readdirSync(OUT).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f) && !f.includes('.base.') && !f.includes('.overlay.'));
+    const PAIRS: [string, string, number, string][] = [
+      ['color.inverse.text.primary', 'color.inverse.background.primary', 4.5, 'label on the bubble'],
+      ['color.inverse.background.primary', 'color.background.primary', 3, 'the bubble and arrow against the page'],
+    ];
+    const misses: string[] = [];
+    let checked = 0;
+    for (const f of brands) {
+      const doc = JSON.parse(readFileSync(resolve(OUT, f), 'utf8'));
+      const rootKey = Object.keys(doc).find((k) => !k.startsWith('$'))!;
+      const leaf = (path: string) => path.split('.').reduce((o: any, k) => o?.[k], doc[rootKey]);
+      const modes = ['light', ...Object.keys(leaf('color.inverse.background.primary')?.$extensions?.prism3?.modes ?? {})];
+      const valueAt = (path: string, mode: string, depth = 0): string | undefined => {
+        const l = leaf(path);
+        if (!l || depth > 12) return undefined;
+        const v = mode !== 'light' && l.$extensions?.prism3?.modes?.[mode] ? l.$extensions.prism3.modes[mode].$value : l.$value;
+        if (typeof v !== 'string') return undefined;
+        const m = /^\{(.+)\}$/.exec(v);
+        return m ? valueAt(m[1].replace(new RegExp(`^${rootKey}\\.`), ''), mode, depth + 1) : v;
+      };
+      const rgbOf = (v: string | undefined): RGB | undefined => {
+        if (!v) return undefined;
+        if (/^#[0-9a-f]{6}$/i.test(v)) return hexToRgb(v);
+        const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(v);
+        return m ? hexToRgb(`#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`) : undefined;
+      };
+      for (const mode of modes) for (const [fg, bg, floor, what] of PAIRS) {
+        const a = rgbOf(valueAt(fg, mode)), b = rgbOf(valueAt(bg, mode));
+        if (!a || !b) { misses.push(`${f}/${mode} ${what}: unresolved (${valueAt(fg, mode)} on ${valueAt(bg, mode)})`); continue; }
+        const ratio = contrast(a, b);
+        checked++;
+        if (ratio < floor) misses.push(`${f}/${mode} ${what}: ${ratio.toFixed(2)}:1 under ${floor}:1`);
+      }
+    }
+    ok(brands.length >= 5 && checked >= brands.length * 4 * PAIRS.length && misses.length === 0,
+      `#4009 tooltip contrast: ${PAIRS.length} inverse pairs clear their floors in every committed brand × mode (${brands.length} brands, ${checked} ratios)${misses.length ? ` — MISS: ${misses.slice(0, 4).join('; ')}` : ''}`);
+  }
+
+  ok(validateComponentDef(td).errors.length === 0, `#4009 tooltip validates clean (${validateComponentDef(td).errors.slice(0, 2).join('; ')})`);
 }
 
 // ------------------------------------------------------------------- #3165: the toast's message at 14px
@@ -44544,6 +44871,91 @@ arm: {
   }
 }
 
+// ------------------------------------------------------------------- #4123 / #4128: the projection's value forms
+// The handoff writes DTCG 2025.10 object forms, and a type style's tracking resolved to px, per mode. No committed
+// brand varies tracking by mode or writes `rgb()` outside the reference brand, so a synthetic canonical tree pins both.
+// Expected values are literals. Mutations: drop `conformValues` from `buildOverlaySet` → the #4123 rows fail; drop
+// `trackingInPx` → the #4128 rows fail.
+{
+  const ext = (modes: Record<string, unknown>) => ({ $extensions: { prism3: { modes } } });
+  const canon = { r: {
+    c: { $type: 'color', $value: 'rgba(255, 128, 0, 0.5)', ...ext({ dark: { $value: '#102030' } }) },
+    d: { $type: 'dimension', $value: '1.5rem' },
+    t: { $type: 'duration', $value: '200ms' },
+    size: { $type: 'dimension', $value: '3rem', $extensions: { prism3: { px: 48 } } },
+    tight: { $type: 'number', $value: -0.02, ...ext({ dark: { $value: -0.05 } }) },
+    ty: { $type: 'typography', $value: { fontFamily: 'Inter', fontSize: '{r.size}', fontWeight: 400, lineHeight: 1.2, letterSpacing: '{r.tight}' } },
+  } };
+  const set = buildOverlaySet(canon) as any;
+  const dark = set.overlays.find((o: any) => o.mode === 'dark')?.tree;
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  ok(same(set.base.r.c.$value, { colorSpace: 'srgb', components: [1, 0.502, 0], alpha: 0.5, hex: '#ff8000' })
+    && same(dark?.r?.c?.$value, { colorSpace: 'srgb', components: [0.0627, 0.1255, 0.1882], hex: '#102030' }),
+    `#4123 a literal color reaches the projection as a DTCG color object, rgba() and #hex alike (base ${JSON.stringify(set.base.r.c.$value)}, dark ${JSON.stringify(dark?.r?.c?.$value)})`);
+  ok(same(set.base.r.d.$value, { value: 1.5, unit: 'rem' }) && set.base.r.t.$value === '200ms',
+    `#4123 a dimension is { value, unit } and a duration stays a string (dimension ${JSON.stringify(set.base.r.d.$value)}, duration ${JSON.stringify(set.base.r.t.$value)})`);
+  ok(same(set.base.r.ty.$value.letterSpacing, { value: -0.96, unit: 'px' }) && same(dark?.r?.ty?.$value?.letterSpacing, { value: -2.4, unit: 'px' }),
+    `#4128 a type style's tracking is resolved to px from its own size, per mode: -0.02 × 48 in base, -0.05 × 48 in dark (base ${JSON.stringify(set.base.r.ty.$value.letterSpacing)}, dark ${JSON.stringify(dark?.r?.ty?.$value?.letterSpacing)})`);
+  ok(canon.r.ty.$value.letterSpacing === '{r.tight}', `#4128 the canonical tree keeps the alias; only the projection resolves it (${canon.r.ty.$value.letterSpacing})`);
+}
+
+// ---- #4123 / #2997: the shadcn/Tailwind projectors read the handoff's DTCG 2025.10 value forms --------------------
+// The projectors read `<brand>.base.tokens.json` and the dark overlay, which #4123 writes as color objects and
+// `{ value, unit }` dimensions, a shadow layer's color and lengths included. A synthetic handoff spelled both ways must
+// project to the same CSS, and the string spelling is the one main's projector already read. Expected literals are
+// written here, never derived from `conformColor`. Mutation: put back the `typeof value !== 'string'` guard in
+// `colorValue` / `dimensionValue` → these rows fail by name (and `check:shadcn`, `lint-shadcn-contrast` throw).
+{
+  const { shadcnCss, dimensionValue, toOklchCss, readHandoff, handoffBrands, shadcnRegistryItem } = await import('./emit-shadcn');
+  const { tailwindThemeCss, shadowCss } = await import('./emit-tailwind');
+  const { SHADCN_COLOR_VARS, SHADCN_DIMENSION_VARS, SHADCN_THEME_VARS } = await import('./projections/shadcn');
+  const { TAILWIND_DIMENSIONS, TAILWIND_FONTS, TAILWIND_SHADOWS } = await import('./projections/tailwind');
+  const put = (tree: Record<string, any>, path: string, tok: unknown) => {
+    const ks = path.split('.'); let n = tree;
+    for (const k of ks.slice(0, -1)) n = (n[k] ??= {});
+    n[ks[ks.length - 1]!] = tok;
+  };
+  const handoff = (objects: boolean) => {
+    const base: Record<string, any> = {};
+    const translucent = objects ? { colorSpace: 'srgb', components: [1, 0.502, 0], alpha: 0.5, hex: '#ff8000' } : 'rgba(255, 128, 0, 0.5)';
+    const opaque = objects ? { colorSpace: 'srgb', components: [0.0392, 0.0706, 0.1569], hex: '#0a1228' } : '#0a1228';
+    const dim = (v: number, u: string) => (objects ? { value: v, unit: u } : `${v}${u}`);
+    put(base, 'z.ink', { $type: 'color', $value: opaque });
+    put(base, 'z.veil', { $type: 'color', $value: translucent });
+    Object.values(SHADCN_COLOR_VARS).forEach((role, i) => put(base, role, { $type: 'color', $value: i % 3 === 0 ? '{q.z.ink}' : i % 3 === 1 ? translucent : opaque }));
+    for (const role of [...Object.values(SHADCN_DIMENSION_VARS), ...Object.values(TAILWIND_DIMENSIONS), ...Object.entries(SHADCN_THEME_VARS).filter(([k]) => !k.startsWith('font-')).map(([, r]) => r)])
+      put(base, role, { $type: 'dimension', $value: dim(0.5, 'rem') });
+    for (const role of [...Object.values(TAILWIND_FONTS), ...Object.entries(SHADCN_THEME_VARS).filter(([k]) => k.startsWith('font-')).map(([, r]) => r)])
+      put(base, role, { $type: 'fontFamily', $value: 'Inter' });
+    for (const role of Object.values(TAILWIND_SHADOWS))
+      put(base, role, { $type: 'shadow', $value: [
+        { color: translucent, offsetX: dim(0, 'px'), offsetY: dim(1, 'px'), blur: dim(2, 'px'), spread: dim(-1, 'px') },
+        { color: '{q.z.veil}', offsetX: dim(0, 'px'), offsetY: dim(4, 'px'), blur: dim(6, 'px'), spread: dim(0, 'px'), inset: true },
+      ] });
+    return { brand: 'q', root: 'q', base, overlays: { dark: {} } } as any;
+  };
+  const obj = handoff(true), str = handoff(false);
+  const shadowRole = Object.values(TAILWIND_SHADOWS)[0]!;
+  let objCss = '', strCss = '', err = '';
+  try { strCss = shadcnCss(str) + tailwindThemeCss(str); objCss = shadcnCss(obj) + tailwindThemeCss(obj); } catch (e) { err = (e as Error).message; }
+  ok(!err && objCss.length > 0 && objCss === strCss,
+    `#4123 the shadcn/Tailwind projectors write the same CSS from a handoff in DTCG 2025.10 object forms as from its string spelling (${err || 'CSS differs'})`);
+  let dimGot = '', shadowGot = '';
+  try { dimGot = dimensionValue(obj, 'radius.lg'); shadowGot = shadowCss(obj, shadowRole, 'light'); } catch (e) { dimGot = (e as Error).message; }
+  ok(dimGot === '0.5rem', `#4123 a { value, unit } dimension projects as its CSS length (got ${JSON.stringify(dimGot)})`);
+  ok(shadowGot === `0px 1px 2px -1px ${toOklchCss('rgba(255, 128, 0, 0.5)')}, inset 0px 4px 6px 0px ${toOklchCss('rgba(255, 128, 0, 0.5)')}`,
+    `#4123 a shadow layer's color object and { value, unit } lengths project as a CSS box-shadow (got ${JSON.stringify(shadowGot)})`);
+  let p3 = '';
+  try { toOklchCss({ colorSpace: 'display-p3', components: [1, 0, 0], hex: '#ff0000' }); } catch (e) { p3 = (e as Error).message; }
+  ok(/display-p3/.test(p3), `#4123 a color object outside srgb is refused by name, not read as srgb (got ${JSON.stringify(p3)})`);
+  const OUT = resolve(HERE, 'out');
+  for (const b of handoffBrands(OUT)) {
+    let e = '';
+    try { const h = readHandoff(b, OUT); shadcnRegistryItem(h); tailwindThemeCss(h); } catch (x) { e = (x as Error).message; }
+    ok(!e, `#4123 ${b}: the committed handoff projects to shadcn and Tailwind CSS (${e})`);
+  }
+}
+
 // #2857 (owner decision Q-MP7 option 3, 2026-11-19) — the engine foundation for motion presets: the long steps of the
 // one duration scale, the brand's preset → step mapping, and the brand-only group outside the contract.
 {
@@ -44586,6 +44998,26 @@ arm: {
   const expandEasing = stockPresets.expand?.easing;
   ok(expandEasing === 'motion.easing-role.default' && leafOf(expandEasing)?.$value === '{pds3.motion.easing.standard}',
     `#2857 owner 2026-11-20: expand takes the in-place default curve (motion.easing-role.default → standard; got ${expandEasing} → ${leafOf(expandEasing)?.$value})`);
+  // OWNER DECISION 2026-11-20 on #4332 (Accordion recipe → A): the prism3-motion skill's Accordion recipe plays the
+  // panel's height on the `expand` preset, both ways, instead of hand-picking the enter and exit transitions. The
+  // SUBJECT is the hand-written skill; the ORACLE is the emitted sidecar, so the recipe's preset must exist and every
+  // name it says `expand` resolves to must be the one prism3 emits. Every "`<name>` preset" the skill cites must be an
+  // emitted preset too. Mutations: the panel row back to `motion.transition.enter` / `.exit`, or the recipe naming a
+  // preset prism3 doesn't emit, fail this arm by name.
+  {
+    const motionSkill = readFileSync(resolve(HERE, '../../skills/prism3-motion/SKILL.md'), 'utf8');
+    const accordion = /\n### Accordion\n([\s\S]*?)(?=\n### )/.exec(motionSkill)?.[1] ?? '';
+    const panelRow = accordion.split('\n').find((l) => l.startsWith('| Panel height')) ?? '';
+    const cells = panelRow.split('|').slice(2, 4).map((c) => c.trim());
+    const rowOk = cells.length === 2 && cells.every((c) => c === 'the `expand` preset');
+    const cited = [...motionSkill.matchAll(/`([a-z][a-z-]*)` preset\b/g)].map((m) => m[1]);
+    const unknown = cited.filter((n) => !(n in stockPresets));
+    const exp = stockPresets.expand ?? {};
+    const resolvesTo = [exp.duration, exp.easing, exp.reduced_duration];
+    const missing = resolvesTo.filter((n) => !n || !accordion.includes(`\`${n}\``));
+    ok(rowOk && cited.includes('expand') && unknown.length === 0 && missing.length === 0,
+      `#4332 owner 2026-11-20: the prism3-motion Accordion recipe plays the panel on the \`expand\` preset both ways, and every preset and name it cites is emitted (panel row: ${JSON.stringify(cells)}; presets cited: ${cited.join(', ') || 'none'}${unknown.length ? `; not emitted: ${unknown.join(', ')}` : ''}${missing.length ? `; expand resolves to names the recipe doesn't cite: ${missing.join(', ')}` : ''})`);
+  }
   // The owner's own examples (Q-MP7 option 3) name `crossfade` and `surface`: a brand can map both.
   const mapped = sidecar({ ...prism3Input, motionPersonality: { ...(prism3Input.motionPersonality ?? {}), presets: { crossfade: 'long', surface: 'longest' } } } as BrandInput).motion_presets ?? {};
   ok(mapped.crossfade?.duration === 'motion.duration.long' && mapped.surface?.duration === 'motion.duration.longest',
@@ -45178,7 +45610,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
 // defs is written out here by hand, not read from the defs, so a def that drops the note fails by its id (docs/34 shape 1).
 {
   const DECIDED = 'Plain HTML/CSS: wire this behavior contract up in your framework. The web component includes it.';
-  const INTERACTIVE = ['breadcrumb-item', 'breadcrumbs', 'code-input', 'dialog', 'link', 'page-nav-item', 'page-nav', 'pagination', 'popover', 'segmented-control-segment', 'segmented-control', 'slider', 'tab-item', 'tabs'];
+  const INTERACTIVE = ['breadcrumb-item', 'breadcrumbs', 'code-input', 'dialog', 'link', 'page-nav-item', 'page-nav', 'pagination', 'popover', 'segmented-control-segment', 'segmented-control', 'slider', 'tab-item', 'tabs', 'menu-item', 'menu'];
   const all = componentDefs;
   for (const id of INTERACTIVE) {
     const d = all.find((x) => x.id === id);
@@ -45465,6 +45897,40 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(files.get('./e/acme.base.tokens.json') === JSON.stringify(projected.base, null, 2) + '\n'
     && files.get('./e/acme.dark.overlay.tokens.json') === JSON.stringify(projected.overlays.find((o) => o.mode === 'dark')?.tree, null, 2) + '\n',
     '#4144 the base + overlay files are the projection of the tree written beside them, as the CLI writes it');
+}
+
+// #2997: the shadcn contrast gate holds an accepted pair to the ratio the owner accepted. The regression fixture's pair
+// (owner decision 2026-11-19 A, on #4289) is muted at 3.77 and above, and fails by name below it, as a KNOWN pair does.
+{
+  const key = 'nb light: muted-foreground on muted';
+  ok(KNOWN_PENDING[key]?.floor === 3.77 && /2026-11-19 A/.test(KNOWN_PENDING[key]?.why ?? ''),
+    `#2997 the fixture's accepted pair records its floor 3.77 and the owner decision (got ${JSON.stringify(KNOWN_PENDING[key])})`);
+  const held = judgeBelowFloor(key, 3.775);
+  ok(held.verdict === 'accepted' && held.listed, `#2997 the fixture's pair at its accepted ratio is reported, not failed (got ${held.verdict})`);
+  const fell = judgeBelowFloor(key, 2.57);
+  ok(fell.verdict === 'failing' && fell.note.includes('BELOW ACCEPTED 3.77'),
+    `#2997 the fixture's pair below its accepted 3.77 fails by name (got ${fell.verdict}${fell.note})`);
+  ok(judgeBelowFloor('nb light: muted-foreground on card', 3.9).verdict === 'failing', '#2997 a pair with no entry fails');
+  const k = judgeBelowFloor('prism3 dark: primary on background', 1.19);
+  ok(k.verdict === 'failing' && k.note.includes('BELOW ACCEPTED 4.24'), `#2997 a KNOWN pair below its accepted floor fails by name (got ${k.verdict}${k.note})`);
+}
+
+// #4428: a regression arm for #4155's filter in the shadcn projector's brand walk (`handoffBrands`). Since #4282 the
+// handoff also carries a web-only `<brand>.web.base.tokens.json` with no overlays; read as a brand, it crashed both
+// Chromium gates. A planted web base is skipped, and every brand the walk returns over the committed handoff reads.
+// BY-NAME MUTATION: drop the `.web.base.tokens.json` exclusion from `handoffBrands` → both arms below fail.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'prism3-4428-'));
+  try {
+    for (const f of ['acme.tokens.json', 'acme.base.tokens.json', 'acme.dark.overlay.tokens.json', 'acme.web.base.tokens.json']) {
+      writeFileSync(join(dir, f), '{"acme":{}}\n');
+    }
+    const got = handoffBrands(dir);
+    ok(JSON.stringify(got) === '["acme"]', `#4428 a web-only base is not read as a brand (got ${JSON.stringify(got)})`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const unread = handoffBrands().filter((b) => { try { readHandoff(b); return false; } catch { return true; } });
+  ok(handoffBrands().length > 0 && unread.length === 0,
+    `#4428 every brand the walk returns over the committed handoff reads (unreadable: ${JSON.stringify(unread)})`);
 }
 
 // #811 — the engine README names only roles the engine emits. `foreground.danger.<state>` was retired (the
