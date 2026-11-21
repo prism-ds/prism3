@@ -15,6 +15,9 @@ change note. Carries #4315 through a normal merge, because the themes it measure
   reads the generated CSS or the role map (docs/34). It also reports the contrast of the rendered text and of the
   focus ring, and writes screenshots at deviceScaleFactor 1 to a git-ignored folder.
 - **`npm run -w @prism3/tokens qa:render`** runs it.
+- **`handoff-values.mjs`** holds the oracle's readers for the handoff's value forms: DTCG 2025.10 color objects and
+  `{ value, unit }` dimensions (#4360), plus the older strings. Anything else throws by name.
+  **`npm run -w @prism3/tokens qa:test`** pins them without a browser.
 
 ### Findings
 
@@ -27,3 +30,5 @@ the defects filed from them are on #4382.
   every other primary-filled part.
 - `radius-xl` dropped from that item's `cssVars.theme`, so the skeleton's derived value wins →
   `shadcn prism3 light card border-top-left-radius: renders 10px, want 8px (radius.xl)`.
+- The old string-only `parseColor` re-applied → `qa:test` fails `parseColor: a DTCG 2025.10 color object, hex plus
+  alpha`, and `qa:render` throws `unparsed handoff color`.
