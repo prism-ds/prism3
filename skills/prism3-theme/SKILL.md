@@ -66,7 +66,7 @@ minimal — read both, they are the reference; the directory also holds a standa
 |---|---|---|
 | `root` | string (default `prism`) | the brand needs its own token namespace (`nbds`, …) |
 | `brandColors` | `[{ name, oklch: {l,c,h} }]` | the brand has accents beyond the hero |
-| `actionPalette` | a `brandColors` name | interactive UI runs on an **accent**, not the hero (decouple) |
+| `actionPalette` | `primary` \| `neutral` \| a `brandColors` name | interactive UI runs on an **accent**, not the hero (decouple), or on a near-black or gray (`neutral`). Defaults to `primary` |
 | `linkPalette` | `primary` \| `neutral` \| a `brandColors` name | links need their **own** color, independent of actions. Defaults to following the action color; the ink is still rated to its contrast floor. A palette that is not color-distinct from body text (e.g. `neutral`) is flagged in the notes to underline links for WCAG 1.4.1 — pair it with `typography.links` |
 | `status` | `{ success/warning/danger/info: {l,c,h,chroma} }` | the brand *specifies* status hues; omit any (or all) to let the engine synthesize + carve a danger red |
 | `surfaces` | `{ light: { base: 50 } }` | the page is a **tinted off-white**, not pure white (the contrast floor moves with it). `floorStep` sets the floor itself: every floor-gated text and link ink (all but `*.primary`) is promised its bar on the floor surface and anything nearer the page, and nothing deeper. To put text on `background.tertiary`, set `floorStep` to its step and the inks re-derive |
@@ -109,6 +109,7 @@ minimal — read both, they are the reference; the directory also holds a standa
 | `layout` | `{ breakpoints: [...], containerMax, containerNarrow, columns, columnOverrides }` | a non-default breakpoint ladder / content cap. `containerNarrow` is the reading-measure container (720px default). `columns` is the base column count (12 default); `columnOverrides` sets a breakpoint's count, e.g. `{ sm: 4 }` |
 | `layout.marginOverrides` / `layout.gutterOverrides` | `{ <breakpoint>: px }`, e.g. `{ md: 44 }` | the brand specifies its own grid margin or gutter at a breakpoint (keyed by the breakpoint name, `sm`…`2xl`); an unset breakpoint keeps the engine's value. The value is never rounded to a step. `grid/margin` (or `grid/gutter`) links to the first of these that exists: **(1)** the `space/*` step with that px; **(2)** otherwise the brand's `core/dimension/*` step with that px (e.g. 36 → `core/dimension/36`); **(3)** otherwise a plain px, flagged off-scale in its description and in the decisions notes. Spacing always comes first, so 24 links to `space/300`, never to `core/dimension/24`. The Figma grid style for that breakpoint carries the same px as its offset |
 | `gradients` | `[{ name, kind: linear\|radial, angle/center/shape, stops: [{ palette, step, position }] }]` | opt-in brand gradients (most systems ship none — omit) |
+| `icons` | `{ map: { plus: add, check: checkmark }, glyphs: { add: { path: "M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z" } } }` | the brand has its own icons. `map` names which brand icon replaces each Prism3 icon, in every generated component that uses it, and a mapped Prism3 icon is no longer built into the brand's file. `glyphs` is the brand's art: one filled path on a 24×24 artboard (`fillRule: evenodd` for counters). A glyph named like a Prism3 icon (`close`) redraws that icon. A key must be a Prism3 icon; a value must be a Prism3 icon or a key in `glyphs`, and may not itself be mapped. Map each `-filled` twin with its line form (`plus-filled: add`): Prism3 draws the pair identically, so leaving one unmapped keeps a duplicate |
 | `disabledStrategy` | `full` \| `reduced` (legacy aliases: `accessible`, `conventional`) | `reduced` (default) — disabled ink clears a dialable `disabledMin` floor (3–4.5, default 3); `full` promises a fixed 4.5:1 (AA text) instead. Neither goes below 3:1 — this system does not use the WCAG 1.4.3/1.4.11 inactive-component exemption, so there is no sub-AA "exempt" look to select. (`accessible`/`conventional` are accepted as legacy aliases; both normalize to `reduced` — they do not select `full` and `conventional` no longer means low-contrast.) |
 
 
@@ -236,7 +237,8 @@ Then run the compile loop. Say in the prose which picks the report left open, so
 ## If you have the MCP surface
 
 `list_levers` enumerates the knobs and their allowed values. `theme_from_brief` takes a
-`design.md` brief (frontmatter and prose) directly — the callable form of this skill's loop.
+`design.md` brief in either dialect directly — the callable form of this skill's loop. For a
+standard brief it also returns `xWarnings`, the `x-prism3:` keys and typography faces it skipped, as the CLI prints them.
 `theme_brand` compiles a `BrandInput` you already hold. Both return the contract results,
 alias integrity and the notes by default; the token tree and the `.ai.json` come back only
 when asked for with `include`, and they are large. To get the actual files, call
