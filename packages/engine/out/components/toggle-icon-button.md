@@ -91,7 +91,7 @@ The accessible name is a short verb or noun naming the action or mode, constant 
 
 - **Built from:** `focus-ring`
 - **Instead, consider:** `toggle-button`
-- **Often used with:** `icon`, `icon-button`
+- **Often used with:** `icon`, `icon-button`, `tooltip`
 - **Replaces:**
   - an IconButton hand-wired with an "active" class and no `aria-pressed`
   - a glyph that swaps to show the state

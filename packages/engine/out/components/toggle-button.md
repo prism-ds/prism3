@@ -92,7 +92,7 @@ A short verb or noun naming the action or mode, sentence case, constant across b
 
 - **Built from:** `focus-ring`
 - **Instead, consider:** `button`, `button-neutral`, `switch-row`, `checkbox-row`, `segmented-control`, `tag`, `toggle-icon-button`
-- **Often used with:** `icon`
+- **Often used with:** `icon`, `tooltip`
 - **Replaces:**
   - a Button hand-wired with an "active" class and no `aria-pressed`
   - `role="switch"` on a toolbar mode

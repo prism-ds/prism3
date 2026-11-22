@@ -355,7 +355,7 @@ export const toggleButton: ComponentDef = {
     primaryPurpose: 'Turn an action or mode on and off in place, with a visible label, as a button that stays pressed.',
     whenToUse: 'A command or mode that persists between presses, such as Pin, Mute, Favorite or a view filter, on a toolbar or beside the content it affects.',
     avoidWhen: 'A one-time action → use Button.Neutral. A system setting → use Switch.Row. A form value submitted later → use Checkbox.Row. Exactly one of a set → use SegmentedControl. A filter value in a set of chips → use Tag. Icon-only with no visible text → use ToggleIconButton.',
-    commonPartners: ['icon', 'focus-ring', 'button'],
+    commonPartners: ['icon', 'focus-ring', 'button', 'tooltip'],
     triggerKeywords: ['toggle button', 'pressed button', 'pin button', 'mute button', 'favorite toggle', 'aria-pressed'],
     generationPriority: 3,
   },
@@ -363,7 +363,6 @@ export const toggleButton: ComponentDef = {
   composition: {
     composesWith: ['focus-ring'],
     alternativeTo: ['button', 'button-neutral', 'switch-row', 'checkbox-row', 'segmented-control', 'tag', 'toggle-icon-button'],
-    planned: ['tooltip'],
     replacesPatterns: ['a Button hand-wired with an "active" class and no `aria-pressed`', '`role="switch"` on a toolbar mode'],
   },
 
@@ -555,7 +554,7 @@ export const toggleIconButton: ComponentDef = {
     primaryPurpose: 'Turn an action or mode on and off in place with an icon alone, as a button that stays pressed.',
     whenToUse: 'An icon-only command or mode that persists between presses, such as Bold, Italic or Mute, usually in a toolbar.',
     avoidWhen: 'A visible label would fit and aid recognition → use ToggleButton. A one-time icon action → use IconButton.Neutral. A system setting → use Switch.Row. Exactly one of a set → use SegmentedControl. Never when you cannot supply an accessible name.',
-    commonPartners: ['icon', 'focus-ring', 'icon-button'],
+    commonPartners: ['icon', 'focus-ring', 'icon-button', 'tooltip'],
     triggerKeywords: ['icon toggle', 'toolbar toggle', 'bold button', 'format toggle', 'pressed icon button'],
     generationPriority: 3,
   },
@@ -563,7 +562,6 @@ export const toggleIconButton: ComponentDef = {
   composition: {
     composesWith: ['focus-ring'],
     alternativeTo: ['toggle-button'],
-    planned: ['tooltip'],
     replacesPatterns: ['an IconButton hand-wired with an "active" class and no `aria-pressed`', 'a glyph that swaps to show the state'],
   },
 

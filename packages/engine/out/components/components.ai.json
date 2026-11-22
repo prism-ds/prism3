@@ -3834,7 +3834,8 @@
         "commonPartners": [
           "icon",
           "focus-ring",
-          "button"
+          "button",
+          "tooltip"
         ],
         "triggerKeywords": [
           "toggle button",
@@ -3866,9 +3867,7 @@
         ],
         "supersedes": [],
         "supersededBy": [],
-        "planned": [
-          "tooltip"
-        ],
+        "planned": [],
         "replacesPatterns": [
           "a Button hand-wired with an \"active\" class and no `aria-pressed`",
           "`role=\"switch\"` on a toolbar mode"
@@ -4070,7 +4069,8 @@
         "commonPartners": [
           "icon",
           "focus-ring",
-          "icon-button"
+          "icon-button",
+          "tooltip"
         ],
         "triggerKeywords": [
           "icon toggle",
@@ -4095,9 +4095,7 @@
         ],
         "supersedes": [],
         "supersededBy": [],
-        "planned": [
-          "tooltip"
-        ],
+        "planned": [],
         "replacesPatterns": [
           "an IconButton hand-wired with an \"active\" class and no `aria-pressed`",
           "a glyph that swaps to show the state"
