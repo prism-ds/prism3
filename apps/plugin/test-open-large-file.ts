@@ -962,7 +962,10 @@ console.log('\n  Capture baseline and Adopt (#3189)');
   // Steps merged onto Tooltip (#4009): 950,000 → 1,000,000. 71 sets, 956,255 calls (fresh read 2,155,572), so 950,000
   // fails on the merged tree. 1,000,000 leaves about 44,000, some five sets at about 8,000 calls a set, and the
   // regressions this cap exists for still land at 2.1M and more.
-  const CHECK_CAP = 1_000_000;
+  // ToggleButton and ToggleIconButton merged onto Avatar, Menu, Steps and Tooltip (#4112, #4353): 1,000,000 → 1,100,000.
+  // 74 sets and 180 more members, 1,026,617 calls (fresh read 2,265,152), so 1,000,000 fails on the merged tree.
+  // 1,100,000 leaves about 73,000, and the regressions this cap exists for still land at 2.2M and more.
+  const CHECK_CAP = 1_100_000;
   const checkOf = async (): Promise<{ msg: any; calls: number; progress: { msg: any; turn: number; i: number }[]; answerAt: number }> => {
     const at = posted.length;
     calls = 0; callsIn.clear();
