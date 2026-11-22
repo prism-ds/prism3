@@ -254,7 +254,19 @@ const MIN_BRANDS = 5;
  * comment explaining the exception would have gone green forever instead, and nothing would have
  * connected the exception to its fix.
  */
+// #3510 — each spring's settle time (`motion.spring-duration.<name>`), a DTCG duration with no Figma variable yet: the
+// paired TIMING a Figma spring needs is G5 (#3485), whose name is the owner's. Every brand emits all three.
+const SPRING_DURATION_UNREACHABLE = ['snappy', 'gentle', 'bouncy'].map((name) => ({
+  path: `motion.spring-duration.${name}`,
+  why: 'a spring\'s CSS settle time (#3510); Figma has no variable for it until G5 pairs a TIMING with each spring',
+  owner: 'prism3',
+  issue: '#3485',
+}));
 const KNOWN_UNREACHABLE: Record<string, { path: string; why: string; owner: string; issue: string }[]> = {
+  aurora: SPRING_DURATION_UNREACHABLE,
+  harbor: SPRING_DURATION_UNREACHABLE,
+  prism3: SPRING_DURATION_UNREACHABLE,
+  wendys: SPRING_DURATION_UNREACHABLE,
   // aurora's two gradients (`gradient.brand`, `gradient.glow`) were here until #731 gave TokenPress's scanner a
   // paint-style channel and a gradient converter; they pair now, and this gate went red on them until removed.
   // #2942 — the link underline. Figma has no variable for text decoration (neither field takes one, so the value is a
@@ -263,6 +275,7 @@ const KNOWN_UNREACHABLE: Record<string, { path: string; why: string; owner: stri
   // brand-wide path has no Figma counterpart for it to read back, and the gate pairs by path. Only the reference brand
   // sets it; every other brand emits neither path.
   nb: [
+    ...SPRING_DURATION_UNREACHABLE,
     {
       path: 'core.font.underline.thickness',
       why: 'a per-style literal PERCENT inside each -link TEXT style (Figma has no variable for text decoration); TokenPress reads it into each composite as textDecorationThickness, and prism3\'s brand-wide path has no Figma counterpart',
@@ -301,11 +314,13 @@ const KNOWN_UNREACHABLE: Record<string, { path: string; why: string; owner: stri
  * normalized shape the unpaired arms compare (`nbds/core/font/style/body/default` -> `core.font.style.body.default`).
  */
 const prism3CutPaths = (brand: string): Set<string> => {
-  const f = join(FIGMA_OUT, brand, 'core.font.json');
-  if (!existsSync(f)) return new Set();
-  const doc = JSON.parse(readFileSync(f, 'utf8')) as { variables?: Array<{ name?: string; scopes?: string[] }> };
+  // `core.font.json`, or the per-mode `core.font.<mode>.json` a brand with per-mode typography emits (prism3's Brand B,
+  // #1729); every mode file names the same cut variables, so the union is the set.
+  const dir = join(FIGMA_OUT, brand);
+  const files = existsSync(join(dir, 'core.font.json')) ? ['core.font.json']
+    : existsSync(dir) ? readdirSync(dir).filter((x) => /^core\.font\.[^.]+\.json$/.test(x)) : [];
   const out = new Set<string>();
-  for (const v of doc.variables ?? []) {
+  for (const v of files.flatMap((x) => (JSON.parse(readFileSync(join(dir, x), 'utf8')) as { variables?: Array<{ name?: string; scopes?: string[] }> }).variables ?? [])) {
     if (v.name && /(?:^|\/)font\/style\/[^/]+\/[^/]+$/.test(v.name)) out.add(v.name.split('/').slice(1).join('.'));
   }
   return out;

@@ -1,6 +1,6 @@
 # Icon usage
 
-Which glyphs each component draws. The icon set holds 46 glyphs; a component draws a glyph from it at a fixed part, starts an icon slot at one, or draws a glyph it owns (the spinner ring), which is kept out of the icon set.
+Which glyphs each component draws. The icon set holds 48 glyphs; a component draws a glyph from it at a fixed part, starts an icon slot at one, or draws a glyph it owns (the spinner ring), which is kept out of the icon set.
 
 Generated from the component definitions and the emission by `packages/engine/emit-analysis-reports.ts`; `regen.ts --check` fails when this page is stale. The same data for agents: [icon-usage.json](icon-usage.json). All reports: [index](index.md).
 
@@ -14,6 +14,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | plusGlyph | `plus` | icon set | drawn | indicator: plus-minus; expansion: collapsed |
 | _breadcrumb-separator | chevronGlyph | `chevron-right` | icon set | drawn | type: chevron |
 |  | slashGlyph | `slash` | icon set | drawn | type: slash |
+| avatar | organizationGlyph | `organization` | icon set | drawn | type: icon; shape: square |
+|  | personGlyph | `person` | icon set | drawn | type: icon; shape: circular |
 | banner | dangerGlyph | `warning-triangle` | icon set | drawn | tone: danger |
 |  | infoGlyph | `info-circle` | icon set | drawn | tone: info |
 |  | successGlyph | `check-circle` | icon set | drawn | tone: success |
@@ -27,6 +29,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 | icon | glyph | `{name}` | any (prop) | drawn | always |
 | image-placeholder | markerGlyph | `image` | icon set | drawn | always |
 | list-item | icon | `check` | icon set | swap default | type: icon |
+| menu-item | checkGlyph | `check` | icon set | drawn | always |
+|  | chevronGlyph | `chevron-right` | icon set | drawn | type: submenu |
 | pagination-item | gapGlyph | `more-horizontal-filled` | icon set | drawn | type: ellipsis |
 |  | nextGlyph | `chevron-right` | icon set | drawn | type: next |
 |  | previousGlyph | `chevron-left` | icon set | drawn | type: previous |
@@ -39,12 +43,18 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | trailingVisual | `close-filled` | icon set | swap default | always |
 | select | chevronGlyph | `chevron-down` | icon set | drawn | always |
 | spinner | ringGlyph | `spinner` | component-owned | drawn | always |
+| step-item | checkGlyph | `check` | icon set | drawn | status: complete |
+|  | errorGlyph | `error-circle` | icon set | drawn | status: error |
 | switch-control | offGlyph | `close` | icon set | drawn | selection: off |
 |  | onGlyph | `check` | icon set | drawn | selection: on |
 | tag | checkGlyph | `check` | icon set | drawn | selection: selected |
 |  | closeGlyph | `close` | icon set | drawn | type: dismissible |
 | textarea | gripGlyph | `resize-grip` | icon set | drawn | always |
 | toast | successGlyph | `check-circle` | icon set | drawn | intent: success |
+| tooltip | bottomGlyph | `tooltip-arrow-up` | component-owned | drawn | placement: bottom |
+|  | endGlyph | `tooltip-arrow-start` | component-owned | drawn | placement: end |
+|  | startGlyph | `tooltip-arrow-end` | component-owned | drawn | placement: start |
+|  | topGlyph | `tooltip-arrow-down` | component-owned | drawn | placement: top |
 
 ### Icon slots
 
@@ -64,6 +74,7 @@ Parts that take any icon from the set. The file nominates the default unless the
 | icon-button-neutral | icon |
 | link | trailingVisual |
 | list-item | icon |
+| menu-item | leadingVisual |
 | password-field | leadingVisual |
 | search-field | leadingVisual, trailingVisual |
 | segmented-control-segment | leadingVisual |
@@ -78,25 +89,31 @@ Parts that take any icon from the set. The file nominates the default unless the
 
 | Glyph | Drawn by |
 |---|---|
-| `check` | checkbox-control, list-item, switch-control, tag |
+| `check` | checkbox-control, list-item, menu-item, step-item, switch-control, tag |
 | `check-circle` | banner, field-message, toast |
 | `chevron-down` | _accordion-indicator, select |
 | `chevron-left` | breadcrumbs, pagination-item |
-| `chevron-right` | _breadcrumb-separator, pagination-item |
+| `chevron-right` | _breadcrumb-separator, menu-item, pagination-item |
 | `chevron-up` | _accordion-indicator |
 | `close` | switch-control, tag |
 | `close-filled` | search-field |
-| `error-circle` | banner, field-message |
+| `error-circle` | banner, field-message, step-item |
 | `image` | image-placeholder |
 | `info-circle` | banner |
 | `minus` | _accordion-indicator, checkbox-control |
 | `more-horizontal-filled` | pagination-item |
+| `organization` | avatar |
+| `person` | avatar |
 | `plus` | _accordion-indicator |
 | `progress-stop` | progress |
 | `resize-grip` | textarea |
 | `search` | search-field |
 | `slash` | _breadcrumb-separator |
 | `spinner` | spinner |
+| `tooltip-arrow-down` | tooltip |
+| `tooltip-arrow-end` | tooltip |
+| `tooltip-arrow-start` | tooltip |
+| `tooltip-arrow-up` | tooltip |
 | `warning-triangle` | banner, field-message |
 
 ## Glyphs no component names (28)

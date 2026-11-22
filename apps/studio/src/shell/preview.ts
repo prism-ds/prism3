@@ -24,12 +24,12 @@ import { INSPECT, type InspectId } from './pages';
 import { glyph, h, hook, menuButton, tile } from './dom';
 import { ENGINE_VERSION } from '@prism3/engine';
 import { buildChip, buildTitle } from '../build-identity';
+import { customModeLabel, modeLabel } from '../state/mode-label';
 
-/** Short mode names, as the legacy mode strip and concept v6 show them. A custom mode shows its own name. */
-const MODE_LABEL: Record<string, string> = { light: 'Light', dark: 'Dark', 'hc-light': 'HC light', 'hc-dark': 'HC dark', wireframe: 'Wireframe' };
 /** Full mode names, for Health's per-mode lines (concept v6's `FULL_MODE_LABEL`). */
 const MODE_NAME: Record<string, string> = { light: 'Light', dark: 'Dark', 'hc-light': 'High contrast light', 'hc-dark': 'High contrast dark', wireframe: 'Wireframe' };
-export const modeLabel = (m: string): string => MODE_LABEL[m] ?? m;
+/** A mode's name as the mode control shows it (`state/mode-label.ts`, #1729). */
+export { customModeLabel, modeLabel };
 
 /** The verdict for the resolved theme, over the modes it ships. */
 export const verdict = (): Verdict => verdictOf(theme, rp.modes);
@@ -305,7 +305,7 @@ const card = (title: string, sub: string | null, role: string): { el: HTMLElemen
  *  reads it), and `toFloor` opens that setting. */
 const health = (toFloor?: () => void): HTMLElement => {
   const v = verdict();
-  const { el, body } = card('Health', 'What the verdict counts', 'health');
+  const { el, body } = card('Health', 'What the contrast check counts', 'health');
   const row = h('p', 'p3-health-row');
   const pill = hook(h('span', v.fail ? 'p3-vpill p3-vpill-bad' : 'p3-vpill'), 'health-summary');
   pill.append(glyph(v.fail ? 'x' : 'check'), h('span', undefined, healthLine(v)));
@@ -315,13 +315,13 @@ const health = (toFloor?: () => void): HTMLElement => {
     const li = h('li', 'p3-health-mode');
     const dot = h('span', m.f ? 'p3-dot p3-dot-bad' : 'p3-dot p3-dot-ok');
     dot.setAttribute('aria-hidden', 'true');
-    li.append(dot, h('span', undefined, modeLine(m, MODE_NAME[m.mode] ?? m.mode)));
+    li.append(dot, h('span', undefined, modeLine(m, MODE_NAME[m.mode] ?? customModeLabel(m.mode))));
     list.append(li);
   }
   body.append(row, list);
   const all = resolvedModes(theme);
   const floors = v.per.filter((m) => m.mode === 'light' || m.mode === 'dark')
-    .map((m) => [MODE_NAME[m.mode] ?? m.mode, all.find((x) => x.mode === m.mode)?.roles['foreground.brand']?.against ?? ''] as const)
+    .map((m) => [MODE_NAME[m.mode] ?? customModeLabel(m.mode), all.find((x) => x.mode === m.mode)?.roles['foreground.brand']?.against ?? ''] as const)
     .filter(([, f]) => f);
   if (floors.length && toFloor) {
     const p = hook(h('div', 'p3-health-floor'), 'health-floor');

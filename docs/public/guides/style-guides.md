@@ -5,7 +5,7 @@
 Style guides are tables, one for each group of tokens in the file, drawn from the file's own variables, text styles, effect styles, gradient styles and grid styles. A rerun updates each table in place. <!-- src: apps/studio/src/shell/style-guides.ts:75#46a11854 --> <!-- src: apps/studio/src/shell/style-guides.ts:79#3d2941b6 -->
 They are in the Figma plugin only. You choose what to draw in the **Docs** area, and **Update file** draws it. <!-- src: apps/studio/src/state/update-file.ts:422-426 --> <!-- src: apps/studio/src/shell/pages.ts:521 -->
 
-Because the tables read the file rather than the studio, they show what the file holds right now, including anything you changed by hand. <!-- src: apps/plugin/src/style-guide.ts:1-40#0c86094b -->
+Because the tables read the file rather than Studio, they show what the file holds right now, including anything you changed by hand. <!-- src: apps/plugin/src/style-guide.ts:1-40#0c86094b -->
 
 ## Before you draw
 
@@ -26,7 +26,7 @@ Write the theme first if you want the color tables to show contrast. The contras
 2. Tick **Style guides**: "Drawn with the settings in Docs. A rerun updates each table in place." It is ticked by default only on a file that isn't set up yet. <!-- src: apps/studio/src/state/update-file.ts:422-425 -->
 3. Choose **Update file**.
 
-The status strip says "Style guides drawn" when the run ends, and the Activity drawer lists each table. If the run went wrong, the drawer's **Update again** opens Update file again. <!-- src: apps/studio/src/state/status-strip.ts:143-144 --> <!-- src: apps/studio/src/shell/activity.ts:248 -->
+The status strip says "Style guides drawn" when the run ends, and the Activity drawer lists each table. If the run went wrong, the drawer's **Update again** opens Update file again. <!-- src: apps/studio/src/state/status-strip.ts:143-144 --> <!-- src: apps/studio/src/shell/activity.ts:252 -->
 
 *[Screenshot placeholder: the Style guides tab in Docs, with groups ticked and the options column.]*
 

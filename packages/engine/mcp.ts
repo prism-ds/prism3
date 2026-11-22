@@ -197,22 +197,69 @@ export const summarizeDescription = (d: string): string => {
   return d;
 };
 
-/** The brand schema as `tools/list` inlines it (#1760): every `description` cut to its summary, and
- *  every other keyword (types, enums, ranges, defaults, `required`, `$defs`, `$ref`, `$id`) left exactly
- *  as the file has it. Validation is unchanged because nothing but prose moves, and the full prose stays
- *  one call away: `list_levers` with `describe`.
+/** The brand schema as `tools/list` inlines it, compacted in two steps. Every keyword but `description`
+ *  (types, enums, ranges, defaults, `required`, `$defs`, `$ref`, `$id`) is left exactly as the file has it,
+ *  so validation is unchanged: only prose moves, and all of it stays one `list_levers` `describe` call away.
  *
- *  WHY, measured on the schema as #1759 left it: the inlined schema was 52,589 of `tools/list`'s 59,969
- *  characters, and 32,333 of those were description prose (191 descriptions). Structure alone was about
- *  17,000. So prose was the part growing, and the part every lever had been trimming to fit. Moving it
- *  out takes the list to 42,314 (measured). A new lever then costs its structure plus a one-line summary
- *  (`test.ts` caps a summary at 200 characters). Its full description, however long, costs nothing
- *  here. */
+ *  STEP 1 (#1760): each description cut to its summary. Measured on the schema as #1759 left it, the inlined
+ *  schema was 52,589 of `tools/list`'s 59,969 characters, 32,333 of them description prose. Cutting it took
+ *  the list to 42,314.
+ *
+ *  STEP 2 (owner decision 2026-11-21, "compress, not raise" again): prose stays inline only where an agent
+ *  needs it before its first call. That is the schema's own description, each TOP-LEVEL field's summary,
+ *  and the summaries beneath the REQUIRED fields (`id`, `primary`, `neutral`) and in the `$defs` they reach
+ *  (`oklch`), so a minimal valid call can be written from `tools/list` alone. Every other description, under
+ *  an optional field (its nested properties, items, `oneOf` branches) or in a `$defs` entry only optional
+ *  fields use, is dropped. By 2026-11 the list had grown back to 54,509, 491 under the 55,000 alarm (54,897 by merge), and
+ *  these deeper descriptions were most of what was growing. Dropping them took it to 41,731 (measured).
+ *  What an agent gives up is the prose under an optional field it has not chosen yet; that field's summary,
+ *  its whole structure and the enums, ranges and defaults that say what it accepts all stay. `list_levers`
+ *  with `describe` returns the field exactly as the file has it, every nested description and the `$defs`
+ *  it references included (`test.ts` and `mcp-test.ts` each hold an arm on that). A new optional lever now
+ *  costs its structure plus one summary, however much prose its sub-fields carry. */
 export const compactSchema = (schema: unknown): unknown => {
-  if (Array.isArray(schema)) return schema.map(compactSchema);
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
+  const root = schema as { properties?: Record<string, unknown>; required?: unknown; $defs?: Record<string, unknown> };
+  const required = new Set(Array.isArray(root.required) ? root.required as string[] : []);
+  const keptDefs = new Set(Object.keys(referencedDefs(
+    Object.fromEntries(Object.entries(root.properties ?? {}).filter(([k]) => required.has(k))), root.$defs ?? {})));
+  return Object.fromEntries(Object.entries(schema as Record<string, unknown>).map(([k, v]) => {
+    if (k === 'description' && typeof v === 'string') return [k, summarizeDescription(v)];
+    if ((k === 'properties' || k === '$defs') && v && typeof v === 'object' && !Array.isArray(v)) {
+      const keep = (name: string): boolean => (k === 'properties' ? required.has(name) : keptDefs.has(name));
+      return [k, Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([name, field]) =>
+        [name, keep(name) ? prose(field, true) : k === 'properties' ? ownSummaryOnly(field) : prose(field, false)]))];
+    }
+    return [k, prose(v, false)];
+  }));
+};
+
+/** An optional top-level field: its own description summarized, every description beneath it dropped. */
+const ownSummaryOnly = (field: unknown): unknown => {
+  if (!field || typeof field !== 'object' || Array.isArray(field)) return field;
+  const out = prose(field, false) as Record<string, unknown>;
+  const d = (field as Record<string, unknown>).description;
+  return typeof d === 'string' ? { ...out, description: summarizeDescription(d) } : out;
+};
+
+/** Keywords whose value is a map of NAMES to schemas, and keywords whose value is data, not a schema.
+ *  Under a name map a key is a field name, so a field called `default` or `description` is walked as a
+ *  schema; a data value (a `default` object, an `enum` list) is copied as it is. */
+const SCHEMA_MAPS = new Set(['properties', '$defs', 'patternProperties']);
+const DATA_KEYWORDS = new Set(['default', 'enum', 'const', 'examples']);
+
+/** A schema with every `description` keyword in it summarized (`keep`) or removed, and nothing else changed. */
+const prose = (schema: unknown, keep: boolean): unknown => {
+  if (Array.isArray(schema)) return schema.map((x) => prose(x, keep));
   if (!schema || typeof schema !== 'object') return schema;
-  return Object.fromEntries(Object.entries(schema as Record<string, unknown>).map(([k, v]) =>
-    [k, k === 'description' && typeof v === 'string' ? summarizeDescription(v) : compactSchema(v)]));
+  return Object.fromEntries(Object.entries(schema as Record<string, unknown>)
+    .filter(([k, v]) => keep || !(k === 'description' && typeof v === 'string'))
+    .map(([k, v]) => [k,
+      k === 'description' && typeof v === 'string' ? summarizeDescription(v)
+      : DATA_KEYWORDS.has(k) ? v
+      : SCHEMA_MAPS.has(k) && v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([n, x]) => [n, prose(x, keep)]))
+        : prose(v, keep)]));
 };
 
 /** Every `$defs` entry a schema fragment reaches through `$ref: "#/$defs/<name>"`, followed transitively,
@@ -302,11 +349,11 @@ export const toolDefs = (brandSchema: unknown) => [
   {
     name: 'theme_brand',
     title: 'Generate a design-token system',
-    description: `Generate a full design-token system from a brand input, and verify it. Returns the contrast-contract results (every declared a11y pair, computed on the resolved colors across all modes, each failure as { role, mode, ratio, against, min }), alias integrity, and the decisions log by default. The DTCG token tree and the .ai.json agent metadata are OPT-IN via \`include\` because they are large — for a four-mode brand they measure roughly ${PAYLOAD_CHARS.tokens.toLocaleString('en-US')} and ${PAYLOAD_CHARS.aiMetadata.toLocaleString('en-US')} characters respectively (~370,000 tokens combined). Arguments: { brand, include }; the plugin's agent link takes the same object as \`input\`. Call list_levers to see the controls, or validate_brand to check an input first. Each field description in the \`brand\` schema below is a one-line summary; list_levers with \`describe\` returns the full text.`,
+    description: `Generate a full design-token system from a brand input, and verify it. Returns the contrast-contract results (every declared a11y pair, computed on the resolved colors across all modes, each failure as { role, mode, ratio, against, min }), alias integrity, and the decisions log by default. The DTCG token tree and the .ai.json agent metadata are OPT-IN via \`include\` because they are large — for a four-mode brand they measure roughly ${PAYLOAD_CHARS.tokens.toLocaleString('en-US')} and ${PAYLOAD_CHARS.aiMetadata.toLocaleString('en-US')} characters respectively (~395,000 tokens combined). Arguments: { brand, include }; the plugin's agent link takes the same object as \`input\`. Call list_levers to see the controls, or validate_brand to check an input first. Each field description in the \`brand\` schema below is a one-line summary; list_levers with \`describe\` returns the full text.`,
     inputSchema: {
       type: 'object',
       properties: {
-        // Compacted (#1760): prose cut to one-line summaries, every other keyword verbatim.
+        // Compacted (#1760, then 2026-11-21): summaries for every top-level field and beneath the required ones, every other keyword verbatim.
         brand: compactSchema(brandSchema),
         include: {
           type: 'array', description: 'Sections to return, replacing the default ["notes"]. Add "tokens" and/or "aiMetadata" for the large payloads; pass [] for the verification result alone.',
@@ -448,7 +495,8 @@ export const toolDefs = (brandSchema: unknown) => [
  *
  *  (Measured when `notes` became a default. Re-measured 2026-09-24, #1623: tokens ~850,000 and
  *  aiMetadata ~500,000; re-measured 2026-09-26, #1670: ~890,000 and ~590,000, the aiMetadata figure having
- *  drifted to the edge of the test's 15% band — the tool descriptions carry the current figures.)
+ *  drifted to the edge of the test's 15% band; re-measured 2026-11-21, #3510 with #2857: ~900,000 and ~694,000, the
+ *  aiMetadata figure past the band again — the tool descriptions carry the current figures.)
  *
  *  Withholding the two huge payloads is right — no client can spend half a megabyte on one result.
  *  Withholding 3.6KB cost an agent the single most decision-relevant thing the engine produces, and
@@ -457,7 +505,7 @@ export const toolDefs = (brandSchema: unknown) => [
 export const DEFAULT_THEME_SECTIONS = ['notes'];
 /** #4200 D (DRAFT): the two large payloads' size for a four-mode brand, one figure each, stated once. The description and
  *  the withheld-section hint both read it, and test.ts holds it to ±15% of the measured size. */
-export const PAYLOAD_CHARS = { tokens: 890_000, aiMetadata: 590_000 } as const;
+export const PAYLOAD_CHARS = { tokens: 890_000, aiMetadata: 690_000 } as const;
 
 /** Accept both `{ brand, include }` and a bare BrandInput (the pre-wrap calling convention). Detected
  *  by the presence of a `brand` key, which BrandInput itself has no property named. */

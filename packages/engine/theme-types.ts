@@ -4,6 +4,7 @@
  *
  *  Split out of `theme.ts` (#3698 R5), which re-exports its public names unchanged.
  */
+import type { BrandIcons } from './icon-map';
 import type { Step } from './ramp';
 import type { SpaceStep, RadiusStep, SizeStep, Density, ControlShape, FieldStyle, SearchFieldStyle, TagStyle, DialogTitleSize, BannerStyle, CurrentIndicator, ButtonIcons, ButtonContentSize, ButtonLabelWeight, ButtonTextHover, ButtonBorderWeight, IconSizeStep, ControlSizeStep, RadioDotShare } from './scale';
 import type { ModeName, BuiltinModeName, ModeOverrides } from './modes';
@@ -183,6 +184,15 @@ export type Dims = {
 /** A declared palette promoted to a full `interactive.<name>.*` column (docs/20 §3). `name` is
  *  the role suffix (`interactive.<name>.*`); `palette` is a defined palette; `anchorStep` is the
  *  fill step its rest colour anchors to (default 500 at generation time). */
+/** One mode's resolved palette swap (#1729): the map as authored, and the routing `resolveMode` reads in its place. */
+export type ModePaletteSwap = {
+  swaps: Record<string, string>;
+  roleToPalette: Record<Role, string>;
+  roleAnchorStep: Record<Role, number>;
+  linkPalette: string;
+  linkAnchorStep: number;
+  interactivePalettes: InteractivePalette[];
+};
 export type InteractivePalette = { name: string; palette: string; anchorStep?: number;
   /** True when `anchorStep` was AUTHORED rather than derived. `brandTheme` always resolves
    *  `anchorStep` (pinned ?? computed), so by the time `modes.ts` reads it the two are
@@ -402,10 +412,13 @@ export type Theme = {
   root: string;                      // 'nbds' | 'prism' (brand root namespace)
   namespace: string;                 // '<root>.core.palette' — the colour PRIMITIVE root (ramps live here; the semantic role layer is emitted under '<root>.color')
   colorFormat: 'rgb' | 'hex';
+  /** The brand icon map, passed through from the input when it sets one (#3076): `.ai.json` records it for agents. */
+  icons?: BrandIcons;
   modes: ModeName[];                 // the appearance modes to generate (light always present; customs appended last)
-  // User-added custom modes (C1) — each `{ name, base }` clones a customizable built-in (light/dark)
-  // under a new slug-safe name that LIVE-INHERITS the base's derivation each build, then deviates via
-  // overrides[name] / modeAnchors[name]. Their names are already appended to `modes` above.
+  // User-added custom modes (C1) — each `{ name, base }` is a snapshot (#1946): its per-mode input lives
+  // under its own name, copied from the mode it started from when it was created. `base` is that source,
+  // kept for reference, and the appearance (light/dark) it derives with; the source need not be generated.
+  // Their names are already appended to `modes` above.
   customModes?: { name: string; base: BuiltinModeName }[];
   palettes: PaletteBuild[];
   roleToPalette: Record<Role, string>;
@@ -437,6 +450,11 @@ export type Theme = {
   // deviate a single mode. The re-derived radius ramps land on `dims.radiusByMode`; this carries the
   // raw levers for round-trip.
   modeLevers?: Partial<Record<ModeName, ModeLevers>>;
+  // Per-mode PALETTE SWAPS (#1729), resolved: for each mode that swaps, the palette map as authored plus the
+  // color routing it produces — every role, the link, each interactive column and every gradient stop that
+  // drew from a swapped palette draws from its replacement in that mode, re-anchored and re-gated there. The
+  // primitives stay mode-invariant: a swap re-points aliases between ramps every mode already ships.
+  modePalettes?: Partial<Record<ModeName, ModePaletteSwap>>;
   // Disabled-state contrast. BOTH branches are gated — this system never ships disabled
   // ink below 3:1, so neither leans on the WCAG 1.4.3/1.4.11 inactive-component exemption
   // (owner decision, 2026-07-29; supersedes the old 'accessible'/'conventional' pair where
@@ -576,7 +594,9 @@ export type SurfaceMode = {
   secondary?: SurfaceSpec; tertiary?: SurfaceSpec;
   inverseSecondary?: InverseSurfaceSpec; inverseTertiary?: InverseSurfaceSpec;
 };
-export type SurfacesConfig = { light?: SurfaceMode; dark?: SurfaceMode };
+/** Keyed by `light`, `dark`, or a custom mode's name: a custom mode carries its own surfaces, copied from the mode it
+ *  started from when it was created (#1946), and never reads its base's. */
+export type SurfacesConfig = { light?: SurfaceMode; dark?: SurfaceMode; [customMode: string]: SurfaceMode | undefined };
 
 // ---------------------------------------------------------------------------
 // White-label brand input -> Theme
@@ -599,12 +619,14 @@ export type BrandInput = {
    *  that ships light only sets `['light']`. The export layout follows this — a collection
    *  only splits into per-mode files when it's multi-mode (docs/11 §4, Pillar 1). */
   modes?: ModeName[];
-  /** User-added custom modes (Phase C1). Each `{ name, base }` adds an appearance mode that
-   *  LIVE-INHERITS a CUSTOMIZABLE built-in (`base` is `light` or `dark` only — not hc/wireframe):
-   *  it re-derives EXACTLY like its base each build (a cloned descriptor, same kind/family/mins,
-   *  new name), then its own `overrides[name]` / `modeAnchors[name]` deviate it. `name` must be a
-   *  slug (`/^[a-z0-9][a-z0-9-]*$/`), unique, and NOT a reserved built-in mode; `base` must be a
-   *  mode this brand generates. Custom modes ARE customizable. Omit for none (byte-identical). */
+  /** User-added custom modes (Phase C1). Each `{ name, base }` adds an appearance mode that is a
+   *  SNAPSHOT (#1946, owner decision 2026-11-18 A): its per-mode input (`overrides`, `modeLevers`,
+   *  `modeAnchors`, `surfaces`, `outlineHoverFill` under `name`) was copied from the mode it started
+   *  from at creation, and nothing links it to that mode afterward. `base` records that mode (provenance,
+   *  `light` or `dark` only — not hc/wireframe) and picks the appearance the mode derives with (a cloned
+   *  descriptor, same kind/family/mins). The base need NOT be a mode this brand generates. `name` must
+   *  be a slug (`/^[a-z0-9][a-z0-9-]*$/`), unique, and NOT a reserved built-in mode. Custom modes ARE
+   *  customizable. Omit for none (byte-identical). */
   customModes?: { name: string; base: BuiltinModeName }[];
   primary: OKLCH;                    // the exact brand anchor (palette 'primary')
   /** The neutral ramp generator. By default the greys are *derived* from a hue + peak
@@ -668,6 +690,13 @@ export type BrandInput = {
    *  doesn't generate throws, and a radius outside [0,2] throws. Distinct from the GLOBAL `radiusScale`
    *  (the baseline every mode inherits) — modeLevers deviate a single mode. Omit for none (byte-identical). */
   modeLevers?: Partial<Record<ModeName, ModeLevers>>;
+  /** Per-mode PALETTE SWAPS (#1729): `{ 'brand-b': { primary: 'brand-b-primary', accent: 'brand-b-accent' } }` reads
+   *  "in this mode, whatever draws from `primary` draws from `brand-b-primary` instead". Every role, the link, each
+   *  interactive column and every gradient stop on a swapped palette follows, re-anchored at the replacement's own
+   *  shade and re-gated against the same contrast floors. Customizable modes other than `light` (light is the
+   *  baseline: change the palette itself there). A source is `primary` or a `brandColors` name; a replacement is a
+   *  `brandColors` name, so its ramp ships in every mode and the swap only re-points aliases. Omit for none. */
+  modePalettes?: Partial<Record<ModeName, Record<string, string>>>;
   /** Optional measured status overrides; omit to let the engine synthesise. */
   status?: Partial<Record<'success' | 'warning' | 'danger' | 'info', OKLCH & { chroma: number }>>;
   /** Disabled-state contrast. Default `'reduced'` — a dialable `disabledMin` floor
@@ -814,6 +843,7 @@ export type BrandInput = {
   tagStyle?: TagStyle;               // 'pill' (default) | 'underline' — the shape every tag draws (#2887)
   dialogTitleSize?: DialogTitleSize; // 'large' (default) | 'medium' | 'small' — the title size of every dialog (#2958)
   bannerStyle?: BannerStyle;         // 'tinted' (default) | 'outlined' — the surface every banner draws (#2924)
+  icons?: BrandIcons; // which brand icon stands in for each Prism3 icon, and the brand's art (#3076, `icon-map.ts`)
   currentIndicator?: CurrentIndicator; // 'partial' (default, Q10 B) | 'full' — the current page's 2px bar: the title's width, or half of it centered (#3345)
   /** RETIRED (#2053, owner 2026-10-04). `radius.hairline` (1px) is always emitted, so this changes nothing.
    *  Still ACCEPTED, so brand files that set it keep loading; a note says it is ignored. It was the opt-in
@@ -863,8 +893,11 @@ export type BrandInput = {
  * means you know the value you want.
  */
 export type BrandInputAuthored =
-  Omit<BrandInput, 'neutral' | 'radiusScale' | 'shadow' | 'layout'> & {
-    neutral: { hue: number | string; chroma: number | string; anchor?: OKLCH; auto?: boolean };
+  Omit<BrandInput, 'primary' | 'neutral' | 'brandColors' | 'radiusScale' | 'shadow' | 'layout'> & {
+    /** An anchor may be authored as a hex color (#4133); `resolveHexAnchors` converts it before anything reads it. */
+    primary: OKLCH | string;
+    neutral: { hue: number | string; chroma: number | string; anchor?: OKLCH | string; auto?: boolean };
+    brandColors?: { name: string; oklch: OKLCH | string }[];
     radiusScale?: number | string;
     shadow?: { softness?: number | string; tint?: { hue?: number; amount?: number } };
     layout?: { breakpoints?: number[]; columns?: number; containerMax?: number | string; containerNarrow?: number | string; columnOverrides?: Record<string, number>; gutterOverrides?: Record<string, number>; marginOverrides?: Record<string, number> };

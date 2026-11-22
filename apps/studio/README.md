@@ -1,10 +1,10 @@
-# @prism3/studio — the web dashboard
+# @prism3/studio — the web Studio
 
 The first **rendering host** over the Prism3 engine core (see `../../docs/09-architecture-and-repos.md`
-and `08-theming-interfaces.md`). It imports the same pure engine modules the Figma
-plugin will, and renders from the shared contracts:
+and `08-theming-interfaces.md`). It imports the same pure engine modules as the Figma
+plugin, which runs this UI whole in its panel, and renders from the shared contracts:
 
-- **Knobs** from the lever manifest (`packages/engine/levers.ts`).
+- **Settings** from the lever manifest (`packages/engine/levers.ts`).
 - **Live component preview + per-mode contrast overlay** from `previewSpec`
   (`preview.ts`) resolved through `resolvePreview(theme)` (`resolve-preview.ts`).
 - **Generated palette ramps** straight off `brandTheme(input).palettes`.
@@ -172,6 +172,20 @@ What can change the site is measured, not assumed: Vercel runs `build:site`, who
 `packages/engine/**`, `packages/engine/schema/**` and one plugin file, `apps/plugin/src/causes.ts` (#3326), from
 outside `apps/studio/`, and copies `docs/public/` to `/docs` (#2637). The rest of the Figma plugin is **not** part of
 this build, so the rest of `apps/plugin/**` deliberately does not trigger a deploy.
+
+The build also copies each hosted brand's shadcn registry item, `packages/engine/out/shadcn/<brand>.registry-item.json`, to
+`/r/<brand>.json` unchanged (#2997, Q2997.19 A). `test-shadcn-registry.ts` checks the built copies against `out/`, byte for byte.
+The hosted brands are the house brand and the engine's example brands, and no others (#4373):
+
+- `/r/prism3.json`
+- `/r/aurora.json`
+- `/r/harbor.json`
+
+Install a brand's theme into a shadcn/ui project:
+
+```bash
+npx shadcn add https://prism3-ds.vercel.app/r/<brand>.json
+```
 
 Only some of the engine's `.ts` files are actually imported by that bundle, so the script names the
 others as exclusions rather than naming the imported ones as inclusions. That direction is the point: a new

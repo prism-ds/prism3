@@ -9,6 +9,7 @@
   "properties": {
     "id": {
       "type": "string",
+      "title": "a name with no slash or backslash that isn't blank, \".\" or \"..\", such as \"aurora\"",
       "pattern": "^(?!\\.{1,2}$)(?=[\\s\\S]*\\S)[^/\\\\\\u0000]+$",
       "description": "Brand identifier (e.g. 'aurora'). Host-supplied identity; the emit namespace is set separately by `root`. It names the emitted files, so it holds no slash, backslash or NUL, is not blank, and is not `.` or `..`."
     },
@@ -19,6 +20,7 @@
     },
     "root": {
       "type": "string",
+      "title": "one lowercase segment of letters, digits and hyphens, starting with a letter, such as \"prism\"",
       "pattern": "^[a-z][a-z0-9-]*$",
       "default": "prism",
       "description": "The single, mode-invariant token namespace segment. Every token emits under `<root>.*` (color primitives at `<root>.core.palette`, semantic roles at `<root>.color`). Per-engagement/brand; defaults to the placeholder 'prism'. One segment only — no dots (two-segment namespaces are intentionally unsupported)."
@@ -30,14 +32,14 @@
     },
     "customModes": {
       "type": "array",
-      "description": "OPTIONAL (Phase C1). User-added appearance modes. Each `{ name, base }` clones a CUSTOMIZABLE built-in (`base` = light/dark only, not hc/wireframe) under a new slug-safe name that LIVE-INHERITS the base's derivation each build (same kind/family/mins), then deviates via its own `overrides[name]` / `modeAnchors[name]`. `name` must be a slug, unique, and not a reserved built-in mode; `base` must be a mode this brand generates. Custom modes are themselves customizable. Omit for none (byte-identical).",
+      "description": "OPTIONAL (Phase C1). User-added appearance modes. Each `{ name, base }` is a snapshot: when it is created, the per-mode input of the mode it starts from (`overrides`, `modeLevers`, `modeAnchors`, `surfaces`, `outlineHoverFill`) is copied under its own name, and from then on it stands alone. Later changes to that mode never reach it, and that mode may be turned off. `base` records which mode it started from (light or dark only, not hc/wireframe) and sets the appearance it derives with (same kind/family/mins). `name` must be a slug, unique, and not a reserved built-in mode. Custom modes are themselves customizable. Omit for none (byte-identical).",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["name", "base"],
         "properties": {
           "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Custom mode name — a lowercase slug (letters/digits/hyphen, starts with a letter or digit). Must not collide with a built-in mode (light/dark/hc-light/hc-dark/wireframe) or another custom mode; brandTheme() rejects those." },
-          "base": { "type": "string", "enum": ["light", "dark"], "description": "The customizable built-in this mode live-inherits. Only 'light' or 'dark' (hc/wireframe cannot be a base), and it must be a mode this brand generates." }
+          "base": { "type": "string", "enum": ["light", "dark"], "description": "The mode this one started from, kept for reference, and the appearance it derives with. Only 'light' or 'dark' (hc/wireframe cannot be a base). It need not be a mode this brand generates: the custom mode carries its own copy of that mode's per-mode input." }
         }
       }
     },
@@ -50,6 +52,15 @@
       "type": "object",
       "description": "OPTIONAL (Phase A2b). Per-mode interactive anchor overrides, keyed by mode name (a customizable mode). Each mode maps an interactive column ('primary' / 'destructive' / an accent name) to a palette step number that re-anchors that column's whole fill (rest/hover/pressed/on-fill all re-derive, still floor-gated). Deep-validated by brandTheme() at resolve time; the schema enforces the object shape. Omit for none (byte-identical).",
       "additionalProperties": true
+    },
+    "modePalettes": {
+      "type": "object",
+      "description": "OPTIONAL (#1729). Per-mode PALETTE SWAPS, keyed by a customizable mode other than light (dark or a `customModes` name). Each mode maps a palette (`primary` or a `brandColors` name) to its replacement (a `brandColors` name): in that mode every role, the link, each interactive column and every gradient stop that drew from the palette draws from the replacement, anchored at the replacement's own shade and held to the same contrast floors. Primitives stay mode-invariant; a swap re-points aliases. Deep-validated by brandTheme(). Omit for none (byte-identical).",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" }
+      }
     },
     "modeLevers": {
       "type": "object",
@@ -151,8 +162,8 @@
       }
     },
     "primary": {
-      "$ref": "#/$defs/oklch",
-      "description": "The exact brand anchor (palette 'primary'). Pinned, never shifted; the engine auto-places it on the step ramp by its lightness."
+      "$ref": "#/$defs/colorAnchor",
+      "description": "The exact brand anchor (palette 'primary'), in OKLCH or as a hex color. Pinned, never shifted; the engine auto-places it on the step ramp by its lightness. A hex color is converted to OKLCH, and the notes record the converted value."
     },
     "neutral": {
       "type": "object",
@@ -161,7 +172,7 @@
       "properties": {
         "hue": { "oneOf": [ { "type": "number", "description": "Neutral ramp hue (deg). A small chroma tints the grays toward the brand for cohesion." }, { "type": "string", "enum": ["warm", "cool"], "description": "Named stop — warm 60 · cool 250." } ] },
         "chroma": { "oneOf": [ { "type": "number", "minimum": 0, "description": "Peak neutral chroma (~0.004–0.02); tapers to near-0 at the ramp ends." }, { "type": "string", "enum": ["pure", "subtle", "tinted", "saturated"], "description": "Named stop — pure 0 · subtle 0.006 · tinted 0.012 · saturated 0.02." } ] },
-        "anchor": { "$ref": "#/$defs/oklch", "description": "OPTIONAL. A pre-defined brand gray, pinned verbatim at its lightness step; the whole neutral ramp is built around it (hue/chroma from the anchor) instead of the hue/chroma cast. For a client that ships their own neutral." },
+        "anchor": { "$ref": "#/$defs/colorAnchor", "description": "OPTIONAL. A pre-defined brand gray, in OKLCH or as a hex color. It is pinned verbatim at its lightness step; the whole neutral ramp is built around it (hue/chroma from the anchor) instead of the hue/chroma cast. For a client that ships their own neutral." },
         "auto": { "type": "boolean", "description": "OPTIONAL. When set, the neutral cast hue re-derives from the brand `primary` at every build (live-follows recolor) instead of the stored `hue`. Ignored when an `anchor` is pinned. This is the default for a brand that provides no neutral." }
       },
       "description": "The neutral ramp generator: hue + peak chroma (derived), `auto`-follow the brand primary, or an exact `anchor` gray (pinned)."
@@ -174,8 +185,8 @@
         "additionalProperties": false,
         "required": ["name", "oklch"],
         "properties": {
-          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "Palette name — a single lowercase slug (e.g. 'accent', 'brand-blue'). Must NOT be an engine-generated palette name (primary/neutral/success/warning/info/danger/white/black/black-alpha/white-alpha) or a duplicate; brandTheme() rejects those. No dots/spaces/symbols (it becomes an alias path segment)." },
-          "oklch": { "$ref": "#/$defs/oklch" }
+          "name": { "type": "string", "title": "a lowercase slug of letters, digits and hyphens, starting with a letter, such as \"accent\"", "pattern": "^[a-z][a-z0-9-]*$", "description": "Palette name — a single lowercase slug (e.g. 'accent', 'brand-blue'). Must NOT be an engine-generated palette name (primary/neutral/success/warning/info/danger/white/black/black-alpha/white-alpha) or a duplicate; brandTheme() rejects those. No dots/spaces/symbols (it becomes an alias path segment)." },
+          "oklch": { "$ref": "#/$defs/colorAnchor", "description": "The color, in OKLCH or as a hex color (converted to OKLCH)." }
         }
       }
     },
@@ -201,8 +212,8 @@
     },
     "surfaces": {
       "type": "object",
-      "additionalProperties": false,
-      "description": "OPTIONAL. Non-default surfaces per mode (e.g. a warm off-white page), and the second and third tiers of the page and inverse ladders. The contrast FLOOR follows the second tier, which follows the declared base unless it is set itself; the engine flags it in notes. Omit for white/black defaults.",
+      "additionalProperties": { "$ref": "#/$defs/surfaceMode" },
+      "description": "OPTIONAL. Non-default surfaces per mode (e.g. a warm off-white page), and the second and third tiers of the page and inverse ladders, keyed by `light`, `dark` or a `customModes` name. A custom mode reads only its own entry, never its base's. The contrast FLOOR follows the second tier, which follows the declared base unless it is set itself; the engine flags it in notes. Omit for white/black defaults.",
       "properties": {
         "light": { "$ref": "#/$defs/surfaceMode" },
         "dark": { "$ref": "#/$defs/surfaceMode" }
@@ -572,6 +583,12 @@
           "additionalProperties": false,
           "properties": { "display": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] }, "title": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] }, "body": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] }, "label": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] }, "caption": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] }, "eyebrow": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] }, "code": { "type": "string", "enum": ["tightest", "tighter", "tight", "snugger", "snug", "normal", "open", "wide", "wider"] } },
           "description": "OPTIONAL. Per-text-type letter spacing PIN (#3077): every style in the text type uses this one letter spacing role. It replaces the size-derived role and its trackingShift nudge; any of the nine roles, open included. Other text types keep the derive and nudge. The role still resolves through letterSpacings and each mode's re-points. Omit for none."
+        },
+        "leading": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "display": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] }, "title": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] }, "body": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] }, "label": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] }, "caption": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] }, "eyebrow": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] }, "code": { "type": "string", "enum": ["tight", "snug", "compact", "cozy", "normal", "relaxed", "loose"] } },
+          "description": "OPTIONAL. Per-text-type line height PIN (#3079): every style in the text type uses this one line height role. It replaces the size-derived role and its leadingShift nudge; any of the seven roles. Other text types keep the derive and nudge. The role still resolves through lineHeights and each mode's re-points. Omit for none."
         }
       }
     },
@@ -630,6 +647,28 @@
     "tagStyle": { "type": "string", "enum": ["pill", "underline"], "default": "pill", "description": "OPTIONAL. The shape every tag draws. 'pill' is a rounded outline; 'underline' is one line under the tag, 1px at rest and 2px when selected or under the pointer, with square corners and no fill in any state. Default 'pill'." },
     "dialogTitleSize": { "type": "string", "enum": ["large", "medium", "small"], "default": "large", "description": "OPTIONAL. The title size of every dialog, centered or a sheet: 'large' binds type.label.lg.emphasis, 'medium' type.label.md.emphasis, 'small' type.label.sm.emphasis. Default 'large'." },
     "bannerStyle": { "type": "string", "enum": ["tinted", "outlined"], "default": "tinted", "description": "OPTIONAL. The surface every banner draws: 'tinted' fills it with the tone's tint (color.foreground.{tone}-subtle); 'outlined' fills it with the page color (color.background.primary). Both keep the 1px edge in the tone (color.border.{tone}). Default 'tinted'." },
+    "icons": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OPTIONAL. The brand's own icons in generated components. 'map' names which brand icon stands in for each Prism3 icon, everywhere a component uses it; a mapped Prism3 icon is no longer built into the brand's file. 'glyphs' carries the brand's art, one path each on a 24×24 artboard; a glyph named like a Prism3 icon redraws it. A key in 'map' must be a Prism3 icon, its value a Prism3 icon or a key in 'glyphs', and a value may not itself be mapped.",
+      "properties": {
+        "map": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^([a-z0-9]+(-[a-z0-9]+)*|FPO-default-icon)$" }, "description": "Prism3 icon name → the icon that replaces it, for example { plus: add, check: checkmark }." },
+        "glyphs": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": { "type": "string", "pattern": "^\\s*[Mm][MmZzLlHhVvCcSsQqTtAa0-9eE.,\\s+-]*$", "description": "One SVG path's data on the 0 0 24 24 artboard, filled." },
+              "fillRule": { "type": "string", "enum": ["evenodd"], "description": "OPTIONAL. 'evenodd' for art with counters cut out; leave it out for the default." }
+            }
+          },
+          "description": "Icon name → the brand's art for it."
+        }
+      }
+    },
     "currentIndicator": { "type": "string", "enum": ["full", "partial"], "default": "partial", "description": "OPTIONAL. The 2px bar under the current page's link (Link at current, so every PageNav item): 'partial' is round(0.5 x the title's width), centered under it; 'full' runs under the whole title. The thickness is 2px either way. Default 'partial'." },
     "buttonIcons": { "type": "string", "enum": ["attached", "edges"], "default": "attached", "description": "OPTIONAL. Button icons: 'attached' beside the label, or 'edges' with the label centered between them." },
     "buttonContentSize": { "type": "string", "enum": ["match", "smaller"], "default": "match", "description": "OPTIONAL. 'smaller': a medium button takes the small label and icon." },
@@ -688,8 +727,19 @@
         "position": { "type": "number", "minimum": 0, "maximum": 1, "description": "Stop position 0..1 along the gradient axis." }
       }
     },
+    "colorAnchor": {
+      "description": "A brand anchor color: an OKLCH object, or a hex color the engine converts to OKLCH.",
+      "oneOf": [{ "$ref": "#/$defs/oklch" }, { "$ref": "#/$defs/hexColor" }]
+    },
+    "hexColor": {
+      "type": "string",
+      "title": "a hex color (#rrggbb, #rgb, #rrggbbaa or #rgba), such as \"#2f6b4f\"",
+      "pattern": "^#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})$",
+      "description": "A hex color, #rrggbb, #rgb, #rrggbbaa or #rgba, such as \"#2f6b4f\". An alpha is dropped, because an anchor is opaque. The engine converts the color to OKLCH and records the converted value in the notes."
+    },
     "oklch": {
       "type": "object",
+      "title": "an OKLCH object { l, c, h }, such as { \"l\": 0.55, \"c\": 0.18, \"h\": 265 }",
       "additionalProperties": false,
       "required": ["l", "c", "h"],
       "properties": {

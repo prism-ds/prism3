@@ -63,6 +63,11 @@ accepts('component-update-result with a malformed publish description', { type: 
 // #3711 (Q-UF3 A): an applied update that went through every set says so; anything but `true` reads false.
 accepts('component-update-result that completed with sets to check', { type: 'component-update-result', ok: false, completed: true, headline: '⚠ Updated 47 sets · 2 to check', summary: 's', lines: ['s'] },
   { kind: 'component-update-result', ok: false, headline: '⚠ Updated 47 sets · 2 to check', summary: 's', lines: ['s'], publish: null, causes: null, completed: true });
+// #4067: the applied update's count of sets written to, the run line's number; a value that is not a count is dropped.
+accepts('component-update-result with its sets count', { type: 'component-update-result', ok: false, completed: true, headline: '⚠ Updated 37 sets · 1 to check', summary: 's', lines: ['s'], sets: 37 },
+  { kind: 'component-update-result', ok: false, headline: '⚠ Updated 37 sets · 1 to check', summary: 's', lines: ['s'], publish: null, causes: null, completed: true, sets: 37 });
+accepts('component-update-result with a malformed sets count', { type: 'component-update-result', ok: true, headline: 'h', summary: 's', sets: '37' },
+  { kind: 'component-update-result', ok: true, headline: 'h', summary: 's', lines: null, publish: null, causes: null, completed: false });
 accepts('component-update-result with a malformed completed', { type: 'component-update-result', ok: false, completed: 'yes', headline: '✗ x', summary: 's' },
   { kind: 'component-update-result', ok: false, headline: '✗ x', summary: 's', lines: null, publish: null, causes: null, completed: false });
 accepts('component-result that stopped before the set', { type: 'component-result', ok: false, completed: false, headline: '✗ unknown def', summary: 's' },
@@ -291,6 +296,13 @@ accepts('file-due with the add queue', { type: 'file-due', seq: 2, present: [], 
   { kind: 'file-due', seq: 2, present: [], theme: false, error: null, due: {}, queued: [] });
 accepts('add-queue, the answer to a queue write', { type: 'add-queue', queued: ['tag'] }, { kind: 'add-queue', queued: ['tag'], error: null });
 drops('the panel\'s own add-queue request, which carries no queue', wire({ type: 'add-queue', ids: ['tag'], on: true }));
+// #3119: whether the file holds a set. Only `inFile: true` reads as in the file, so the drawer never offers a set it
+// cannot show; an answer with no set is dropped. Mutation `m.inFile === true` → `m.inFile !== false` (`write-adapter.ts`)
+// fails `accepts set-in-file with a non-boolean inFile reads as not in the file`, by name.
+accepts('set-in-file true', { type: 'set-in-file', def: 'badge', inFile: true }, { kind: 'set-in-file', def: 'badge', inFile: true });
+accepts('set-in-file false', { type: 'set-in-file', def: 'badge', inFile: false }, { kind: 'set-in-file', def: 'badge', inFile: false });
+accepts('set-in-file with a non-boolean inFile reads as not in the file', { type: 'set-in-file', def: 'badge', inFile: 'yes' }, { kind: 'set-in-file', def: 'badge', inFile: false });
+drops('set-in-file that names no set', wire({ type: 'set-in-file', inFile: true }));
 
 console.log(`\n${executed - failed}/${executed} passed`);
 if (failed) process.exit(1);

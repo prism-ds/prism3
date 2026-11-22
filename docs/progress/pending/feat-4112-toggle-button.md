@@ -1,8 +1,10 @@
 ## (2026-11-19) — ToggleButton and ToggleIconButton: a Button that stays pressed (#4112)
 
 **Status:** ENGINE minor (`changes/feat-4112-toggle-button.md`; `fold.ts` assigns `{{ENGINE_VERSION}}`). CONTRACT
-unchanged: no token name moves, every binding is an existing role. `EXECUTOR_REVISION` 66 → 67: the toggle sets join
-`CANVAS_FURNITURE`, which the executor runs; `executor-reach.json` names the two toggle sets, measured.
+unchanged: no token name moves, every binding is an existing role. `COMPONENT_CONTRACT_VERSION` 2.5.0 → 2.6.0 (MINOR:
+`toggle-button` and `toggle-icon-button` added; baseline re-accepted). `EXECUTOR_REVISION` 72 → 73 (serial: main took 68
+to 72 while this was open): the toggle sets join `CANVAS_FURNITURE`, which the executor runs, and `applyButtonLayout`
+reads selection-led keys; `executor-reach.json` keeps every earlier entry and names the two toggle sets for 73, measured.
 
 ### What changed
 

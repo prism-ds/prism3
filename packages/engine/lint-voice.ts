@@ -550,6 +550,8 @@ const gated: string[] = [
   // The token-name baseline — deliberately not a `regen` artifact (see CLAUDE.md principle 5), so
   // named by hand here exactly as lint-us-english.ts names it.
   join(repo, 'packages/engine/schema/token-contract.json'),
+  // The component-contract baseline (#1325) — kept out of `regen` for the same reason, named by hand the same way.
+  join(repo, 'packages/engine/schema/component-contract.json'),
   // The paint census (#758) — the second baseline kept out of `regen`, named by hand for the same reason.
   join(repo, 'packages/engine/schema/paint-census.json'),
   // The docs/34 shape-index baseline (#786) — the third, same reason. Its shape titles are quoted
@@ -956,6 +958,8 @@ const NOTE_SWEEP: [string, Record<string, unknown>][] = [
   ['modes', { modes: ['light', 'dark', 'wireframe'], customModes: [{ name: 'promo', base: 'dark' }], overrides: { light: { 'text.link.default': { palette: 'primary', step: 600 } } }, modeAnchors: { dark: { primary: 400 } }, modeLevers: { dark: { density: 'compact', easings: { emphasized: 'calm' } } } }],
   ['root, gamut, supplied status, decoupled action and link', { root: 'acme', brandColors: [{ name: 'accent', oklch: { l: 0.55, c: 0.3, h: 235 } }], actionPalette: 'accent', linkPalette: 'primary', status: { success: { h: 150, chroma: 0.15 }, danger: { h: 27, chroma: 0.2 } } }],
   ['neutral anchor', { neutral: { hue: 262, chroma: 0.008, anchor: { l: 0.6, c: 0.01, h: 262 } } }],
+  // #1729: a per-mode palette swap, as the default theme's Brand B makes one.
+  ['palette swap', { brandColors: [{ name: 'second', oklch: { l: 0.5, c: 0.15, h: 200 } }], customModes: [{ name: 'brand-b', base: 'light' }], modePalettes: { 'brand-b': { primary: 'second' } } }],
   ['neutral auto, link same as action', { neutral: { hue: 262, chroma: 0.008, auto: true }, linkPalette: 'primary' }],
   ['red primary', { primary: { l: 0.5, c: 0.2, h: 25 }, neutral: { hue: 25, chroma: 0.01 } }],
   ['greige primary', { primary: { l: 0.5, c: 0.03, h: 30 }, neutral: { hue: 30, chroma: 0.01 } }],
@@ -972,6 +976,8 @@ const NOTE_SWEEP: [string, Record<string, unknown>][] = [
   ['primary named, and pinned', { actionPalette: 'primary', actionAnchorStep: 300 }],
   ['link set apart from a rebased action', { brandColors: [{ name: 'accent', oklch: { l: 0.6, c: 0.1, h: 200 } }], roleColors: { action: 'accent' }, linkPalette: 'primary' }],
   ['a named stop', { radiusScale: 'soft' }],
+  // #4133: an anchor authored as hex, at every site that takes one, so the conversion note is scanned.
+  ['hex anchors', { primary: '#2f6b4f', neutral: { hue: 262, chroma: 0.008, anchor: '#6b6e72' }, brandColors: [{ name: 'accent', oklch: '#c8102e' }] }],
   // #3071: the opaque outline hover fill with a pick, and a pick left under another method.
   ['opaque outline hover fill', { outlineInteraction: 'opaque-fill', outlineHoverFill: { light: { hover: 'neutral.050' } } }],
   ['outline hover fill under the wash', { outlineHoverFill: { light: { hover: 'neutral.050' } } }],
@@ -979,6 +985,7 @@ const NOTE_SWEEP: [string, Record<string, unknown>][] = [
   ['outline wash under no hover fill', { outlineInteraction: 'none', outlineWash: { hover: 5 } }],
   ['grid margins off the spacing scale (#3052; md was 44 until space.550, #3408)', { layout: { marginOverrides: { md: 36, lg: 45 } } }],
   ['caption sizes and letter spacing pins (#3077)', { typography: { sizes: { caption: { md: 10 } }, tracking: { display: 'open', label: 'open' } } }],
+  ['line height pins (#3079)', { typography: { leading: { title: 'cozy', body: 'relaxed' } } }],
   ['a trait pre-empted by another', { personality: ['soft', 'sharp'] }],
   // Every trait the schema advertises, so each trait's approved `why` is scanned too.
   ...((Array.isArray(traitEnum) ? traitEnum : []) as string[]).map((t): [string, Record<string, unknown>] => [`personality '${t}'`, { personality: [t] }]),
@@ -997,6 +1004,7 @@ const PRODUCERS: Producer[] = [
   { id: 'overrides', re: /^overrides: color overrides in /, kind: 'site' },
   { id: 'modeAnchors', re: /^modeAnchors: /, kind: 'site' },
   { id: 'modeLevers', re: /^modeLevers: /, kind: 'site' },
+  { id: 'modePalettes', re: /^modePalettes: in /, kind: 'site' },
   { id: 'namespace', re: /^namespace: tokens emit under /, kind: 'site' },
   { id: 'primary anchor', re: /^primary: the brand color is pinned at step \d+/, kind: 'site' },
   { id: 'out of gamut', re: /^anchor '[^']+' \(oklch [^)]+\) is outside the sRGB gamut/, kind: 'site' },
@@ -1016,6 +1024,7 @@ const PRODUCERS: Producer[] = [
   { id: 'roleColors: rebase', re: /^roleColors: \w+ uses the '[^']+' palette/, kind: 'site' },
   { id: 'roleColors: off-hue', re: /^roleColors: '[^']+' \(hue [^)]+\) is \d+° from the usual/, kind: 'site' },
   { id: 'accentPalette replaced', re: /^interactivePalettes: set, so accentPalette /, kind: 'site' },
+  { id: 'hex anchor', re: /^(primary|neutral\.anchor|brandColors '[^']+'): the hex #[0-9a-fA-F]+, converted to OKLCH /, kind: 'site' },
   { id: 'interactive column', re: /^interactive column: '[^']+' on the /, kind: 'site' },
   { id: 'status ramp dropped', re: /^(success|warning|info): rebased by roleColors/, kind: 'site' },
   { id: 'dimensions', re: /^dimensions: \d+px grid/, kind: 'site' },
@@ -1039,6 +1048,7 @@ const PRODUCERS: Producer[] = [
   { id: 'typography: sizeFloor 8', re: /^typography: sizeFloor 8 /, kind: 'site' },
   { id: 'typography: caption sizes', re: /^typography: caption sizes set by the brand: /, kind: 'site' },
   { id: 'typography: tracking pins', re: /^typography: letter spacing pinned per text type: /, kind: 'site' },
+  { id: 'typography: leading pins', re: /^typography: line height pinned per text type: /, kind: 'site' },
   { id: 'disabled: full', re: /^disabled: 'full' — /, kind: 'site' },
   { id: 'disabled: reduced', re: /^disabled: 'reduced' \(default\) — /, kind: 'site' },
   { id: 'overlays: default', re: /^interactive overlays: 'overlay-neutral' \(default\)/, kind: 'site' },
@@ -1080,11 +1090,14 @@ const NOTES_UNREACHABLE = ['typography: empty display tier (the "below the usual
 // The push sites, counted in the SOURCE (comments dropped), as a tripwire for a new producer the sweep
 // never reaches: one the sweep reaches is an unclaimed note already. A literal per file, written here.
 // theme-brand.ts (`brandTheme`, in theme.ts until #3698 R5 split it per axis): 45 note pushes (#3052 added the grid-link notes' spread) + the one that copies vocabulary.ts's notes in. vocabulary.ts: 2.
-const NOTE_PUSH_SITES: Record<string, number> = { 'packages/engine/theme-brand.ts': 52, 'packages/engine/vocabulary.ts': 2 };
+// #3284 added a pinned-action note (52). #4133 added the one that copies hex-anchors.ts's notes in (53), and hex-anchors.ts's own push.
+// #1729 added the palette swap's note (54). #3079 added the line height pin's note (55).
+const NOTE_PUSH_SITES: Record<string, number> = { 'packages/engine/theme-brand.ts': 55, 'packages/engine/vocabulary.ts': 2, 'packages/engine/hex-anchors.ts': 1 };
 // The rules a NOTE must also pass, beyond §2 and `normative`. Each is a thing an engine note has carried.
 const ALLCAPS_OK = new Set(['AA', 'AAA', 'WCAG', 'OKLCH', 'HC']);
 const NOTE_RULES: { rule: string; re: RegExp }[] = [
-  { rule: 'issue-number', re: /#\d+/g },                                  // "(#898)", "issue #101"
+  // `\b` after the digits (#4133): a hex color the hex-anchor note names ("#2f6b4f") runs into letters, an issue number does not.
+  { rule: 'issue-number', re: /#\d+\b/g },                               // "(#898)", "issue #101"
   { rule: 'all-caps', re: /\b[A-Z]{2,}\b/g },                             // "CONFIRM", "NOT", "ON", "ESCAPE HATCH"
   { rule: 'date', re: /\b\d{4}-\d{2}-\d{2}\b/g },                         // "destructive 2026-09-24"
   { rule: 'internal-id', re: /\b[A-Z]{1,2}-?\d+[a-z]?\b/g },              // "B4a", "M-05"
@@ -1100,6 +1113,7 @@ const noteHits = (txt: string): RawHit[] => [
 const NOTE_SELF_CHECK: { sample: string; want: string | null }[] = [
   { sample: 'action color defaults to the PRIMARY brand palette — CONFIRM this hue', want: 'all-caps' },
   { sample: 'any that miss its floor are flagged (#898)', want: 'issue-number' },
+  { sample: 'primary: the hex #2f6b4f, converted to OKLCH { l: 0.4794, c: 0.078, h: 161.08 }.', want: null },
   { sample: 'AA-clean in every state (#1389/B4a, destructive 2026-09-24)', want: 'date' },
   { sample: 'AA-clean in every state (B4a)', want: 'internal-id' },
   { sample: 'radius: hairline sentinel on', want: 'maintainer-jargon' },
