@@ -780,9 +780,10 @@ export const CONTRACT_VERSION = '15.4.0';
  * 1.7.0 (the schema, MINOR): #4096's `prism3-component-defs/1.7`, the optional brand `icons` map added.
  * 2.4.0 (the contract, MINOR): `steps` and `step-item` added (#4341).
  * 2.5.0 (the contract, MINOR): `avatar` added, and the icon's `person` and `organization` names (#4345).
+ * 2.6.0 (the contract, MINOR): `toggle-button` and `toggle-icon-button` added (#4353).
  */
 export const COMPONENT_SCHEMA_VERSION = '1.7.0';
-export const COMPONENT_CONTRACT_VERSION = '2.5.0';
+export const COMPONENT_CONTRACT_VERSION = '2.6.0';
 
 /** A guaranteed path that was removed, and where its consumers should point instead. */
 export type Deprecation = {
