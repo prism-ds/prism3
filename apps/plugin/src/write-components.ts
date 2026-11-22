@@ -149,7 +149,7 @@ export interface CompNode {
   readonly id?: string;
   name?: string;
   /** A COMPONENT / COMPONENT_SET's Figma description — the def's `summary` (#1623 sign-off). Read back
-   *  on an existing set so a designer's own description is never overwritten. */
+   *  on an existing set, so one a designer changed after Prism3's record is kept (#2865). */
   description?: string;
   x?: number;
   y?: number;
@@ -643,7 +643,9 @@ export type ComponentApplyOptions = {
   /** THE FIGMA DESCRIPTION (#1623 sign-off) — the def's one-line `summary`, which the plugin reads off
    *  the def and passes here. Written on a set this run creates (or on each component, in
    *  `emitAsComponents` mode), and on a set the file already had only while that set's description is
-   *  empty: a designer's own description is theirs. A write-time option like `emitAsComponents`, so it
+   *  Prism3's (`descriptionIsOurs`, #2865) and some member carries a stamp, or while it is empty: a designer's own
+   *  description, or any non-empty one on a set Prism3 never built, is theirs, and is marked so (`DESCRIPTION_THEIRS`).
+   *  Each write records itself. A write-time option like `emitAsComponents`, so it
    *  stays off the plan and out of `planStamp`. */
   description?: string;
   /** WHERE THE SET IS PLACED (#1554) — the `↳ <family>` section page the page-aware build resolved,
@@ -894,6 +896,33 @@ export const relayOldGrid = (
  */
 export const STAMP_KEY = 'memberStamp';
 export const memberStamp = (plan: AnatomyPlan): string => `${ENGINE_VERSION}|${planStamp(plan)}|${EXECUTOR_REVISION}`;
+
+/**
+ * THE DESCRIPTION RECORD (#2865, owner decision A). The description Prism3 last wrote on a set (or on a component of a
+ * single-component def), kept in shared plugin data beside it. It tells a description Prism3 wrote from one a designer
+ * wrote: the description is Prism3's to replace while it still equals its record, and while it has no record at all
+ * (a file built before the record existed, the posture Q113 A takes for a member with no record). A description a
+ * designer changed after the record is theirs, and is kept.
+ */
+export const DESCRIPTION_KEY = 'description';
+export type Described = { description?: unknown; getSharedPluginData?(ns: string, key: string): string; setSharedPluginData?(ns: string, key: string, value: string): void };
+/** Whether the node's description is Prism3's to replace: empty, unrecorded, or still what Prism3 last wrote. */
+export const descriptionIsOurs = (node: Described): boolean => {
+  const now = String(node.description ?? '');
+  const rec = node.getSharedPluginData?.(NS, DESCRIPTION_KEY) ?? '';
+  return !now || !rec || now === rec;
+};
+/** THE DESIGNER'S MARK (#2865 delta review should-fix 1): the record a build leaves on a set Prism3 never built whose
+ *  description is non-empty and unrecorded. A build that adds a member to such a set stamps that member, and from the
+ *  next build on the set reads as Prism3-built; without this mark, the designer's unrecorded description would then
+ *  read as Prism3's and be replaced. The mark starts with a control character, so it equals no summary and no
+ *  description, and `descriptionIsOurs` reads the description as edited from then on. */
+export const DESCRIPTION_THEIRS = '\u0001theirs';
+/** Write the description and its record together. */
+export const writeDescription = (node: Described, text: string): void => {
+  node.description = text;
+  node.setSharedPluginData?.(NS, DESCRIPTION_KEY, text);
+};
 
 /** The plan-stamp half — the only half the staleness decision reads. `''` for an unstamped member, which
  *  is what an empty `getSharedPluginData` and a host with no plugin-data surface both produce, and which
@@ -2200,7 +2229,9 @@ const writeComponentSet = async (
       // The preference that did not resolve (#2661), named once per instance: `toSlots` visits a slot's items twice.
       if (node && firstVisit && pre && pre.miss !== undefined) misses.push(`${n.name}.nestPrefer -> ${n.nestPrefer} (in this file, but it did not resolve: ${pre.miss.slice(1)}; made from ${n.nestTarget} instead)`);
       if (node && firstVisit && n.nestOverrides && !kept)
-        for (const m of applyNestOverrides(node as Parameters<typeof applyNestOverrides>[0], n.nestOverrides, (name) => { const c = compByName.get(name); return c?.id ? String(c.id) : null; }))
+        // #3828: the swap value read through `oneComp`, as the nest and swap targets are (#1796), and a name two plain
+        // components hold named in the shared AMBIGUOUS words, never picked by document order.
+        for (const m of applyNestOverrides(node as Parameters<typeof applyNestOverrides>[0], n.nestOverrides, (name) => { const c = oneComp(name); return c?.id ? String(c.id) : null; }, (name) => (twice(name) ? nestMissAdvice('AMBIGUOUS', name) : null)))
           misses.push(`${n.name}${m}`);
       // THE HOST'S PREFERENCE FOR THE NESTED COMPONENT'S DEFAULT ITEMS (#2661, owner decision Q418): Dialog's group has its
       // Cancel swapped to Button.Neutral when the file has it. Once per instance like the overrides, and not onto an
@@ -3169,6 +3200,10 @@ const writeComponentSet = async (
   // field added there costs ~19 KB of payload on Button for something the payload never reads. Both
   // derivations call `planComponentName`, so the key agrees with `spec.name` by construction.
   const stampByMember = new Map(plans.map((p) => [planComponentName(p), memberStamp(p)] as const));
+  // A SET PRISM3 BUILT (#2865, owner decision A is scoped to one): some member carries a stamp, read before this run writes
+  // any. The check's `descriptionDue` reads the same thing (`counts.members > counts.unstamped`). A set no member of which
+  // Prism3 stamped is the designer's, and so is its description, with or without a record.
+  const setBuiltByUs = !!set && (set.children ?? []).some((c) => !!(c as CompNode).getSharedPluginData?.(NS, STAMP_KEY));
 
   // CHUNKED (#684). The yield is on the CELL index, not on `fresh.length`, because `fresh.length` is not
   // monotonic with the loop — a run that skips every member by name leaves it at 0 for all 648 cells, so
@@ -3242,6 +3277,12 @@ const writeComponentSet = async (
   };
   for (let i = 0; i < cells.length; i++) {
     const spec = cells[i];
+    // #3828: AN EMITTED COMPONENT'S NAME HELD BY TWO OR MORE plain components (the #1796 policy). Neither is read as the
+    // existing member, and no third is added beside them: named, and left for the designer to resolve.
+    if (opts.emitAsComponents && twice(`${component}/${emitCoordValue(spec.name)}`)) {
+      misses.push(`member ${component}/${emitCoordValue(spec.name)} -> AMBIGUOUS (${nestMissAdvice('AMBIGUOUS')})`);
+      continue;
+    }
     const existing = have.get(spec.name);
     const inPlace = existing ? opts.update?.members.get(spec.name) : undefined;
     if (existing && inPlace) {
@@ -3422,7 +3463,7 @@ const writeComponentSet = async (
     fresh.forEach((c, i) => {
       const newName = `${component}/${emitCoordValue(String(c.name))}`;
       wr(c).name = newName;
-      if (opts.description) wr(c).description = opts.description;
+      if (opts.description) writeDescription(c as unknown as Described, opts.description);
       emitted.push(newName);
       // Placed, not litter: drop it from the partial-write trail so a later throw does not try to park a
       // component that is exactly where it belongs.
@@ -3493,7 +3534,7 @@ const writeComponentSet = async (
     for (const c of fresh) trail.loose.delete(c);
     trail.loose.add(set);
     wr(set).name = component;
-    if (opts.description) wr(set).description = opts.description;
+    if (opts.description) writeDescription(set as unknown as Described, opts.description);
     // #865 ON THE SET, which is the half a per-node fix cannot reach. `combineAsVariants` returns a
     // container carrying a 5px corner radius and a 10/5 dash rhythm but NO stroke paint (probed live
     // 2026-09-27 — see `SET_BORDER`), none of which any def mentions. `null` — there is no plan node for a
@@ -3508,9 +3549,17 @@ const writeComponentSet = async (
     // executor reaching outside what it built to normalize someone else's work.
     claimDefaults(wr(set), null, misses, 'created');
   } else {
-    // AN EXISTING SET gets the description only while it has none — the fill and radius below are the
-    // designer's on this branch, and a description they wrote is too.
-    if (opts.description && !wr(set).description) wr(set).description = opts.description;
+    // AN EXISTING SET gets the description only while it is Prism3's (#2865, owner decision A): empty, with no record,
+    // or still the one Prism3 last wrote, and only on a set Prism3 built (`setBuiltByUs`). The fill and radius below are
+    // the designer's on this branch, and so is the description of a set Prism3 never built, or one they changed after
+    // Prism3's record.
+    // An EMPTY description has no designer text to protect, so it is filled on any existing set, as before #2865 (#1623).
+    // A non-empty one with no record, on a set Prism3 never built, is marked as the designer's before this run stamps a
+    // member into the set (`DESCRIPTION_THEIRS`), so the next build, which reads the set as built, still keeps it.
+    const d = set as unknown as Described;
+    const now = String(d.description ?? '');
+    if (opts.description && (!now || (setBuiltByUs && descriptionIsOurs(d)))) writeDescription(d, opts.description);
+    else if (!setBuiltByUs && now && !(d.getSharedPluginData?.(NS, DESCRIPTION_KEY) ?? '')) d.setSharedPluginData?.(NS, DESCRIPTION_KEY, DESCRIPTION_THEIRS);
   }
   if (!createdSet) for (const c of fresh) {
     set.appendChild?.(c);
