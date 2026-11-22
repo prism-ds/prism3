@@ -49,6 +49,14 @@ The set default stays hidden (#2926), and `ErrorNoMessage` stays.
 - **Review fixes.** `pinRules` guards its indexes, so `typecheck-components.ts` passes on the #1182 clean list
   again. The chunked paste path now has an executed arm: the text field is pasted in at least two chunks onto one
   page, and the message must be wired at `status=default` only.
+- **Update over a pre-B1 file (executor revision 68).** The owner's Update file at `3fda7bad` read "2 to check": 21
+  status=default members per field set showed their message against a plan that hides it. The update claimed
+  `visible = true` on each pinned node while it was still wired, and on the host a wired node's `visible` is the set's
+  one `message` default, so the last write turned it on for every member still wired. The executor now takes the
+  reference off a pinned node before writing it, and the wire loop's own unwire stays as the backstop. The shim models
+  the shared cell as an opt-in (`boolWriteThrough`), inferred from that run rather than measured, and a new
+  `test-update-apply.ts` section updates a pre-B1 set to B1 and then updates from the state `3fda7bad` left. Both end
+  clean.
 
 **Trap.** `pinRules` derives the paste rule from the plans and then checks it against them. A pin pattern that no
 axis rule states is refused, rather than shipped as a wire that binds the wrong members. The field findings that repeat across cases are grouped by their exact values. The three content-inset

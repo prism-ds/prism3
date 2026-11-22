@@ -156,6 +156,15 @@ export type ShimOpts = {
    *  measures what its main component measures. A HIDDEN child (`visible: false`) takes no cell and adds no
    *  gap, as on the host. The `minHeight` floor is modelled with or without this. */
   layoutModel?: boolean;
+  /** A BOUND BOOLEAN IS ONE CELL ON THE SET (#4461), opt-in. A node whose `visible` is wired to a BOOLEAN property is
+   *  modelled as `characters` on a bound TEXT node is (#1567): a VIEW onto the property's one `defaultValue`. Reading
+   *  `visible` reads the default, and writing it writes the default, so every sibling wired to the same property
+   *  follows the last write. Unwiring leaves the node holding the value it showed. INFERRED, not measured on a scratch
+   *  page: the owner's Update file at `3fda7bad` wrote `visible=false` on each of a field set's 21 status=default
+   *  message nodes and `visible=true` on its 63 pinned ones (still wired at that moment), and all 21 read back
+   *  `visible=true`, which the one shared cell explains and a per-node visibility does not. Off, `visible` is a plain
+   *  per-node field, as before. */
+  boolWriteThrough?: boolean;
   /** The LINE BOX, in px, a TEXT node measures under the named applied style when `layoutModel` is on —
    *  the caption's line height, keyed by style NAME as `textAdvance` is. Unlisted styles measure 0. */
   textLineBox?: Record<string, number>;
@@ -1585,6 +1594,24 @@ export const makeShim = (opts: ShimOpts = {}) => {
       // Seeded from what the node already holds: a native slot's reference is written by the host at the combine
       // (#2417), before this setter is installed, and a guard that started from null would erase it.
       let held: Record<string, string> | null = ((n as Record<string, unknown>).componentPropertyReferences as Record<string, string> | null | undefined) ?? null;
+      // #4461 — `boolWriteThrough`: a node wired to a BOOLEAN shows the property's one default, and a write to its
+      // `visible` moves that default (see the option). Re-installed on every reference write, so unwiring hands the
+      // node back a plain field holding what it showed.
+      const bindVisible = (refs: Record<string, string> | null): void => {
+        if (!opts.boolWriteThrough) return;
+        const id = refs?.visible;
+        const pd = id ? propLookup?.(id) : undefined;
+        const d = Object.getOwnPropertyDescriptor(n, 'visible');
+        const isView = !!(d?.get as { boolView?: true } | undefined)?.boolView;
+        if (pd?.type === 'BOOLEAN') {
+          const get = Object.assign(() => pd.defaultValue !== false, { boolView: true as const });
+          Object.defineProperty(n, 'visible', { configurable: true, enumerable: true, get, set: (v: unknown) => { pd.defaultValue = v !== false; } });
+        } else if (isView) {
+          const shown = (n as Record<string, unknown>).visible;
+          Object.defineProperty(n, 'visible', { configurable: true, enumerable: true, writable: true, value: shown });
+        }
+      };
+      bindVisible(held);
       Object.defineProperty(n, 'componentPropertyReferences', {
         configurable: true,
         get: () => held,
@@ -1615,6 +1642,7 @@ export const makeShim = (opts: ShimOpts = {}) => {
           for (const id of Object.values(v ?? {}))
             if (!known.includes(id)) throw new Error(`in set_componentPropertyReferences: Could not find a component property with name: '${id}'`);
           held = v;
+          bindVisible(held);
           // #1513/#1567 — A BOUND TEXT NODE IS A VIEW ONTO THE SET-LEVEL PROPERTY, NOT A NODE WITH A COPY.
           //
           // The original model here was a one-shot RESET: on bind, adopt the property's `defaultValue` onto the

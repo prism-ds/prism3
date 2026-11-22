@@ -294,7 +294,7 @@ import { BASELINE_KEY, UPDATING_KEY } from './src/member-baseline';
 import { figmaInstances, fixHostMethods, makeShim, STYLE_FONT, type Node, type Page } from './component-shim';
 import { adoptMembers, breakingClause, breakingLine, breakingOf, consumerLines, breakingSection, breakingSummary, captureBaselines, checkedSetOf, dryRunSet, hostPorts, previewLine, previewUpdate, previewVerdict, readSetView, readSingleView, type Breaking, type UpdateHost, type UpdateTarget } from './src/update-plan';
 import { drawnFaults, faultLine, varsById } from './src/drawn';
-import { BASELINE_V, baselineOf, resetStyleNames, snapshotMember } from './src/member-baseline';
+import { BASELINE_V, baselineOf, resetStyleNames, snapshotMember, writeBaseline } from './src/member-baseline';
 import { applyUpdate, applyVerdict as applyVerdictOf, ledgerAfter, previewHashOf, namesMember, DEPRECATED_PREFIX, RETAINED_KEY, nestedFirst, type ApplyHost } from './src/update-apply';
 import { headerFor } from './src/page-header';
 import { readFileSync } from 'node:fs';
@@ -327,7 +327,7 @@ const planChild = (n: PlanNode, name: string): PlanNode => n.children!.find((c) 
 type World = { host: ApplyHost; api: Record<string, any>; page: Page; set: () => Node; plans: AnatomyPlan[] };
 /** A fresh file holding one set, built by the executor, with identities on. `extraVars` are variables the file
  *  holds beyond the plans', for a later plan to bind. */
-const world = async (id: string, plans = plansOf(id), o: { extraVars?: string[]; extraStyles?: string[]; extraComps?: string[]; varPx?: Record<string, number>; componentProps?: Record<string, Record<string, { type: string; defaultValue: string | boolean }>>; keyPrefix?: string; styleIdPrefix?: string; unavailableFonts?: { family: string; style: string }[]; refuseVersion?: boolean; allowMisses?: string[]; fileSets?: { name: string; variants: string[] }[]; looseHost?: string } = {}): Promise<World> => {
+const world = async (id: string, plans = plansOf(id), o: { extraVars?: string[]; extraStyles?: string[]; extraComps?: string[]; varPx?: Record<string, number>; componentProps?: Record<string, Record<string, { type: string; defaultValue: string | boolean }>>; keyPrefix?: string; styleIdPrefix?: string; unavailableFonts?: { family: string; style: string }[]; refuseVersion?: boolean; allowMisses?: string[]; fileSets?: { name: string; variants: string[] }[]; looseHost?: string; boolWriteThrough?: boolean } = {}): Promise<World> => {
   const page: Page = { children: [] };
   const api = makeShim({
     vars: [...new Set([...plans.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]), 'space/0', ...(o.extraVars ?? [])])],
@@ -347,6 +347,7 @@ const world = async (id: string, plans = plansOf(id), o: { extraVars?: string[];
     varPx: o.varPx,
     componentProps: o.componentProps,
     looseHost: o.looseHost,
+    boolWriteThrough: o.boolWriteThrough,
   }) as any;
   const built = await applyComponentPlan(plans, api);
   if (o.allowMisses) o.allowMisses.push(...built.misses);
@@ -7150,6 +7151,85 @@ section('message default off — Update flips the set\'s `message` default to of
     ok(after.set.join() === before.set.join() && [...before.members].every(([name, b]) => after.members.get(name)?.key === b.key && after.members.get(name)?.id === b.id), `${id} message/keys: the set and every member keep their keys and ids`);
     const post = (await previewUpdate(w.host, [{ def: id, plans: planned }])).sets[0];
     ok(post.counts.current === post.counts.members && !post.properties.edit.length, `${id} message/settled: a second dry run reads every member current and lists no property edit (${JSON.stringify(post.counts)}; ${JSON.stringify(post.properties.edit)})`);
+  }
+}
+
+/* ── #4461: Update file over a pre-B1 field set ──────────────────────────────────────────────────────── */
+section('#4461 pre-B1 → B1 — Update file over a field set built before the pin: the status=default members keep the message wired and hidden, the pinned ones show it unwired');
+{
+  // THE OWNER'S MAC RUN (#4461, "Finding from the Mac re-record attempt"): Update file at `3fda7bad` over text-field and
+  // password-field sets built before B1 read "2 to check", 21 status=default members per set with message.visible=true
+  // against a plan that says false. The file here is built the way that one was: each field's def from before the pin
+  // (no `pinnedShownAt`, so every member's message is wired, and no `status` footprint exemption), with the set default
+  // off (#2926) as the file already had it. `boolWriteThrough` models the host's one shared cell per boolean: a write
+  // to a wired node's `visible` moves the set default, so every node still wired follows it.
+  const LABEL_MEMBERS = ['medium', 'small', 'large'].flatMap((size) => ['primary', 'secondary'].flatMap((emphasis) => ['regular', 'bold'].flatMap((weight) =>
+    ['rest', 'disabled'].map((state) => `size=${size}, emphasis=${emphasis}, weight=${weight}, state=${state}`))));
+  const statusOf = (n: Node): string => { let m: Node | null = n; while (m && m.type !== 'COMPONENT') m = m.parent as Node | null; return /status=(\w+)/.exec(String(m?.name ?? ''))?.[1] ?? 'default'; };
+  const memberOf = (n: Node): string => { let m: Node | null = n; while (m && m.type !== 'COMPONENT') m = m.parent as Node | null; return String(m?.name ?? '?'); };
+  const messagesOf = (set: Node): Node[] => membersOf(set).flatMap((m) => ((m.children as Node[] | undefined) ?? []).flatMap(function own(n: Node): Node[] { return [...(n.name === 'message' ? [n] : []), ...(n.type === 'INSTANCE' ? [] : ((n.children as Node[] | undefined) ?? []).flatMap(own))]; }));
+  // The end state B1 asks for, read off the file by NAME: every way a member's message can be wrong, one line each.
+  const wrongB1 = (set: Node, key: string): string[] => messagesOf(set).flatMap((n) => {
+    const wired = (n.componentPropertyReferences as Record<string, string> | null)?.visible;
+    const name = memberOf(n);
+    if (statusOf(n) === 'default') return [
+      ...(wired !== key ? [`${name}: message not wired to 'message' (${String(wired)})`] : []),
+      ...(n.visible !== false ? [`${name}: message.visible=${String(n.visible)}, the plan says false`] : []),
+    ];
+    return [
+      ...(wired !== undefined ? [`${name}: pinned message still wired (${wired})`] : []),
+      ...(n.visible === false ? [`${name}: pinned message hidden`] : []),
+    ];
+  });
+  for (const id of ['text-field', 'password-field']) {
+    const d = componentDefs.find((x) => x.id === id)!;
+    const fp = d.figmaProperties!;
+    const sm = fp.booleans!.showMessage as Exclude<NonNullable<typeof fp.booleans>[string], string> & { pinnedShownAt?: unknown };
+    const { pinnedShownAt: pin, ...unpinned } = sm;
+    ok(!!pin && sm.default === false, `premise: ${id} pins its message today and defaults it off (${JSON.stringify(pin)}, default ${String(sm.default)})`);
+    const preB1 = figmaAnatomySet({ ...d, figmaProperties: { ...fp, booleans: { ...fp.booleans, showMessage: unpinned }, footprintVaries: fp.footprintVaries?.filter((a) => a !== 'status') } }, { swapTarget: SWAP_TARGET });
+    const planned = plansOf(id);
+    const componentProps = id === 'password-field' ? { button: { 'label#7:1': { type: 'TEXT', defaultValue: 'Button' } } } : undefined;
+    const w = await world(id, preB1, { fileSets: [{ name: 'field-label', variants: LABEL_MEMBERS }], componentProps, boolWriteThrough: true });
+    const defs0 = w.set().componentPropertyDefinitions as Record<string, { type: string; defaultValue?: unknown }>;
+    const key = Object.keys(defs0).find((k) => k.split('#')[0] === 'message')!;
+    const wired0 = messagesOf(w.set()).filter((n) => (n.componentPropertyReferences as Record<string, string> | null)?.visible === key);
+    ok(defs0[key]?.defaultValue === false && wired0.length === 84 && wired0.every((n) => n.visible === false),
+      `premise: the pre-B1 ${id} set wires all 84 members' message to 'message', off by default, every one hidden (${wired0.length} wired, ${wired0.filter((n) => n.visible !== false).length} shown, default ${String(defs0[key]?.defaultValue)})`);
+    const { res } = await confirm(w, [{ def: id, plans: planned }]);
+    const v = applyVerdict(res);
+    const wrong = wrongB1(w.set(), key);
+    const defs1 = w.set().componentPropertyDefinitions as Record<string, { defaultValue?: unknown }>;
+    ok(wrong.length === 0, `#4461 ${id} pre-B1 update: every status=default member keeps its message wired to 'message' and hidden, every pinned member shows it unwired (${wrong.length} wrong: ${wrong.slice(0, 4).join('; ') || 'none'}${wrong.length > 4 ? ` … and ${wrong.length - 4} more` : ''})`);
+    ok(defs1[key]?.defaultValue === false, `#4461 ${id} pre-B1 update: the set's 'message' still defaults off (${String(defs1[key]?.defaultValue)})`);
+    ok(v.ok && !v.lines.some((l) => /still differ from the plan/.test(l)), `#4461 ${id} pre-B1 update verdict: ${v.headline}, nothing to check (${v.lines.slice(0, 2).join(' | ').slice(0, 300) || 'no lines'})`);
+    const post = (await previewUpdate(w.host, [{ def: id, plans: planned }])).sets[0];
+    ok(post.counts.current === post.counts.members && !post.properties.edit.length, `#4461 ${id} pre-B1 update settled: a second dry run reads every member current and lists no property edit (${JSON.stringify(post.counts)}; ${JSON.stringify(post.properties.edit)})`);
+
+    // THE OWNER'S SCRATCH FILE TODAY: the `3fda7bad` update already applied (revision 67), so the pinned members show the
+    // message unwired, the set's `message` was moved to on by the pinned writes, and the 21 members still wired show it,
+    // and that update took each member's as-built record and stamp in that state. Rebuilt here from the clean result:
+    // the default moved to on (the shared cell carries the 21 with it), then each member's record re-taken and its stamp
+    // put back at 67. Updating from THAT state to this head must end clean too.
+    (w.set().editComponentProperty as (k: string, e: { defaultValue: boolean }) => string)(key, { defaultValue: true });
+    for (const m of membersOf(w.set())) {
+      await writeBaseline(m);
+      const st = String((m.getSharedPluginData as (ns: string, k: string) => string)(NS, STAMP_KEY));
+      (m.setSharedPluginData as (ns: string, k: string, v: string) => void)(NS, STAMP_KEY, st.replace(/\|\d+$/, '|67'));
+    }
+    const at67 = wrongB1(w.set(), key);
+    ok(at67.length === 21 && at67.every((l) => /^status=default, .*message\.visible=true/.test(l)),
+      `premise: the ${id} set as the 3fda7bad update left it, 21 status=default members showing the message (${at67.length}: ${at67.slice(0, 2).join('; ')})`);
+    const pre67 = (await previewUpdate(w.host, [{ def: id, plans: planned }])).sets[0];
+    ok(pre67.counts.update === 84 && pre67.counts.handEdited === 0, `#4461 ${id} from 3fda7bad: the dry run lists all 84 members to update (revision 67 → ${EXECUTOR_REVISION}), none as edited by hand (${JSON.stringify(pre67.counts)}; edits ${JSON.stringify(pre67.properties.edit)})`);
+    const { res: res2 } = await confirm(w, [{ def: id, plans: planned }]);
+    const v2 = applyVerdict(res2);
+    const wrong2 = wrongB1(w.set(), key);
+    const defs2 = w.set().componentPropertyDefinitions as Record<string, { defaultValue?: unknown }>;
+    ok(wrong2.length === 0 && defs2[key]?.defaultValue === false, `#4461 ${id} from 3fda7bad: the update ends at B1, 'message' off by default (${String(defs2[key]?.defaultValue)}), ${wrong2.length} wrong: ${wrong2.slice(0, 3).join('; ') || 'none'}`);
+    ok(v2.ok && !v2.lines.some((l) => /still differ from the plan/.test(l)), `#4461 ${id} from 3fda7bad verdict: ${v2.headline}, nothing to check (${v2.lines.slice(0, 2).join(' | ').slice(0, 300) || 'no lines'})`);
+    const post2 = (await previewUpdate(w.host, [{ def: id, plans: planned }])).sets[0];
+    ok(post2.counts.current === post2.counts.members && !post2.properties.edit.length, `#4461 ${id} from 3fda7bad settled: a second dry run reads every member current and lists no property edit (${JSON.stringify(post2.counts)}; ${JSON.stringify(post2.properties.edit)})`);
   }
 }
 
