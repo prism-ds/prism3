@@ -53,10 +53,10 @@
  *
  * ── PAINT ────────────────────────────────────────────────────────────────────────────────────────────────
  * Slider: the track takes `fill` (`color.field.border.rest`), the selected bar takes `indicator`
- * (`color.interactive.neutral.border.rest`), the value readout takes `label` (`color.text.primary`) and the
+ * (`color.interactive.neutral.indicator.rest`, a mark like the disc it meets, #3398), the value readout takes `label` (`color.text.primary`) and the
  * milestones take `body` (`color.text.secondary`). None moves with hover or press: the state is on the thumb.
  * Thumb: the disc's `indicator` steps rest / hover / pressed on the neutral selection mark
- * (`color.interactive.neutral.indicator.*`, #3346), the same value as the bar's ink by default; the inner halo is a 4px `border`
+ * (`color.interactive.neutral.indicator.*`, #3346), the bar's ink at rest; the inner halo is a 4px `border`
  * stroke at hover and pressed, and the outer halo a `fill` at pressed only, both `color.border.primary`.
  * Disabled: the track `color.disabled.fill`; the bar and the disc together `color.disabled.icon`; text
  * `color.disabled.text`; no halo.
@@ -228,6 +228,8 @@ export const sliderThumb: ComponentDef = {
   docs: {
     usage: 'Part of a Slider. The Slider places one thumb for a single value and two for a range, and sets each thumb\'s name, value, size and state.',
     do: [
+    ],
+    implementation: [
       'Extend its hit area in code to at least 44×44px at every size, with a transparent ::before inset outward',
       'Let the Slider name each thumb, so a range announces "Minimum" and "Maximum", not "slider, slider"',
     ],
@@ -335,7 +337,7 @@ export const slider: ComponentDef = {
     { name: 'showMilestones', type: 'boolean', default: false, required: false, description: 'Shows labeled milestones under the track: the minimum and the maximum at its ends, and any values in milestones between them, each under its own position.' },
     { name: 'milestones', type: 'Array<number | { value: number; label: string }>', required: false, description: 'The values labeled under the track when showMilestones is on, such as [500, 1000]. A plain number is formatted like the value text; an object gives its own label. The minimum and the maximum are always labeled.' },
     { name: 'showInputs', type: 'boolean', default: false, required: false, description: 'Shows paired number inputs under the track: one for a single value, "Minimum" and "Maximum" for a range. Typing moves the thumb; dragging updates the input. With inputs on, turn the value text off.' },
-    { name: 'helpText', type: 'string | node', required: false, description: 'Guidance under the slider, in a field message.' },
+    { name: 'helpText', type: 'string | node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the slider, in a field message.' },
     { name: 'showMessage', type: 'boolean', default: false, required: false, description: 'Whether the field message is shown under the slider. Off by default; turn it on to show the help or error text. Never hides a message the slider needs: turn it on wherever there is help text or an error.' },
     { name: 'validation', type: "enum: 'default' | 'error'", values: ['default', 'error'], default: 'default', required: false, description: 'error marks the slider invalid: the field message shows the error status and each thumb carries aria-invalid. A slider\'s own value is always in range, so an error comes from a paired input or from validation elsewhere in the form.' },
     { name: 'validationMessage', type: 'string', required: false, description: 'The error text, shown in the field message and added to aria-describedby. Say what is wrong and how to fix it.' },
@@ -373,9 +375,10 @@ export const slider: ComponentDef = {
     'milestone-type': 'type.body.xs.default',
 
     // The track (3:1 against the page) and the selected bar, in ink (3:1 against the page and against the track).
-    // Neither moves with state: the state is on the thumb.
+    // Neither moves with state: the state is on the thumb. The bar is a mark, the thumb's own neutral selection mark
+    // (owner, #3398 A), so a brand's outline-edge setting never splits it from the disc it meets.
     'fill': 'color.field.border.rest',
-    'indicator': 'color.interactive.neutral.border.rest',
+    'indicator': 'color.interactive.neutral.indicator.rest',
     // The value readout and the milestones (4.5:1 against the page).
     'label': 'color.text.primary',
     'body': 'color.text.secondary',
@@ -692,6 +695,8 @@ export const slider: ComponentDef = {
       'Name the dimension with a visible label',
       'Format the value with its unit or currency, and use the same text for `aria-valuetext`',
       'Turn on the paired inputs when an exact value matters',
+    ],
+    implementation: [
       'Bind costly work, such as a network filter, to `onChangeEnd`',
     ],
     dont: [
@@ -740,6 +745,7 @@ export const slider: ComponentDef = {
     evolution: [
       '2026-10-16 (#2669): owner decision, every call A on the proposal and wireframe. One Slider with a type axis (single, range) × five states = 10 members, one size, header value text, a 2px rail and 4px fill, a 24px ringed thumb nested as Slider.Thumb, optional end labels, inputs and message.',
       '2026-10-22 (#2669): owner decision Q550, A on Q536 a–f. One track thickness in field.border.rest with the selected part and the thumb in neutral ink; the thumb on the track with no ring; a 0px header gap; labeled milestones in place of the end labels, off by default; a size axis (small, medium, large) for 30 members; a halo at hover and press.',
+      '2026-11 (#3398): the selected bar follows `interactive.neutral.indicator.rest`, the thumb\'s selection mark, so a brand\'s outline-edge setting never reaches it. It bound `interactive.neutral.border.rest`.',
     ],
   },
 };

@@ -112,6 +112,7 @@ import {
   figmaAnatomySet, applyControlShape, applyFieldStyle, fieldStyleFor, applyTagStyle, applyDialogTitleSize, applyBannerStyle, applyCurrentIndicator, applyWeightIntent, applyOutlineInteraction, applyButtonLayout, applySpacingDensity, applyMinWidthRatio, DEFAULT_BUTTON_LAYOUT,
   planBindingErrors, planComponentName, planBoundVars, planTextStyles, planEffectStyles, type AnatomyPlan,
 } from './anatomy-figma';
+import { applyIconMap } from './icon-map';
 
 const here = dirname(fileURLToPath(import.meta.url));
 type Value = string | number | boolean | readonly number[] | readonly unknown[];
@@ -212,13 +213,13 @@ const REFUSALS: Refusal[] = [
   // #3698 R2: two to seven breakpoints. The schema's `minItems: 2` refuses fewer, before the build path runs;
   // `buildLayout` refuses an eighth (#2198), since the schema states no maximum.
   ...ALL_BRANDS.flatMap((brand): Refusal[] => [
-    ...[[], [0]].map((value): Refusal => ({ brand, lever: 'layout.breakpoints', value, message: new RegExp(`^schema: layout\\.breakpoints: ${value.length} item\\(s\\) < minItems 2$`),
+    ...[[], [0]].map((value): Refusal => ({ brand, lever: 'layout.breakpoints', value, message: new RegExp(`^schema: layout\\.breakpoints has ${value.length} item\\(s\\); it takes at least 2$`),
       reason: 'fewer than two breakpoints: one floor drops the guaranteed `md` tier (#3698 F3)' })),
     { brand, lever: 'layout.breakpoints', value: [...SEVEN_FLOORS, 2560], message: /^The brand can have at most seven breakpoints\. This brand has 8\.$/,
       reason: 'an eighth breakpoint has no t-shirt name (#2198)' },
   ]),
   // #3707 (owner decision A): the schema's `minItems: 1` refuses an empty `typography.links` before the build path runs.
-  ...ALL_BRANDS.map((brand): Refusal => ({ brand, lever: 'typography.links', value: [], message: /^schema: typography\.links: 0 item\(s\) < minItems 1$/,
+  ...ALL_BRANDS.map((brand): Refusal => ({ brand, lever: 'typography.links', value: [], message: /^schema: typography\.links has 0 item\(s\); it takes at least 1$/,
     reason: 'an empty list ships no body or caption link style, which the contract guarantees and Link binds (#3707)' })),
 ];
 
@@ -251,7 +252,7 @@ const figmaEmitted = (theme: Theme): Emitted => {
 // off the raw input like `controlShape`, with the brand's own size ladder; the ratio floor (Tag's) is last.
 const materialize = (def: ComponentDef, input: BrandInput, theme: Theme): ComponentDef =>
   applyMinWidthRatio(applyButtonLayout(
-    applySpacingDensity(applyOutlineInteraction(applyWeightIntent(applyCurrentIndicator(applyBannerStyle(applyDialogTitleSize(applyTagStyle(applyFieldStyle(applyControlShape(def, input.controlShape ?? 'rounded'), fieldStyleFor(def, input)), input.tagStyle ?? 'pill'), input.dialogTitleSize ?? 'large'), input.bannerStyle ?? 'tinted'), input.currentIndicator ?? 'partial'), weightAvailability(theme.typography)), theme.outlineInteraction), theme.dims.density),
+    applySpacingDensity(applyOutlineInteraction(applyWeightIntent(applyCurrentIndicator(applyBannerStyle(applyDialogTitleSize(applyTagStyle(applyFieldStyle(applyControlShape(applyIconMap(def, input.icons), input.controlShape ?? 'rounded'), fieldStyleFor(def, input)), input.tagStyle ?? 'pill'), input.dialogTitleSize ?? 'large'), input.bannerStyle ?? 'tinted'), input.currentIndicator ?? 'partial'), weightAvailability(theme.typography)), theme.outlineInteraction), theme.dims.density),
     {
       icons: input.buttonIcons ?? DEFAULT_BUTTON_LAYOUT.icons,
       content: input.buttonContentSize ?? DEFAULT_BUTTON_LAYOUT.content,

@@ -1,7 +1,7 @@
 {
   "$comment": "The one source for docs/public/ecosystem/index.html, both views. Hand-authored on purpose: packages/engine/lint-ecosystem.ts checks it against the code (paths, members, which lane can reach what), so the code is the oracle and this file is the subject. How to update it: README.md in this folder.",
   "version": 2,
-  "repo": "https://github.com/adamforrester/prism3/blob/main/",
+  "repo": "https://github.com/prism-ds/prism3/blob/main/",
   "statuses": [
     {
       "id": "shipped",
@@ -311,6 +311,7 @@
           "image-placeholder",
           "spinner",
           "badge",
+          "avatar",
           "tag",
           "tag-group",
           "tab-item",
@@ -343,7 +344,14 @@
           "code-input",
           "page-nav-item",
           "page-nav",
-          "popover"
+          "skeleton",
+          "popover",
+          "step-item",
+          "steps",
+          "menu-item",
+          "menu-group",
+          "menu",
+          "tooltip"
         ]
       }
     },
@@ -1517,10 +1525,12 @@
           "via": "Update file: the sets the file lacks, listed in its checklist. Each family gets a usage panel with numbered anatomy markers, a parts list and the release it last changed in",
           "sources": [
             "apps/plugin/src/write-components.ts",
-            "apps/plugin/src/doc-panel.ts"
+            "apps/plugin/src/doc-panel.ts",
+            "apps/plugin/src/show-set.ts"
           ],
           "messages": [
-            "build-components"
+            "build-components",
+            "show-set"
           ]
         },
         "agent": {

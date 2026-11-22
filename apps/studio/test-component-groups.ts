@@ -102,10 +102,13 @@ const WIRE_LINKS: [string, string[]][] = [['Link', ['Link']]];
 // one row holds them, as Code input's row holds its cell.
 const WIRE_RADIOS: [string, string[]][] = [['Radio', ['Radio.Control', 'Radio.Group', 'Radio.Row']]];
 const WIRE_COMPONENTS: [string, string[]][] = [
-  ['Accordion', ['Accordion', 'Accordion.Indicator']], ['Badge', ['Badge']], ['Breadcrumbs', ['BreadcrumbItem', 'Breadcrumbs', 'BreadcrumbSeparator']],
+  // Avatar (#4110) joins after the wireframe: its own page beside Badge.
+  ['Accordion', ['Accordion', 'Accordion.Indicator']], ['Avatar', ['Avatar']], ['Badge', ['Badge']], ['Breadcrumbs', ['BreadcrumbItem', 'Breadcrumbs', 'BreadcrumbSeparator']],
   ['Checkbox', ['Checkbox.Control', 'Checkbox.Group', 'Checkbox.Row']], ['Counter', ['Counter']], ['Divider', ['Divider']],
   ['Icon button', ['IconButton', 'IconButton.Destructive', 'IconButton.Neutral']], ['List', ['List', 'List.Item']],
   // Pagination (#2665) joins after the wireframe: its own page, the row and its item, a family.
+  // #4007: Menu, its own page, its group and item beside it.
+  ['Menu', ['Menu', 'Menu.Group', 'Menu.Item']],
   ['Pagination', ['Pagination', 'Pagination.Item']],
   // #4008: Popover, its own page under Components.
   ['Popover', ['Popover']],
@@ -113,8 +116,13 @@ const WIRE_COMPONENTS: [string, string[]][] = [
   ['Segmented control', ['SegmentedControl', 'SegmentedControl.Segment']],
   // #2343 PR 5: Sign-in button, on its own page (Q-S10 A).
   ['Sign-in button', ['SignInButton']],
-  ['Slider', ['Slider', 'Slider.Thumb']], ['Switch', ['Switch.Control', 'Switch.Row']],
-  ['Tabs', ['Tab.Item', 'Tabs']], ['Toast', ['Toast']], ['Veil', ['Veil']],
+  ['Slider', ['Slider', 'Slider.Thumb']],
+  // #3055: Steps, on its own page, the indicator and its step, a family. Which section it sits in is held for the owner.
+  ['Steps', ['StepItem', 'Steps']],
+  ['Switch', ['Switch.Control', 'Switch.Row']],
+  ['Tabs', ['Tab.Item', 'Tabs']], ['Toast', ['Toast']],
+  // Tooltip (#4009) joins after the wireframe: its own page.
+  ['Tooltip', ['Tooltip']], ['Veil', ['Veil']],
   // #2343 PR 4: Wallet button, on its own page.
   ['Wallet button', ['WalletButton']],
 ];
@@ -122,7 +130,9 @@ const WIRE_SUBS: [string, string[]][] = [
   // #2989 (Q656 A): Breadcrumb item and Code cell left for their consumers' pages. #3148: Provider logo joins Icon on the
   // Icons & assets page, so the two share its row, as every page's family does (DRAFT row label, Q3148.2 on #3148).
   ['Field label', ['FieldLabel']], ['Field message', ['FieldMessage']], ['Flush icon button', ['FlushIconButton', 'FlushIconButton.Destructive', 'FlushIconButton.Neutral']],
-  ['Focus ring', ['FocusRing']], ['Icons & assets', ['Icon', 'ProviderLogo']], ['Image placeholder', ['ImagePlaceholder']], ['Spinner', ['Spinner']],
+  ['Focus ring', ['FocusRing']], ['Icons & assets', ['Icon', 'ProviderLogo']], ['Image placeholder', ['ImagePlaceholder']],
+  // #4109: Skeleton's page, provisional and held for the owner.
+  ['Skeleton', ['Skeleton']], ['Spinner', ['Spinner']],
 ];
 const groups = groupsOf(catalog);
 const drawn = (kind: string) => (groups.find((g) => g.kind === kind)?.rows ?? []).map((r) => [r.label, r.ids.map(name)] as [string, string[]]);
@@ -186,13 +196,13 @@ ok(new Set(allBlocks).size === allBlocks.length && groups.every((g) => !(SECTION
 ok(JSON.stringify(drawn('components').map((r) => r[0])) === JSON.stringify(WIRE_COMPONENTS.map((r) => r[0])),
   `notes 2, 3, #2905 Q6 A: Other components holds every other component row (Banner and Radio left for their own sections, #2924, #3086), Breadcrumbs (#2666), Pagination (#2665), Progress (#2670) and Slider (#2669) among them, alphabetical, families grouped by page (${drawn('components').map((r) => r[0]).join(', ')})`);
 ok(JSON.stringify(drawn('subcomponents').map((r) => r[0])) === JSON.stringify(WIRE_SUBS.map((r) => r[0])),
-  `note 4: the Subcomponents rows are the wireframe's 7, Icon's now shared with Provider logo on Icons & assets (#3148), alphabetical (Breadcrumb item and Code cell left for their consumers' pages, #2989) (${drawn('subcomponents').map((r) => r[0]).join(', ')})`);
+  `note 4: the Subcomponents rows are the wireframe's 7 and Skeleton's (#4109), Icon's now shared with Provider logo on Icons & assets (#3148), alphabetical (Breadcrumb item and Code cell left for their consumers' pages, #2989) (${drawn('subcomponents').map((r) => r[0]).join(', ')})`);
 ok(JSON.stringify(drawn('components')) === JSON.stringify(WIRE_COMPONENTS) && JSON.stringify(drawn('subcomponents')) === JSON.stringify(WIRE_SUBS),
   `note 2: a family's sets are alphabetical by component name, and call 12: a part set stays in its family (${JSON.stringify(drawn('components').filter((r) => r[1].length > 1).map((r) => r[1].join('/')))})`);
 ok(groups.find((g) => g.kind === 'subcomponents')?.rows.some((r) => r.ids.includes('icon') && r.page === 'Icons & assets') === true,
   'call 11: Icon lists under Subcomponents, and still lands on ↳ Icons & assets');
-ok(groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length === catalog.length && catalog.length === 64,
-  `every set is listed once: ${groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length} rows' sets over ${catalog.length} in the catalog (the wireframe's 41, Button.Group since #2661, Counter since #2427, Code input and its cell since #2428, Pagination's 2 since #2665, Progress since #2670, Search field since #2888, Slider with its Thumb since #2669, Toast since #2668, Banner since #2579, the three Breadcrumbs sets since #2666, Provider logo since #2343, Wallet button since #2343 PR 4, Card number field since #2343 PR 4, Sign-in button since #2343 PR 5, Page navigation with its item since #3345, Tag.Group since #1739, and Popover since #4008)`);
+ok(groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length === catalog.length && catalog.length === 72,
+  `every set is listed once: ${groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length} rows' sets over ${catalog.length} in the catalog (the wireframe's 41, Button.Group since #2661, Counter since #2427, Code input and its cell since #2428, Pagination's 2 since #2665, Progress since #2670, Search field since #2888, Slider with its Thumb since #2669, Toast since #2668, Banner since #2579, the three Breadcrumbs sets since #2666, Provider logo since #2343, Wallet button since #2343 PR 4, Card number field since #2343 PR 4, Sign-in button since #2343 PR 5, Page navigation with its item since #3345, Tag.Group since #1739, Avatar since #4110, Skeleton since #4109, Popover since #4008, Steps with its item since #3055, Menu with its group and item since #4007, and Tooltip since #4009)`);
 ok(sentenceCase('Field Label') === 'Field label' && sentenceCase('Text field') === 'Text field' && sentenceCase('Icons & assets') === 'Icons & assets',
   'call 14: a page name reads in sentence case ("Field Label" → "Field label")');
 ok(GROUPS_COPY.sectionCount('components', 19, 32) === '19 families and sets · 32 sets' && GROUPS_COPY.sectionCount('subcomponents', 7, 9) === '7 entries · 9 sets'
@@ -260,6 +270,8 @@ console.log('\n2b. A box per set, needed sets (#3306, Q3306.1–6 A)');
 const WIRE_SPLITS: [string, string[]][] = [
   ['Buttons', ['button-destructive', 'button-group', 'button-neutral']],
   ['Icon button', ['icon-button', 'icon-button-destructive', 'icon-button-neutral']],
+  // #4007: Menu.Group is a root of its own, placed in a Menu's slot rather than nested by default.
+  ['Menu', ['menu', 'menu-group']],
   ['Flush icon button', ['flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral']],
   ['Icons & assets', ['icon', 'provider-logo']],
 ];
@@ -388,7 +400,7 @@ const four = ['button', 'button-destructive', 'dialog', 'text-field'];
 const c4 = costOf(catalog, four);
 ok(c4.sets === 4 && c4.variants === 576 + 576 + 16 + 84 && c4.components === 0, `four sets cost ${c4.variants} variants (Dialog's 16: its end placement, #2877, and fill footer, #2880, with the width-only size off the variants since #3392 A)`);
 const ci = costOf(catalog, ['icon', 'badge']);
-ok(ci.variants === 50 && ci.components === 46, `a set built as separate components counts as components, not variants (Icon: ${ci.components}; Badge's 50 members, its contained status label at two sizes and three emphases since #2983 and its inline style since #3199: ${ci.variants})`);
+ok(ci.variants === 50 && ci.components === 48, `a set built as separate components counts as components, not variants (Icon: ${ci.components}, with person and organization since #4110; Badge's 50 members, its contained status label at two sizes and three emphases since #2983 and its inline style since #3199: ${ci.variants})`);
 ok(JSON.stringify(alsoBuilds(catalog, four)) === JSON.stringify(['Icon', 'Spinner', 'Focus ring', 'Flush icon button Neutral', 'Divider', 'Button Group', 'Field label', 'Field message']),
   `idea 7: the sets a build makes first, transitively, minus the selection, named as the list names them (Q392 on #2812) (${alsoBuilds(catalog, four).join(', ')})`);
 ok(displayNameOf(catalog, 'button-destructive') === 'Button Destructive' && displayNameOf(catalog, 'tab-item') === 'Tab Item' && displayNameOf(catalog, 'image-placeholder') === 'Image placeholder',

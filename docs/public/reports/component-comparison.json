@@ -231,6 +231,88 @@
       "sizeDefault": "medium"
     },
     {
+      "id": "avatar",
+      "name": "Avatar",
+      "category": "foundations",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "size": [
+          "medium",
+          "x-small",
+          "small",
+          "large",
+          "x-large"
+        ],
+        "shape": [
+          "circular",
+          "square"
+        ],
+        "type": [
+          "initials",
+          "icon",
+          "image"
+        ]
+      },
+      "props": [
+        {
+          "name": "name"
+        },
+        {
+          "name": "src"
+        },
+        {
+          "name": "srcSet"
+        },
+        {
+          "name": "decorative",
+          "default": false
+        },
+        {
+          "name": "shape",
+          "default": "circular",
+          "values": [
+            "circular",
+            "square"
+          ]
+        },
+        {
+          "name": "size",
+          "default": "medium",
+          "values": [
+            "x-small",
+            "small",
+            "medium",
+            "large",
+            "x-large"
+          ]
+        },
+        {
+          "name": "presence",
+          "values": [
+            "online",
+            "away",
+            "busy",
+            "offline"
+          ]
+        },
+        {
+          "name": "getInitials"
+        },
+        {
+          "name": "fallbackDelay"
+        }
+      ],
+      "sizes": [
+        "medium",
+        "x-small",
+        "small",
+        "large",
+        "x-large"
+      ],
+      "sizeDefault": "medium"
+    },
+    {
       "id": "badge",
       "name": "Badge",
       "category": "feedback",
@@ -2263,7 +2345,9 @@
           "minus-filled",
           "more-horizontal-filled",
           "more-vertical-filled",
+          "organization",
           "pause-circle",
+          "person",
           "play-circle",
           "plus",
           "plus-circle",
@@ -2326,7 +2410,9 @@
             "minus-filled",
             "more-horizontal-filled",
             "more-vertical-filled",
+            "organization",
             "pause-circle",
+            "person",
             "play-circle",
             "plus",
             "plus-circle",
@@ -2967,6 +3053,167 @@
         "large"
       ],
       "sizeDefault": "medium"
+    },
+    {
+      "id": "menu",
+      "name": "Menu",
+      "category": "overlay",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "placement": [
+          "bottom"
+        ]
+      },
+      "props": [
+        {
+          "name": "items"
+        },
+        {
+          "name": "open",
+          "default": false
+        },
+        {
+          "name": "defaultOpen",
+          "default": false
+        },
+        {
+          "name": "onOpenChange"
+        },
+        {
+          "name": "placement",
+          "default": "bottom",
+          "values": [
+            "top",
+            "bottom",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "name": "align",
+          "default": "start",
+          "values": [
+            "start",
+            "center",
+            "end"
+          ]
+        },
+        {
+          "name": "loop",
+          "default": true
+        }
+      ],
+      "sizes": []
+    },
+    {
+      "id": "menu-group",
+      "name": "Menu.Group",
+      "category": "overlay",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "type": [
+          "section"
+        ]
+      },
+      "props": [
+        {
+          "name": "heading"
+        },
+        {
+          "name": "items"
+        },
+        {
+          "name": "value"
+        },
+        {
+          "name": "onValueChange"
+        }
+      ],
+      "sizes": []
+    },
+    {
+      "id": "menu-item",
+      "name": "Menu.Item",
+      "category": "overlay",
+      "states": [
+        "rest",
+        "hover",
+        "pressed",
+        "focus-visible",
+        "disabled"
+      ],
+      "projectedStates": [
+        "rest",
+        "hover",
+        "pressed",
+        "focus-visible",
+        "disabled"
+      ],
+      "axes": {
+        "type": [
+          "action",
+          "submenu"
+        ],
+        "intent": [
+          "default",
+          "destructive"
+        ]
+      },
+      "props": [
+        {
+          "name": "label"
+        },
+        {
+          "name": "type",
+          "default": "action",
+          "values": [
+            "action",
+            "checkbox",
+            "radio",
+            "submenu"
+          ]
+        },
+        {
+          "name": "intent",
+          "default": "default",
+          "values": [
+            "default",
+            "destructive"
+          ]
+        },
+        {
+          "name": "checked",
+          "default": false
+        },
+        {
+          "name": "disabled",
+          "default": false
+        },
+        {
+          "name": "leadingIcon"
+        },
+        {
+          "name": "description"
+        },
+        {
+          "name": "shortcut"
+        },
+        {
+          "name": "href"
+        },
+        {
+          "name": "textValue"
+        },
+        {
+          "name": "onSelect"
+        },
+        {
+          "name": "closeOnSelect"
+        }
+      ],
+      "sizes": []
     },
     {
       "id": "page-nav",
@@ -4440,6 +4687,68 @@
       "sizeDefault": "medium"
     },
     {
+      "id": "skeleton",
+      "name": "Skeleton",
+      "category": "foundations",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "shape": [
+          "text",
+          "circle",
+          "rect"
+        ],
+        "size": [
+          "medium",
+          "small"
+        ]
+      },
+      "props": [
+        {
+          "name": "shape",
+          "default": "text",
+          "values": [
+            "text",
+            "circle",
+            "rect"
+          ]
+        },
+        {
+          "name": "size",
+          "default": "medium",
+          "values": [
+            "small",
+            "medium"
+          ]
+        },
+        {
+          "name": "lines",
+          "default": 3
+        },
+        {
+          "name": "width",
+          "default": "100%"
+        },
+        {
+          "name": "height"
+        },
+        {
+          "name": "animation",
+          "default": "pulse",
+          "values": [
+            "pulse",
+            "shimmer",
+            "none"
+          ]
+        }
+      ],
+      "sizes": [
+        "medium",
+        "small"
+      ],
+      "sizeDefault": "medium"
+    },
+    {
       "id": "slider",
       "name": "Slider",
       "category": "form",
@@ -4621,6 +4930,122 @@
         "small",
         "medium",
         "large"
+      ],
+      "sizeDefault": "medium"
+    },
+    {
+      "id": "step-item",
+      "name": "StepItem",
+      "category": "navigation",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "status": [
+          "upcoming",
+          "current",
+          "complete",
+          "error"
+        ],
+        "orientation": [
+          "horizontal",
+          "vertical"
+        ],
+        "size": [
+          "medium",
+          "small"
+        ]
+      },
+      "props": [
+        {
+          "name": "status",
+          "default": "upcoming",
+          "values": [
+            "upcoming",
+            "current",
+            "complete",
+            "error"
+          ]
+        },
+        {
+          "name": "label"
+        },
+        {
+          "name": "href"
+        },
+        {
+          "name": "size",
+          "default": "medium",
+          "values": [
+            "small",
+            "medium"
+          ]
+        },
+        {
+          "name": "orientation",
+          "default": "horizontal",
+          "values": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        {
+          "name": "connector",
+          "default": true
+        }
+      ],
+      "sizes": [
+        "medium",
+        "small"
+      ],
+      "sizeDefault": "medium"
+    },
+    {
+      "id": "steps",
+      "name": "Steps",
+      "category": "navigation",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "orientation": [
+          "horizontal",
+          "vertical"
+        ],
+        "size": [
+          "medium",
+          "small"
+        ]
+      },
+      "props": [
+        {
+          "name": "items"
+        },
+        {
+          "name": "orientation",
+          "default": "horizontal",
+          "values": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        {
+          "name": "size",
+          "default": "medium",
+          "values": [
+            "small",
+            "medium"
+          ]
+        },
+        {
+          "name": "label"
+        },
+        {
+          "name": "responsive",
+          "default": true
+        }
+      ],
+      "sizes": [
+        "medium",
+        "small"
       ],
       "sizeDefault": "medium"
     },
@@ -5390,6 +5815,81 @@
       "sizes": []
     },
     {
+      "id": "tooltip",
+      "name": "Tooltip",
+      "category": "overlay",
+      "states": [],
+      "projectedStates": [],
+      "axes": {
+        "placement": [
+          "top",
+          "bottom",
+          "start",
+          "end"
+        ]
+      },
+      "props": [
+        {
+          "name": "label"
+        },
+        {
+          "name": "placement",
+          "default": "top",
+          "values": [
+            "top",
+            "bottom",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "name": "align",
+          "default": "center",
+          "values": [
+            "start",
+            "center",
+            "end"
+          ]
+        },
+        {
+          "name": "arrow",
+          "default": true
+        },
+        {
+          "name": "kind",
+          "default": "description",
+          "values": [
+            "description",
+            "label"
+          ]
+        },
+        {
+          "name": "delay"
+        },
+        {
+          "name": "closeDelay"
+        },
+        {
+          "name": "open"
+        },
+        {
+          "name": "defaultOpen",
+          "default": false
+        },
+        {
+          "name": "onOpenChange"
+        },
+        {
+          "name": "disabled",
+          "default": false
+        },
+        {
+          "name": "children"
+        }
+      ],
+      "sizes": []
+    },
+    {
       "id": "veil",
       "name": "Veil",
       "category": "overlay",
@@ -5601,6 +6101,7 @@
       "members": [
         "button-group",
         "checkbox-group",
+        "menu-group",
         "radio-group",
         "tag-group"
       ],
@@ -5611,6 +6112,7 @@
       "name": "*.Item",
       "members": [
         "list-item",
+        "menu-item",
         "page-nav-item",
         "pagination-item",
         "tab-item"
@@ -5679,6 +6181,7 @@
       "icon-button",
       "icon-button-destructive",
       "icon-button-neutral",
+      "menu-item",
       "pagination-item",
       "password-field",
       "radio-control",
@@ -5732,6 +6235,7 @@
       "icon-button-destructive",
       "icon-button-neutral",
       "link",
+      "menu-item",
       "pagination-item",
       "password-field",
       "radio-control",
@@ -5776,6 +6280,7 @@
       "icon-button-destructive",
       "icon-button-neutral",
       "link",
+      "menu-item",
       "pagination-item",
       "password-field",
       "radio-control",
@@ -5834,6 +6339,7 @@
       "icon-button-destructive",
       "icon-button-neutral",
       "link",
+      "menu-item",
       "pagination-item",
       "radio-control",
       "radio-row",
@@ -5877,6 +6383,7 @@
       "icon-button-destructive",
       "icon-button-neutral",
       "link",
+      "menu-item",
       "pagination-item",
       "password-field",
       "radio-control",
@@ -6083,6 +6590,15 @@
     "intent": [
       {
         "values": [
+          "default",
+          "destructive"
+        ],
+        "components": [
+          "menu-item"
+        ]
+      },
+      {
+        "values": [
           "neutral",
           "success"
         ],
@@ -6145,7 +6661,9 @@
           "vertical"
         ],
         "components": [
-          "divider"
+          "divider",
+          "step-item",
+          "steps"
         ]
       }
     ],
@@ -6166,6 +6684,7 @@
           "bottom"
         ],
         "components": [
+          "menu",
           "popover"
         ]
       },
@@ -6178,6 +6697,17 @@
         ],
         "components": [
           "dialog"
+        ]
+      },
+      {
+        "values": [
+          "bottom",
+          "end",
+          "start",
+          "top"
+        ],
+        "components": [
+          "tooltip"
         ]
       }
     ],
@@ -6283,6 +6813,7 @@
           "square"
         ],
         "components": [
+          "avatar",
           "icon-button",
           "icon-button-destructive",
           "icon-button-neutral"
@@ -6297,6 +6828,16 @@
           "flush-icon-button",
           "flush-icon-button-destructive",
           "flush-icon-button-neutral"
+        ]
+      },
+      {
+        "values": [
+          "circle",
+          "rect",
+          "text"
+        ],
+        "components": [
+          "skeleton"
         ]
       },
       {
@@ -6368,6 +6909,9 @@
           "page-nav",
           "page-nav-item",
           "progress",
+          "skeleton",
+          "step-item",
+          "steps",
           "switch-control",
           "switch-row"
         ]
@@ -6396,6 +6940,18 @@
         "components": [
           "code-input",
           "code-input-cell"
+        ]
+      },
+      {
+        "values": [
+          "large",
+          "medium",
+          "small",
+          "x-large",
+          "x-small"
+        ],
+        "components": [
+          "avatar"
         ]
       }
     ],
@@ -6443,6 +6999,17 @@
         ],
         "components": [
           "progress"
+        ]
+      },
+      {
+        "values": [
+          "complete",
+          "current",
+          "error",
+          "upcoming"
+        ],
+        "components": [
+          "step-item"
         ]
       }
     ],
@@ -6585,6 +7152,15 @@
       },
       {
         "values": [
+          "action",
+          "submenu"
+        ],
+        "components": [
+          "menu-item"
+        ]
+      },
+      {
+        "values": [
           "chevron",
           "slash"
         ],
@@ -6643,11 +7219,29 @@
       },
       {
         "values": [
+          "icon",
+          "image",
+          "initials"
+        ],
+        "components": [
+          "avatar"
+        ]
+      },
+      {
+        "values": [
           "range",
           "single"
         ],
         "components": [
           "slider"
+        ]
+      },
+      {
+        "values": [
+          "section"
+        ],
+        "components": [
+          "menu-group"
         ]
       }
     ],
@@ -6722,8 +7316,26 @@
     ],
     "align": [
       {
+        "id": "menu",
+        "default": "start",
+        "values": [
+          "start",
+          "center",
+          "end"
+        ]
+      },
+      {
         "id": "popover",
         "default": "start",
+        "values": [
+          "start",
+          "center",
+          "end"
+        ]
+      },
+      {
+        "id": "tooltip",
+        "default": "center",
         "values": [
           "start",
           "center",
@@ -6738,6 +7350,17 @@
         "values": [
           "start",
           "center"
+        ]
+      }
+    ],
+    "animation": [
+      {
+        "id": "skeleton",
+        "default": "pulse",
+        "values": [
+          "pulse",
+          "shimmer",
+          "none"
         ]
       }
     ],
@@ -6869,6 +7492,10 @@
       {
         "id": "popover",
         "default": false
+      },
+      {
+        "id": "tooltip",
+        "default": true
       }
     ],
     "asChild": [
@@ -6943,6 +7570,10 @@
         "id": "checkbox-row"
       },
       {
+        "id": "menu-item",
+        "default": false
+      },
+      {
         "id": "radio-control"
       },
       {
@@ -6967,12 +7598,25 @@
       },
       {
         "id": "popover"
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "clearable": [
       {
         "id": "text-field",
         "default": false
+      }
+    ],
+    "closeDelay": [
+      {
+        "id": "tooltip"
+      }
+    ],
+    "closeOnSelect": [
+      {
+        "id": "menu-item"
       }
     ],
     "collapse": [
@@ -6982,6 +7626,12 @@
         "values": [
           "expand"
         ]
+      }
+    ],
+    "connector": [
+      {
+        "id": "step-item",
+        "default": true
       }
     ],
     "count": [
@@ -7008,6 +7658,10 @@
     ],
     "decorative": [
       {
+        "id": "avatar",
+        "default": false
+      },
+      {
         "id": "divider",
         "default": true
       }
@@ -7031,7 +7685,15 @@
     ],
     "defaultOpen": [
       {
+        "id": "menu",
+        "default": false
+      },
+      {
         "id": "popover",
+        "default": false
+      },
+      {
+        "id": "tooltip",
         "default": false
       }
     ],
@@ -7086,6 +7748,9 @@
       {
         "id": "progress",
         "default": 400
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "description": [
@@ -7094,6 +7759,9 @@
       },
       {
         "id": "dialog"
+      },
+      {
+        "id": "menu-item"
       },
       {
         "id": "radio-row"
@@ -7190,6 +7858,10 @@
         "default": false
       },
       {
+        "id": "menu-item",
+        "default": false
+      },
+      {
         "id": "password-field",
         "default": false
       },
@@ -7251,6 +7923,10 @@
       },
       {
         "id": "textarea",
+        "default": false
+      },
+      {
+        "id": "tooltip",
         "default": false
       }
     ],
@@ -7323,6 +7999,11 @@
         ]
       }
     ],
+    "fallbackDelay": [
+      {
+        "id": "avatar"
+      }
+    ],
     "footer": [
       {
         "id": "dialog",
@@ -7366,9 +8047,19 @@
         "id": "pagination"
       }
     ],
+    "getInitials": [
+      {
+        "id": "avatar"
+      }
+    ],
     "getStatusText": [
       {
         "id": "pagination"
+      }
+    ],
+    "heading": [
+      {
+        "id": "menu-group"
       }
     ],
     "headingLevel": [
@@ -7393,6 +8084,11 @@
           "5",
           "6"
         ]
+      }
+    ],
+    "height": [
+      {
+        "id": "skeleton"
       }
     ],
     "helpText": [
@@ -7461,10 +8157,16 @@
         "id": "link"
       },
       {
+        "id": "menu-item"
+      },
+      {
         "id": "page-nav-item"
       },
       {
         "id": "pagination-item"
+      },
+      {
+        "id": "step-item"
       }
     ],
     "htmlFor": [
@@ -7645,6 +8347,14 @@
     ],
     "intent": [
       {
+        "id": "menu-item",
+        "default": "default",
+        "values": [
+          "default",
+          "destructive"
+        ]
+      },
+      {
         "id": "toast",
         "default": "neutral",
         "values": [
@@ -7783,6 +8493,12 @@
         "id": "list"
       },
       {
+        "id": "menu"
+      },
+      {
+        "id": "menu-group"
+      },
+      {
         "id": "page-nav"
       },
       {
@@ -7790,6 +8506,9 @@
       },
       {
         "id": "segmented-control"
+      },
+      {
+        "id": "steps"
       },
       {
         "id": "tabs"
@@ -7818,6 +8537,14 @@
           "ancestor",
           "current",
           "overflow"
+        ]
+      },
+      {
+        "id": "tooltip",
+        "default": "description",
+        "values": [
+          "description",
+          "label"
         ]
       }
     ],
@@ -7869,6 +8596,9 @@
         "id": "link"
       },
       {
+        "id": "menu-item"
+      },
+      {
         "id": "page-nav"
       },
       {
@@ -7916,6 +8646,12 @@
         "default": "Loading"
       },
       {
+        "id": "step-item"
+      },
+      {
+        "id": "steps"
+      },
+      {
         "id": "switch-row"
       },
       {
@@ -7935,6 +8671,9 @@
       },
       {
         "id": "textarea"
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "labelPosition": [
@@ -7972,6 +8711,9 @@
     "leadingIcon": [
       {
         "id": "card-number-field"
+      },
+      {
+        "id": "menu-item"
       },
       {
         "id": "password-field"
@@ -8012,9 +8754,21 @@
         "default": 6
       }
     ],
+    "lines": [
+      {
+        "id": "skeleton",
+        "default": 3
+      }
+    ],
     "link": [
       {
         "id": "banner"
+      }
+    ],
+    "loop": [
+      {
+        "id": "menu",
+        "default": true
       }
     ],
     "max": [
@@ -8099,6 +8853,9 @@
     ],
     "name": [
       {
+        "id": "avatar"
+      },
+      {
         "id": "card-number-field"
       },
       {
@@ -8148,7 +8905,9 @@
           "minus-filled",
           "more-horizontal-filled",
           "more-vertical-filled",
+          "organization",
           "pause-circle",
+          "person",
           "play-circle",
           "plus",
           "plus-circle",
@@ -8403,7 +9162,13 @@
         "id": "dialog"
       },
       {
+        "id": "menu"
+      },
+      {
         "id": "popover"
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "onPageChange": [
@@ -8419,14 +9184,31 @@
         "id": "tag-group"
       }
     ],
+    "onSelect": [
+      {
+        "id": "menu-item"
+      }
+    ],
+    "onValueChange": [
+      {
+        "id": "menu-group"
+      }
+    ],
     "open": [
       {
         "id": "dialog",
         "default": false
       },
       {
+        "id": "menu",
+        "default": false
+      },
+      {
         "id": "popover",
         "default": false
+      },
+      {
+        "id": "tooltip"
       }
     ],
     "options": [
@@ -8437,6 +9219,22 @@
     "orientation": [
       {
         "id": "divider",
+        "default": "horizontal",
+        "values": [
+          "horizontal",
+          "vertical"
+        ]
+      },
+      {
+        "id": "step-item",
+        "default": "horizontal",
+        "values": [
+          "horizontal",
+          "vertical"
+        ]
+      },
+      {
+        "id": "steps",
         "default": "horizontal",
         "values": [
           "horizontal",
@@ -8494,8 +9292,28 @@
         ]
       },
       {
+        "id": "menu",
+        "default": "bottom",
+        "values": [
+          "top",
+          "bottom",
+          "start",
+          "end"
+        ]
+      },
+      {
         "id": "popover",
         "default": "bottom",
+        "values": [
+          "top",
+          "bottom",
+          "start",
+          "end"
+        ]
+      },
+      {
+        "id": "tooltip",
+        "default": "top",
         "values": [
           "top",
           "bottom",
@@ -8507,6 +9325,17 @@
     "prefix": [
       {
         "id": "text-field"
+      }
+    ],
+    "presence": [
+      {
+        "id": "avatar",
+        "values": [
+          "online",
+          "away",
+          "busy",
+          "offline"
+        ]
       }
     ],
     "previousLabel": [
@@ -8674,6 +9503,10 @@
       {
         "id": "breadcrumbs",
         "default": true
+      },
+      {
+        "id": "steps",
+        "default": true
       }
     ],
     "reversed": [
@@ -8732,6 +9565,14 @@
     ],
     "shape": [
       {
+        "id": "avatar",
+        "default": "circular",
+        "values": [
+          "circular",
+          "square"
+        ]
+      },
+      {
         "id": "flush-icon-button",
         "default": "flush",
         "values": [
@@ -8786,6 +9627,20 @@
           "linear",
           "circular"
         ]
+      },
+      {
+        "id": "skeleton",
+        "default": "text",
+        "values": [
+          "text",
+          "circle",
+          "rect"
+        ]
+      }
+    ],
+    "shortcut": [
+      {
+        "id": "menu-item"
       }
     ],
     "showCardMark": [
@@ -8920,6 +9775,17 @@
           "small",
           "medium",
           "large"
+        ]
+      },
+      {
+        "id": "avatar",
+        "default": "medium",
+        "values": [
+          "x-small",
+          "small",
+          "medium",
+          "large",
+          "x-large"
         ]
       },
       {
@@ -9283,6 +10149,14 @@
         ]
       },
       {
+        "id": "skeleton",
+        "default": "medium",
+        "values": [
+          "small",
+          "medium"
+        ]
+      },
+      {
         "id": "slider",
         "default": "medium",
         "values": [
@@ -9299,6 +10173,22 @@
           "small",
           "medium",
           "large"
+        ]
+      },
+      {
+        "id": "step-item",
+        "default": "medium",
+        "values": [
+          "small",
+          "medium"
+        ]
+      },
+      {
+        "id": "steps",
+        "default": "medium",
+        "values": [
+          "small",
+          "medium"
         ]
       },
       {
@@ -9386,6 +10276,16 @@
         "id": "textarea"
       }
     ],
+    "src": [
+      {
+        "id": "avatar"
+      }
+    ],
+    "srcSet": [
+      {
+        "id": "avatar"
+      }
+    ],
     "start": [
       {
         "id": "list",
@@ -9408,6 +10308,16 @@
         "default": "active",
         "values": [
           "active",
+          "complete",
+          "error"
+        ]
+      },
+      {
+        "id": "step-item",
+        "default": "upcoming",
+        "values": [
+          "upcoming",
+          "current",
           "complete",
           "error"
         ]
@@ -9582,6 +10492,11 @@
           "default",
           "inverse"
         ]
+      }
+    ],
+    "textValue": [
+      {
+        "id": "menu-item"
       }
     ],
     "thumbLabels": [
@@ -9779,6 +10694,16 @@
           "unordered",
           "ordered",
           "icon"
+        ]
+      },
+      {
+        "id": "menu-item",
+        "default": "action",
+        "values": [
+          "action",
+          "checkbox",
+          "radio",
+          "submenu"
         ]
       },
       {
@@ -10045,6 +10970,9 @@
         "id": "list-item"
       },
       {
+        "id": "menu-group"
+      },
+      {
         "id": "password-field"
       },
       {
@@ -10134,6 +11062,10 @@
           "auto",
           "full"
         ]
+      },
+      {
+        "id": "skeleton",
+        "default": "100%"
       }
     ],
     "wording": [
@@ -10185,12 +11117,17 @@
       "kind": "state set",
       "subject": "role peers: *.Item",
       "components": [
-        "list-item",
-        "page-nav-item",
-        "pagination-item",
-        "tab-item"
+        "list-item"
       ],
-      "detail": "no state set is shared by most of the group — list-item []; page-nav-item []; pagination-item [rest, hover, pressed, focus-visible, disabled]; tab-item [rest, hover, pressed, focus-visible, disabled]"
+      "detail": "list-item differs from the group's common set [disabled, focus-visible, hover, pressed, rest] — lacks disabled, focus-visible, hover, pressed, rest"
+    },
+    {
+      "kind": "state set",
+      "subject": "role peers: *.Item",
+      "components": [
+        "page-nav-item"
+      ],
+      "detail": "page-nav-item differs from the group's common set [disabled, focus-visible, hover, pressed, rest] — lacks disabled, focus-visible, hover, pressed, rest"
     },
     {
       "kind": "state set",
@@ -10409,12 +11346,23 @@
     },
     {
       "kind": "axis values",
+      "subject": "axis intent",
+      "components": [
+        "menu-item",
+        "toast"
+      ],
+      "detail": "the intent axis takes 2 value sets — [default, destructive] in menu-item; [neutral, success] in toast"
+    },
+    {
+      "kind": "axis values",
       "subject": "axis placement",
       "components": [
         "dialog",
-        "popover"
+        "menu",
+        "popover",
+        "tooltip"
       ],
-      "detail": "the placement axis takes 2 value sets — [bottom] in popover; [bottom, center, end, full] in dialog"
+      "detail": "the placement axis takes 3 value sets — [bottom] in menu, popover; [bottom, center, end, full] in dialog; [bottom, end, start, top] in tooltip"
     },
     {
       "kind": "axis values",
@@ -10445,15 +11393,17 @@
       "kind": "axis values",
       "subject": "axis shape",
       "components": [
+        "avatar",
         "flush-icon-button",
         "flush-icon-button-destructive",
         "flush-icon-button-neutral",
         "icon-button",
         "icon-button-destructive",
         "icon-button-neutral",
-        "progress"
+        "progress",
+        "skeleton"
       ],
-      "detail": "the shape axis takes 3 value sets — [circular, square] in icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circular, linear] in progress"
+      "detail": "the shape axis takes 4 value sets — [circular, square] in avatar, icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circle, rect, text] in skeleton; [circular, linear] in progress"
     },
     {
       "kind": "axis values",
@@ -10462,6 +11412,7 @@
         "_accordion-indicator",
         "_slider-thumb",
         "accordion",
+        "avatar",
         "badge",
         "breadcrumb-item",
         "breadcrumbs",
@@ -10499,8 +11450,11 @@
         "segmented-control-segment",
         "select",
         "sign-in-button",
+        "skeleton",
         "slider",
         "spinner",
+        "step-item",
+        "steps",
         "switch-control",
         "switch-row",
         "tab-item",
@@ -10511,7 +11465,7 @@
         "textarea",
         "wallet-button"
       ],
-      "detail": "the size axis takes 4 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell"
+      "detail": "the size axis takes 5 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, step-item, steps, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell; [large, medium, small, x-large, x-small] in avatar"
     },
     {
       "kind": "axis values",
@@ -10531,12 +11485,13 @@
         "radio-row",
         "search-field",
         "select",
+        "step-item",
         "switch-control",
         "switch-row",
         "text-field",
         "textarea"
       ],
-      "detail": "the status axis takes 3 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress"
+      "detail": "the status axis takes 4 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item"
     },
     {
       "kind": "axis values",
@@ -10573,16 +11528,19 @@
       "subject": "axis type",
       "components": [
         "_breadcrumb-separator",
+        "avatar",
         "badge",
         "list",
         "list-item",
+        "menu-group",
+        "menu-item",
         "pagination",
         "pagination-item",
         "progress",
         "slider",
         "tag"
       ],
-      "detail": "the type axis takes 8 value sets — [icon, ordered, unordered] in list, list-item; [chevron, slash] in _breadcrumb-separator; [compact, numbered, simple] in pagination; [count, dot, status] in badge; [determinate, indeterminate] in progress; [dismissible, select] in tag; [ellipsis, next, page, previous] in pagination-item; [range, single] in slider"
+      "detail": "the type axis takes 11 value sets — [icon, ordered, unordered] in list, list-item; [action, submenu] in menu-item; [chevron, slash] in _breadcrumb-separator; [compact, numbered, simple] in pagination; [count, dot, status] in badge; [determinate, indeterminate] in progress; [dismissible, select] in tag; [ellipsis, next, page, previous] in pagination-item; [icon, image, initials] in avatar; [range, single] in slider; [section] in menu-group"
     },
     {
       "kind": "axis values",
@@ -10616,6 +11574,14 @@
         "accordion"
       ],
       "detail": "accordion declares its sizes as [medium, small, large], not smallest first"
+    },
+    {
+      "kind": "size order",
+      "subject": "avatar",
+      "components": [
+        "avatar"
+      ],
+      "detail": "avatar declares its sizes as [medium, x-small, small, large, x-large], not smallest first"
     },
     {
       "kind": "size order",
@@ -10907,11 +11873,35 @@
     },
     {
       "kind": "size order",
+      "subject": "skeleton",
+      "components": [
+        "skeleton"
+      ],
+      "detail": "skeleton declares its sizes as [medium, small], not smallest first"
+    },
+    {
+      "kind": "size order",
       "subject": "slider",
       "components": [
         "slider"
       ],
       "detail": "slider declares its sizes as [medium, small, large], not smallest first"
+    },
+    {
+      "kind": "size order",
+      "subject": "step-item",
+      "components": [
+        "step-item"
+      ],
+      "detail": "step-item declares its sizes as [medium, small], not smallest first"
+    },
+    {
+      "kind": "size order",
+      "subject": "steps",
+      "components": [
+        "steps"
+      ],
+      "detail": "steps declares its sizes as [medium, small], not smallest first"
     },
     {
       "kind": "size order",
@@ -10991,7 +11981,35 @@
       "components": [
         "field-label"
       ],
-      "detail": "field-label defaults size to small; 50 of 51 sized components default to medium"
+      "detail": "field-label defaults size to small; 54 of 55 sized components default to medium"
+    },
+    {
+      "kind": "prop default",
+      "subject": "prop align",
+      "components": [
+        "menu",
+        "popover",
+        "tooltip"
+      ],
+      "detail": "align defaults differ over the same values — center in tooltip; start in menu, popover"
+    },
+    {
+      "kind": "prop default",
+      "subject": "prop arrow",
+      "components": [
+        "popover",
+        "tooltip"
+      ],
+      "detail": "arrow defaults differ over the same values — false in popover; true in tooltip"
+    },
+    {
+      "kind": "prop default",
+      "subject": "prop decorative",
+      "components": [
+        "avatar",
+        "divider"
+      ],
+      "detail": "decorative defaults differ over the same values — false in avatar; true in divider"
     },
     {
       "kind": "prop default",
@@ -11043,6 +12061,16 @@
     },
     {
       "kind": "prop default",
+      "subject": "prop placement",
+      "components": [
+        "menu",
+        "popover",
+        "tooltip"
+      ],
+      "detail": "placement defaults differ over the same values — bottom in menu, popover; top in tooltip"
+    },
+    {
+      "kind": "prop default",
       "subject": "prop wording",
       "components": [
         "sign-in-button",
@@ -11057,6 +12085,14 @@
         "accordion"
       ],
       "detail": "accordion has the variant axis expansion and no prop of that name"
+    },
+    {
+      "kind": "axis without prop",
+      "subject": "avatar",
+      "components": [
+        "avatar"
+      ],
+      "detail": "avatar has the variant axis type and no prop of that name"
     },
     {
       "kind": "axis without prop",
@@ -11153,6 +12189,14 @@
         "link"
       ],
       "detail": "link has the variant axis selection and no prop of that name"
+    },
+    {
+      "kind": "axis without prop",
+      "subject": "menu-group",
+      "components": [
+        "menu-group"
+      ],
+      "detail": "menu-group has the variant axis type and no prop of that name"
     },
     {
       "kind": "axis without prop",

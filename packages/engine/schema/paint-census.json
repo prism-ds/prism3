@@ -3,14 +3,14 @@
   "defs": {
     "icon": {
       "set": {
-        "members": 46,
-        "assignments": 46,
-        "sha256": "4050e35c90281646d097cf07a805d82ba610ad288e13c1fc5d95cec33f1cf6d3"
+        "members": 48,
+        "assignments": 48,
+        "sha256": "64b0798704f05a30b79b9757558d2306bffd9aa5ea3a98dba564d11634909441"
       },
       "grid": {
-        "members": 414,
-        "assignments": 414,
-        "sha256": "c0daf376b461a125879a0a8f64eddc07ef4b46c502424c4849bdb9de45fded25"
+        "members": 432,
+        "assignments": 432,
+        "sha256": "bef577ffb09e1cc05cbb99b24ba8a2c158624a64f32ed0cec136b85e6a547110"
       }
     },
     "provider-logo": {
@@ -373,6 +373,18 @@
         "sha256": "fe9301df5b770b1aedc6438bfac413ce0b26b53c5232c62847de7b573113ee4b"
       }
     },
+    "avatar": {
+      "set": {
+        "members": 30,
+        "assignments": 80,
+        "sha256": "cfc28ca5c3faa7a3a73ffde735f98134d4f47aed3f8448f79c262f5c47df3d31"
+      },
+      "grid": {
+        "members": 30,
+        "assignments": 80,
+        "sha256": "3fffd7438ae8933c230afcc2ba62701eefb3977e1837f1c3a58fd0b981ad7042"
+      }
+    },
     "tag": {
       "set": {
         "members": 45,
@@ -701,12 +713,12 @@
       "set": {
         "members": 30,
         "assignments": 180,
-        "sha256": "8561fdc47d1397548f310640636765587af4e1e73e4c526a51890f5994b50071"
+        "sha256": "7228d8b2ee37c0e5fb1f24515d22614a58b9fc50275431657b9afb31ec2fb96e"
       },
       "grid": {
         "members": 30,
         "assignments": 180,
-        "sha256": "25ce5ac499ff43cb0d3dd1e2fb063fb7f76da38c24f313c461244050fe9b5d09"
+        "sha256": "fd0072ad203afc3627c9e01a6b5d4b3ac6b26e84851152cbe87158b0f5f20a62"
       }
     },
     "code-input-cell": {
@@ -757,6 +769,18 @@
         "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
       }
     },
+    "skeleton": {
+      "set": {
+        "members": 4,
+        "assignments": 8,
+        "sha256": "6558ff3d60678f48a6b31dfee222d19ee5f0f8a59e011a3062b67512730543ca"
+      },
+      "grid": {
+        "members": 4,
+        "assignments": 8,
+        "sha256": "6610537978aef736d4d8471336052897bc2cc0afbc5de4db231a0df3d9928cc6"
+      }
+    },
     "popover": {
       "set": {
         "members": 1,
@@ -767,6 +791,78 @@
         "members": 1,
         "assignments": 4,
         "sha256": "92e9d522af64dce87a341930067f3de19097577db0f12b22b91691523dd8d54c"
+      }
+    },
+    "step-item": {
+      "set": {
+        "members": 16,
+        "assignments": 56,
+        "sha256": "4db800e2575caf0877ff9043d16a14b99c96971bb74f57c8ceda607cf2c9c30a"
+      },
+      "grid": {
+        "members": 16,
+        "assignments": 56,
+        "sha256": "46ac72c1f21cc3d80716d6268c93fe6dbfff5052afe2aff1fd1a742fcff21c01"
+      }
+    },
+    "steps": {
+      "set": {
+        "members": 4,
+        "assignments": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "grid": {
+        "members": 4,
+        "assignments": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "menu-item": {
+      "set": {
+        "members": 15,
+        "assignments": 89,
+        "sha256": "092a0a729bc96ac87993f1b593de2665fda65bcb4a9b99ca325830e3f0dcb3fb"
+      },
+      "grid": {
+        "members": 15,
+        "assignments": 89,
+        "sha256": "ba0f1036cde72cabfe0649ea0954b3ae9005ec1f58854b205c3998373e762795"
+      }
+    },
+    "menu-group": {
+      "set": {
+        "members": 1,
+        "assignments": 1,
+        "sha256": "92913096e0634edb328468b2e91644d9a20ecf1472899716537401549d1774fa"
+      },
+      "grid": {
+        "members": 1,
+        "assignments": 1,
+        "sha256": "aa9f65754f2cf92d34950327a5449b18b540c124a8e9762e3db19aaf9a56bc40"
+      }
+    },
+    "menu": {
+      "set": {
+        "members": 1,
+        "assignments": 2,
+        "sha256": "3b5d379578b0493f47a65e6018b3830dd3e10f982f12a88169e09f262c40baf8"
+      },
+      "grid": {
+        "members": 1,
+        "assignments": 2,
+        "sha256": "b81958886c20ab845356177fd7f01382b9263fa89faeb8600692ff7a18e4e4a4"
+      }
+    },
+    "tooltip": {
+      "set": {
+        "members": 4,
+        "assignments": 12,
+        "sha256": "b65f61e47b4040a24af1a462b0c5a1cdb022577c0cc74cc9c74ba3e6df3de3dd"
+      },
+      "grid": {
+        "members": 4,
+        "assignments": 12,
+        "sha256": "4345da742d70d27e352a7769bd42221b6c84d0c5d379437ec6407421d8f68f61"
       }
     }
   }

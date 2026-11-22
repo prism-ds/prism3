@@ -146,6 +146,10 @@ const AI_FIELDS = (() => {
     const t = ai[tier];
     if (t && typeof t === 'object') for (const e of Object.values(t)) if (e && typeof e === 'object') for (const [k, x] of Object.entries(e)) if (k !== 'mode_overrides' && k !== 'resolves_to') sub(x);
   }
+  // A motion preset's fields (#2857): `motion_presets` is keyed by preset name, which is data, so its entries' own keys
+  // (`duration`, `easing`, `reduced_duration`) are the vocabulary, as a tier's entries' keys are above.
+  const presets = ai.motion_presets;
+  if (presets && typeof presets === 'object') for (const e of Object.values(presets)) if (e && typeof e === 'object') Object.keys(e).forEach((n) => out.add(n));
   // Frontmatter keys a skill file declares about itself.
   ['when_to_use', 'disable_model_invocation'].forEach((n) => out.add(n));
   return out;
@@ -223,9 +227,7 @@ const DECLARED = indexOf(SOURCES.map((f) => [f, readFileSync(join(repo, f), 'utf
  * stale (drop the admission and let its location be checked), and so does one no skill quotes any more.
  */
 const UPPER = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/;
-const NOT_DECLARED: Record<string, string> = {
-  COMPONENT_CONTRACT_VERSION: 'a decided direction with no code yet (#1325 Option 3, #1326 decision 3); `prism3-build-component` §8 names it and says in the next sentence that it does not exist in code today',
-};
+const NOT_DECLARED: Record<string, string> = {};
 /** Admitted words a real skill quoted this run, for the stale-admission check. Cleared after the self-check. */
 const admittedSeen = new Set<string>();
 

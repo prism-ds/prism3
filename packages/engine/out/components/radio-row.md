@@ -48,8 +48,6 @@ Use a group of these for exactly one of 2 to 7 mutually exclusive, all-visible o
 - Ship options inside a group — the group owns the shared name, the single value, validation and the tab stop
 - Give the group a label; without one, assistive tech announces "radio button, 1 of 3" with no idea what the choice is
 - Give an optional group an explicit "None" option — a radio cannot be deselected, so a stray click is otherwise permanent
-- Keep `onChange` cheap, since selection follows focus and a screen-reader user arrowing through fires it at every step
-- On focus restore, focus the checked option rather than the first
 - Start empty to force a deliberate choice; pre-select only a genuinely safe default
 
 ### Don't
@@ -104,13 +102,16 @@ Option labels are parallel and brief; the detail that distinguishes them goes in
 
 ## Building it in code
 
+- Keep `onChange` cheap, since selection follows focus and a screen-reader user arrowing through fires it at every step
+- On focus restore, focus the checked option rather than the first
+
 ### Props
 
 | Name | Type | Default | Required | Description |
 | --- | --- | --- | --- | --- |
 | `value` | string | — | yes | Required, where Checkbox.Row's is optional. This is the option's identity within its group, not a string that happens to be submitted. Selection is derived from it: checked = (group.value === props.value). The option never holds a boolean of its own. |
 | `label` | node | — | no | Rich content, inline-end of the control, and part of the hit target — the Checkbox.Row label model, inherited. Option labels are parallel, mutually exclusive and brief: the same grammatical shape across the set, with no overlap that would make two options both apply. Long labels wrap rather than truncate, with the control centered within the first line-box so it stays on the first line. Per-option detail or price belongs in description, not in the label. |
-| `description` | node | — | no | Per-option helper beneath the label, describedby-wired. This is where the detail that makes an option distinguishable goes — the price, the delivery estimate, the caveat. |
+| `description` | node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the label: the detail that makes an option distinguishable — the price, the delivery estimate, the caveat. |
 | `validation` | enum: 'default' \| 'error' | `default` | no | Set by the Radio group, never by one radio alone: the group passes its validation status to every option, and error draws the danger ring on each. A consumer sets validation on the group, not here. |
 | `disabled` | boolean | `false` | no | Native disabled: removed from the tab order, not submitted, contrast-exempt. Disables the whole row: the nested control takes its disabled skin and the label dims. Reserve for an option that does not apply in the current state. |
 | `readOnly` | boolean | `false` | no | Restated for the caveat Checkbox.Row carries: \<input type="radio"> has no working readonly, only disabled, so a genuinely read-only option needs aria-readonly plus a prevented change, or is better rendered as static text. Usually set on every option of a group at once. Decide which explicitly; the default of doing neither is a control that looks interactive and silently is not. |

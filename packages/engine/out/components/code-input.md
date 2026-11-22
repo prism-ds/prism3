@@ -49,7 +49,6 @@ Use for a short, fixed-length code sent by text message, email or an authenticat
 
 ### Do
 
-- Accept a pasted or autofilled code in full, ignoring spaces and hyphens
 - Say which error it is: too few digits, wrong code or expired code
 - Keep the resend link and any expiry time next to the field
 
@@ -105,6 +104,8 @@ Label = noun phrase, sentence case. Helper = the length and where the code went.
 
 ## Building it in code
 
+- Accept a pasted or autofilled code in full, ignoring spaces and hyphens
+
 ### Props
 
 | Name | Type | Default | Required | Description |
@@ -117,7 +118,7 @@ Label = noun phrase, sentence case. Helper = the length and where the code went.
 | `onComplete` | function | — | no | Called once with the value when it reaches the set length, and again only if the value changes and reaches it again. The page decides whether to submit. |
 | `inputMode` | enum: 'numeric' \| 'text' | `numeric` | no | numeric for a code of digits, text for a code with letters. |
 | `autoComplete` | string | `one-time-code` | no | one-time-code by default, so the phone offers the code from the message. Never off. |
-| `helpText` | string \| node | — | no | Persistent guidance (rendered as FieldMessage): how many characters and where the code was sent. |
+| `helpText` | string \| node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the cells as a FieldMessage: how many characters and where the code was sent. |
 | `validation` | enum: 'default' \| 'error' | `default` | no | error swaps every cell to the danger border, sets the message to the error status and sets aria-invalid. |
 | `validationMessage` | string \| node | — | no | The error text: too few characters, a wrong code or an expired code, each said plainly. |
 | `showMessage` | boolean | `false` | no | Whether the composed FieldMessage is shown. Off by default; turn it on to show the helper or validation message below the cells. Never hides a message the field needs: turn it on wherever there is helper or validation text. |

@@ -3,7 +3,7 @@
 Owner decision Q-SP1 E: each `motion.spring.*` ships in `@prism3/tokens` as a transition CSS can play, a
 `linear()` easing and its settling duration, while the damping and stiffness stay in the DTCG tree and Figma.
 Six guaranteed names, `motion.spring-easing.{snappy,gentle,bouncy}` and `motion.spring-duration.{…}`, so
-`CONTRACT_VERSION` 15.1.0 → 15.2.0 (MINOR). Engine {{ENGINE_VERSION}}.
+`CONTRACT_VERSION` 15.3.0 → 15.4.0 (MINOR). Engine {{ENGINE_VERSION}}.
 
 ### The derivation, and the two technical calls
 
@@ -15,7 +15,7 @@ mass 1), starting at rest:
   spring stays inside that band, found on the curve, not its exponential envelope (the envelope over-states
   it). snappy 317ms, gentle 435ms, bouncy 360ms. The CSS steps the last 0.1% at the end: under a pixel for any
   move shorter than 1000px.
-- **Sampling density: one stop every 5ms**, rounded to 3 decimals. Interpolation error is at most h²/8 · k
+- **Sampling density: at most every 5ms**, rounded to 3 decimals. Interpolation error is at most h²/8 · k
   for a spring that starts at rest, 0.0032 at k = 1000, plus 0.0005 of rounding, so the stated bound is
   **0.005 of the travel**. `test.ts` measures it against the analytic spring densely: the shipped springs
   come in at 0.0013–0.0021, and the worst of a 30-spring sweep (ζ 0.1–1, k 50–1000) stays under it. A
@@ -41,3 +41,8 @@ owner decision, with the alternatives.
 - `check-consumability.mjs` counted every non-DTCG leaf as a corrupt (`[object Object]`) value in the
   canonical build. Only object-valued ones corrupt; a non-DTCG string passes through. It now counts those.
 - `MOTION_FIGMA_COVERAGE` names both new families with no Figma form yet: the duration waits for G5's name.
+- **A drifted figure this tipped over (after the merge of `5df3acca`).** `test.ts` holds `theme_brand`'s stated
+  payload sizes to 15% of measured. With #2857's presets on main, aiMetadata measured 691,538 against the stated
+  590,000 (inside the band by 2,580 characters); the spring leaves took it to 694,330, past it. `PAYLOAD_CHARS`
+  now states 690,000 (tokens stays 890,000, measured 900,699), and the description's combined figure is ~395,000
+  tokens. The #1670 precedent.

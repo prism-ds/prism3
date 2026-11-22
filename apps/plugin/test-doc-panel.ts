@@ -741,10 +741,13 @@ const overlapsBox = (p: { x: number; y: number; width: number; height: number },
   p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height;
 const overlap = (a: N, b: N): boolean => { const p = boxOf(a), q = boxOf(b); return p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h; };
 const names = (id: string) => componentDefs.find((d) => d.id === id)?.name ?? id;
-const withSets = componentDefs.filter((d) => CANVAS_FURNITURE.has(d.id));
+// #4008, #4007: a set of one member (Popover, Menu, Menu.Group) builds a set but has no canvas furniture, so "builds a
+// set" is read off the def, not off the furniture list.
+const buildsSet = (id: string): boolean => { const d = componentDefs.find((x) => x.id === id); return !!d?.figmaProperties && !d.figmaProperties.emitAsComponents; };
+const withSets = componentDefs.filter((d) => buildsSet(d.id));
 /** THE FAMILIES, as the oracle reads them (#2927): each taxonomy page's defs that build a set, and its lead, the page's
  *  `lead` or its one def. Read off the taxonomy data, not through `panelFamily`. */
-const FAMILIES = TAXONOMY.sections.flatMap((s) => s.leaves).map((l) => ({ page: l.page, lead: l.lead ?? (l.defs.length === 1 ? l.defs[0] : ''), members: l.defs.filter((d) => CANVAS_FURNITURE.has(d)) })).filter((f) => f.members.length);
+const FAMILIES = TAXONOMY.sections.flatMap((s) => s.leaves).map((l) => ({ page: l.page, lead: l.lead ?? (l.defs.length === 1 ? l.defs[0] : ''), members: l.defs.filter(buildsSet) })).filter((f) => f.members.length);
 const familyOf = (id: string) => FAMILIES.find((f) => f.members.includes(id))!;
 const leads = withSets.filter((d) => familyOf(d.id).lead === d.id);
 
@@ -1575,7 +1578,7 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
     .flatMap((b) => (b.type === 'Links' && b.label !== 'Replaces' ? [`${b.label}: ${b.items.map((i) => `${i.name}>${i.def}`).join(' / ')}`] : []));
   // #3555 Q-MD10 A: `alternativeTo` is symmetric, so Checkbox gains TextField (which names it) and Button gains Tag and Link.
   const cb = ['Instead, consider: Switch>switch-row / Radio>radio-row / TextField>text-field', 'Often used with: FieldLabel>field-label / FieldMessage>field-message / FocusRing>focus-ring / Buttons>button'];
-  const bt = ['Built from: FocusRing>focus-ring / Spinner>spinner', 'Instead, consider: Icon button>icon-button / Switch>switch-row / Tag>tag / Link>link', 'Often used with: Icon>icon / Popover>popover'];
+  const bt = ['Built from: FocusRing>focus-ring / Spinner>spinner', 'Instead, consider: Icon button>icon-button / Switch>switch-row / Tag>tag / Link>link', 'Often used with: Icon>icon / Popover>popover / Menu>menu / Tooltip>tooltip'];
   ok(related('checkbox-row').join('\n') === cb.join('\n'), 'family/related: Checkbox names families, its own parts dropped, Built from gone', related('checkbox-row').join(' | '));
   ok(related('button').join('\n') === bt.join('\n'), 'family/related buttons: Buttons as the wireframe has it', related('button').join(' | '));
   // A list naming one family twice, through two members: one entry.
@@ -1588,7 +1591,7 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
   // Tag names Badge, Checkbox.Group and Radio.Group as alternatives and as partners, so they stay under Instead, consider. Then over every lead: no family or component in two lists.
   ok(related('dialog').join('\n') === ['Built from: Flush Icon Button>flush-icon-button / Divider>divider / Buttons>button', 'Instead, consider: Accordion>accordion / Toast>toast / Banner>banner / Popover>popover',
     'Often used with: TextField>text-field / Select>select / Checkbox>checkbox-row / Radio>radio-row'].join('\n'), 'related/dialog: Buttons once, under Built from', related('dialog').join(' | '));
-  ok(related('tag').join('\n') === ['Built from: FocusRing>focus-ring', 'Instead, consider: Badge>badge / Buttons>button / Checkbox>checkbox-row / Radio>radio-row', 'Often used with: Icon>icon / Popover>popover'].join('\n'),
+  ok(related('tag').join('\n') === ['Built from: FocusRing>focus-ring', 'Instead, consider: Badge>badge / Buttons>button / Checkbox>checkbox-row / Radio>radio-row', 'Often used with: Icon>icon / Avatar>avatar / Popover>popover'].join('\n'),
     'related/tag: Badge, Checkbox and Radio once, under Instead, consider', related('tag').join(' | '));
   const twiceIn: string[] = [];
   for (const d of componentDefs.filter((x) => leadsPanel(x.id))) {
@@ -1634,14 +1637,16 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
   const shown = texts(live[0]);
   ok(!!dd && dd.type === 'Do-Dont' && dd.do.join('|') === want.slice(0, 4).join('|') && (want.length <= 4 || shown.some((t) => t.includes(`of ${want.length} Do items`))),
     `family/do: the first 4 of the family's ${want.length} Do items, the Row's first`);
-  // Each item once, over families whose defs repeat lines (Buttons repeats 28 Do and 10 Don't lines across its four
+  // Each item once, over families whose defs repeat lines (Buttons repeats its shared Do and Don't lines across its four
   // defs; Icon button repeats 6). EXPECTED is typed here, read off the defs, not derived through the panel's own merge.
+  // #2778 moved Button's nine build rules and Icon button's one out of Do, into `docs.implementation`, which the panel
+  // does not draw: Buttons' Do count went 19 → 10 and Icon button's 4 → 3.
   const famBlocks = (id: string) => planDocPanel(componentDefs.find((d) => d.id === id)!, { modes: ['light', 'dark'], names }).sections.flatMap((x) => x.blocks);
   const countLine = (id: string) => famBlocks(id).flatMap((b) => b.type === 'Paragraph' && b.text.startsWith('Showing') ? [b.text] : []);
-  ok(countLine('button').join('|') === "Showing 4 of 19 Do items and 4 of 9 Don't items.",
+  ok(countLine('button').join('|') === "Showing 4 of 10 Do items and 4 of 9 Don't items.",
     `family/once: Buttons counts each repeated item once (${JSON.stringify(countLine('button'))})`);
   const ib = famBlocks('icon-button').find((b) => b.type === 'Do-Dont');
-  ok(!countLine('icon-button').length && !!ib && ib.type === 'Do-Dont' && ib.do.length === 4 && ib.dont.length === 3 && new Set([...ib.do, ...ib.dont]).size === 7,
+  ok(!countLine('icon-button').length && !!ib && ib.type === 'Do-Dont' && ib.do.length === 3 && ib.dont.length === 3 && new Set([...ib.do, ...ib.dont]).size === 6,
     `family/once: Icon button's family fits the panel once its repeats are merged (${JSON.stringify(countLine('icon-button'))})`);
 }
 
@@ -1894,7 +1899,7 @@ section('overlap/… — a panel lies on nothing');
   const set = fakeSet(q, 'tag', 0, 0, 600, 400);
   q.appendChild!(mk('FRAME', 'Notes', [], { x: 700, y: 100, _w: 300, _h: 300 }));
   const r = await drawDocPanel(host([q]), set, componentDefs.find((d) => d.id === 'tag')!, { names });
-  ok(!r.drawn && panelsOn(q).length === 0 && panelItems(r).join(' ') === 'No usage panel for tag: "Notes" sits right of the set, where the panel goes. Move it, then build or update again',
+  ok(!r.drawn && panelsOn(q).length === 0 && panelItems(r).join(' ') === 'No usage panel for tag: "Notes" sits right of the set, where the panel goes. Move it, then build again or run Update file',
     `overlap/blocked: no panel drawn, and the run says to move the layer, not to Update, which never moves it: "${panelItems(r).join(' ')}"`);
   // A backdrop reaching into the panel's spot (#2902): the set's own, tagged as Prism3 draws it, never blocks; one a
   // designer placed, untagged, blocks as Notes does (Q172.5), and so does another set's.
@@ -1914,7 +1919,7 @@ section('overlap/… — a panel lies on nothing');
   const handSet = fakeSet(hand, 'tag', 0, 0, 600, 400);
   bg(hand, handSet, null);
   const rh = await drawDocPanel(host([hand]), handSet, tagDef, { names });
-  ok(!rh.drawn && panelItems(rh).join(' ') === 'No usage panel for tag: "inverse-bg" sits right of the set, where the panel goes. Move it, then build or update again',
+  ok(!rh.drawn && panelItems(rh).join(' ') === 'No usage panel for tag: "inverse-bg" sits right of the set, where the panel goes. Move it, then build again or run Update file',
     `overlap/hand backdrop: an untagged inverse-bg still blocks (Q172.5): "${panelItems(rh).join(' ')}"`);
   const other = page('↳ Other backdrop');
   const otherSet = fakeSet(other, 'tag', 0, 0, 600, 400);
@@ -2073,7 +2078,7 @@ const roomPage = async (name: string, also?: (p: N, a: N) => void) => {
 };
 {
   const { p, a, b, ra, rb, uh, targets, livePanel } = await roomPage('↳ Room apply');
-  ok(rb.drawn && !ra.drawn && panelItems(ra).join(' ') === 'No usage panel for badge: "divider" sits right of the set, where the panel goes. Run Update to make room, then the panel is drawn',
+  ok(rb.drawn && !ra.drawn && panelItems(ra).join(' ') === 'No usage panel for badge: "divider" sits right of the set, where the panel goes. Run Update file to make room, then the panel is drawn',
     `overlap/blocked by a set: a Prism3 set later in the row is the one case the run sends to Update ("${panelItems(ra).join(' ')}")`);
   const pre = await previewUpdate(uh, targets);
   const pa = pre.sets.find((x) => x.set === 'badge'), pb = pre.sets.find((x) => x.set === 'divider');
@@ -2448,17 +2453,18 @@ section('template/… — `_Doc-block`');
 /* ── code: a backtick span drawn as code (#3552 Q-UG2 A) ──────────────────────────────────────────────────── */
 section('code/… — a code span is written without its backticks and drawn in the brand\'s inline code style (#3552 Q-UG2 A)');
 {
-  // The one panel line with code spans today, typed from Button's def: its first Do item.
-  const want = "Place the icons the way the brand's buttonIcons setting says; attached (Attached to label, the default) keeps them beside the label with the group centered";
+  // A panel line with a code span, typed from Button's def: its inverse-surface Do item. (Its first Do item with code
+  // spans, the `buttonIcons` line, moved to `docs.implementation` with #2778, and the panel leaves that section out.)
+  const want = 'Set surface=inverse for a button on a dark or brand-filled band, so its fill, ink, border and disabled treatment bind the inverse counterparts instead of losing contrast against the flipped ground';
   const drawButton = async (o: { codeStyle?: boolean } = {}) => {
     const p = page(`↳ code ${o.codeStyle === false ? 'none' : 'style'}`);
     const r = await drawDocPanel(host([p], o), fakeSet(p, 'button'), componentDefs.find((d) => d.id === 'button')!, { names });
-    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Place the icons the way'));
+    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Set surface=inverse for a button'));
     return { r, t };
   };
   const a = await drawButton();
-  ok(a.t?.characters === want && JSON.stringify(a.t?._codes) === JSON.stringify([{ text: 'buttonIcons', id: 'S:code' }, { text: 'attached', id: 'S:code' }]),
-    'code/button: Button\'s Do item reads without backticks, buttonIcons and attached in code/inline/default', `${String(a.t?.characters)} ${JSON.stringify(a.t?._codes)}`);
+  ok(a.t?.characters === want && JSON.stringify(a.t?._codes) === JSON.stringify([{ text: 'surface=inverse', id: 'S:code' }]),
+    'code/button: Button\'s Do item reads without backticks, surface=inverse in code/inline/default', `${String(a.t?.characters)} ${JSON.stringify(a.t?._codes)}`);
   const b = await drawButton({ codeStyle: false });
   ok(b.t?.characters === want && !(b.t?._codes as unknown[]).length && b.r.misses.some((m) => m.includes('code/inline/default')),
     'code/no style: a file without the code style writes the same text plain and names the style', `${JSON.stringify(b.t?._codes)} misses ${b.r.misses.join('; ')}`);
@@ -2468,7 +2474,7 @@ section('code/… — a code span is written without its backticks and drawn in 
     const api = host([p]);
     api.loadFontAsync = async (f) => { if (f.family === CODE_TEXT_STYLE.fontName.family) throw new Error('no font'); };
     const r = await drawDocPanel(api, fakeSet(p, 'button'), componentDefs.find((d) => d.id === 'button')!, { names });
-    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Place the icons the way'));
+    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Set surface=inverse for a button'));
     ok(t?.characters === want && !(t?._codes as unknown[]).length && r.misses.some((m) => m.includes('JetBrains Mono Regular unavailable')),
       'code/no font: the code style\'s font won\'t load, so the text is plain, no code range is set, and the miss names the font', `${JSON.stringify(t?._codes)} misses ${r.misses.join('; ')}`);
   }
@@ -2513,8 +2519,9 @@ section('code/… — a code span is written without its backticks and drawn in 
   // The issue's named identifiers (N5) and a sample of its code syntax, typed by hand with the lead whose panel draws each.
   const MARKED: [string, string][] = [
     ['field-label', 'htmlFor'], ['radio-row', 'onChange'], ['text-field', 'readOnly'], ['textarea', 'maxRows'],
-    ['password-field', 'autoComplete'], ['card-number-field', 'brandName'], ['card-number-field', 'renderInput'],
-    ['slider', 'onChangeEnd'], ['icon-button', 'isInactive'], ['button', 'buttonIcons'],
+    // #2778: Password field's autoComplete, Card number field's brandName and renderInput, Slider's onChangeEnd and
+    // Button's buttonIcons left the panel with the build rules (the panel does not draw "Building it in code").
+    ['icon-button', 'isInactive'], ['button', 'surface=inverse'],
     ['button', '<button>'], ['icon-button', 'div[role=button]'], ['text-field', 'type="number"'],
     ['checkbox-row', '<input type="checkbox">'], ['checkbox-row', 'aria-checked'], ['switch-row', 'aria-pressed'],
   ];
@@ -2573,7 +2580,7 @@ section('qa/… — usage panels QA round 1 (#2970): titles, the space above Do 
   ok(lists.join('\n') === [
     'Built from: FocusRing',
     'Instead, consider: Badge / Buttons / Checkbox / Radio',
-    'Often used with: Icon / Popover',
+    'Often used with: Icon / Avatar / Popover',
     'Replaces: a removable token list built as a listbox / a clickable div styled as a pill / a bare × glyph with no accessible name',
   ].join('\n'), 'qa/related lists: 4 lists, one line per name, no chips', lists.join(' | '));
   ok(!related.children.some((b) => walk(b).some((c) => /^chip\d/.test(String(c.name)))) && rows.every((x) => JSON.stringify(x.text._lists) === `[{"s":0,"e":${String(x.text.characters).length},"o":{"type":"UNORDERED"}}]`),

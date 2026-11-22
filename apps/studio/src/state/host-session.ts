@@ -178,6 +178,12 @@ export interface HostSession {
    *  `agent-started` names the set (#2087); an agent build that names none is not attributed (it still lands in the
    *  Activity drawer). Never persisted, and never read from the file. */
   readonly setBuilds: ReadonlyMap<string, SetBuild>;
+  /** #3119: the set the last Build set verdict was about (the panel's own build, or an agent's that named its set), or
+   *  `null` when it named none. The Activity drawer's "Show the set in Figma" is for this set. */
+  readonly componentSet: string | null;
+  /** #3119: whether the file holds each set, as the main thread last said (`set-in-file`): after every Build set, and when
+   *  a "Show the set in Figma" found none. A set with no entry is not offered. */
+  readonly setInFile: ReadonlyMap<string, boolean>;
   /** OPT-IN PRUNE (#1521) — Figma-only, and three slots for the same reason `applyState` is not
    *  `seedOutcome`: the prune is its own action and its verdict must not land in another write's pill.
    *  `pruneBusy` is the in-flight state — a preview being computed or a delete running — and disables the
@@ -231,7 +237,9 @@ export interface HostSession {
    *  when the words are the same. A refusal is not a verdict: it settles no run and fills no verdict slot.
    *  The one slot it moves is the panel's own `pending`, and only when an agent's run holds the operation:
    *  the panel's request was then the one declined, and nothing is coming to answer it. */
-  readonly refused: { readonly op: OpKey; readonly message: string; readonly agent: boolean; readonly n: number } | null;
+  /** `held`: the operation holding the file (#3760), which since #3697 R7 can differ from `op`, the one asked for. Absent
+   *  when the host names none (a host older than the file-wide hold). */
+  readonly refused: { readonly op: OpKey; readonly held?: OpKey; readonly message: string; readonly agent: boolean; readonly n: number } | null;
   /** The file's Documentation settings (#2909, `apps/plugin/src/doc-settings.ts`), as the host last said them: `null`
    *  until it has (and always on the web). `error` is the host's words when a save was refused. */
   readonly docSettings: DocSettingsView | null;
@@ -303,6 +311,8 @@ export const initialHostSession = (): HostSession => ({
   styleGuideCleanup: null,
   componentDef: null,
   setBuilds: new Map(),
+  componentSet: null,
+  setInFile: new Map(),
   pruneBusy: false,
   prunePreview: null,
   pruneVerdict: null,
@@ -394,7 +404,8 @@ export const reduce = (prev: HostSession, m: HostMessage): HostSession => {
       if (!op || op === 'readback') return s;
       // Draw specs, declined: it gets no verdict, so the host's words are its result.
       const specs = op === 'components' && !m.agent && s.specsState === 'pending' ? { specsState: { ok: false, headline: '✗ not drawn', summary: m.message } } : {};
-      const next = { ...s, ...specs, refused: { op, message: m.message, agent: m.agent, n: (s.refused?.n ?? 0) + 1 } };
+      const holder = m.held ? AGENT_OP[m.held] : undefined;
+      const next = { ...s, ...specs, refused: { op, ...(holder ? { held: holder } : {}), message: m.message, agent: m.agent, n: (s.refused?.n ?? 0) + 1 } };
       // The panel's own request, declined: it posted, set `pending`, and will get no verdict. Only a panel request
       // declined behind the panel's own run OF THE SAME operation leaves `pending` to that run's verdict, which fills
       // the same slot. Since #3697 R7 one write holds the whole file, so a request is also declined behind a
@@ -424,7 +435,7 @@ export const reduce = (prev: HostSession, m: HostMessage): HostSession => {
       const set = own ? s.componentDef : agentDef ?? null;
       const result: SetBuild = m.ok ? 'ok' : m.completed ? 'issues' : 'failed';
       const setBuilds = set !== null ? new Map([...s.setBuilds, [set, result]]) : s.setBuilds;
-      return { ...s, componentState: { ok: m.ok, headline: m.headline, summary: m.summary, lines: m.lines, causes: m.causes }, openDetail: m.ok ? null : 'components', componentProgress: null, componentDef: null, setBuilds, componentLatest: 'build' };
+      return { ...s, componentState: { ok: m.ok, headline: m.headline, summary: m.summary, lines: m.lines, causes: m.causes }, openDetail: m.ok ? null : 'components', componentProgress: null, componentDef: null, setBuilds, componentLatest: 'build', componentSet: set };
     }
     case 'component-update-result':
       // Draw specs' verdict, the panel's or an agent's, is Specs' alone (Q713 A): the components row never shows it.
@@ -499,6 +510,8 @@ export const reduce = (prev: HostSession, m: HostMessage): HostSession => {
     case 'add-queue':
       // #3129: the queue after the panel's write, the teammates' writes since included.
       return { ...s, addQueue: m.queued };
+    case 'set-in-file':
+      return { ...s, setInFile: new Map([...s.setInFile, [m.def, m.inFile]]) };
     case 'updates-off':
       // #2956: the panel asks the file again on every answer (`main.ts`); a refusal is kept to say so in Update file.
       return { ...s, updatesOffError: m.error ? { def: m.def, off: m.off, error: m.error } : null };
@@ -588,6 +601,8 @@ export const topicsFor = (m: HostMessage, prev: HostSession, next: HostSession):
     case 'file-due': return next === prev ? [] : JSON.stringify(next.addQueue) === JSON.stringify(prev.addQueue) ? ['host:update'] : ['host:update', 'host:components'];
     case 'add-queue': return ['host:update', 'host:components'];
     case 'updates-off': return ['host:update', 'host:components'];
+    // #3119: the Activity drawer's "Show the set in Figma", which reads it.
+    case 'set-in-file': return next === prev ? [] : ['host'];
     // #3137: Clean up's panels item, and Documentation's off line, which names how many are drawn.
     case 'panels-clean-result': return ['host:update', 'host:docs'];
     // Q2909.8 A: the statuses fill in on Components' list and in the checklist as each set's answer lands.

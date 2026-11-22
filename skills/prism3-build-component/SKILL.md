@@ -85,13 +85,13 @@ The brief's sections follow one locked spine, so each lands in a known place:
 | §2 Anatomy and parts | `anatomy` (§2 below) |
 | §3 Properties / API | `props` |
 | §4 States and variants | `states`, `variants`, `axisKinds`. A brief state or axis the def omits is a `contested` entry in `notes` that says so. A component with no interaction states of its own, including a container whose states live on its children, declares `states: []`, never `['rest']` (the validator refuses it) |
-| §5 Usage guidance | `docs` (`usage`, `do`, `dont`) |
+| §5 Usage guidance | `docs` (`usage`, `do`, `dont`; the build rules go in its `implementation` list, below) |
 | §6 Accessibility | `accessibility` (`role`, `wcag`, `keyboard`, `focus`, `aria`) |
 | §7 Content guidelines | `content` (`labelPattern`, `errorPattern`, `emptyPattern`, `dialogPattern`, `metaphorRules` — a closed key list) and `docs.contentGuidelines` |
 | §8 Motion and transition | `motion` (`enter`, `exit`, `reduceMotion`) |
 | §9 Internationalization | `accessibility` `aria` (translatable names, what mirrors) and `anatomy.codeOnly` entries led by `RTL —` or `text expansion —` (the schema has no i18n field) |
 | §10 Naming | `aliases` (kebab-case ids) and `ai.triggerKeywords` (phrases) |
-| §11 Implementation notes | `anatomy.codeOnly` |
+| §11 Implementation notes | the `docs` `implementation` list for a rule a developer acts on, `anatomy.codeOnly` for what Figma cannot carry |
 | §12 Related and alternative components | `composition` and `ai` (`ai.commonPartners`, `ai.avoidWhen`) |
 | §13 Field POV evolution | the `evolution` bucket of `notes` |
 | §15 Agent-consumable schema | identity (`category`, `status`), and its open points into the `contested` and `unverified` buckets of `notes` |
@@ -130,7 +130,8 @@ identity (`id`, `name`, `aliases`, `category`, `status`), `inherits` where the d
 (`paintKeys`, `densitySpacing`, `visibleGaps`), `tokens`, `anatomy`, `figmaProperties`, `accessibility`, `content`, `docs`, `ai`,
 `composition`, `motion` and `notes`. `summary` comes before `description`. Button's factory and the Icon
 button factory write them the other way round; do not copy that (#2712). Which keys to write empty is still open there; the one empty
-value that is already a statement is `figmaProperties.booleans` (§6).
+value that is already a statement is `figmaProperties.booleans` (§6). Never write `brandGlyphs`: `applyIconMap`
+attaches it from the brand input's icon art (#3076).
 
 ### What ships, and who reads it
 
@@ -140,6 +141,17 @@ strips them (`notes` whole; each `codeOnly` entry down to its leading term); and
 `lint-component-docs` and `apps/plugin/lint-bundle-prose.ts` fail by name if either reaches a
 shipped form. Provenance, history, issue numbers, brief section references and Prism 2 go there,
 or in code comments.
+
+**Usage or implementation.** Shipped guidance has three readers: a designer placing the component, an
+agent generating UI with it, and a developer building it in code. One test sorts each rule:
+
+- Would a designer placing it in a mockup act on it? The `docs` `do` / `dont` lists. A rule both readers act on
+  (a prop the designer sets and the developer wires) stays here.
+- Only someone writing the component's code (DOM and ARIA wiring, state ownership, events, CSS technique,
+  what a brand setting builds)? The `docs` `implementation` list. It ships in `components.ai.json` and as the page's
+  "Building it in code" section.
+- The ARIA contract? The `accessibility` `aria` field.
+- What Figma cannot carry, or its history? `anatomy.codeOnly` / `notes`, which do not ship.
 
 `summary` is the one line a designer reads in Figma: the plugin writes it as the component
 set's description (each component's, for an `emitAsComponents` def) and as the description on
@@ -240,6 +252,18 @@ per-component spacing token. Two orderings hold at every density, and `packages/
 def as literal rules, so add yours there: a gap is tighter than the padding beside it (#325),
 and an icon-side inset sits between them (#326: gap < icon-side padding < label-side padding).
 
+**A fixed label weight: `typeWeight`.** When a def binds `type.<group>.*` refs at one weight with no axis to
+carry it, set `typeWeight: { group, intent }` (`intent` is `regular` or `bold`). The materializer repoints each such
+ref to the weight the brand ships for that intent, so the binding holds on a brand whose weights differ (Code input,
+Badge). `keys` narrows it to named token keys when the def binds one group at two weights (Badge). A weight that
+varies by variant is `weightIntent` instead, and one group can't take both.
+
+**A provider's own paint: `literal`.** Everywhere else a def binds token names, never values. A third-party
+button whose colors, font and wording the provider fixes (`wallet-button`) carries them as values instead, in one
+`literal` record keyed per projected coordinate, and each part that uses it opts in with its own `literal`. Every
+projected member must resolve an entry, and a def that carries one is listed by name in `packages/engine/test.ts`,
+so the record never spreads by accident.
+
 Spell a binding key the way the nearest sibling spells the same job (`size.{size}.padding-x`, not a
 new abbreviation). The corpus has a few jobs under two spellings (`pad-x` and `padding-x`, `height` and
 `min-height`), and #2710 is folding them into one; do not add a third.
@@ -258,6 +282,9 @@ Every part declares a `kind` from a closed vocabulary (`packages/engine/componen
 | `absolute` | takes no cell in the flow — an absolutely-positioned sibling (a focus ring) |
 | `nest` | an in-flow instance of another component — takes a cell like a box, content resolved from `nests` |
 | `vector` | a filled outline whose content is geometry — names a `glyph` from the icon vocabulary |
+
+A new kind is a schema change: add it to `KINDS` in `packages/engine/lint-part-union.ts` and to that gate's `ADMITS`, and raise `EXECUTOR_REVISION` in `apps/plugin/src/executor-revision.ts` if the
+executor draws it (§7).
 
 **Some fields belong to certain kinds** (#3698), and both `tsc` and the validator refuse them on any other kind:
 `radius` and `children` go on a `box` only (a glyph's corners are `tileEdge.radius`), `replaces` and
@@ -431,7 +458,7 @@ whose actual value comes from the host, not from the plan.
   small size of the defs in its `SMALL_SIZE` list, the flush text buttons in `FLUSH_MEMBERS`, whose
   44×44 (24×24 at small) target is extended in code and must be stated in the def's `codeOnly`, and
   the flush icon buttons in `CODE_SIDE_TARGETS`, whose target is extended in code to 44×44 at every
-  size and must be stated in both `codeOnly` and the shipped docs' do list. A def that is not a
+  size and must be stated in both `codeOnly` and the shipped `docs` `implementation` list. A def that is not a
   control of its own is listed in `EXCLUDED` in `packages/engine/lint-hit-target.ts` with a
   reason, and a part inside a control that is a target of its own (Tag's ×) in `INNER_TARGETS`.
   So in shipped prose, SC 2.5.5 is stated as intent, not as a guarantee for every size. See `packages/engine/components/select.ts` and
@@ -457,8 +484,8 @@ whose actual value comes from the host, not from the plan.
 
   **A selection mark on the page is a shape, so it binds `color.interactive.<c>.indicator.*`, never a text role and
   never the outline edge** (#3346, owner 2026-11-03; narrowed by Q-CC13 A, 2026-11-11). That covers the selected
-  outline above, a selected tab's bar, a checked radio's ring, a switch's off thumb, a slider's disc and
-  Pagination.Item's current-page underline (Q-CC12 A). The indicator matches the label's color, overrides included,
+  outline above, a selected tab's bar, a checked radio's ring, a switch's off thumb, a slider's disc and its
+  selected bar (#3398 A), and Pagination.Item's current-page underline (Q-CC12 A). The indicator matches the label's color, overrides included,
   and a brand that quiets its outline edges (`border.*`) leaves it alone. A mark that sits on a fill takes the fill's
   side instead: a switch's on thumb, on the filled track, binds `interactive.<c>.on-fill`, and a checked radio's dot
   is fill-colored (`interactive.<c>.fill.selected`). One named exception: Link's current-page bar, which PageNav.Item
@@ -499,7 +526,7 @@ library. Its `ai.whenToUse` opens with one of two wordings: "Only as a child of 
 (Q394): a designer inserts it from the assets panel, which works only for a published set, so it stays
 unprefixed even where its `ai.whenToUse` says "Only as a child of …". The slot items are `tab-item`,
 `list-item`, `segmented-control-segment`, `breadcrumb-item`, `pagination-item`, `page-nav-item`,
-`code-input-cell` and `radio-row`. The checkbox and radio controls (`checkbox-control`,
+`step-item`, `code-input-cell`, `radio-row` and `menu-item`. The checkbox and radio controls (`checkbox-control`,
 `radio-control`) stay unprefixed because they may be used on their own.
 
 **Figma property names are lowercase (owner decision Q345).** Every name a designer reads in the
@@ -725,6 +752,7 @@ above; `lint-skills` fails if a row is missing or disagrees with the manifest. A
 | `surfaces` | value |  |
 | `raisedSurface` | value | one token's value moves: `color.foreground.raised`, which Dialog's panel binds, holds the card, the page or white in light |
 | `scrimStrength` | value | one token's value moves: `color.scrim.default`, the dialog's backdrop, aliases a heavier existing `black-alpha` step; no name changes |
+| `interactiveGround` | value | interactive role values move: the fills, disabled text and icon, field borders, the destructive outline and the field status borders are measured on the page instead of the contrast floor, in light and dark; no binding or name changes |
 | `glassRoles` | value | adds brand-dependent `color.glass.<name>` fills; a def binds `glass.surface`, never a brand's own glass role |
 | `strictInteractiveContrast` | value | swaps the inverse label ink token |
 | `linkStateRungs` | value |  |
@@ -797,6 +825,9 @@ so a new def fails by name until you add it — or, for a floor list, stays unco
 | `packages/engine/test.ts` | nothing for the brief: `KB_BRIEF_CATEGORY` is derived from `schema/kb-briefs.json` (refresh it if the brief is new). A def with a `presentWhen` part in `GATED_EXPECTED`, and a def binding a `size.<size>.control`, `dot` or `track` key in `CONTROL_DEFS`: both are exact-equality lists. |
 | `lint-control-shape-reach` | a def that binds a corner: a button, field or checkbox in `FAMILIES` (it then follows Control shape, so give it `levers.controlShape`), a def a claimed noun could be read to cover but the owner ruled out in `NOT_CLAIMED` with the decision (Counter, Q-CS4 B), anything else in `OUTSIDE_REASON` with the reason. Google Pay's wallet corner is held to half the height under every shape (a CLAMP failure names it). A def in none fails by name (#3765). |
 | `apps/plugin/src/file-taxonomy.ts` | the def on a page in `TAXONOMY` (§3). |
+| `lint-part-union` | a new part kind (§2) in `KINDS`, and in `ADMITS` under every field that kind may carry. A kind missing from either fails by name. |
+| `lint-motion-literals` | a def a `prism3-motion` recipe governs in `RECIPE_DEFS`, under that recipe, so its `motion.reduceMotion` is checked against the recipe's reduced form. |
+| `lint-executor-revision`, `lint-executor-reach` (plugin) | when a new part kind or projection changes the component executor's code, raise `EXECUTOR_REVISION` in `apps/plugin/src/executor-revision.ts` and name every set it redraws in `apps/plugin/src/executor-reach.json`. |
 
 `lint-naming` needs no entry either: its rules (§6) apply to every registered def, so a new def that
 breaks one fails by name.
@@ -891,11 +922,18 @@ skill-only change like this file needs no note.
 guaranteed **token-name** surface only. A component id, prop name or variant value is not a
 token name, so binding existing roles leaves `CONTRACT_VERSION` unmoved.
 
-The component-API surface has its own decided direction: a distinct `COMPONENT_CONTRACT_VERSION`
-(#1325 Option 3, #1326 decision 3), MAJOR/MINOR by add-versus-rename, evolved from the
-component-surface baseline. **The direction is settled; the mechanism is a separate follow-up arc
-and does not exist in code today** — do not stamp a component-contract version or gate against
-one until that arc builds it.
+The component-API surface has its own two versions (#1325, owner decision Q-CC1 A), both in
+`packages/engine/version.ts`. `COMPONENT_CONTRACT_VERSION` covers the **component contract**: each
+def's id and name, status, props (type, required, default, values), states, variant axes and
+values, and slots. `COMPONENT_SCHEMA_VERSION` covers the **component schema**, the shape of one
+published entry. Say "component contract" or "token contract", never a bare "contract".
+
+`npx tsx packages/engine/component-contract.ts --check` fails when a def moves that surface, and
+names each change with its class: a removed or renamed name is MAJOR, an added one MINOR, a moved
+default PATCH (`docs/30` has the full table). A new def is a MINOR. Raise
+`COMPONENT_CONTRACT_VERSION` by that increment in the same PR, then run
+`npx tsx packages/engine/component-contract.ts --accept`, which refuses until the number is high
+enough. Like `CONTRACT_VERSION`, you raise this number yourself; the fold does not assign it.
 
 ## Before you finish
 
@@ -915,7 +953,7 @@ one until that arc builds it.
    passes the variant rule in §6; a show/hide, a text, a nested choice or a width is not an axis.
 7. No border binds an icon or text role; an invalid state is the `status` axis, not an `error` state; a
    state a consumer sets has its own prop; repeated children sit in an `items` slot.
-8. The def is in every gate list in §7, its docs page and JSON entry are regenerated, both baselines
+8. The def is in every gate list in §7, its docs page and JSON entry are regenerated, all three baselines
    are accepted after the change note is added, and `npm run verify` is all-PASS with no SKIP.
 9. A mutation of the def fails a surface gate by name, and each brief decision's own arm fails by name.
 10. A progress entry, `docs/progress/pending/<slug>.md`, carries the diagnosis, the decisions held for

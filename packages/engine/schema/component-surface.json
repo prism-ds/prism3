@@ -2,8 +2,8 @@
   "note": "AUTHORED BASELINE, never a regen artifact (see lint-component-surface.ts). Rewritten only by an explicit `npx tsx packages/engine/lint-component-surface.ts --accept`, which refuses unless an engine bump is already declared (a change note in packages/engine/changes/, #1807) — a gate allowed to rewrite what it reads has no memory. Per def: the member count of the DEFAULT Figma projection, a sha256 over its sorted `planComponentName|planStamp` rows, and its non-variant component properties as sorted `name:TYPE` (#2649). `null` means the def declares no figmaProperties and projects no set. Mostly brand-independent: figmaAnatomySet takes a def and no theme. The exception is a def with weightIntent (#1602), whose weight axis resolves per brand — for those, extra `<id>@<scenario>` rows record the surface under canonical availability scenarios (body-emphasis = NB's bold→emphasis, body-single = the axis collapse), so a change to the resolution or collapse rule moves a row. Likewise a def binding the interactive overlay wash (#1608) carries `<id>@outline-solid-tint` and `<id>@outline-none` rows — its outline/text hover fill under the other two outlineInteraction methods. The button family (#1667) carries `<id>@button-default`, `<id>@button-edges` and `<id>@button-smaller` rows — its derived minimum width, the Locked to edges layout and the One step smaller medium content, against the default-density heights. It records no engine version of its own on purpose — a pure value change bumps the engine and moves no component surface. A failure here is a CHANGED projection: read the diff, decide whether the change was intended, add a change note declaring the bump, then accept.",
   "defs": {
     "icon": {
-      "members": 46,
-      "sha256": "10ad9afab46142d55db91c664d8f9806e9128069af18a4c8e68652ab71b0fc7a",
+      "members": 48,
+      "sha256": "0a4682cdb6dcfc41a429bda42c067d1201c43043a2b242e1be97fbfe4d8de2e4",
       "properties": []
     },
     "provider-logo": {
@@ -463,7 +463,7 @@
     },
     "spinner": {
       "members": 4,
-      "sha256": "ea89c251f0a29b2686e2f4ed1bbec1c6668f189c8ddaa13f69ac16442f6849cc",
+      "sha256": "026d0538f54969c21d7fc45b393981e52600ba7f230f70e95bc9221c92f89a37",
       "properties": []
     },
     "badge": {
@@ -472,6 +472,14 @@
       "properties": [
         "label:TEXT",
         "value:TEXT"
+      ]
+    },
+    "avatar": {
+      "members": 30,
+      "sha256": "6bed9df0e00779c78ce3529ecc83f1f46e9c83438a5050c5fdfac3dd6280c91c",
+      "properties": [
+        "initials:TEXT",
+        "presence:BOOLEAN"
       ]
     },
     "tag": {
@@ -757,7 +765,7 @@
     },
     "progress": {
       "members": 12,
-      "sha256": "d339572d714207b5a327577167f258b404f4f3bfbd0506ef621947c01b2a0835",
+      "sha256": "a66783e7a0804ab6638efa9851d96e363ec88a54258ba9c96647a61ad6f02872",
       "properties": [
         "complete value text:TEXT",
         "label text:TEXT",
@@ -816,7 +824,7 @@
     },
     "slider": {
       "members": 30,
-      "sha256": "eafd14313e9d7a0fba3f15bc73b6f1aa994421aed8dfeafc8dff008cb3c9de3a",
+      "sha256": "ac592648690ee336b0b7bff61c3332e72ea9aa1dbd1e63605721d4338b03705d",
       "properties": [
         "inputs:BOOLEAN",
         "label:BOOLEAN",
@@ -857,6 +865,11 @@
         "items:SLOT"
       ]
     },
+    "skeleton": {
+      "members": 4,
+      "sha256": "d5fb95a417fd6345fde819fa98741b4926fe9cbaa90a9150a8b88fcf8d3eafe7",
+      "properties": []
+    },
     "popover": {
       "members": 1,
       "sha256": "f52139a7c315b16de3bd467183303b65e6c32f9aae441da4b4395e105ef9a4b5",
@@ -866,6 +879,91 @@
         "footer:BOOLEAN",
         "title text:TEXT",
         "title:BOOLEAN"
+      ]
+    },
+    "step-item": {
+      "members": 16,
+      "sha256": "5cea9e6e38e9452fb68350682ebdd5ebe7c8544dcbb7faddf679a5385aa111e7",
+      "properties": [
+        "connector:BOOLEAN",
+        "label:TEXT",
+        "number:TEXT"
+      ]
+    },
+    "steps": {
+      "members": 4,
+      "sha256": "1fbbf6c8ccbbd6741a157ab0c74f62d97aa038f5f97012ad15c35e6acad0aecb",
+      "properties": [
+        "items:SLOT"
+      ]
+    },
+    "menu-item": {
+      "members": 15,
+      "sha256": "dea7b1fe44add5635d4525f3f60dec2e244da9468b06fd1daa92e8d37b5a22be",
+      "properties": [
+        "checked:BOOLEAN",
+        "description text:TEXT",
+        "description:BOOLEAN",
+        "indicator:BOOLEAN",
+        "label:TEXT",
+        "leading icon:BOOLEAN",
+        "leading:BOOLEAN",
+        "shortcut text:TEXT",
+        "shortcut:BOOLEAN"
+      ]
+    },
+    "menu-item@outline-solid-tint": {
+      "members": 15,
+      "sha256": "470877f25f31f2b86307237502ab3b5e49fd5a59ea67fc7d3cc5f5fb002ae9c6",
+      "properties": [
+        "checked:BOOLEAN",
+        "description text:TEXT",
+        "description:BOOLEAN",
+        "indicator:BOOLEAN",
+        "label:TEXT",
+        "leading icon:BOOLEAN",
+        "leading:BOOLEAN",
+        "shortcut text:TEXT",
+        "shortcut:BOOLEAN"
+      ]
+    },
+    "menu-item@outline-none": {
+      "members": 15,
+      "sha256": "bd91566fbe4ec1e00f17ace78918199c93b0dd5740e3de273984a49b51a56362",
+      "properties": [
+        "checked:BOOLEAN",
+        "description text:TEXT",
+        "description:BOOLEAN",
+        "indicator:BOOLEAN",
+        "label:TEXT",
+        "leading icon:BOOLEAN",
+        "leading:BOOLEAN",
+        "shortcut text:TEXT",
+        "shortcut:BOOLEAN"
+      ]
+    },
+    "menu-group": {
+      "members": 1,
+      "sha256": "ba618abef0621b9169238dc929fb4840629b871507fceb3c18b3b38286ef65a2",
+      "properties": [
+        "heading text:TEXT",
+        "heading:BOOLEAN",
+        "items:SLOT"
+      ]
+    },
+    "menu": {
+      "members": 1,
+      "sha256": "114d3a3c43211e651ea28e034344ee24a80895c19a6da99a17b0664dd7288fe1",
+      "properties": [
+        "items:SLOT"
+      ]
+    },
+    "tooltip": {
+      "members": 4,
+      "sha256": "fc56d7bedcbf98b4cfb43fcb79a65fcc60e7495d0cca19db063b710cfa070edb",
+      "properties": [
+        "arrow:BOOLEAN",
+        "label:TEXT"
       ]
     }
   }

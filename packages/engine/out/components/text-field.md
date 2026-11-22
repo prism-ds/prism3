@@ -48,9 +48,7 @@ Use for free-form, non-enumerable single-line input — names, titles, SKUs, ide
 
 - Always render a visible, associated label (FieldLabel) — visually-hidden only for search
 - Distinguish `readOnly` (copyable, submitted, full-contrast) from disabled (silent, exempt)
-- Emit a real `<input name>` so it works uncontrolled, in a native form, with Server Actions
 - Separate a decorative glyph (`aria-hidden`) from an interactive trailing action (a labeled button)
-- Follow the error-timing contract: validate on blur, re-validate on input after the first error, move focus to the first invalid field on submit, and show an error summary on a long form (the form library runs it; the field renders it)
 
 ### Don't
 
@@ -95,13 +93,16 @@ Label = noun phrase, sentence case, no trailing colon. Placeholder = example onl
 
 - **Built from:** `field-label`, `field-message`
 - **Instead, consider:** `textarea`, `select`, `checkbox-row`, `switch-row`, `password-field`, `search-field`, `counter`, `card-number-field`, `slider`, `code-input`
-- **Often used with:** `icon`, `button`, `spinner`
+- **Often used with:** `icon`, `button`, `spinner`, `tooltip`
 - **Replaces:**
   - bare input without label wiring
   - placeholder-as-label
   - `type=number` for formatted numeric
 
 ## Building it in code
+
+- Emit a real `<input name>` so it works uncontrolled, in a native form, with Server Actions
+- Follow the error-timing contract: validate on blur, re-validate on input after the first error, move focus to the first invalid field on submit, and show an error summary on a long form (the form library runs it; the field renders it)
 
 ### Props
 
@@ -113,7 +114,7 @@ Label = noun phrase, sentence case, no trailing colon. Placeholder = example onl
 | `onChange` | function | — | no | Change handler (also onBlur / onFocus). |
 | `type` | enum: 'text' \| 'email' \| 'url' \| 'tel' \| 'search' \| 'password' | `text` | no | Attribute-only variants (mobile keyboard + autofill). Not number: numeric input needs a number field (not built yet). search / password are better served by their thin specializations. |
 | `placeholder` | string | — | no | An example only ("name@example.com"); vanishes on input; nothing load-bearing lives here. |
-| `helpText` | string \| node | — | no | Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format before failure. |
+| `helpText` | string \| node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format before failure. |
 | `validation` | enum: 'default' \| 'error' \| 'warning' \| 'success' | `default` | no | The validation state. Each non-default status swaps the input border to its own boundary (border-only — error → danger, warning → warning, success → success) and sets the nested message to the matching status; default is neutral. error also sets aria-invalid. The values align with FieldMessage's status axis, so this drives the nested message directly. |
 | `validationMessage` | string \| node | — | no | The validation text shown at error / warning / success, added to aria-describedby. For error, say what is wrong and how to fix it (SC 3.3.3), never "Invalid". |
 | `showMessage` | boolean | `false` | no | Whether the composed FieldMessage is shown. Off by default; turn it on to render the helper or validation message below the input. Never hides a message the field needs: turn it on wherever there is helper or validation text. |

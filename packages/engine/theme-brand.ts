@@ -8,7 +8,9 @@ import { radiusScale, componentSizes, type RadiusStep, type SizeStep, controlSiz
 import { inGamut, maxChroma, deltaE2000, ACHROMATIC_C } from './color';
 import type { ModeName } from './modes';
 import { resolveVocabulary } from './vocabulary';
-import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
+import { resolveHexAnchors } from './hex-anchors';
+import { iconMapErrors } from './icon-map';
+import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, INTERACTIVE_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
 import { PALETTE_NAME_RE, RESERVED_PALETTES, STATUS_DEFAULTS, statusRamp, inRedTerritory, hueDist, RED_CHROMA_FLOOR, normalizeDisabledStrategy, normalizeDisabledMin } from './theme-color';
 import { buildDims } from './theme-dims';
 import { buildMotion, type MotionAxis } from './theme-motion';
@@ -42,7 +44,11 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // numbers; `personality` traits fill levers the brief left absent, never one it set. Each
   // inference lands in `notes` alongside the engine's own defaults — the whole point is that a
   // choice made FOR the author is as visible as one they made themselves.
-  const resolved = resolveVocabulary(brandInput);
+  // #4133 (owner decision A, 2026-11-19): a hex anchor becomes OKLCH first, with a note naming the converted value,
+  // so nothing past this line sees a string where an anchor goes.
+  const hexed = resolveHexAnchors(brandInput);
+  notes.push(...hexed.notes);
+  const resolved = resolveVocabulary(hexed.input);
   const input = resolved.input as BrandInput;
   notes.push(...resolved.notes);
   // #3875: the id names every file the CLI writes (`<id>.tokens.json` and the rest, `emit-dtcg.ts`), so a separator in
@@ -86,11 +92,15 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // (DECISIONS LOG arm) renders every producer below and fails any note that drifts back.
   if (stdModes.length < ALL_MODES.length) notes.push(`modes: ${stdModes.join(', ')} only — the brand turns off ${ALL_MODES.filter((m) => !stdModes.includes(m)).join(', ')}.`);
   if (modes.includes('wireframe')) notes.push('modes: wireframe added — a grayscale mode: each color role takes its neutral equivalent, and every radius is 0.');
-  // User-added custom modes (Phase C1) — each `{ name, base }` LIVE-INHERITS a customizable
-  // built-in (`base` = light/dark only): it re-derives exactly like its base each build (a cloned
-  // descriptor, same kind/family/mins, new name), then its own overrides/modeAnchors deviate it.
-  // Names must be slug-safe, non-reserved (not a built-in), and unique; the base must be light/dark
-  // AND a mode this brand generates. Validated here (in-memory BrandInput skips schema validation).
+  // User-added custom modes (Phase C1; a SNAPSHOT since #1946, owner decision 2026-11-18 A). Each
+  // `{ name, base }` is a mode in its own right: its per-mode input (overrides, modeLevers,
+  // modeAnchors, surfaces, outlineHoverFill under its own name) was copied from the mode it started
+  // from when it was created, and nothing reads the source's per-mode input again. `base` records
+  // that source (provenance) and picks the appearance the mode derives with (light or dark: a cloned
+  // descriptor, same kind/family/mins). So the source mode may be off: turning Dark off, or editing
+  // it, leaves a custom mode that started from Dark as it was. Names must be slug-safe, non-reserved
+  // (not a built-in), and unique; `base` must be light or dark. Validated here (in-memory BrandInput
+  // skips schema validation).
   const CUSTOM_MODE_RE = /^[a-z0-9][a-z0-9-]*$/;
   const customModes = input.customModes ?? [];
   const customNames: string[] = [];
@@ -103,14 +113,12 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
       throw new Error(`customModes: duplicate custom mode name '${cm.name}' — custom mode names must be unique`);
     if (cm.base !== 'light' && cm.base !== 'dark')
       throw new Error(`customModes: '${cm.name}' base '${cm.base}' must be a CUSTOMIZABLE built-in (light or dark) — hc/wireframe cannot be a custom-mode base`);
-    if (!modes.includes(cm.base))
-      throw new Error(`customModes: '${cm.name}' base '${cm.base}' is not in this brand's generated modes (${modes.join(', ')})`);
     customNames.push(cm.name);
   }
   // The full mode list: built-ins first, customs appended (canonical order). A fresh array so the
   // shared ALL_MODES constant is never mutated when `input.modes` was omitted.
   const modesAll: ModeName[] = customNames.length ? [...modes, ...customNames] : modes;
-  if (customModes.length) notes.push(`custom modes: ${customModes.map((cm) => `${cm.name} (based on ${cm.base})`).join(', ')} — each rebuilds from its base on every build; overrides and modeAnchors adjust it.`);
+  if (customModes.length) notes.push(`custom modes: ${customModes.map((cm) => `${cm.name} (started from ${cm.base})`).join(', ')} — each keeps the copy of that mode's settings taken when it was made, and later changes to that mode do not reach it.`);
   // Per-mode colour overrides (Phase A1) — customizable modes only. A mode this brand doesn't
   // generate can't carry overrides; the generate-only built-ins (hc-light/hc-dark/wireframe) are
   // baseline-only (a later phase makes HC/wireframe customizable). Malformed palette/step refs
@@ -284,12 +292,16 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     { path: 'raisedSurface', value: input.raisedSurface, options: RAISED_SURFACE_VALUES },
     { path: 'scrimStrength', value: input.scrimStrength, options: SCRIM_STRENGTH_VALUES },
     { path: 'secondaryTextGround', value: input.secondaryTextGround, options: SECONDARY_TEXT_GROUND_VALUES },
+    { path: 'interactiveGround', value: input.interactiveGround, options: INTERACTIVE_GROUND_VALUES },
     { path: 'radioDot', value: input.radioDot, options: RADIO_DOT_SHARES },
   ];
   for (const { path, value, options } of enumLevers) {
     if (value !== undefined && !(options as readonly unknown[]).includes(value))
       throw new Error(`${path}: ${JSON.stringify(value)} is invalid — must be one of ${options.join('/')}`);
   }
+  // The brand icon map (#3076): every rule, by name (`icon-map.ts`). The first broken one stops the build.
+  const iconErrors = iconMapErrors(input.icons);
+  if (iconErrors.length) throw new Error(iconErrors.join('; '));
   const glassRoles = validGlassRoles(input.glassRoles);
   const rangeLevers: { path: string; value: unknown; min: number; max: number }[] = [
     { path: 'radiusScale', value: input.radiusScale, min: 0, max: 2 },
@@ -870,6 +882,8 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   if (capSizes.length) notes.push(`typography: caption sizes set by the brand: ${capSizes.map(([v, px]) => `caption.${v} ${px}px`).join(', ')}, one size in every mode.`);
   const trackPins = TYPE_GROUPS.filter((g) => input.typography?.tracking?.[g]).map((g) => `${g} ${input.typography!.tracking![g]}`);
   if (trackPins.length) notes.push(`typography: letter spacing pinned per text type: ${trackPins.join(', ')}. Every size in a pinned text type uses that letter spacing, in place of the size-based one and its nudge.`);
+  const leadPins = TYPE_GROUPS.filter((g) => input.typography?.leading?.[g]).map((g) => `${g} ${input.typography!.leading![g]}`);
+  if (leadPins.length) notes.push(`typography: line height pinned per text type: ${leadPins.join(', ')}. Every size in a pinned text type uses that line height, in place of the size-based one and its nudge.`);
   // Sub-10px flag (#1363). 8px is below every practical legibility floor and below the size range
   // this system's contrast ratios were reasoned about, so an opted-in sub-10px rung is flagged here the
   // way `actionPalette` flags a decoupled action colour — a deliberate, recorded exception rather than a
@@ -919,6 +933,13 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     }
     throw new Error(`${where}: ${JSON.stringify(value)} is not ${noun}. Use ${alts}${ramp}.`);
   };
+  // A `surfaces` key names light, dark or a declared custom mode (#1946). The schema takes any key since a custom mode
+  // carries its own `surfaces.<name>`, and in-memory input skips the schema, so a typo (`drak`), a derived mode
+  // (`hc-light`) or an undeclared custom mode would otherwise be read by no mode and silently ignored.
+  for (const mode of Object.keys(input.surfaces ?? {})) {
+    if (mode !== 'light' && mode !== 'dark' && !customNames.includes(mode))
+      throw new Error(`surfaces.${mode}: '${mode}' is not light, dark or a custom mode of this brand${customNames.length ? ` (custom modes: ${customNames.join(', ')})` : ''}, so no mode reads these surfaces. Use light, dark or a name in customModes.`);
+  }
   for (const [mode, sf] of Object.entries(input.surfaces ?? {})) {
     for (const key of ['base', 'secondary', 'tertiary'] as const) {
       if (sf?.[key] != null && typeof sf[key] === 'object') {
@@ -1053,6 +1074,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   return {
     id: input.id, root, namespace: `${root}.${CORE_TIER}.palette`, colorFormat: 'hex', modes: modesAll, palettes, roleToPalette, notes,
     ...(customModes.length ? { customModes } : {}),
+    ...(input.icons && (Object.keys(input.icons.map ?? {}).length || Object.keys(input.icons.glyphs ?? {}).length) ? { icons: input.icons } : {}),
     ...(Object.keys(radiusByMode).length || Object.keys(familiesByMode).length || Object.keys(weightRolesByMode).length || Object.keys(lineHeightRepointByMode).length || Object.keys(letterSpacingRepointByMode).length || Object.keys(motionByMode).length || Object.keys(easingRolesByMode).length || Object.keys(shadowByMode).length || Object.keys(sizesByMode).length ? { modeLevers } : {}),
     roleAnchorStep: { brand: anchorStep, neutral: 500, success: 500, warning: 500, danger: 500, info: 500, action: actionAnchorStep },
     linkPalette, linkAnchorStep,
@@ -1069,6 +1091,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     ...(input.raisedSurface ? { raisedSurface: input.raisedSurface } : {}),
     ...(input.scrimStrength ? { scrimStrength: input.scrimStrength } : {}),
     ...(input.secondaryTextGround ? { secondaryTextGround: input.secondaryTextGround } : {}),
+    ...(input.interactiveGround ? { interactiveGround: input.interactiveGround } : {}),
     ...(glassRoles ? { glassRoles } : {}),
     ...(radioDot !== RADIO_DOT_DEFAULT ? { radioDot } : {}),
     actionAnchorStep: input.actionAnchorStep, destructiveAnchorStep: input.destructiveAnchorStep,

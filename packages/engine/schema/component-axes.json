@@ -77,6 +77,31 @@
       "title": "TEXT"
     }
   },
+  "avatar": {
+    "axes": {
+      "shape": [
+        "circular",
+        "square"
+      ],
+      "size": [
+        "large",
+        "medium",
+        "small",
+        "x-large",
+        "x-small"
+      ],
+      "type": [
+        "icon",
+        "image",
+        "initials"
+      ]
+    },
+    "members": 30,
+    "properties": {
+      "initials": "TEXT",
+      "presence": "BOOLEAN"
+    }
+  },
   "badge": {
     "axes": {
       "emphasis": [
@@ -723,7 +748,9 @@
         "minus-filled",
         "more-horizontal-filled",
         "more-vertical-filled",
+        "organization",
         "pause-circle",
+        "person",
         "play-circle",
         "plus",
         "plus-circle",
@@ -736,7 +763,7 @@
         "warning-triangle-filled"
       ]
     },
-    "members": 46,
+    "members": 48,
     "properties": {}
   },
   "icon-button": {
@@ -934,6 +961,62 @@
       "label": "TEXT",
       "number": "TEXT",
       "swap icon": "INSTANCE_SWAP"
+    }
+  },
+  "menu": {
+    "axes": {
+      "placement": [
+        "bottom"
+      ]
+    },
+    "members": 1,
+    "properties": {
+      "items": "SLOT"
+    }
+  },
+  "menu-group": {
+    "axes": {
+      "type": [
+        "section"
+      ]
+    },
+    "members": 1,
+    "properties": {
+      "heading": "BOOLEAN",
+      "heading text": "TEXT",
+      "items": "SLOT"
+    }
+  },
+  "menu-item": {
+    "axes": {
+      "intent": [
+        "default",
+        "destructive"
+      ],
+      "state": [
+        "disabled",
+        "focus-visible",
+        "hover",
+        "pressed",
+        "rest"
+      ],
+      "type": [
+        "action",
+        "submenu"
+      ]
+    },
+    "members": 15,
+    "properties": {
+      "checked": "BOOLEAN",
+      "description": "BOOLEAN",
+      "description text": "TEXT",
+      "indicator": "BOOLEAN",
+      "label": "TEXT",
+      "leading": "BOOLEAN",
+      "leading icon": "BOOLEAN",
+      "shortcut": "BOOLEAN",
+      "shortcut text": "TEXT",
+      "↳ swap leading icon": "INSTANCE_SWAP"
     }
   },
   "page-nav": {
@@ -1396,6 +1479,21 @@
     "members": 96,
     "properties": {}
   },
+  "skeleton": {
+    "axes": {
+      "shape": [
+        "circle",
+        "rect",
+        "text"
+      ],
+      "size": [
+        "medium",
+        "small"
+      ]
+    },
+    "members": 4,
+    "properties": {}
+  },
   "slider": {
     "axes": {
       "size": [
@@ -1440,6 +1538,46 @@
     },
     "members": 4,
     "properties": {}
+  },
+  "step-item": {
+    "axes": {
+      "orientation": [
+        "horizontal",
+        "vertical"
+      ],
+      "size": [
+        "medium",
+        "small"
+      ],
+      "status": [
+        "complete",
+        "current",
+        "error",
+        "upcoming"
+      ]
+    },
+    "members": 16,
+    "properties": {
+      "connector": "BOOLEAN",
+      "label": "TEXT",
+      "number": "TEXT"
+    }
+  },
+  "steps": {
+    "axes": {
+      "orientation": [
+        "horizontal",
+        "vertical"
+      ],
+      "size": [
+        "medium",
+        "small"
+      ]
+    },
+    "members": 4,
+    "properties": {
+      "items": "SLOT"
+    }
   },
   "switch-control": {
     "axes": {
@@ -1651,6 +1789,21 @@
       "action": "BOOLEAN",
       "close": "BOOLEAN",
       "message": "TEXT"
+    }
+  },
+  "tooltip": {
+    "axes": {
+      "placement": [
+        "bottom",
+        "end",
+        "start",
+        "top"
+      ]
+    },
+    "members": 4,
+    "properties": {
+      "arrow": "BOOLEAN",
+      "label": "TEXT"
     }
   },
   "veil": {

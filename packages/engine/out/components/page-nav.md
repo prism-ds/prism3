@@ -13,7 +13,7 @@ A navigation between two to six related pages, such as Log in and Create account
 
 - **Purpose:** Move between sibling pages: a navigation of links, each to its own address, with the current page marked by a bar and `aria-current="page"`.
 - **Use when:** Two to about six sibling pages of one area, such as Log in and Create account, or an account's Overview, Orders and Profile, where each page has its own address and the current one is marked.
-- **Avoid when:** The content switches in place without changing the address (use Tabs), the links are the site's main navigation, the path is a hierarchy (use Breadcrumbs), or the pages are a required sequence (a stepper, not built yet).
+- **Avoid when:** The content switches in place without changing the address (use Tabs), the links are the site's main navigation, the path is a hierarchy (use Breadcrumbs), or the pages are a required sequence (use Steps).
 
 ## Anatomy
 
@@ -41,7 +41,6 @@ Use page navigation to move between two to six sibling pages that share a headin
 
 - Mark the page the user is on as the current item
 - Use each page's own title as its label
-- Name the landmark for the area, such as Account
 - Keep the row the same on every page it links
 
 ### Don't
@@ -94,6 +93,8 @@ Page titles in sentence case, matching each page heading.
   - a row of links with the current page told apart by color alone
 
 ## Building it in code
+
+- Name the landmark for the area, such as Account
 
 ### Props
 

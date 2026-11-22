@@ -151,6 +151,12 @@
             ]
           },
           {
+            "name": "↳ Avatar",
+            "components": [
+              "avatar"
+            ]
+          },
+          {
             "name": "↳ Tag",
             "components": [
               "tag",
@@ -215,6 +221,15 @@
             ]
           },
           {
+            "name": "↳ Menu",
+            "components": [
+              "menu-item",
+              "menu-group",
+              "menu"
+            ],
+            "usagePanelLead": "menu"
+          },
+          {
             "name": "↳ Banner",
             "components": [
               "banner"
@@ -238,9 +253,23 @@
             "usagePanelLead": "page-nav"
           },
           {
+            "name": "↳ Steps",
+            "components": [
+              "step-item",
+              "steps"
+            ],
+            "usagePanelLead": "steps"
+          },
+          {
             "name": "↳ Toast",
             "components": [
               "toast"
+            ]
+          },
+          {
+            "name": "↳ Tooltip",
+            "components": [
+              "tooltip"
             ]
           },
           {
@@ -315,6 +344,12 @@
             "components": [
               "spinner"
             ]
+          },
+          {
+            "name": "↳ Skeleton",
+            "components": [
+              "skeleton"
+            ]
           }
         ]
       },
@@ -354,7 +389,7 @@
         "kind": "component set",
         "page": "↳ Icons & assets",
         "section": "Foundations",
-        "members": 46,
+        "members": 48,
         "variantProperties": [
           {
             "name": "name",
@@ -394,7 +429,9 @@
               "minus-filled",
               "more-horizontal-filled",
               "more-vertical-filled",
+              "organization",
               "pause-circle",
+              "person",
               "play-circle",
               "plus",
               "plus-circle",
@@ -414,7 +451,7 @@
             "tone"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/icon.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/icon.md"
       },
       {
         "id": "provider-logo",
@@ -518,7 +555,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/provider-logo.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/provider-logo.md"
       },
       {
         "id": "focus-ring",
@@ -543,7 +580,7 @@
             "offset"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/focus-ring.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/focus-ring.md"
       },
       {
         "id": "button",
@@ -624,7 +661,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/button.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/button.md"
       },
       {
         "id": "button-destructive",
@@ -705,7 +742,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/button-destructive.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/button-destructive.md"
       },
       {
         "id": "button-neutral",
@@ -786,7 +823,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/button-neutral.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/button-neutral.md"
       },
       {
         "id": "wallet-button",
@@ -836,7 +873,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/wallet-button.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/wallet-button.md"
       },
       {
         "id": "sign-in-button",
@@ -892,7 +929,7 @@
             "disabled"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/sign-in-button.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/sign-in-button.md"
       },
       {
         "id": "icon-button",
@@ -951,7 +988,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/icon-button.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/icon-button.md"
       },
       {
         "id": "icon-button-destructive",
@@ -1010,7 +1047,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/icon-button-destructive.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/icon-button-destructive.md"
       },
       {
         "id": "icon-button-neutral",
@@ -1069,7 +1106,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/icon-button-neutral.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/icon-button-neutral.md"
       },
       {
         "id": "flush-icon-button",
@@ -1119,7 +1156,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/flush-icon-button.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/flush-icon-button.md"
       },
       {
         "id": "flush-icon-button-destructive",
@@ -1169,7 +1206,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/flush-icon-button-destructive.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/flush-icon-button-destructive.md"
       },
       {
         "id": "flush-icon-button-neutral",
@@ -1219,7 +1256,7 @@
             "inactive"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/flush-icon-button-neutral.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/flush-icon-button-neutral.md"
       },
       {
         "id": "field-label",
@@ -1274,7 +1311,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/field-label.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/field-label.md"
       },
       {
         "id": "field-message",
@@ -1301,7 +1338,7 @@
             "type": "TEXT"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/field-message.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/field-message.md"
       },
       {
         "id": "text-field",
@@ -1373,7 +1410,7 @@
             "empty"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/text-field.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/text-field.md"
       },
       {
         "id": "textarea",
@@ -1449,7 +1486,7 @@
             "empty"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/textarea.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/textarea.md"
       },
       {
         "id": "checkbox-control",
@@ -1495,7 +1532,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/checkbox-control.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/checkbox-control.md"
       },
       {
         "id": "checkbox-row",
@@ -1546,7 +1583,7 @@
             "read-only"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/checkbox-row.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/checkbox-row.md"
       },
       {
         "id": "checkbox-group",
@@ -1574,7 +1611,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/checkbox-group.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/checkbox-group.md"
       },
       {
         "id": "radio-control",
@@ -1619,7 +1656,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/radio-control.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/radio-control.md"
       },
       {
         "id": "radio-row",
@@ -1670,7 +1707,7 @@
             "read-only"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/radio-row.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/radio-row.md"
       },
       {
         "id": "radio-group",
@@ -1698,7 +1735,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/radio-group.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/radio-group.md"
       },
       {
         "id": "switch-control",
@@ -1747,7 +1784,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/switch-control.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/switch-control.md"
       },
       {
         "id": "switch-row",
@@ -1790,7 +1827,7 @@
             "read-only"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/switch-row.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/switch-row.md"
       },
       {
         "id": "select",
@@ -1858,7 +1895,7 @@
             "empty"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/select.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/select.md"
       },
       {
         "id": "veil",
@@ -1896,7 +1933,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/veil.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/veil.md"
       },
       {
         "id": "image-placeholder",
@@ -1926,7 +1963,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/image-placeholder.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/image-placeholder.md"
       },
       {
         "id": "spinner",
@@ -1948,7 +1985,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/spinner.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/spinner.md"
       },
       {
         "id": "badge",
@@ -2010,7 +2047,54 @@
             "type": "TEXT"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/badge.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/badge.md"
+      },
+      {
+        "id": "avatar",
+        "name": "Avatar",
+        "figmaName": "avatar",
+        "kind": "component set",
+        "page": "↳ Avatar",
+        "section": "Components",
+        "members": 30,
+        "variantProperties": [
+          {
+            "name": "shape",
+            "values": [
+              "circular",
+              "square"
+            ]
+          },
+          {
+            "name": "type",
+            "values": [
+              "initials",
+              "icon",
+              "image"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "x-small",
+              "small",
+              "large",
+              "x-large"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "initials",
+            "type": "TEXT"
+          },
+          {
+            "name": "presence",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/avatar.md"
       },
       {
         "id": "tag",
@@ -2073,7 +2157,7 @@
             "read-only"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/tag.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/tag.md"
       },
       {
         "id": "tag-group",
@@ -2094,7 +2178,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/tag-group.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/tag-group.md"
       },
       {
         "id": "tab-item",
@@ -2145,7 +2229,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/tab-item.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/tab-item.md"
       },
       {
         "id": "tabs",
@@ -2173,7 +2257,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/tabs.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/tabs.md"
       },
       {
         "id": "divider",
@@ -2220,7 +2304,7 @@
             "type": "TEXT"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/divider.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/divider.md"
       },
       {
         "id": "_accordion-indicator",
@@ -2256,7 +2340,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/_accordion-indicator.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/_accordion-indicator.md"
       },
       {
         "id": "accordion",
@@ -2314,7 +2398,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/accordion.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/accordion.md"
       },
       {
         "id": "list-item",
@@ -2358,7 +2442,7 @@
             "swapTarget": "icon/check"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/list-item.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/list-item.md"
       },
       {
         "id": "list",
@@ -2388,7 +2472,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/list.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/list.md"
       },
       {
         "id": "segmented-control-segment",
@@ -2435,7 +2519,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/segmented-control-segment.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/segmented-control-segment.md"
       },
       {
         "id": "segmented-control",
@@ -2461,7 +2545,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/segmented-control.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/segmented-control.md"
       },
       {
         "id": "link",
@@ -2529,7 +2613,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/link.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/link.md"
       },
       {
         "id": "button-group",
@@ -2550,7 +2634,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/button-group.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/button-group.md"
       },
       {
         "id": "dialog",
@@ -2606,7 +2690,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/dialog.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/dialog.md"
       },
       {
         "id": "password-field",
@@ -2674,7 +2758,7 @@
             "empty"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/password-field.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/password-field.md"
       },
       {
         "id": "toast",
@@ -2707,7 +2791,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/toast.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/toast.md"
       },
       {
         "id": "_breadcrumb-separator",
@@ -2728,7 +2812,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/_breadcrumb-separator.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/_breadcrumb-separator.md"
       },
       {
         "id": "breadcrumb-item",
@@ -2768,7 +2852,7 @@
             "type": "TEXT"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/breadcrumb-item.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/breadcrumb-item.md"
       },
       {
         "id": "breadcrumbs",
@@ -2802,7 +2886,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/breadcrumbs.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/breadcrumbs.md"
       },
       {
         "id": "counter",
@@ -2851,7 +2935,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/counter.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/counter.md"
       },
       {
         "id": "pagination-item",
@@ -2925,7 +3009,7 @@
             "type": "TEXT"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/pagination-item.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/pagination-item.md"
       },
       {
         "id": "pagination",
@@ -2966,7 +3050,7 @@
             "type": "TEXT"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/pagination.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/pagination.md"
       },
       {
         "id": "progress",
@@ -3033,7 +3117,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/progress.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/progress.md"
       },
       {
         "id": "search-field",
@@ -3119,7 +3203,7 @@
             "empty"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/search-field.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/search-field.md"
       },
       {
         "id": "card-number-field",
@@ -3196,7 +3280,7 @@
             "empty"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/card-number-field.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/card-number-field.md"
       },
       {
         "id": "banner",
@@ -3263,7 +3347,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/banner.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/banner.md"
       },
       {
         "id": "_slider-thumb",
@@ -3295,7 +3379,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/_slider-thumb.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/_slider-thumb.md"
       },
       {
         "id": "slider",
@@ -3374,7 +3458,7 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/slider.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/slider.md"
       },
       {
         "id": "code-input-cell",
@@ -3424,7 +3508,7 @@
             "style"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/code-input-cell.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/code-input-cell.md"
       },
       {
         "id": "code-input",
@@ -3474,7 +3558,7 @@
             "pending"
           ]
         },
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/code-input.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/code-input.md"
       },
       {
         "id": "page-nav-item",
@@ -3501,7 +3585,7 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/page-nav-item.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/page-nav-item.md"
       },
       {
         "id": "page-nav",
@@ -3521,7 +3605,35 @@
           }
         ],
         "properties": [],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/page-nav.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/page-nav.md"
+      },
+      {
+        "id": "skeleton",
+        "name": "Skeleton",
+        "figmaName": "skeleton",
+        "kind": "component set",
+        "page": "↳ Skeleton",
+        "section": "Subcomponents",
+        "members": 4,
+        "variantProperties": [
+          {
+            "name": "shape",
+            "values": [
+              "text",
+              "circle",
+              "rect"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/skeleton.md"
       },
       {
         "id": "popover",
@@ -3557,7 +3669,235 @@
             "type": "BOOLEAN"
           }
         ],
-        "doc": "https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/popover.md"
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/popover.md"
+      },
+      {
+        "id": "step-item",
+        "name": "StepItem",
+        "figmaName": "step-item",
+        "kind": "component set",
+        "page": "↳ Steps",
+        "section": "Components",
+        "members": 16,
+        "variantProperties": [
+          {
+            "name": "status",
+            "values": [
+              "upcoming",
+              "current",
+              "complete",
+              "error"
+            ]
+          },
+          {
+            "name": "orientation",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "number",
+            "type": "TEXT"
+          },
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "connector",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/step-item.md"
+      },
+      {
+        "id": "steps",
+        "name": "Steps",
+        "figmaName": "steps",
+        "kind": "component set",
+        "page": "↳ Steps",
+        "section": "Components",
+        "members": 4,
+        "variantProperties": [
+          {
+            "name": "orientation",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          {
+            "name": "size",
+            "values": [
+              "medium",
+              "small"
+            ]
+          }
+        ],
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/steps.md"
+      },
+      {
+        "id": "menu-item",
+        "name": "Menu.Item",
+        "figmaName": "menu-item",
+        "kind": "component set",
+        "page": "↳ Menu",
+        "section": "Components",
+        "members": 15,
+        "variantProperties": [
+          {
+            "name": "type",
+            "values": [
+              "action",
+              "submenu"
+            ]
+          },
+          {
+            "name": "intent",
+            "values": [
+              "default",
+              "destructive"
+            ]
+          },
+          {
+            "name": "state",
+            "values": [
+              "rest",
+              "hover",
+              "pressed",
+              "focus-visible",
+              "disabled"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "description text",
+            "type": "TEXT"
+          },
+          {
+            "name": "shortcut text",
+            "type": "TEXT"
+          },
+          {
+            "name": "leading",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "indicator",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "checked",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "leading icon",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "description",
+            "type": "BOOLEAN"
+          },
+          {
+            "name": "shortcut",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/menu-item.md"
+      },
+      {
+        "id": "menu-group",
+        "name": "Menu.Group",
+        "figmaName": "menu-group",
+        "kind": "component set",
+        "page": "↳ Menu",
+        "section": "Components",
+        "members": 1,
+        "variantProperties": [
+          {
+            "name": "type",
+            "values": [
+              "section"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "heading text",
+            "type": "TEXT"
+          },
+          {
+            "name": "heading",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/menu-group.md"
+      },
+      {
+        "id": "menu",
+        "name": "Menu",
+        "figmaName": "menu",
+        "kind": "component set",
+        "page": "↳ Menu",
+        "section": "Components",
+        "members": 1,
+        "variantProperties": [
+          {
+            "name": "placement",
+            "values": [
+              "bottom"
+            ]
+          }
+        ],
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/menu.md"
+      },
+      {
+        "id": "tooltip",
+        "name": "Tooltip",
+        "figmaName": "tooltip",
+        "kind": "component set",
+        "page": "↳ Tooltip",
+        "section": "Components",
+        "members": 4,
+        "variantProperties": [
+          {
+            "name": "placement",
+            "values": [
+              "top",
+              "bottom",
+              "start",
+              "end"
+            ]
+          }
+        ],
+        "properties": [
+          {
+            "name": "label",
+            "type": "TEXT"
+          },
+          {
+            "name": "arrow",
+            "type": "BOOLEAN"
+          }
+        ],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/tooltip.md"
       }
     ]
   },
@@ -3603,7 +3943,9 @@
       "minus-filled",
       "more-horizontal-filled",
       "more-vertical-filled",
+      "organization",
       "pause-circle",
+      "person",
       "play-circle",
       "plus",
       "plus-circle",
@@ -3761,6 +4103,39 @@
       {
         "component": "popover",
         "property": "body"
+      },
+      {
+        "component": "steps",
+        "property": "items",
+        "settings": {
+          "minChildren": 2,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "step-item"
+        ]
+      },
+      {
+        "component": "menu-group",
+        "property": "items",
+        "settings": {
+          "minChildren": 1,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "menu-item"
+        ]
+      },
+      {
+        "component": "menu",
+        "property": "items",
+        "settings": {
+          "minChildren": 1,
+          "allowPreferredValuesOnly": true
+        },
+        "preferred": [
+          "menu-item"
+        ]
       }
     ]
   },
@@ -3914,6 +4289,7 @@
       "veil",
       "image-placeholder",
       "badge",
+      "avatar",
       "tag",
       "tag-group",
       "tab-item",
@@ -3950,7 +4326,12 @@
       "wallet-button",
       "sign-in-button",
       "page-nav-item",
-      "page-nav"
+      "page-nav",
+      "step-item",
+      "steps",
+      "skeleton",
+      "menu-item",
+      "tooltip"
     ],
     "templates": [
       {

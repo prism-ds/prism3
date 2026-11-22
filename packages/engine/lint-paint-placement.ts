@@ -301,20 +301,25 @@ const EXPECT_ANATOMY = [
   'icon', 'focus-ring', 'button', 'button-destructive', 'button-neutral', 'wallet-button', 'sign-in-button', 'icon-button', 'icon-button-destructive',
   'icon-button-neutral', 'field-label', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-row',
   'checkbox-group', 'radio-control', 'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil',
-  'image-placeholder', 'spinner', 'badge', 'tag', 'tag-group', 'tab-item', 'tabs', 'divider', '_accordion-indicator', 'accordion',
+  'image-placeholder', 'spinner', 'badge', 'avatar', 'tag', 'tag-group', 'tab-item', 'tabs', 'divider', '_accordion-indicator', 'accordion',
   'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'list-item', 'list',
   'segmented-control-segment', 'segmented-control', 'link', 'button-group', 'dialog', 'password-field', 'counter', 'pagination-item', 'pagination', 'progress', 'search-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', '_slider-thumb', 'slider',
   'code-input-cell', 'code-input', 'provider-logo', 'card-number-field', 'page-nav-item', 'page-nav',
-  'popover',
+  'skeleton',
+  'popover', 'menu-item', 'menu-group', 'menu', 'tooltip',
+  // #3055: Steps and its step.
+  'step-item', 'steps',
 ];
 const EXPECT_PAINTERS = [
   'focus-ring', 'button', 'button-destructive', 'button-neutral', 'icon-button', 'icon-button-destructive',
   'icon-button-neutral', 'text-field', 'textarea', 'checkbox-control', 'radio-control', 'switch-control', 'select', 'veil',
-  'image-placeholder', 'badge', 'tag', 'tab-item', 'tabs', 'divider', 'list-item', 'segmented-control-segment', 'segmented-control', 'dialog', 'banner',
+  'image-placeholder', 'badge', 'avatar', 'tag', 'tab-item', 'tabs', 'divider', 'list-item', 'segmented-control-segment', 'segmented-control', 'dialog', 'banner',
   // #2665: the page cell's current-page border or underline and the hover wash.
   'pagination-item',
   // #2669: the thumb's disc and halo; the Slider's rail and selected bar.
   '_slider-thumb', 'slider',
+  // #4109: the bars and the block, one surface in pieces.
+  'skeleton',
   // #2457 Q287 A: the round shape's edge and wash. The flush shape's box resolves none of them.
   // Q295.2 B: three families, as IconButton's three.
   'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral',
@@ -324,6 +329,10 @@ const EXPECT_PAINTERS = [
   'toast',
   // #4008: the popover's raised panel, its fill and its hairline edge.
   'popover',
+  // #4007: the menu's raised panel (Popover's roles) and the item's highlight wash.
+  'menu', 'menu-item',
+  // #4009: the inverse bubble (its arrow takes the same fill as a glyph).
+  'tooltip',
   // #2427: the outline Counter's fill and edge. A ghost member's box resolves none of them.
   'counter',
   // #2428: the Code cell paints Text field's field chrome on its own box.
@@ -336,6 +345,8 @@ const EXPECT_PAINTERS = [
   'search-field',
   // #2343 PR 4: the Card number field paints as TextField does; its tile keeps its own paint.
   'card-number-field',
+  // #3055: the step's disc (fill and outline) and its line to the next step (the box indicator).
+  'step-item',
 ];
 const closedSet = (what: string, expected: string[], live: string[], remedy: string): void => {
   for (const id of expected.filter((x) => !live.includes(x))) {

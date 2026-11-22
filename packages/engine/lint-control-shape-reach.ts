@@ -98,12 +98,15 @@ const DENSITIES = ['compact', 'comfortable', 'spacious'] as const;
 
 /** Defs that bind a corner Control shape must not move, each with why. */
 const OUTSIDE_REASON: Record<string, string> = {
+  // #4109, held for the owner: a host passes the radius of the content the skeleton stands for.
+  'skeleton': 'a loading placeholder, not a control: its corners match the content it stands for, which a host sets',
   'provider-logo': 'a mark, not a control',
   'flush-icon-button': 'no box at rest: its square shape is radius.none and its circle intrinsic',
   'flush-icon-button-destructive': 'no box at rest: its square shape is radius.none and its circle intrinsic',
   'flush-icon-button-neutral': 'no box at rest: its square shape is radius.none and its circle intrinsic',
   'radio-control': 'intrinsically round',
   'switch-control': 'intrinsically round',
+  'avatar': 'an identity picture, not a control: its circle is radius.round and its square corner (radius.sm, radius.md) belongs to the avatar, so no Control shape setting reaches it (#4110)',
   'badge': 'a status label, not a control; its radius.sm must not follow a field setting',
   'tag': 'Tag style owns its shape',
   'list-item': 'a round bullet',
@@ -111,10 +114,15 @@ const OUTSIDE_REASON: Record<string, string> = {
   'segmented-control': 'not a button, field or checkbox',
   'dialog': 'a surface',
   'toast': 'a surface',
+  'tooltip': 'a surface',
   'banner': 'a surface',
   'popover': 'a surface',
+  'menu': 'a surface',
+  'menu-group': 'a section of a surface',
+  'menu-item': 'a row inside a surface, not a button, field or checkbox; its corner is the highlight\'s',
   'pagination-item': 'a pagination cell, not a button',
   'progress': 'an indicator',
+  'step-item': 'a step marker, a round disc by construction, not a control',
   '_slider-thumb': 'intrinsically round',
   'slider': 'an intrinsically round track',
 };

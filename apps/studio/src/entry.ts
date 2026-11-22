@@ -24,7 +24,7 @@ import { clearInput, persistInput, restoreSession, type LocalStore } from './per
 import { glyph, h, hook } from './shell/dom';
 import { initTheme } from './shell/theme';
 import { BRANDS, BOOT_BRAND, brandState, initSession, rebuild, setPersist, setPath, subscribe } from './state/store';
-import { commit, handleHostMessage, mountApp, installStyles, mountResizeGrip, build } from './main';
+import { commit, handleHostMessage, mountApp, installStyles, mountResizeGrip, build, syncLeaving } from './main';
 // The chrome stylesheet, as TEXT rather than as a separate emitted asset (#769) — see step 4 below for
 // what that buys and what it costs.
 import STYLE from './styles.css';
@@ -32,6 +32,7 @@ import STYLE from './styles.css';
 // `chrome.css`, as TEXT. A virtual module that only `apps/studio/chrome/esbuild-plugin.mjs` resolves, so
 // a bundler without the plugin fails at build time rather than shipping without it (UI redesign S1.1).
 import CHROME from 'p3:chrome-css';
+import { must } from './must';
 
 // ---- 1. boot -----------------------------------------------------------------------------------------
 // Web persists the working brand to localStorage; the plugin uses Figma shared-data instead (restored
@@ -70,15 +71,18 @@ const bootBrand = (): { input: BrandInput; origin: Origin; baseline?: BrandInput
     // Web, nothing valid stored → the EMPTY STATE. brandState still holds the demo so the app is in a
     // valid state behind the start screen, but the origin is `none`: nothing has been chosen yet, so
     // there is nothing to be dirty against and nothing an import could lose.
-    return { input: structuredClone(BRANDS[BOOT_BRAND]), origin: { kind: 'none' } };
+    return { input: structuredClone(must(BRANDS[BOOT_BRAND], 'the boot brand')), origin: { kind: 'none' } };
   }
   // Plugin: boot on the demo and wait for the host. `restore-input` (#131) may replace this within
   // milliseconds with the file's own brand — until it arrives, `example` is the honest answer, and a
   // file with no stored blob correctly keeps it (that is #721's state 2).
-  return { input: structuredClone(BRANDS[BOOT_BRAND]), origin: { kind: 'example', id: BOOT_BRAND } };
+  return { input: structuredClone(must(BRANDS[BOOT_BRAND], 'the boot brand')), origin: { kind: 'example', id: BOOT_BRAND } };
 };
 const boot = bootBrand();
 initSession(boot.input, boot.origin, boot.baseline);
+// #3982: `initSession` publishes no topic, so the leave prompt reads the booted provenance here. A reload that kept
+// unsaved edits (#3880) asks before leaving at once, as the replace confirm does.
+syncLeaving();
 // Every successful rebuild persists the last-good brand, and the provenance beside it (#3880) — on web only. The
 // plugin injects nothing: its brand is written to the file by the main thread on Apply. Statically dead in the plugin
 // bundle.
@@ -165,7 +169,7 @@ if (refused) {
   const row = h('div', 'p3-confirm-row');
   row.append(btn('Export saved brand', 'refused-brand-export', exportIt), btn('Clear saved brand', 'refused-brand-clear', clearIt));
   text.append(
-    line("The saved brand didn't open, so the studio started without it."),
+    line("The saved brand didn't open, so Studio started without it."),
     line(refused.message),
     line('Choosing a brand replaces the saved one. Export it first to keep a copy as design.md.'),
     row,

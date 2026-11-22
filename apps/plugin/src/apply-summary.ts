@@ -119,10 +119,11 @@ export const componentHeadline = (added: number, skipped: number, misses: number
 export const staleNote = (stale: number, engineVersion: string): string | null => {
   if (stale === 0) return null;
   const one = stale === 1;
+  // #4185 C (DRAFT): the fix the old line offered, deleting the members, is what it warned breaks placed instances.
+  // Update file updates a stale variant in place (its stamp's earlier engine half re-applies, `update-plan.ts`).
   return (
-    `${stale} member${one ? '' : 's'} in this set ${one ? 'was' : 'were'} built from an earlier plan and ${one ? 'was' : 'were'} left in place, ` +
-    `because rebuilding ${one ? 'it' : 'them'} would orphan any instance you have already placed — an instance tracks its main component by id. ` +
-    `This build is engine ${engineVersion}; to pick it up, delete ${one ? 'that member' : 'those members'} and run again, or build into a fresh page.`
+    `${stale} variant${one ? ' was' : 's were'} built by an earlier version of Prism3 (this build is engine ${engineVersion}) and kept, ` +
+    `so placed instances stay linked. Run Update file to update ${one ? 'it' : 'them'} in place.`
   );
 };
 
@@ -222,8 +223,9 @@ export const partialWriteHeadline = (f: PartialWriteFacts): string => {
  * on macOS and Windows, and naming one key would be wrong for half the audience.
  *
  * ONE UNDO STEP IS THE CLAIM, and it rests on a measured fact rather than on Figma's documentation:
- * `figma.commitUndo()` is called nowhere in this plugin, so a whole run collapses into a single undo
- * entry and one undo unwinds the entire partial build. That is also why the executor does not delete
+ * `figma.commitUndo()` is called only as a write starts (`guarded`, `main.ts`, #4158), never during one, so a
+ * whole run collapses into a single undo entry of its own and one undo unwinds the entire partial build, and nothing
+ * from an earlier run. That is also why the executor does not delete
  * what it wrote — the unwind already exists, on a path that does not need a host that has just started
  * refusing calls to accept 648 more.
  */
@@ -254,3 +256,11 @@ export const partialWriteNote = (f: PartialWriteFacts): string => {
   const item = partialWriteItem(f);
   return item ? ` — ${item}` : '';
 };
+
+/** #4185 B (owner decision 2026-11-19, option b): the build's engine-internal miss lines (`<part>.<field> -> UNCLAIMED`,
+ *  `-> DISCARDED`, issue numbers) leave the designer's screen. Activity shows this one line per set instead; the lines
+ *  themselves go to the in-memory run log (`activityLog.annotate`, which an agent and a maintainer read) and the console.
+ *  Empty for no miss. Wording: owner decision 2026-11-20 on #4364 — the line promises no place (the run log is memory
+ *  only), and counts BINDINGS, since each miss is one binding on one member; #4370 shares the noun with Update file. */
+export const missesLine = (n: number): string =>
+  n ? `⚠ ${n} binding${n === 1 ? '' : 's'} Prism3 couldn't make.` : '';

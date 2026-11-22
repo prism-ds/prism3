@@ -16,6 +16,7 @@
  * backticked and resolvable, facts in structured fields as well as prose, and a versioned JSON Schema
  * (`schema/ai-metadata.schema.json`, `$id` === `AI_METADATA_SCHEMA`) documenting every field.
  */
+import { brandIconNames } from './icon-map';
 import { Theme, CORE_TIER, BODY_XS_DESCRIPTION } from './theme';
 import { resolveAllModes, ResolvedRole } from './modes';
 import { contrast, floorRatio, hexToRgb } from './color';
@@ -577,6 +578,7 @@ const primMeaning = (seg: string[], node?: any): string => {
   if (seg[0] === 'opacity') return 'Opacity scale primitive';
   // Not "grid": 1, 2, 3, 5, 6, 10, 18 and 30px are off the 4px grid (#3555 F6). The tree's own word.
   if (seg[0] === 'dimension') return `${seg[1]}px dimension primitive`;
+  if (seg[0] === 'motion' && seg[1] === 'brand') return 'Brand-only motion value — set by this brand, outside the guaranteed names';
   if (seg[0] === 'motion') return seg[1] === 'easing' ? 'Easing curve primitive (cubic-bezier)' : seg[1] === 'spring' ? 'Spring primitive (damping / stiffness)' : seg[1] === 'spring-easing' ? 'Spring as a CSS linear() curve, for code that cannot run a spring' : seg[1] === 'spring-duration' ? 'Spring settle time — the duration its CSS curve plays over' : seg[1] === 'stagger' ? 'Stagger delay primitive' : 'Motion duration primitive';
   if (seg[0] === 'font') {
     if (seg[1] === 'family') return `Font family stack — ${seg[2]} role`;
@@ -608,8 +610,9 @@ const refsIn = (v: any): string[] => {
 export type AiMetadataOptions = { tokensFile?: string };
 
 /** The sidecar's schema id. The JSON Schema at `schema/ai-metadata.schema.json` carries the same `$id`,
- *  and a test holds the two equal — bump both together when a field is added, renamed or removed. */
-export const AI_METADATA_SCHEMA = 'prism3-ai-metadata/0.5';
+ *  and a test holds the two equal — bump both together when a field is added, renamed or removed.
+ *  0.6 — `motion_presets` (#2857). 0.7 — `icons`, the brand icon map (#3076). */
+export const AI_METADATA_SCHEMA = 'prism3-ai-metadata/0.7';
 
 /** The one normative sentence (AI/C-1) — a check a reader can run with `tokens.json` alone: resolve both
  *  roles in each mode, composite a translucent one over its ground, compare with the floor. `lint-voice.ts`
@@ -1035,6 +1038,12 @@ export const buildAiMetadata = (theme: Theme, tree: any, opts: AiMetadataOptions
     const seen = new Set(Object.values(tier).flatMap((e) => Object.keys(e)));
     return [...order.filter((f) => seen.has(f)), ...[...seen].filter((f) => !order.includes(f)).sort()];
   };
+  // #4163 (owner decision A): which families are primitives, read off this file's own `primitives` tier. `core.*` and
+  // `motion.*` are named one level down, because a role shares each of those groups with the primitive it aliases.
+  const primitiveFamilies = [...new Set(Object.keys(primitives).map((k) => {
+    const s = k.split('.');
+    return s[0] === CORE_TIER || s[0] === 'motion' ? `${s[0]}.${s[1]}` : s[0];
+  }))];
   return {
     $schema: AI_METADATA_SCHEMA,
     brand: theme.id,
@@ -1043,12 +1052,15 @@ export const buildAiMetadata = (theme: Theme, tree: any, opts: AiMetadataOptions
       'its path below the brand root; color roles drop the leading `color.` segment. Tiers: `color` (semantic color ' +
       'roles), `typography` (type styles and font roles), `layout` (space, size, radius, border-width, background-blur, ' +
       'focus-ring, icon, control and grid roles, and the type line boxes), `motion` (motion roles), `gradient` when the brand has one, and `primitives` (the raw ' +
-      'values the roles resolve to). A primitive carries `aliased_by`, every token that resolves to it directly or through ' +
+      'values the roles resolve to). The primitive families are ' + primitiveFamilies.map((f) => `\`${f}\``).join(', ') +
+      '. Not every one sits under `' + CORE_TIER + '`: a family outside it is still a primitive, so read the tier, not the path. ' +
+      'A primitive carries `aliased_by`, every token that resolves to it directly or through ' +
       'another alias, recomputed on every build. On a color role, `sits_on` names the grounds an ink or edge is placed on ' +
       'and `carries` the inks placed on a ground; both are measured in every mode. `tracks` names companion roles and ' +
       'implies no contrast. `contrast_with` is the role\'s contrast contract: `requirement` states it as a check that ' +
       'resolves both roles in every mode, and `ratio` is the light-mode measurement. `usage_limit` marks an ink that is ' +
-      'for large text, icons and non-essential text only. Field definitions: the JSON Schema whose `$id` is this ' +
+      'for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, the duration ' +
+      'step it plays on (the brand\'s mapping), its easing role and its reduced-motion duration. Field definitions: the JSON Schema whose `$id` is this ' +
       'file\'s `$schema`.',
     color_fields: fieldsOf(colorRoles, ['$description', 'meaning', 'when_to_use', 'avoid_when', 'usage_limit', 'sits_on', 'carries', 'tracks', 'contrast_with', 'mode_overrides']),
     typography_fields: fieldsOf(typography, ['$description', 'meaning', 'when_to_use', 'avoid_when', 'resolves_to', 'used_by']),
@@ -1059,6 +1071,18 @@ export const buildAiMetadata = (theme: Theme, tree: any, opts: AiMetadataOptions
     typography,
     layout,
     motion,
+    // Each motion preset, resolved through the brand's preset → step mapping (#2857, Q-MP7 option 3). A preset is not
+    // a token: it names the shared scale's step, so the paths here are `motion` tier entries above.
+    motion_presets: Object.fromEntries(theme.motion.presets.map((p) => [p.preset, {
+      duration: `motion.duration.${p.duration}`, easing: `motion.easing-role.${p.easing}`, reduced_duration: `motion.duration-reduced.${p.reduced}`,
+    }])),
+    // THE BRAND ICON MAP (#3076), when the brand sets one: component docs name Prism3's icons, and an agent resolves each
+    // through `map`. `names` is the icon set this brand's file holds. DRAFT note copy.
+    ...(theme.icons ? { icons: {
+      note: 'Component docs name Prism3 icons. This brand replaces each icon named in `map` with the icon it maps to; `names` is the icon set the brand ships.',
+      map: { ...(theme.icons.map ?? {}) },
+      names: brandIconNames(theme.icons),
+    } } : {}),
     ...(Object.keys(gradient).length ? { gradient_fields: fieldsOf(gradient, ['$description', 'meaning', 'when_to_use', 'avoid_when', 'resolves_to', 'a11y']), gradient } : {}),
     primitives,
   };

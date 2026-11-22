@@ -817,11 +817,13 @@ export const figmaEffectStyleName = (ref: string): string => {
  * typo and a set swap (`icon-set.ts`'s whole purpose is that a client's branded set replaces ours), and
  * both are answered by seeing what the vocabulary actually holds.
  */
-const glyphPath = (defId: string, part: string, glyph: string | undefined): string => {
+const glyphPath = (defId: string, part: string, glyph: string | undefined, brand?: ComponentDef['brandGlyphs']): string => {
   // Unreachable through `validateComponentDef`, which refuses a vector part with no glyph — this is the
   // backstop for a caller that skipped it, the same relationship every other throw in this file has.
   if (!glyph) throw new Error(`${defId}: anatomy part '${part}' is kind 'vector' and names no glyph`);
-  const path = ICON_PATHS[glyph as keyof typeof ICON_PATHS];
+  // THE BRAND'S ART FIRST (#3076): a glyph the brand input carries, whether a name of its own or a Prism3 name it
+  // redraws (Q5 A), is drawn from `brandGlyphs`, which only `applyIconMap` writes.
+  const path = brand?.[glyph]?.path ?? ICON_PATHS[glyph as keyof typeof ICON_PATHS];
   if (!path) {
     // Nearest by shared prefix, which is what a typo and a renamed glyph both produce. Not a full edit
     // distance: this is an error message, and the cheap heuristic answers both realistic causes.
@@ -929,7 +931,7 @@ const glyphDocument = (path: string, fillRule?: string): string => {
 
 /** `glyphDocument` for a resolved glyph NAME — looks its path and (sparse) winding rule up together, so
  *  the two lookups stay in one place and the caller passes a name rather than re-deriving both (#1012). */
-const glyphSvgFor = (defId: string, part: string, glyph: string | undefined): string => {
+const glyphSvgFor = (defId: string, part: string, glyph: string | undefined, brand?: ComponentDef['brandGlyphs']): string => {
   // A COMPONENT-OWNED glyph (#1670) is looked up first: geometry a component draws that is deliberately not
   // in the icon set (the spinner), composed of several filled layers, each carrying its own layer opacity.
   // Same artboard, same `fill="currentColor"` convention, one `<path>` per layer in drawing order; `id`
@@ -941,7 +943,8 @@ const glyphSvgFor = (defId: string, part: string, glyph: string | undefined): st
       layers.map((l) => `<path id="${l.id}" ${l.fillRule ? `fill-rule="${l.fillRule}" ` : ''}${l.opacity !== undefined ? `opacity="${l.opacity}" ` : ''}d="${l.d}" fill="currentColor"/>`).join('') +
       '</svg>';
   }
-  return glyphDocument(glyphPath(defId, part, glyph), glyph ? ICON_FILL_RULES[glyph as keyof typeof ICON_PATHS] : undefined);
+  const own = glyph ? brand?.[glyph] : undefined;
+  return glyphDocument(glyphPath(defId, part, glyph, brand), own ? own.fillRule : glyph ? ICON_FILL_RULES[glyph as keyof typeof ICON_PATHS] : undefined);
 };
 
 /** The def whose emitted components ARE the provider logos (#2343): `provider-logo`, `emitAsComponents` like `icon`, each
@@ -984,7 +987,7 @@ export type NestOverride = { property: string; type: 'TEXT' | 'INSTANCE_SWAP'; v
  * set's component. THROWS on a key the nested def does not declare and on a glyph the icon set does not draw, so a
  * misspelled override fails the projection rather than building an instance that silently keeps its default.
  */
-export const nestOverridesOf = (defId: string, partName: string, p: PartDef): NestOverride[] | undefined => {
+export const nestOverridesOf = (defId: string, partName: string, p: PartDef, brand?: ComponentDef['brandGlyphs']): NestOverride[] | undefined => {
   if (!p.overrides) return undefined;
   const nested = componentDefs.find((d) => d.id === p.nests);
   const fp = nested?.figmaProperties;
@@ -998,7 +1001,7 @@ export const nestOverridesOf = (defId: string, partName: string, p: PartDef): Ne
   for (const [key, glyph] of Object.entries(p.overrides.swaps ?? {})) {
     const v = fp.swaps?.[key];
     if (!v) throw new Error(`${defId}: anatomy part '${partName}' overrides swap '${key}', which '${nested.id}' does not declare — its swaps are [${Object.keys(fp.swaps ?? {}).join(', ') || 'none'}] (#2645)`);
-    if (!(ICON_NAMES as readonly string[]).includes(glyph)) throw new Error(`${defId}: anatomy part '${partName}' swaps '${key}' to '${glyph}', which is no glyph the icon set draws (#2645)`);
+    if (!(ICON_NAMES as readonly string[]).includes(glyph) && !brand?.[glyph]) throw new Error(`${defId}: anatomy part '${partName}' swaps '${key}' to '${glyph}', which is no glyph the icon set draws (#2645)`);
     out.push({ property: swapFigmaName(key, v), type: 'INSTANCE_SWAP', value: iconComponentName(glyph) });
   }
   return out;
@@ -2274,7 +2277,7 @@ export const figmaAnatomyPlan = (
         providerLogoGlyph(def.id, name, p.swapDefault);
         slotDefault = providerLogoComponentName(p.swapDefault);
       } else {
-        glyphPath(def.id, name, p.swapDefault);
+        glyphPath(def.id, name, p.swapDefault, def.brandGlyphs);
         slotDefault = iconComponentName(p.swapDefault);
       }
     }
@@ -2293,7 +2296,7 @@ export const figmaAnatomyPlan = (
     // here. `glyphPath` runs first so a name outside the vocabulary still throws with its own message.
     const glyphName = p.kind === 'vector' ? resolveGlyph(def.id, name, p.glyph, paintCoord) : undefined;
     const iconTarget = glyphName !== undefined && !COMPONENT_GLYPHS[glyphName] && def.id !== ICON_DEF_ID && def.id !== PROVIDER_LOGO_DEF_ID
-      ? (glyphPath(def.id, name, glyphName), iconComponentName(glyphName))
+      ? (glyphPath(def.id, name, glyphName, def.brandGlyphs), iconComponentName(glyphName))
       : undefined;
     // The provider-logo def's own glyph is drawn inline from the MARK vocabulary, on the mark's own artboard (#2343).
     const markGlyph = p.kind === 'vector' && def.id === PROVIDER_LOGO_DEF_ID ? providerLogoGlyph(def.id, name, glyphName) : undefined;
@@ -2338,7 +2341,7 @@ export const figmaAnatomyPlan = (
         ? markGlyph
           ? { glyphSvg: markGlyph.svg, glyphViewBox: markGlyph.dims }
           : {
-              glyphSvg: glyphSvgFor(def.id, name, glyphName),
+              glyphSvg: glyphSvgFor(def.id, name, glyphName, def.brandGlyphs),
               glyphViewBox: glyphArtboard().dims,
             }
         : {}),
@@ -2454,7 +2457,7 @@ export const figmaAnatomyPlan = (
       // These surface as Figma exposed nested-instance properties; the executors mark the instance exposed.
       ...((p.kind === 'absolute' || p.kind === 'nest') && p.nesting?.kind === 'nest-exposed' ? { nestExpose: p.nesting.expose } : {}),
       // The per-instance overrides (#2645), ONLY on a part that declares them, so every other plan is byte-identical.
-      ...((p.kind === 'absolute' || p.kind === 'nest') && p.overrides ? { nestOverrides: nestOverridesOf(def.id, name, p) } : {}),
+      ...((p.kind === 'absolute' || p.kind === 'nest') && p.overrides ? { nestOverrides: nestOverridesOf(def.id, name, p, def.brandGlyphs) } : {}),
       ...(p.kind === 'nest' && p.nestTexts ? { nestTexts: p.nestTexts } : {}),
       ...(p.kind === 'absolute' && p.inset ? { absoluteInset: varOf(p.inset) } : {}),
       // The stroke to compensate for (#801), projected only alongside an inset — on its own it has
@@ -2462,7 +2465,8 @@ export const figmaAnatomyPlan = (
       ...(p.kind === 'absolute' && p.inset && p.strokeInset ? { absoluteStrokeInset: varOf(p.strokeInset) } : {}),
       // THE CORNER PIN (textarea's resize grip): a glyph lifted out of the flow into its parent's corner.
       // Only on a pinned vector, so every other plan is byte-identical; the schema requires the inset.
-      ...(p.kind === 'vector' && p.corner && p.inset ? { cornerInset: varOf(p.inset) } : {}),
+      // A pinned BOX (#4110, Avatar's presence ring) takes the same field: the executors' corner pass reads any node.
+      ...((p.kind === 'vector' || p.kind === 'box') && p.corner && p.inset ? { cornerInset: varOf(p.inset) } : {}),
       // THE FOOT PIN (#2872, Link's current-page bar): a box lifted out of the flow across its parent's bottom edge.
       // Only on such a box, so every other plan is byte-identical.
       ...(p.kind === 'box' && p.foot ? { footPin: true } : {}),
@@ -5713,7 +5717,7 @@ for(const [name,key] of bare)if(!referenced.has(key))propMiss.push('property '+n
 export const CANVAS_FURNITURE: ReadonlySet<string> = new Set([
   'focus-ring', 'button', 'button-destructive', 'button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral',
   'field-label', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-row', 'checkbox-group', 'radio-control',
-  'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil', 'image-placeholder', 'badge', 'tag', 'tag-group', 'tab-item', 'tabs',
+  'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil', 'image-placeholder', 'badge', 'avatar', 'tag', 'tag-group', 'tab-item', 'tabs',
   'divider', '_accordion-indicator', 'accordion', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'list-item',
   'list', 'segmented-control-segment', 'segmented-control', 'link',
   'button-group', 'dialog', 'password-field', 'counter', 'pagination-item', 'pagination', 'progress', 'search-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', '_slider-thumb', 'slider',
@@ -5727,6 +5731,14 @@ export const CANVAS_FURNITURE: ReadonlySet<string> = new Set([
   'sign-in-button',
   // #3345: Page navigation and its item, Breadcrumbs' shape.
   'page-nav-item', 'page-nav',
+  // #3055: Steps and its step, Breadcrumbs' shape.
+  'step-item', 'steps',
+  // #4109: Skeleton, a set with headers like every other.
+  'skeleton',
+  // #4007: Menu.Item, a set of 15 with state columns. Menu and Menu.Group build one member each, so they have no grid.
+  'menu-item',
+  // #4009: Tooltip, a set of four placements with headers.
+  'tooltip',
 ]);
 
 export const planSetLayout = (plans: AnatomyPlan[], fn: string) => {
@@ -6038,6 +6050,21 @@ return {set:set.name,id:set.id,variants:built.length,size:[set.width,set.height]
  * which is four short arrays. As a side effect a member this generator never built — a designer's
  * manual copy — parses to no cell and is reported instead of being silently dragged somewhere.
  */
+/**
+ * #2610 — THE NEW-SET PLACEMENT SHIPS IN CHUNK 1 ONLY. Only chunk 1 can create a set (a later chunk that finds none returns
+ * NOT FOUND before the build), so `__prior` and `__place` are dead code everywhere else, and every byte of the shell ships in
+ * every chunk: main's indivisible unit sat 26 bytes under the #1798 ceiling when the header rule needed about 240. So chunk
+ * 1 defines them and every later chunk ships the two no-op stubs below, and `planSetChunks` measures chunk 1's shell on its
+ * own. `__prior` reads the page's top-level boxes before the build loop appends members; `__place` is the plugin's
+ * `placeNewSet`: under a `_section-header` (found by name, in any case, as an instance or a frame) the row's top is the sets'
+ * top, else the header's bottom + 80 (PAGE_HEADER_GAP), and the set takes the first free slot scanning right from the header's
+ * left edge, a slot being free when the set's box widened 160 (SET_GAP) on each side meets no node in the row (#2405, #2598).
+ * With no header, top-aligned with the sets (else all content) and 160 right of everything in its row (#1750). No reach: the
+ * paste draws no labels.
+ */
+const PAYLOAD_PLACE_FIRST = `const __prior=()=>figma.currentPage.children.map(n=>({t:n.type,x:n.x||0,y:n.y||0,w:n.width||0,h:n.height||0,hd:/^(INSTANCE|FRAME)$/.test(n.type)&&/^_section-header$/i.test(n.name)}));
+const __place=(set,prior)=>{const S=prior.filter(b=>b.t==='COMPONENT_SET'&&!b.hd),H=prior.find(b=>b.hd),y=H&&!S.length?H.y+H.h+80:Math.min(...(S.length?S:prior).map(b=>b.y)),B=prior.filter(b=>b.y<y+set.height&&b.y+b.h>y);let x=H?H.x:Math.max(...(B.length?B:prior).map(b=>b.x+b.w))+160;if(H)for(let p=1;p;){p=0;for(const b of B)if(b.x<x+set.width+160&&b.x+b.w+160>x){x=b.x+b.w+160;p=1;}}set.x=x;set.y=y;};`;
+const PAYLOAD_PLACE_LATER = 'const __prior=()=>[],__place=()=>{};';
 const PAYLOAD_CHUNK_BODY = `// FIND OR CREATE. Append mode is chosen by what is in the FILE, not by the chunk index: a re-run of
 // chunk 0 against a set that already exists must append (and then skip everything by name) rather than
 // combine a second set beside the first.
@@ -6071,7 +6098,7 @@ return {set:null,chunk:CHUNK+1,of:TOTAL,added:0,variants:0,axesChanged:{set:SET_
 // when this chunk CREATES the set, which is chunk 1 (a later chunk that finds no set returned above); a set
 // that already exists keeps its position, the "designer's placement wins" rule. Hidden nodes count.
 const created=!set;
-const prior=created?figma.currentPage.children.map(n=>({t:n.type,x:n.x||0,y:n.y||0,w:n.width||0,h:n.height||0})):[];
+const prior=created?__prior():[];
 // SKIP BY NAME. \`combineAsVariants\` accepts a DUPLICATE member name silently, and the set it returns
 // then THROWS on \`componentPropertyDefinitions\` and \`variantGroupProperties\` while
 // \`addComponentProperty\` still succeeds — so a re-run without this produces a set that looks buildable
@@ -6161,13 +6188,13 @@ if(colW.length&&rowH.length&&(Math.round(set.width)<Math.round(wantW)||Math.roun
 // set's row. The plugin measures that gap from each set's labels; the paste draws none, so its new set's edge is its
 // frame, and another set's labels already on the page push it as any node does. A node wholly above or below the row does not push it. AFTER the resize, because the row is
 // the set's height. Written again here rather than shared: the paste script cannot import the plugin, and
-// test.ts compares the two placements.
+// test.ts compares the two placements. The code is \`__place\`, shipped in chunk 1 only (#2610, PAYLOAD_PLACE_FIRST).
 // THE ROW IS CHUNK 1'S HEIGHT. Later chunks grow the set down and right from where this put it, and do not
 // move it; the plugin places once, at the finished height. So a node below chunk 1's rows but inside the
 // finished set's can be covered here where the plugin would have pushed the set past it (#1856).
 // NO POSITION READ-BACK, unlike the plugin: the stub stores x/y as plain fields, so the read-back could not
 // fail in any gate, and it would cost bytes in every chunk.
-if(created&&prior.length){const S=prior.filter(b=>b.t==='COMPONENT_SET'),y=Math.min(...(S.length?S:prior).map(b=>b.y)),B=prior.filter(b=>b.y<y+set.height&&b.y+b.h>y);set.x=Math.max(...(B.length?B:prior).map(b=>b.x+b.w))+160;set.y=y;}
+if(created&&prior.length)__place(set,prior);
 // READ BACK the definitions, GUARDED. A duplicate member name poisons this getter (see above), so an
 // unguarded read throws with no indication of which member caused it — and takes the whole paste's
 // report with it, including the misses already collected.
@@ -6372,6 +6399,7 @@ const REFS_ALL=${JSON.stringify(last ? refs : [])};
 const REF_OVERRIDES_ALL=${JSON.stringify(last ? refOverrides : [])};
 ${PAYLOAD_PREAMBLE}
 ${payloadBuildFor((slice.length ? slice : specs).map((x) => x.root))}
+${index === 0 ? PAYLOAD_PLACE_FIRST : PAYLOAD_PLACE_LATER}
 ${PAYLOAD_CHUNK_BODY}
 ${PAYLOAD_DECLARE_PROPS}
 ${last && hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${PAYLOAD_WIRE_REFS}
@@ -6390,10 +6418,11 @@ ${PAYLOAD_CHUNK_RETURN}
   // PACK BY MEASURED BYTES. The shell is emitted and measured rather than estimated, then variants are
   // added while they fit — because a per-variant average is wrong by 60% between a slot-less plan and a
   // leading+trailing one, and the point is to be right about the payload that actually ships.
-  const pack = (shell: number) => {
+  // Chunk 1 is packed to its OWN shell (`first`): it alone carries the new-set placement (#2610, PAYLOAD_PLACE_FIRST).
+  const pack = (shell: number, first: number) => {
     const groups: (typeof specs)[] = [];
     let cur: typeof specs = [];
-    let size = shell;
+    let size = first;
     for (const spec of specs) {
       // `+1` for the comma this variant adds to the `PLANS` array literal. One byte per variant, and it
       // is the only part of a chunk's size that is not inside `spec` itself.
@@ -6425,10 +6454,10 @@ ${PAYLOAD_CHUNK_RETURN}
   // — and that total is what packing produces, hence the fixpoint. It converges because a wider shell
   // only ever yields more chunks, `String(n).length` grows in steps, and the loop is bounded by that
   // width; the cap is a backstop, not a limit anything real reaches.
-  let groups = pack(emit([], 0, 1, false).length);
+  let groups = pack(emit([], 1, 2, false).length, emit([], 0, 1, false).length);
   for (let guard = 0; guard < 8; guard++) {
-    const shell = emit([], groups.length - 1, groups.length, false).length;
-    const next = pack(shell);
+    const shell = emit([], Math.max(1, groups.length - 1), Math.max(2, groups.length), false).length;
+    const next = pack(shell, emit([], 0, groups.length, false).length);
     if (next.length === groups.length) { groups = next; break; }
     groups = next;
   }
