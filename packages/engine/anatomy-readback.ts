@@ -688,6 +688,18 @@ export const FIELDS: Record<string, FieldCheck> = {
     },
   },
 
+  // PINNED SHOWN AND UNBOUND (#4461, B1): the member builds the part visible and wires it to NO property, so the
+  // switch does nothing here. An executor that wired it anyway (the deduped refs name the part on every member)
+  // or built it hidden fails here, by name.
+  pinnedVisibleProp: {
+    show: (p) => `shown, not wired to ${String(p)}`,
+    check: (p, n) => {
+      const got = (n.componentPropertyReferences as Record<string, unknown> | null | undefined)?.visible;
+      if (got !== undefined && got !== null) return `visible → ${String(got)} — wired, where the plan pins it shown and unbound from ${String(p)}`;
+      return n.visible === false ? 'visible=false — built hidden, where the plan pins it shown' : null;
+    },
+  },
+
   // ── nominations that come back as identity ───────────────────────────────────────────────────
   swapTarget: {
     show: (p) => `an instance of ${String(p)}`,

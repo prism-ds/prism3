@@ -362,7 +362,7 @@
     },
     "text-field": {
       "members": 84,
-      "sha256": "5d4b64e53d9f60e06bc2dc8b6a5f6ab505fd2d0e065206d021cc3417cb8fbf83",
+      "sha256": "b9a1267f5abc450d2a8c2c453a97ec4b3e5097954eca41127d1344344cb49013",
       "properties": [
         "leading icon:BOOLEAN",
         "message:BOOLEAN",
@@ -675,7 +675,7 @@
     },
     "password-field": {
       "members": 84,
-      "sha256": "89832db2aaadac594c2a446630c51fdae26e49e44cb034a993c0838042f40fd3",
+      "sha256": "16ed0f4526eae4b642769dd2d146e4c6308b4bd2f10b9e30ce0b85ac4a103c8f",
       "properties": [
         "leading icon:BOOLEAN",
         "message:BOOLEAN",

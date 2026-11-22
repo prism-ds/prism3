@@ -23,11 +23,24 @@
  *   - a part Figma sizes to FILL, or any part of a root of FIXED width: its left inset and its right inset, each against
  *     its own side's root (a field's width is its build width in Figma and its container's in code);
  *   - TEXT, and a part that hugs one: its x only; its width is the font's, not the layout's;
+ *   - a Figma TEXT part whose code part records its font (`check-geometry.ts`): Figma sets a line box at whole pixels,
+ *     H = round(L) for a line height L = font size × line height, where Chromium truncates it to its 1/64px layout
+ *     unit, L₆₄ = ⌊64L⌋/64. So the code's height is held to Figma's less that rounding (H − L₆₄), and, for a text Figma
+ *     centers in its parent, the code's y to Figma's plus half of it, truncated to the layout unit as Chromium places it.
+ *     Arithmetic, not a tolerance (#4432 decision 2 C, Q32 A): a text 1px off still fails. Not modeled, as no matched
+ *     TEXT part needs it: what sits below a top-aligned text;
  *   - every other part: its x and its width. In a row that hugs a TEXT, a part after the text is offset by the text's
  *     width difference (code − Figma), and so is a hugging root's width (floored at its minimum width). So a 1px
  *     drift in a padding or a gap still fails, however the two renderers set the text.
  *   - one case is named, not compared: a button at its minimum width in either record whose label text differs between
  *     the two. Its content is centered, so its x positions depend on the text.
+ *
+ * ROOT CAUSES (#4432 decision 1 A). A line is one comparison; a finding is one root cause. A root border that differs
+ * (CSS's transparent hairline against a member with no stroke) is one finding per component, however many cases show
+ * it, and so is every line whose residual equals that border's difference on its side exactly: a hugging root's width
+ * (left + right), and a part's x or inset (that side's border). Otherwise, the same difference (the same part, the
+ * same quantity, the same two values) in several cases of one component is one finding: one rule, drawn in every
+ * state. Every other line is its own finding. The summary names both counts; the lines print under their finding.
  *
  * Fails by name: `<component> <case> (<figma node id>): <what> is <code> in code, <figma> in Figma`.
  * A missing Figma record FAILS, naming the Mac job: a comparison that did not run is not a pass.
@@ -52,7 +65,12 @@ export const scriptReturns = async (src: string): Promise<string | null> => {
   const label = { id: '2:3', name: 'label', type: 'TEXT', visible: true, characters: 'Go', layoutSizingHorizontal: 'HUG', absoluteBoundingBox: box(112, 108, 30, 20) };
   const member = { id: '2:1', type: 'COMPONENT', variantProperties: { state: 'rest' }, absoluteBoundingBox: box(100, 100, 54, 36), children: [label], strokes: [] };
   const set = { id: '1:1', name: 'button', type: 'COMPONENT_SET', componentPropertyDefinitions: {}, children: [member] };
-  const stub = { loadAllPagesAsync: async () => {}, root: { findAllWithCriteria: () => [set] } };
+  // #4461: a field whose message is wired to `message` (hidden) at status=default and pinned shown, wired to nothing,
+  // at status=error. The record must read each member's EFFECTIVE value, not the set's one default.
+  const msg = (id: string, visible: boolean, wired: boolean) => ({ id, name: 'message', type: 'INSTANCE', visible, absoluteBoundingBox: box(0, 70, 320, 20), children: [], ...(wired ? { componentPropertyReferences: { visible: 'message#7:0' } } : {}) });
+  const field = (id: string, status: string, m: ReturnType<typeof msg>) => ({ id, type: 'COMPONENT', variantProperties: { status }, absoluteBoundingBox: box(0, 0, 320, 90), children: [m], strokes: [] });
+  const fset = { id: '3:1', name: 'text-field', type: 'COMPONENT_SET', componentPropertyDefinitions: { 'message#7:0': { type: 'BOOLEAN', defaultValue: false } }, children: [field('3:2', 'default', msg('3:3', false, true)), field('3:4', 'error', msg('3:5', true, false))] };
+  const stub = { loadAllPagesAsync: async () => {}, root: { findAllWithCriteria: () => [set, fset] } };
   const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (figma: unknown) => Promise<unknown>;
   let got: unknown;
   try { got = await new AsyncFunction('figma', src)(stub); } catch (e) { return `figma-geometry.js throws when run as figma_execute runs it: ${(e as Error).message}`; }
@@ -62,6 +80,12 @@ export const scriptReturns = async (src: string): Promise<string | null> => {
   const want = { id: '2:3', type: 'TEXT', x: 12, y: 8, w: 30, h: 20, text: 'Go' };
   const off = Object.entries(want).filter(([k, v]) => part?.[k] !== v).map(([k]) => k);
   if (!part || off.length) return `figma-geometry.js returns a record without the stub's label as container/label {x: 12, y: 8, w: 30, h: 20} (${part ? `differs in ${off.join(', ')}` : 'missing'})`;
+  const rec = JSON.parse(got);
+  const fm = (rec.components?.['text-field']?.members ?? []) as { variant: Record<string, string>; properties?: Record<string, string>; unwired?: string[] }[];
+  const eff = (status: string) => fm.find((x) => x.variant.status === status);
+  const [d, e] = [eff('default'), eff('error')];
+  if (rec.propertyRead !== 'effective' || d?.properties?.message !== 'false' || d?.unwired || e?.properties?.message !== 'true' || JSON.stringify(e?.unwired) !== '["message"]')
+    return `figma-geometry.js does not record each member's effective message (#4461): the stub field's message is wired and hidden at status=default and pinned shown, wired to nothing, at error, so it must read message=false there and message=true, unwired, at error; it read ${JSON.stringify({ propertyRead: rec.propertyRead, default: [d?.properties?.message, d?.unwired], error: [e?.properties?.message, e?.unwired] })}`;
   return null;
 };
 const CODE = resolve(HERE, 'storybook-static/geometry.code.json');
@@ -72,8 +96,8 @@ const key_ = (figmaName: string) => ALIAS[figmaName] ?? figmaName;
 
 type Box = { x: number; y: number; w: number; h: number };
 type FPart = Box & { id: string; type: string; sizing: string | null; text?: string };
-type FMember = { id: string; variant: Record<string, string>; properties?: Record<string, string>; root: { w: number; h: number; sizing: string | null; minWidth: number | null; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, FPart> };
-type CCase = { story: string; where: Record<string, string>; root: { w: number; h: number; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, Box>; text?: string };
+type FMember = { id: string; variant: Record<string, string>; properties?: Record<string, string>; unwired?: string[]; root: { w: number; h: number; sizing: string | null; minWidth: number | null; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, FPart> };
+type CCase = { story: string; where: Record<string, string>; root: { w: number; h: number; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, Box & { font?: { size: number; lineHeight: number | null } }>; text?: string };
 export type FigmaRecord = { components: Record<string, { members: FMember[] }> };
 export type CodeRecord = { cases: Record<string, CCase> };
 
@@ -95,10 +119,31 @@ const closest = <T>(items: T[], label: (t: T) => string, diffs: (t: T) => string
 };
 const n2 = (v: number) => Math.round(v * 100) / 100;
 
+/** Chromium's layout unit: a length truncated to 1/64px (its LayoutUnit from a float). */
+const unit64 = (v: number) => Math.floor(v * 64 + 1e-9) / 64;
+/** Figma's whole-pixel line box against Chromium's 1/64px one, for a line height L in px: [H, H − L₆₄]. */
+export const lineBox = (L: number): [number, number] => [Math.round(L), Math.round(L) - unit64(L)];
+
+export type Finding = { cause: string | null; lines: string[] };
+/** The lines grouped by root cause, in first-seen order; a line with no cause is a finding of its own. A cause is a
+ *  border's (see ROOT CAUSES) or, failing that, the line less its case and node id. */
+export const findingsOf = (failures: string[], causeOf: Map<string, string>): Finding[] => {
+  const out: Finding[] = [];
+  const byCause = new Map<string, Finding>();
+  for (const line of failures) {
+    const cause = causeOf.get(line) ?? null;
+    if (cause === null) { out.push({ cause, lines: [line] }); continue; }
+    if (!byCause.has(cause)) { const f = { cause, lines: [] as string[] }; byCause.set(cause, f); out.push(f); }
+    byCause.get(cause)!.lines.push(line);
+  }
+  return out;
+};
+
 /** `codeParts`: the part paths, per component, a Figma layer must be matched by in code (`partList`). */
-export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<string, string[]>): { failures: string[]; notes: string[]; compared: number } => {
+export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<string, string[]>): { failures: string[]; notes: string[]; compared: number; findings: Finding[] } => {
   const failures: string[] = [];
   const notes: string[] = [];
+  const causeOf = new Map<string, string>();
   let compared = 0;
   const reached = new Set<string>();
   for (const [key, c] of Object.entries(code.cases)) {
@@ -119,11 +164,24 @@ export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<st
     }
     reached.add(m.id);
     const at = `${component} ${key.split('--')[1]} (${m.id})`;
-    const fail = (what: string, got: number, want: number) => failures.push(`${at}: ${what} is ${n2(got)} in code, ${n2(want)} in Figma`);
+    // the root's border, where it differs: one cause for the component, and the residual each side's difference explains
+    const [cb, fb] = [c.root.border, m.root.border];
+    const borderCause = cb.some((v, i) => !near(v, fb[i])) ? `${component}: the root's border is ${cb.join('/')} in code, ${fb.join('/')} in Figma (top/right/bottom/left)` : null;
+    const side = { top: cb[0] - fb[0], right: cb[1] - fb[1], bottom: cb[2] - fb[2], left: cb[3] - fb[3], width: cb[1] + cb[3] - fb[1] - fb[3] };
+    const fail = (what: string, got: number, want: number, explainedBy?: keyof typeof side) => {
+      const line = `${at}: ${what} is ${n2(got)} in code, ${n2(want)} in Figma`;
+      failures.push(line);
+      causeOf.set(line, borderCause && explainedBy && !near(side[explainedBy], 0) && near(got - want, side[explainedBy]) ? borderCause : `${component}: ${what} is ${n2(got)} in code, ${n2(want)} in Figma`);
+    };
     const SIDES = ['top', 'right', 'bottom', 'left'];
     const CORNERS = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
     for (const [k, names] of [['padding', SIDES], ['border', SIDES], ['radius', CORNERS]] as const) {
-      c.root[k].forEach((v, i) => { compared++; if (!near(v, m.root[k][i])) fail(`container ${k} ${names[i]}`, v, m.root[k][i]); });
+      c.root[k].forEach((v, i) => {
+        compared++;
+        if (near(v, m.root[k][i])) return;
+        fail(`container ${k} ${names[i]}`, v, m.root[k][i]);
+        if (k === 'border') causeOf.set(failures[failures.length - 1], borderCause!);
+      });
     }
     compared++;
     if (!near(c.root.h, m.root.h)) fail('container height', c.root.h, m.root.h);
@@ -139,37 +197,53 @@ export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<st
     if (hug && !centered) {
       compared++;
       const want = Math.max(m.root.minWidth ?? 0, m.root.w + delta);
-      if (!near(c.root.w, want)) fail(`container width (Figma's ${n2(m.root.w)} + the text's ${n2(delta)})`, c.root.w, want);
+      if (!near(c.root.w, want)) fail(`container width (Figma's ${n2(m.root.w)} + the text's ${n2(delta)})`, c.root.w, want, 'width');
     }
     for (const [part, b] of Object.entries(c.parts)) {
       if (part === 'container') continue;
       const f = m.parts[part];
-      if (!f) { failures.push(`${at}: ${part} is drawn in code, not in Figma`); continue; }
-      for (const k of ['y', 'h'] as const) { compared++; if (!near(b[k], f[k])) fail(`${part} ${k === 'y' ? 'y' : 'height'}`, b[k], f[k]); }
+      if (!f) { failures.push(`${at}: ${part} is drawn in code, not in Figma`); causeOf.set(failures[failures.length - 1], `${component}: ${part} is drawn in code, not in Figma`); continue; }
+      // a TEXT part: Figma's line box is the code's line height rounded to whole pixels, and a centered text moves by
+      // half the rounding (decision 2 C). Centered is read from Figma, whose numbers are exact: the text's middle at
+      // its parent's middle.
+      const L = f.type === 'TEXT' ? b.font?.lineHeight ?? null : null;
+      if (L !== null) {
+        const [H, round] = lineBox(L);
+        const parentPath = part.slice(0, part.lastIndexOf('/'));
+        const pf = parentPath === 'container' ? { y: 0, h: m.root.h } : m.parts[parentPath];
+        const centeredText = pf !== undefined && near(f.y + f.h / 2, pf.y + pf.h / 2);
+        const why = `Figma's whole-pixel line box: ${n2(L)}px set at ${H}`;
+        compared++;
+        if (!near(b.h, f.h - round)) fail(`${part} height (${why}, Figma's ${n2(f.h)} less ${n2(round)})`, b.h, f.h - round);
+        compared++;
+        const wantY = centeredText ? unit64(f.y + round / 2) : f.y;
+        if (!near(b.y, wantY)) fail(`${part} y${centeredText ? ` (${why}, centered: Figma's ${n2(f.y)} + ${n2(round / 2)})` : ''}`, b.y, wantY, 'top');
+      } else for (const k of ['y', 'h'] as const) { compared++; if (!near(b[k], f[k])) fail(`${part} ${k === 'y' ? 'y' : 'height'}`, b[k], f[k], k === 'y' ? 'top' : undefined); }
       if (centered) continue;
       const hugsText = f.type === 'TEXT' || (f.sizing === 'HUG' && Object.entries(m.parts).some(([p, q]) => p.startsWith(`${part}/`) && q.type === 'TEXT'));
       const [cl, cr, fl, fr] = [b.x, c.root.w - b.x - b.w, f.x, m.root.w - f.x - f.w];
       if (f.sizing === 'FILL') {
         compared++;
-        if (!near(cl, fl)) fail(`${part} left inset`, cl, fl);
-        if (!hugsText) { compared++; if (!near(cr, fr)) fail(`${part} right inset`, cr, fr); }
+        if (!near(cl, fl)) fail(`${part} left inset`, cl, fl, 'left');
+        if (!hugsText) { compared++; if (!near(cr, fr)) fail(`${part} right inset`, cr, fr, 'right'); }
         continue;
       }
       if (m.root.sizing === 'FIXED') {
         // a root of another width: a part keeps the inset on the side Figma anchors it to, and its own width
         compared++;
-        if (fl <= fr) { if (!near(cl, fl)) fail(`${part} left inset`, cl, fl); } else if (!near(cr, fr)) fail(`${part} right inset`, cr, fr);
+        if (fl <= fr) { if (!near(cl, fl)) fail(`${part} left inset`, cl, fl, 'left'); } else if (!near(cr, fr)) fail(`${part} right inset`, cr, fr, 'right');
         if (!hugsText) { compared++; if (!near(b.w, f.w)) fail(`${part} width`, b.w, f.w); }
         continue;
       }
       const want = f.x >= textEnd - EPS ? f.x + delta : f.x;
       compared++;
-      if (!near(b.x, want)) fail(`${part} x${want !== f.x ? ` (Figma's ${n2(f.x)} + the text's ${n2(delta)})` : ''}`, b.x, want);
+      if (!near(b.x, want)) fail(`${part} x${want !== f.x ? ` (Figma's ${n2(f.x)} + the text's ${n2(delta)})` : ''}`, b.x, want, 'left');
       if (!hugsText) { compared++; if (!near(b.w, f.w)) fail(`${part} width`, b.w, f.w); }
     }
     for (const [part, f] of Object.entries(m.parts)) {
       if (Object.keys(c.parts).some((p) => p === part) || !codeParts[component]?.includes(part)) continue;
       failures.push(`${at}: ${part} (${f.id}) is drawn in Figma, not in code`);
+      causeOf.set(failures[failures.length - 1], `${component}: ${part} is drawn in Figma, not in code`);
     }
   }
   for (const [component, set] of Object.entries(fig.components)) for (const m of set.members) {
@@ -180,7 +254,7 @@ export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<st
     const isDefault = Object.entries(m.variant).every(([axis, v]) => axis === 'state' || DEFAULTS[component]?.[ALIAS[axis] ?? axis] === v || (axis === 'status' && v === 'error' && state === 'rest'));
     if (isDefault && (status === undefined || status === 'default' || (status === 'error' && state === 'rest'))) failures.push(`${component} (${m.id}) ${Object.entries(m.variant).map(([k, v]) => `${k}=${v}`).join(', ')}: a KPI 2 member no code case reaches: nearest ${closest(Object.entries(code.cases).filter(([k]) => k.split('--')[0] === component), ([k]) => `case ${k}`, ([, cc]) => axisDiffs(m, cc.where))}`);
   }
-  return { failures, notes, compared };
+  return { failures, notes, compared, findings: findingsOf(failures, causeOf) };
 };
 
 /** The part paths the arm says its code draws with a box: its input contract's boxed parts (`arm-contract.ts`), so a
@@ -207,7 +281,9 @@ const DEFAULTS: Record<string, Record<string, string>> = Object.fromEntries(['bu
 }]));
 
 // ------------------------------------------------------------------------------------------------ self-test
-/** A Figma record planted from the code's own: the text set 7.3px narrower, as another renderer would. */
+/** A Figma record planted from the code's own: the text set 7.3px narrower, as another renderer would, and a label that
+ *  records its font set as Figma sets it: a whole-pixel line box, centered in the root (Figma's numbers, not the code's
+ *  minus the model, so the model is what makes the two agree). */
 const plantFigma = (code: CodeRecord): FigmaRecord => {
   const out: FigmaRecord = { components: {} };
   for (const [key, c] of Object.entries(code.cases)) {
@@ -223,10 +299,12 @@ const plantFigma = (code: CodeRecord): FigmaRecord => {
       const after = !field && label && b.x >= label.x + label.w - EPS;
       const sizing = !field ? 'FIXED' : FIXED_PARTS.test(p) ? 'FIXED' : 'FILL';
       const rightAnchored = field && sizing !== 'FILL' && b.x > c.root.w / 2;
+      const L = !field && p === 'container/label' ? b.font?.lineHeight ?? null : null;
+      const H = L === null ? b.h : Math.round(L);
       parts[p] = {
         id: `1:${Object.keys(parts).length}`, type: !field && p === 'container/label' ? 'TEXT' : 'FRAME', sizing,
-        x: after ? b.x - shrink : rightAnchored ? b.x - narrow : b.x, y: b.y,
-        w: p === 'container/label' && !field ? b.w - shrink : sizing === 'FILL' ? b.w - narrow : b.w, h: b.h,
+        x: after ? b.x - shrink : rightAnchored ? b.x - narrow : b.x, y: L === null ? b.y : (c.root.h - H) / 2,
+        w: p === 'container/label' && !field ? b.w - shrink : sizing === 'FILL' ? b.w - narrow : b.w, h: H,
         ...(p === 'container/label' && !field ? { text: c.text } : {}),
       };
     }
@@ -272,20 +350,65 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma
     let bad = 0;
     const script = await scriptReturns(readFileSync(SCRIPT, 'utf8'));
     if (script) { bad++; console.error(`FAIL self-test: ${script}`); }
-    else console.log('OK self-test: figma-geometry.js, run in an async function body as figma_execute runs it, returns the record (a stub set\'s label read back as container/label)');
+    else console.log('OK self-test: figma-geometry.js, run in an async function body as figma_execute runs it, returns the record (a stub set\'s label read back as container/label, and each stub field member\'s effective message: false where wired and hidden, true and unwired where pinned shown, #4461)');
     const base = plantFigma(code);
     const clean = compare(base, code, partList(code));
     for (const n of clean.notes) console.log(`  named: ${n}`);
-    if (clean.failures.length) { bad++; console.error(`FAIL self-test: the planted record with only the text narrower should agree, but: ${clean.failures.slice(0, 5).join(' / ')}`); }
-    else console.log(`OK self-test: a record whose only difference is the text's width agrees (${clean.compared} comparisons; ${clean.notes.length} named, not compared)`);
+    if (clean.failures.length) { bad++; console.error(`FAIL self-test: the planted record with only the text narrower and Figma's whole-pixel line boxes should agree, but: ${clean.failures.slice(0, 5).join(' / ')}`); }
+    else console.log(`OK self-test: a record whose only differences are the text's width and Figma's whole-pixel line boxes agrees (${clean.compared} comparisons; ${clean.notes.length} named, not compared)`);
+    // the line-box arm is only an arm if the planted labels differ from the code's (#4432 decision 2 C)
+    const rounded = Object.entries(code.cases).filter(([k, c]) => k.startsWith('button--') && c.parts['container/label']?.font && base.components.button.members.some((m) => m.id === `9:${k}` && !near(m.parts['container/label'].h, c.parts['container/label'].h)));
+    if (rounded.length < 3) { bad++; console.error(`FAIL self-test: the planted record sets ${rounded.length} button labels at a whole-pixel line box other than the code's; the line-box arm needs the code record to carry each label's font (check-geometry.ts) and three sizes to round`); }
+    else console.log(`OK self-test: ${rounded.length} planted labels sit at Figma's whole-pixel line box, not the code's (${rounded.map(([k]) => k.slice(8)).join(', ')})`);
+    // ROOT CAUSES (#4432 decision 1 A): Figma's buttons with no border, everything else equal, is one finding; another
+    // difference is another, and one difference in two cases is one
+    const nb = clone(base);
+    for (const m of nb.components.button.members) {
+      m.root.border = [0, 0, 0, 0];
+      m.root.w -= 2;
+      for (const fp of Object.values(m.parts)) fp.x -= 1;
+    }
+    for (const id of ['9:text-field--rest', '9:text-field--hover']) nb.components['text-field'].members.find((x) => x.id === id)!.parts['container/label'].y += 1;
+    const g = compare(nb, code, partList(code));
+    const border = g.findings.find((f) => /^button: the root's border is 1\/1\/1\/1 in code, 0\/0\/0\/0 in Figma/.test(f.cause ?? ''));
+    const labelY = g.findings.filter((f) => f.lines.some((l) => /^text-field (rest|hover) .*: container\/label y is/.test(l)));
+    const want = [
+      ['Figma\'s borderless buttons are one finding', !!border && g.findings.filter((f) => f.lines.some((l) => l.startsWith('button '))).length === 1],
+      ['it holds every border line, and the width and x lines the border explains', !!border && border.lines.some((l) => / container border left is 1 in code, 0 in Figma$/.test(l)) && border.lines.some((l) => /: container width \(/.test(l)) && border.lines.some((l) => /: container\/label x is/.test(l))],
+      // the two members are each matched by several cases (rest, filled, required and medium share one)
+      ['the label 1px lower in two text-field members is one other finding, over every case that shows them', labelY.length === 1 && labelY[0].lines.length >= 2 && labelY[0].lines.every((l) => /^text-field [a-z-]+ \(9:text-field--(rest|hover)\): container\/label y is/.test(l))],
+      ['two findings in all', g.findings.length === 2],
+    ] as const;
+    for (const [what, ok] of want) {
+      if (ok) console.log(`OK self-test: root causes: ${what}`);
+      else { bad++; console.error(`FAIL self-test: root causes: ${what}, but: ${g.findings.length} findings: ${g.findings.map((f) => `${f.cause ?? f.lines[0]} (${f.lines.length})`).join(' / ')}`); }
+    }
+    // FIELD REACH (#4432 decision 3 A): Figma's field members record \`message\` at its default, false. Each KPI 2 state at
+    // the default status must be reached by a code case with the message off. (At error, Q-POC2 A writes the message
+    // whatever showMessage says, so Figma's error member at message=false is a finding, not a gap in the stories.)
+    const reach = clone(base);
+    for (const field of ['text-field', 'password-field']) {
+      const set = reach.components[field];
+      set.members = set.members.filter((m) => m.properties?.message === 'true').map((m) => ({ ...m, properties: { ...m.properties, message: 'false' } }));
+    }
+    const rr = compare(reach, code, partList(code));
+    for (const field of ['text-field', 'password-field']) for (const state of ['rest', 'hover', 'focus-visible', 'disabled']) {
+      const m = reach.components[field].members.find((x) => x.variant.state === state && x.variant.status === 'default' && x.variant.size === 'medium' && Object.entries(x.properties ?? {}).every(([k, v]) => k === 'message' || v === 'false'));
+      const missed = !m || rr.failures.some((x) => x.startsWith(`${field} (${m.id}) `) && x.includes('a KPI 2 member no code case reaches'));
+      if (!missed) console.log(`OK self-test: field reach: ${field} at ${state}, the message off as in Figma, is reached by a code case`);
+      else { bad++; console.error(`FAIL self-test: field reach: ${field} at ${state} with the message off (Figma's default) is reached by no code case${m ? `: ${rr.failures.find((x) => x.startsWith(`${field} (${m.id}) `))}` : ', and no such member was planted'}`); }
+    }
     // an unmatched pair names the axis that kept it apart: Figma's field members record `message` at its default
-    const why = clone(base);
+    // (on the code record less its no-message cases, so every text-field case shows the message, as on #4432)
+    const withMsg = clone(code);
+    for (const k of Object.keys(withMsg.cases)) if (k.endsWith('-no-message')) delete withMsg.cases[k];
+    const why = plantFigma(withMsg);
     for (const m of why.components['text-field'].members) m.properties = { ...m.properties, message: 'false' };
     // and a matched member with a part the contract boxes but this case does not draw, so the call reaches the
     // drawn-in-Figma branch, the one that reads the part list: a call without it throws there
     const lead = why.components.button.members.find((x) => x.id === '9:button--rest')!;
     lead.parts['container/leadingVisual'] = { ...lead.parts['container/label'], id: '9:lead', type: 'FRAME' };
-    const r = compare(why, code, partList(code));
+    const r = compare(why, withMsg, partList(withMsg));
     if (r.failures.some((x) => /^button rest \(9:button--rest\): container\/leadingVisual \(9:lead\) is drawn in Figma, not in code$/.test(x))) console.log('OK self-test: a matched member\'s part the contract boxes and the case does not draw is named, through the part list');
     else { bad++; console.error(`FAIL self-test: a matched member's part the contract boxes and the case does not draw is not named: ${r.failures.find((x) => x.startsWith('button rest')) ?? 'no line'}`); }
     for (const [what, re, lines] of [
@@ -329,8 +452,22 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma
     console.error('FAIL figma geometry: apps/storybook/figma-geometry.json is missing. It comes from the Mac job in apps/storybook/figma-geometry.md; a comparison that did not run is not a pass.');
     process.exit(1);
   }
-  const r = compare(JSON.parse(readFileSync(FIGMA, 'utf8')), code, partList(code));
+  const figRecord = JSON.parse(readFileSync(FIGMA, 'utf8'));
+  const r = compare(figRecord, code, partList(code));
+  // #4461 (B1): a record from before the effective read holds each boolean at the set's one default, so a field member
+  // whose message is pinned shown at a validation status reads message=false in it. Its lines wait on the re-record.
+  if (figRecord.propertyRead !== 'effective')
+    console.log('NOTE the Figma record reads each boolean property at its set default (it predates #4461\'s per-member read), so the field error members read message=false here; since #4461 the message is pinned shown and unbound at every validation status, and those lines await the Mac re-record (apps/storybook/figma-geometry.md)');
+  for (const m of Object.values(figRecord.components ?? {}).flatMap((c) => (c as { members: FMember[] }).members)) if (m.unwired?.length) console.log(`NOTE member ${m.id} (${Object.entries(m.variant).map(([k, v]) => `${k}=${v}`).join(', ')}): ${m.unwired.join(', ')} shown, wired to no property (#4461)`);
   for (const n of r.notes) console.log(`NOTE ${n}`);
-  if (r.failures.length) { console.error(`FAIL figma geometry: ${r.failures.length} of ${r.compared} comparisons differ`); for (const f of r.failures) console.error(`  - ${f}`); process.exit(1); }
+  if (r.failures.length) {
+    console.error(`FAIL figma geometry: ${r.failures.length} of ${r.compared} comparisons differ, in ${r.findings.length} findings (lines that share a root cause count once)`);
+    for (const f of r.findings) {
+      if (f.lines.length === 1) { console.error(`  - ${f.lines[0]}`); continue; }
+      console.error(`  - one finding, ${f.lines.length} lines: ${f.cause}`);
+      for (const l of f.lines) console.error(`      - ${l}`);
+    }
+    process.exit(1);
+  }
   console.log(`OK figma geometry: ${r.compared} comparisons, code equal to Figma to 0.01px`);
 }

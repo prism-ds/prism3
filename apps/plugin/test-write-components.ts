@@ -4039,7 +4039,11 @@ ok(setPage.children.length === 1 && setPage.children[0].type === 'COMPONENT_SET'
   const byDef = (id: string): ComponentDef => {
     const d = componentDefs.find((x) => x.id === id)!;
     const fp = d.figmaProperties;
-    return fp?.booleans?.showMessage ? { ...d, figmaProperties: { ...fp, booleans: { ...fp.booleans, showMessage: { ...fp.booleans.showMessage, default: true } } } } : d;
+    // With the message shown at every member, a pin (#4461) no longer moves the box along `status`, so its footprint
+    // exemption goes too: the status members are held to their default sibling's footprint, as before the pin.
+    const sm = fp?.booleans?.showMessage;
+    const pinAxes = sm && typeof sm === 'object' && sm.pinnedShownAt ? Object.keys(sm.pinnedShownAt) : [];
+    return sm ? { ...d, figmaProperties: { ...fp, booleans: { ...fp.booleans, showMessage: { ...(sm as object), default: true } as never }, footprintVaries: fp.footprintVaries?.filter((a) => !pinAxes.includes(a)) } } : d;
   };
   const GLYPH = varValue('icon/size/xs');                 // what the shim binds `icon.size.xs` to
   const fmPlansShipped = figmaAnatomySet(materializeForBrand(fieldMessage, null), { swapTarget: SWAP });

@@ -1904,10 +1904,15 @@ const writeComponentSet = async (
   // it is ever wired or not — so the style is re-applied where it is lost (see the note at `claimDefaults`'
   // call site) and nothing here needs to carry it to a later phase.
   const textByMember = new Map<string, Map<string, string>>();
+  // #4461 (B1): the parts a member builds PINNED SHOWN and unbound (`pinnedVisibleProp`). The deduped `refs` names the
+  // part for every member, so without this the wire loop would bind a field's message to `message` at error too.
+  const pinnedByMember = new Map<string, Set<string>>();
   for (const plan of plans) {
     const perPart = new Map<string, { field: string; prop: string }>();
     const perText = new Map<string, string>();
-    const walk = (n: { name: string; propertyRef?: { field: string; prop: string }; characters?: string; children: unknown[] }): void => {
+    const pinned = new Set<string>();
+    const walk = (n: { name: string; propertyRef?: { field: string; prop: string }; characters?: string; pinnedVisibleProp?: string; children: unknown[] }): void => {
+      if (n.pinnedVisibleProp) pinned.add(`${n.name}|visible`);
       if (n.propertyRef) perPart.set(`${n.name}|${n.propertyRef.field}`, n.propertyRef);
       if (typeof n.characters === 'string') perText.set(n.name, n.characters);
       for (const c of n.children as (typeof n)[]) walk(c);
@@ -1915,6 +1920,7 @@ const writeComponentSet = async (
     walk(plan.root as unknown as Parameters<typeof walk>[0]);
     refByMember.set(planComponentName(plan), perPart);
     textByMember.set(planComponentName(plan), perText);
+    if (pinned.size) pinnedByMember.set(planComponentName(plan), pinned);
   }
   // AFTER the offline guards, because a throw from them leaves nothing to name (#913).
   trail.component = component;
@@ -2314,6 +2320,21 @@ const writeComponentSet = async (
     // THE NODE'S OWN FIELDS, every one of them, in the order a build writes them — skipped whole for a node edited by
     // hand (`kept`). The children below are visited either way: each has its own record and its own verdict.
     const own = async (): Promise<{ id: string; name: string } | undefined> => {
+      // PINNED SHOWN, UNWIRED FIRST (#4461). A node the file holds that an older revision wired to the boolean this plan
+      // pins it against (an Update over a set built before the pin) loses that reference HERE, before any write below
+      // touches its `visible`. On the host a wired node's `visible` is the set's one default for that boolean: the
+      // `visible = true` claim, made while still wired, moved `message` to on for the whole set, and every
+      // status=default member still wired showed its message (the owner's Mac run at `3fda7bad`, 21 per field set).
+      // The wire loop's own unwire stays: it covers a pinned node this pass did not reach.
+      if (ex && n.pinnedVisibleProp) {
+        const had = (node.componentPropertyReferences ?? undefined) as Record<string, string> | undefined;
+        if (had?.visible !== undefined) {
+          const rest = { ...had };
+          delete rest.visible;
+          try { node.componentPropertyReferences = rest; }
+          catch (err) { misses.push(`${n.name}.visible -> taking the pinned node off '${n.pinnedVisibleProp}' before its write, so the set's default cannot move with it (#4461), REFUSED (${failureDetail(err)})`); }
+        }
+      }
       // NODE-VISIBILITY BOOLEAN (#1331): a hidden-by-default part is BUILT hidden; its `leading icon` switch
       // (wired below) toggles it. Applied HERE, in the shared build path, rather than in `claimDefaults` —
       // that helper returns early for an INSTANCE (a slot's node is an INSTANCE, and it must not neutralize
@@ -3939,6 +3960,18 @@ const writeComponentSet = async (
       // `builtFor` presence, NOT the node's: the distinction between "we know this member's parts" and
       // "this part is one of them". Keying off `kept` alone would send every legitimate absence back to
       // the scenegraph and quietly restore a third of the cost this exists to remove.
+      // Pinned shown and unbound on THIS member (#4461): nothing to wire, by design. A member an older revision wired
+      // (an Update over a file built before the pin) has the reference taken off, unless the node is kept as a hand edit.
+      if (pinnedByMember.get(String(member.name))?.has(`${r.part}|${r.field}`)) {
+        const pinNode = builtFor ? builtFor.get(r.part) : findOwnPart(liveMember(String(member.name)) ?? member, r.part);
+        const had = (pinNode?.componentPropertyReferences ?? undefined) as Record<string, string> | undefined;
+        if (pinNode && had?.[r.field] !== undefined && !(pinNode.id != null && keptIds.has(String(pinNode.id)))) {
+          const rest = { ...had };
+          delete rest[r.field];
+          wr(pinNode).componentPropertyReferences = rest;
+        }
+        continue;
+      }
       const kept = builtFor?.get(r.part);
       let node: CompNode | null | undefined;
       if (builtFor) { node = kept; if (kept) refsRetained++; else refsKnownAbsent++; }
