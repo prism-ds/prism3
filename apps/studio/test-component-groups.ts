@@ -272,17 +272,17 @@ console.log('\n2b. A box per set, needed sets (#3306, Q3306.1–6 A)');
 const WIRE_SPLITS: [string, string[]][] = [
   ['Buttons', ['button-destructive', 'button-group', 'button-neutral']],
   ['Icon button', ['icon-button', 'icon-button-destructive', 'icon-button-neutral']],
-  // #4112: the toggle pair, two roots on one page.
-  ['Toggle button', ['toggle-button', 'toggle-icon-button']],
   // #4007: Menu.Group is a root of its own, placed in a Menu's slot rather than nested by default.
   ['Menu', ['menu', 'menu-group']],
+  // #4112: the toggle pair, two roots on one page.
+  ['Toggle button', ['toggle-button', 'toggle-icon-button']],
   ['Flush icon button', ['flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral']],
   ['Icons & assets', ['icon', 'provider-logo']],
 ];
 const allRows = groups.flatMap((g) => g.rows);
 const splits = allRows.filter((r) => splitsOf(catalog, r)).map((r) => [r.label, rootsOf(catalog, r.ids)] as [string, string[]]);
 ok(JSON.stringify(splits) === JSON.stringify(WIRE_SPLITS),
-  `Q3306.1 A: the families that split are those with two or more roots, Buttons, Icon button, Toggle button, Flush icon button and Icons & assets, each with its roots (${JSON.stringify(splits)})`);
+  `Q3306.1 A: the families that split are those with two or more roots, Buttons, Icon button, Menu, Toggle button, Flush icon button and Icons & assets, each with its roots (${JSON.stringify(splits)})`);
 ok(['Checkbox', 'Radio', 'Switch', 'Tabs', 'Accordion', 'Breadcrumbs', 'Code input'].every((l) => { const r = allRows.find((x) => x.label === l); return r && r.family && !splitsOf(catalog, r); })
   && JSON.stringify(rootsOf(catalog, ['_accordion-indicator', 'accordion'])) === JSON.stringify(['accordion']),
   'Q3306.1 A: a family with one root keeps one box (Checkbox, Radio, Switch, Tabs, Accordion, Breadcrumbs, Code input)');
