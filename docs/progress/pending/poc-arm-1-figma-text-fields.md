@@ -1,6 +1,6 @@
 ## (2026-11-21) — Figma geometry: line boxes modeled, findings grouped, fields reached (#3408 S6)
 
-**What changed.** On `poc/arm-1`, with no engine change, three owner decisions from #4432 are built:
+**What changed.** On `poc/arm-1`, three owner decisions from #4432 are built, then the owner's decision B1 on this PR:
 - **1 A:** `compare-figma-geometry.ts` groups lines by root cause. The button's root border (1px transparent in CSS,
   no stroke in Figma) is one finding, holding its border lines and every width or x line whose residual equals the
   border's difference on that side exactly. The same difference repeated across cases is one finding too. The summary
@@ -21,8 +21,33 @@ cell's right inset.
 labels by up to 0.0156px. Chromium's LayoutUnit truncates, so 20.7px is laid out as 20.6875. It truncates the centered
 offset too: the small label sits at 11.09375, not 11.1016. Both are modeled. Neither is a tolerance.
 
-**Trap.** At error the field writes its message whatever `showMessage` says (Q-POC2 A), so `error-no-message` still
-draws one and can't match Figma's error member, which has `message=false`. That's an owner question on the PR, not a
-missing story. The field findings that repeat across cases are grouped by their exact values. The three content-inset
+### B1: the field's message pinned shown at every validation status
+
+At a validation status the code writes the message whatever `showMessage` says (Q-POC2 A), so Figma's error member
+(`message=false`, the set's default) couldn't match. The owner chose B1 for all three statuses: at error, warning and
+success, the message node is built **visible and not wired** to the `message` switch, so the switch does nothing there.
+The set default stays hidden (#2926), and `ErrorNoMessage` stays.
+- **Engine.** A `booleans` entry takes `pinnedShownAt` (variant axis → values). `figmaAnatomyPlan` builds the part
+  visible there with no `visibleProp` and records `pinnedVisibleProp`. `planSetProperties` refuses a pinned node that
+  is wired or built hidden, and the "declared two different ways" guard still trips for two bound members that
+  disagree. The validator refuses a pin on a non-variant axis, an undeclared value, or every member. TextField and
+  Password set it through `makeTextField`'s `messagePinnedAt`. Search and card-number fields don't, since arm 1 has
+  no code for them.
+- **Both executors needed it** (`EXECUTOR_REVISION` 67, reach `password-field`, `text-field`). Each wires the deduped
+  refs on every member that builds the part, so each would have bound the pinned message. The plugin reads the
+  member's plan. The paste payload reads a rule, `REF_PINS_ALL` (`part` plus axis values), off the member's name,
+  because a per-member list (63 entries) broke the chunk budget. The skip code is emitted only for a set with a pin,
+  so every other payload is byte-identical to before. An Update over a file built before the pin finds the message
+  wired on those members, so the plugin takes that reference off, unless the node is kept as a hand edit. The
+  read-back fails a pinned node that is still wired or hidden.
+- **Footprint.** The pinned members are taller than the default member, whose message is hidden, so the fields now
+  exempt `status` through `footprintVaries`, as checkbox-group does for its message. The validator accepts a pinned
+  axis as the third reason a box moves.
+- **Recorder.** `figma-geometry.js` reads each boolean per member: the visibility of the node wired to it, or, where
+  the member wires none, of the node at the path other members wire, listed under `unwired`. The committed record
+  predates this, so the two error lines stay until the Mac re-record, and the compare says so.
+
+**Trap.** `pinRules` derives the paste rule from the plans and then checks it against them. A pin pattern that no
+axis rule states is refused, rather than shipped as a wire that binds the wrong members. The field findings that repeat across cases are grouped by their exact values. The three content-inset
 lines are very probably one cause (the control's CSS border against Figma's inside stroke), but the records carry no
 part strokes, so the comparison can't prove it and doesn't merge them.

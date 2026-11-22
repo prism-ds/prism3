@@ -117,6 +117,10 @@ export type FieldSpec = Pick<ComponentDef, 'id' | 'name' | 'summary' | 'descript
   leading?: { glyph: string; shown: boolean };
   trailing?: { glyph: string };
   labelSwitch?: true;
+  /** The validation statuses at which the message is built shown and NOT wired to the `message` switch (#4461, owner
+   *  decision B1): the code writes the message at a validation status whatever `showMessage` says (Q-POC2 A). Set for
+   *  TextField and Password (the arm 1 fields); absent, the switch drives the message at every status. */
+  messagePinnedAt?: readonly ('error' | 'warning' | 'success')[];
   /** The brand style settings that reach the field (`ComponentDef.levers`). Absent, none does. */
   levers?: ComponentDef['levers'];
 };
@@ -667,6 +671,9 @@ export const makeTextField = (spec: FieldSpec): ComponentDef => {
   // entries leading with those names) but are deliberately absent from this projected axis.
   figmaProperties: {
     variantAxes: ['size', 'status'],
+    // The message pinned shown at each validation status (#4461) makes those members taller than the default one,
+    // where it is hidden: the box legitimately moves along `status`, as checkbox-group's does for its message.
+    ...(spec.messagePinnedAt ? { footprintVaries: ['status'] } : {}),
     stateAxis: { name: 'state', values: ['rest', 'hover', 'filled', 'focus-visible', 'focus-visible-filled', 'disabled', 'read-only'] },
     // `state` across the columns — the axis a designer reads a control's skin across, and the widest here.
     gridAxis: 'state',
@@ -692,7 +699,8 @@ export const makeTextField = (spec: FieldSpec): ComponentDef => {
       ...(toggle || markEdge ? {} : { trailingIcon: { part: 'trailingVisual', figmaName: 'trailing icon', default: false } }),
       // The tile's presence (`edge: 'mark'`), built shown: the field shows the generic tile before it knows the network.
       ...(markEdge ? { showCardMark: { part: 'cardMark', figmaName: 'card mark', default: true } } : {}),
-      showMessage: { part: 'message', figmaName: 'message', default: false },
+      // Pinned shown at each validation status (#4461, B1), where the code always writes it; hidden elsewhere (#2926).
+      showMessage: { part: 'message', figmaName: 'message', default: false, ...(spec.messagePinnedAt ? { pinnedShownAt: { status: spec.messagePinnedAt } } : {}) },
     },
     // The two glyphs' CONTENT — orthogonal to their presence booleans above. `figmaName` gives each the canon
     // panel label nested beneath its switch; the code props stay `leadingIcon` / `trailingIcon` (one prop, two
@@ -717,6 +725,8 @@ export const makeTextField = (spec: FieldSpec): ComponentDef => {
 export const textField: ComponentDef = makeTextField({
   id: 'text-field',
   levers: { controlShape: { squares: ['radius.sm'] }, fieldStyle: { frame: 'control' } },
+  // The message is shown and unbound at every validation status in Figma, as the code writes it there (#4461, B1).
+  messagePinnedAt: ['error', 'warning', 'success'],
   name: 'TextField',
   aliases: ['text-input', 'input', 'textbox', 'formfield'],
   summary: 'Single-line text field: label, input, and helper or validation message.',

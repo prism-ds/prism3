@@ -9,6 +9,10 @@
  *   - each visible descendant's box, relative to the member's top left, keyed by its layer path (`container/label`;
  *     the member itself is `container`), with its node id, its type and its horizontal sizing (FIXED, HUG or FILL).
  * The variant is the member's own `variantProperties`.
+ * Each BOOLEAN component property (`leading icon`, `message`) is recorded PER MEMBER, at its effective value (#4461):
+ * the visibility of the member's node wired to it; where the member wires no node to it, the visibility of the node
+ * at the layer path other members wire, listed under the member's `unwired` (the field's message, pinned shown and
+ * unbound at a validation status, reads "true" there); and only where neither exists, the set's default.
  *
  * It returns the record as a JSON string. Save it UNEDITED as `apps/storybook/figma-geometry.json`. The IIFE is
  * RETURNED: `figma_execute` wraps the code in an async function body and hands back only an explicit `return`, so a
@@ -21,14 +25,30 @@ return (async () => {
   const r2 = (n) => Math.round(n * 100) / 100;
   await figma.loadAllPagesAsync();
   const sets = figma.root.findAllWithCriteria({ types: ['COMPONENT_SET'] }).filter((s) => SETS.includes(s.name));
-  const out = { format: '1.0', source: 'figma', file: '(not recorded: the file name stays out of the repo)', note: 'Boxes relative to the member\'s top left, from absoluteBoundingBox, in px, to 0.01. Parts keyed by layer path.', components: {} };
+  const out = { format: '1.0', source: 'figma', file: '(not recorded: the file name stays out of the repo)', note: 'Boxes relative to the member\'s top left, from absoluteBoundingBox, in px, to 0.01. Parts keyed by layer path.', propertyRead: 'effective', components: {} };
   for (const set of sets) {
     const members = [];
-    // the set's BOOLEAN component properties (e.g. "leading icon", "message") at their defaults: what each member shows
-    const properties = {};
-    for (const [key, def] of Object.entries(set.componentPropertyDefinitions || {})) if (def.type === 'BOOLEAN') properties[key.split('#')[0]] = String(def.defaultValue);
+    // the set's BOOLEAN component properties (e.g. "leading icon", "message"), read per member below (#4461)
+    const bools = Object.entries(set.componentPropertyDefinitions || {}).filter(([, d]) => d.type === 'BOOLEAN');
+    // every own layer of a member with its path; a nested instance's internals are another component's, so not entered
+    const layers = (m) => { const out = []; const go = (n, path) => { for (const c of n.children || []) { const p = `${path}/${c.name}`; out.push([p, c]); if (c.type !== 'INSTANCE') go(c, p); } }; go(m, 'container'); return out; };
+    const wiredTo = (n) => (n.componentPropertyReferences || {}).visible;
+    // the layer paths any member wires to each property
+    const wiredPaths = {};
+    for (const m of set.children) if (m.type === 'COMPONENT') for (const [p, n] of layers(m)) if (wiredTo(n)) (wiredPaths[wiredTo(n)] = wiredPaths[wiredTo(n)] || new Set()).add(p);
     for (const m of set.children) {
       if (m.type !== 'COMPONENT') continue;
+      const own = layers(m);
+      const properties = {};
+      const unwired = [];
+      for (const [key, def] of bools) {
+        const name = key.split('#')[0];
+        const wired = own.filter(([, n]) => wiredTo(n) === key);
+        const peers = wired.length ? [] : own.filter(([p]) => (wiredPaths[key] || new Set()).has(p));
+        if (wired.length) properties[name] = String(wired.every(([, n]) => n.visible !== false));
+        else if (peers.length) { properties[name] = String(peers.every(([, n]) => n.visible !== false)); unwired.push(name); }
+        else properties[name] = String(def.defaultValue);
+      }
       const o = m.absoluteBoundingBox;
       const parts = {};
       const walk = (n, path) => {
@@ -46,6 +66,7 @@ return (async () => {
         id: m.id,
         variant: m.variantProperties || {},
         properties,
+        ...(unwired.length ? { unwired } : {}),
         root: {
           w: r2(o.width), h: r2(o.height), sizing: m.layoutSizingHorizontal || null, minWidth: typeof m.minWidth === 'number' ? r2(m.minWidth) : null,
           padding: [m.paddingTop, m.paddingRight, m.paddingBottom, m.paddingLeft].map((v) => r2(v || 0)),

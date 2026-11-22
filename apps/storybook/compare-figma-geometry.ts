@@ -65,7 +65,12 @@ export const scriptReturns = async (src: string): Promise<string | null> => {
   const label = { id: '2:3', name: 'label', type: 'TEXT', visible: true, characters: 'Go', layoutSizingHorizontal: 'HUG', absoluteBoundingBox: box(112, 108, 30, 20) };
   const member = { id: '2:1', type: 'COMPONENT', variantProperties: { state: 'rest' }, absoluteBoundingBox: box(100, 100, 54, 36), children: [label], strokes: [] };
   const set = { id: '1:1', name: 'button', type: 'COMPONENT_SET', componentPropertyDefinitions: {}, children: [member] };
-  const stub = { loadAllPagesAsync: async () => {}, root: { findAllWithCriteria: () => [set] } };
+  // #4461: a field whose message is wired to `message` (hidden) at status=default and pinned shown, wired to nothing,
+  // at status=error. The record must read each member's EFFECTIVE value, not the set's one default.
+  const msg = (id: string, visible: boolean, wired: boolean) => ({ id, name: 'message', type: 'INSTANCE', visible, absoluteBoundingBox: box(0, 70, 320, 20), children: [], ...(wired ? { componentPropertyReferences: { visible: 'message#7:0' } } : {}) });
+  const field = (id: string, status: string, m: ReturnType<typeof msg>) => ({ id, type: 'COMPONENT', variantProperties: { status }, absoluteBoundingBox: box(0, 0, 320, 90), children: [m], strokes: [] });
+  const fset = { id: '3:1', name: 'text-field', type: 'COMPONENT_SET', componentPropertyDefinitions: { 'message#7:0': { type: 'BOOLEAN', defaultValue: false } }, children: [field('3:2', 'default', msg('3:3', false, true)), field('3:4', 'error', msg('3:5', true, false))] };
+  const stub = { loadAllPagesAsync: async () => {}, root: { findAllWithCriteria: () => [set, fset] } };
   const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (figma: unknown) => Promise<unknown>;
   let got: unknown;
   try { got = await new AsyncFunction('figma', src)(stub); } catch (e) { return `figma-geometry.js throws when run as figma_execute runs it: ${(e as Error).message}`; }
@@ -75,6 +80,12 @@ export const scriptReturns = async (src: string): Promise<string | null> => {
   const want = { id: '2:3', type: 'TEXT', x: 12, y: 8, w: 30, h: 20, text: 'Go' };
   const off = Object.entries(want).filter(([k, v]) => part?.[k] !== v).map(([k]) => k);
   if (!part || off.length) return `figma-geometry.js returns a record without the stub's label as container/label {x: 12, y: 8, w: 30, h: 20} (${part ? `differs in ${off.join(', ')}` : 'missing'})`;
+  const rec = JSON.parse(got);
+  const fm = (rec.components?.['text-field']?.members ?? []) as { variant: Record<string, string>; properties?: Record<string, string>; unwired?: string[] }[];
+  const eff = (status: string) => fm.find((x) => x.variant.status === status);
+  const [d, e] = [eff('default'), eff('error')];
+  if (rec.propertyRead !== 'effective' || d?.properties?.message !== 'false' || d?.unwired || e?.properties?.message !== 'true' || JSON.stringify(e?.unwired) !== '["message"]')
+    return `figma-geometry.js does not record each member's effective message (#4461): the stub field's message is wired and hidden at status=default and pinned shown, wired to nothing, at error, so it must read message=false there and message=true, unwired, at error; it read ${JSON.stringify({ propertyRead: rec.propertyRead, default: [d?.properties?.message, d?.unwired], error: [e?.properties?.message, e?.unwired] })}`;
   return null;
 };
 const CODE = resolve(HERE, 'storybook-static/geometry.code.json');
@@ -85,7 +96,7 @@ const key_ = (figmaName: string) => ALIAS[figmaName] ?? figmaName;
 
 type Box = { x: number; y: number; w: number; h: number };
 type FPart = Box & { id: string; type: string; sizing: string | null; text?: string };
-type FMember = { id: string; variant: Record<string, string>; properties?: Record<string, string>; root: { w: number; h: number; sizing: string | null; minWidth: number | null; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, FPart> };
+type FMember = { id: string; variant: Record<string, string>; properties?: Record<string, string>; unwired?: string[]; root: { w: number; h: number; sizing: string | null; minWidth: number | null; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, FPart> };
 type CCase = { story: string; where: Record<string, string>; root: { w: number; h: number; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, Box & { font?: { size: number; lineHeight: number | null } }>; text?: string };
 export type FigmaRecord = { components: Record<string, { members: FMember[] }> };
 export type CodeRecord = { cases: Record<string, CCase> };
@@ -339,7 +350,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma
     let bad = 0;
     const script = await scriptReturns(readFileSync(SCRIPT, 'utf8'));
     if (script) { bad++; console.error(`FAIL self-test: ${script}`); }
-    else console.log('OK self-test: figma-geometry.js, run in an async function body as figma_execute runs it, returns the record (a stub set\'s label read back as container/label)');
+    else console.log('OK self-test: figma-geometry.js, run in an async function body as figma_execute runs it, returns the record (a stub set\'s label read back as container/label, and each stub field member\'s effective message: false where wired and hidden, true and unwired where pinned shown, #4461)');
     const base = plantFigma(code);
     const clean = compare(base, code, partList(code));
     for (const n of clean.notes) console.log(`  named: ${n}`);
@@ -441,7 +452,13 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma
     console.error('FAIL figma geometry: apps/storybook/figma-geometry.json is missing. It comes from the Mac job in apps/storybook/figma-geometry.md; a comparison that did not run is not a pass.');
     process.exit(1);
   }
-  const r = compare(JSON.parse(readFileSync(FIGMA, 'utf8')), code, partList(code));
+  const figRecord = JSON.parse(readFileSync(FIGMA, 'utf8'));
+  const r = compare(figRecord, code, partList(code));
+  // #4461 (B1): a record from before the effective read holds each boolean at the set's one default, so a field member
+  // whose message is pinned shown at a validation status reads message=false in it. Its lines wait on the re-record.
+  if (figRecord.propertyRead !== 'effective')
+    console.log('NOTE the Figma record reads each boolean property at its set default (it predates #4461\'s per-member read), so the field error members read message=false here; since #4461 the message is pinned shown and unbound at every validation status, and those lines await the Mac re-record (apps/storybook/figma-geometry.md)');
+  for (const m of Object.values(figRecord.components ?? {}).flatMap((c) => (c as { members: FMember[] }).members)) if (m.unwired?.length) console.log(`NOTE member ${m.id} (${Object.entries(m.variant).map(([k, v]) => `${k}=${v}`).join(', ')}): ${m.unwired.join(', ')} shown, wired to no property (#4461)`);
   for (const n of r.notes) console.log(`NOTE ${n}`);
   if (r.failures.length) {
     console.error(`FAIL figma geometry: ${r.failures.length} of ${r.compared} comparisons differ, in ${r.findings.length} findings (lines that share a root cause count once)`);

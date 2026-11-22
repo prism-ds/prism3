@@ -20271,6 +20271,10 @@ arm: {
       ok(JSON.stringify(withMsg) === JSON.stringify(MESSAGE_OFF_FAMILY),
         `#2926 the defs with a showMessage boolean are exactly the message-off family ${JSON.stringify(MESSAGE_OFF_FAMILY)} (got ${JSON.stringify(withMsg)}) — a new one joins the list and takes its default`);
       const findVis = (n: any, name: string): any[] => [...(n.visibleProp === name ? [n] : []), ...(n.children ?? []).flatMap((c: any) => findVis(c, name))];
+      const findPin = (n: any, name: string): any[] => [...(n.pinnedVisibleProp === name ? [n] : []), ...(n.children ?? []).flatMap((c: any) => findPin(c, name))];
+      // #4461 (owner decision B1, all three statuses): the arm 1 fields pin the message SHOWN and unbound at every
+      // validation status, where the code writes it whatever showMessage says. Written out, not read off the defs.
+      const PINNED_AT_STATUS: Record<string, readonly string[]> = { 'text-field': ['error', 'success', 'warning'], 'password-field': ['error', 'success', 'warning'] };
       const msgBad: string[] = [];
       for (const id of MESSAGE_OFF_FAMILY) {
         const d = componentDefs.find((x) => x.id === id);
@@ -20281,11 +20285,53 @@ arm: {
         if (prop?.default !== false) msgBad.push(`${id}: prop default ${String(prop?.default)}`);
         if (/\b(shown|on) by default\b|on — the default|on, the default/i.test(`${prop?.description ?? ''} ${d.anatomy?.parts[b.part]?.note ?? ''} ${d.anatomy?.parts.message?.note ?? ''}`)) msgBad.push(`${id}: prose still says the message is on by default`);
         const set = figmaAnatomySet(d, { swapTarget: 'FPO-default-icon' });
-        const nodes = set.flatMap((p) => findVis(p.root, b.figmaName ?? 'message'));
-        if (nodes.length < set.length || !nodes.every((n) => n.visible === false)) msgBad.push(`${id}: ${nodes.filter((n) => n.visible !== false).length} of ${nodes.length} message nodes built visible over ${set.length} members`);
+        const pinAt = PINNED_AT_STATUS[id] ?? [];
+        const isPinned = (p: AnatomyPlan) => pinAt.includes(String(p.coord.status));
+        const bound = set.filter((p) => !isPinned(p));
+        const nodes = bound.flatMap((p) => findVis(p.root, b.figmaName ?? 'message'));
+        if (nodes.length < bound.length || !nodes.every((n) => n.visible === false)) msgBad.push(`${id}: ${nodes.filter((n) => n.visible !== false).length} of ${nodes.length} message nodes built visible over ${bound.length} bound members`);
+        // and the pinned members (#4461): shown, wired to nothing, at exactly the owner's statuses
+        const pinWrong = set.filter((p) => {
+          const pins = findPin(p.root, b.figmaName ?? 'message');
+          const wired = findVis(p.root, b.figmaName ?? 'message');
+          return isPinned(p) ? !(pins.length === 1 && wired.length === 0 && pins[0].visible !== false) : pins.length > 0;
+        });
+        if (pinWrong.length) msgBad.push(`${id}: ${pinWrong.length} members pin the message other than at status ${JSON.stringify(pinAt)}, shown and unbound (first ${planComponentName(pinWrong[0])})`);
       }
       ok(msgBad.length === 0,
-        `#2926 every field's message is OFF by default: the boolean, the prop and the built node (visible:false at every member) agree, and no doc says "shown by default"${msgBad.length ? ` — WRONG: ${msgBad.join(' | ')}` : ''}`);
+        `#2926 every field's message is OFF by default: the boolean, the prop and the built node (visible:false at every bound member) agree, and no doc says "shown by default"; #4461 the arm 1 fields pin it shown and unbound at every validation status${msgBad.length ? ` — WRONG: ${msgBad.join(' | ')}` : ''}`);
+    }
+
+    // (2c) #4461 (B1): planSetProperties takes the pinned members without "declared two different ways", and still
+    //      refuses every other inconsistency; the validator refuses a pin it cannot honor.
+    {
+      const tfSet = figmaAnatomySet(textField, { swapTarget: 'FPO-default-icon' });
+      const findMsgNode = (n: any): any => n.name === 'message' ? n : (n.children ?? []).map(findMsgNode).find(Boolean);
+      const err = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+      ok(err(() => planSetProperties(tfSet)) === '' && planSetProperties(tfSet).find((p) => p.name === 'message')?.default === false,
+        `#4461 planSetProperties takes the text field's whole set (message pinned shown at error, warning and success, hidden and bound elsewhere) and declares 'message' defaulting false (${err(() => planSetProperties(tfSet)) || 'ok'})`);
+      const clone = (p: AnatomyPlan): AnatomyPlan => JSON.parse(JSON.stringify(p));
+      const errorPlan = tfSet.find((p) => p.coord.status === 'error')!;
+      const defaultPlan = tfSet.find((p) => p.coord.status === 'default')!;
+      // a pinned node that is ALSO wired
+      const wired = clone(errorPlan); findMsgNode(wired.root).visibleProp = 'message';
+      ok(/pins 'message' shown and unbound .* but the node is wired to 'message'/.test(err(() => planSetProperties([defaultPlan, wired]))),
+        `#4461 planSetProperties refuses a pinned message that is also wired, by name (${err(() => planSetProperties([defaultPlan, wired]))})`);
+      // a pinned node built hidden
+      const hidden = clone(errorPlan); findMsgNode(hidden.root).visible = false;
+      ok(/pins 'message' shown and unbound .* but the node is built hidden/.test(err(() => planSetProperties([defaultPlan, hidden]))),
+        `#4461 planSetProperties refuses a pinned message built hidden, by name (${err(() => planSetProperties([defaultPlan, hidden]))})`);
+      // any other inconsistency still trips the guard: a BOUND member built shown beside one built hidden
+      const shownBound = clone(defaultPlan); delete findMsgNode(shownBound.root).visible;
+      ok(/'message' is declared two different ways across the set/.test(err(() => planSetProperties([defaultPlan, shownBound, errorPlan]))),
+        `#4461 the "declared two different ways" guard still trips for two BOUND members that disagree, pinned members beside them (${err(() => planSetProperties([defaultPlan, shownBound, errorPlan]))})`);
+      // the validator: the pin must name a projected variant axis, values it declares, and leave a member bound
+      const withPin = (pin: Record<string, readonly string[]>) => ({ ...textField, figmaProperties: { ...textField.figmaProperties!, booleans: { ...textField.figmaProperties!.booleans, showMessage: { part: 'message', figmaName: 'message', default: false, pinnedShownAt: pin } } } }) as ComponentDef;
+      const pinErr = (pin: Record<string, readonly string[]>, re: RegExp) => figmaPropertyErrors(withPin(pin)).some((x) => re.test(x));
+      ok(figmaPropertyErrors(textField).every((x) => !/pinnedShownAt/.test(x)), `#4461 the text field's own pin (status: error, warning, success) passes the validator (${figmaPropertyErrors(textField).filter((x) => /pinnedShownAt/.test(x)).join(' / ')})`);
+      ok(pinErr({ state: ['hover'] }, /pinnedShownAt names 'state', which is not a projected variant axis/), '#4461 the validator refuses a pin on the state axis, by name');
+      ok(pinErr({ status: ['danger'] }, /pinnedShownAt\.status names 'danger', which 'status' does not declare/), '#4461 the validator refuses a pin on an undeclared value, by name');
+      ok(pinErr({ status: ['default', 'error', 'warning', 'success'] }, /pinnedShownAt pins every member the set keeps/), '#4461 the validator refuses a pin over every member, by name');
     }
 
     // (3) the boolean does NOT multiply the set — still status(4) × state(5) = 20 members.
@@ -28493,6 +28539,26 @@ arm: {
           `#1203 reachable: the mixed grid wires the pending spinner to BOTH swap slots, so the by-part dedup genuinely collapses (${spinnerRows.join('; ')})`);
         ok(JSON.stringify(plugWiring) === JSON.stringify(pasteWiring),
           `#1203 parity: both executors wire every member's swap slot to the SAME property, spinner included — plugin vs paste disagree on: ${JSON.stringify([...plugWiring.filter((s) => !pasteWiring.includes(s)), ...pasteWiring.filter((s) => !plugWiring.includes(s))].slice(0, 6))}`);
+        // #4461 (B1): both executors leave the field's message UNWIRED where the plan pins it shown (error, warning,
+        // success), though the deduped refs name the part on every member, and wire it at status=default. Read off the
+        // page each path wrote. The chunked paste path carries the same rule in its last chunk.
+        {
+          const tfGrid = figmaAnatomySet(textField, { swapTarget: 'FPO-default-icon' }).filter((p) => p.size === 'medium' && p.coord.state === 'rest');
+          const tTargets = (n: FigmaNodePlan): string[] => [n.nestTarget, n.swapTarget, ...(n.children ?? []).flatMap(tTargets)].filter((x): x is string => typeof x === 'string');
+          const tfOpts = { vars: tfGrid.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]), styles: tfGrid.flatMap((p) => planTextStyles(p.root)), comps: ['FPO-default-icon', ...new Set(tfGrid.flatMap((p) => tTargets(p.root)))] };
+          const tfPaste: StubPage = { children: [] };
+          const tfPlug: StubPage = { children: [] };
+          await runPayload(planSetToPluginJs(tfGrid), { ...tfOpts, page: tfPaste });
+          await plugRun(tfGrid, { ...tfOpts, page: tfPlug });
+          for (const [path, page] of [['paste', tfPaste], ['plugin', tfPlug]] as const) {
+            const at = refWiring(page).filter((r) => r.includes('/message.visible=')).map((r) => /status=(\w+)/.exec(r)?.[1] ?? '?').sort();
+            ok(JSON.stringify(at) === '["default"]',
+              `#4461 ${path} executor: the text field's message is wired to 'message' at status=default only, and left unwired where it is pinned shown (error, warning, success) — wired at ${JSON.stringify(at)}`);
+          }
+          const lastChunk = planSetChunks(tfGrid, 1e9).at(-1)!.js;
+          ok(lastChunk.includes('const REF_PINS_ALL=[{"part":"message","where":{"status":["error","success","warning"]}}]'),
+            `#4461 the chunked paste path's last chunk carries the message's pin rule (REF_PINS_ALL)`);
+        }
         // THE GEOMETRY, read off the two pages. Every member's NAME→POSITION map: the column pitch is
         // measured from the members, so identical positions mean both paths measured every member the
         // same and placed them in the same cells. And, since the set's inner padding (2026-09-27), the

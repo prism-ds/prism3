@@ -23,7 +23,7 @@
  * also-pure step (`planBindingErrors`) that takes the emitted Figma variable names as a Set.
  */
 import type { AxisKind, ComponentDef, LiteralEntry, LiteralFont, NestVariantWhen, NestVariantWhere, PartDef } from './component-schema';
-import { axisKindOf, densitySizeValues, densitySpacingKeys, visibleGapKeys, fillKey, gridColumnAxis, fillPaintKey, paintKeyPlaceholders, parseRatio, PRIMARY_PAINT_SLOTS, replacesCandidates, STATE_GATE, statesOf, whenStates, variantsOf, slotAxisFigmaName, variantAxisFigmaName, swapPart, swapFigmaName, textFigmaName, booleanPartsOf, booleanFigmaName, booleanDefault, figmaVariantCount, figmaAxisNames, isExcludedCoordinate, WEIGHT_INTENTS } from './component-schema';
+import { axisKindOf, densitySizeValues, densitySpacingKeys, visibleGapKeys, fillKey, gridColumnAxis, fillPaintKey, paintKeyPlaceholders, parseRatio, PRIMARY_PAINT_SLOTS, replacesCandidates, STATE_GATE, statesOf, whenStates, variantsOf, slotAxisFigmaName, variantAxisFigmaName, swapPart, swapFigmaName, textFigmaName, booleanPartsOf, booleanFigmaName, booleanDefault, booleanPinnedAt, figmaVariantCount, figmaAxisNames, isExcludedCoordinate, WEIGHT_INTENTS } from './component-schema';
 import type { ControlShape, FieldStyle, SearchFieldStyle, TagStyle, DialogTitleSize, BannerStyle, CurrentIndicator, ButtonIcons, ButtonContentSize, ButtonLabelWeight, ButtonTextHover, ButtonBorderWeight, Density } from './scale';
 import { buttonMinWidth, CURRENT_INDICATOR_PARTIAL_SHARE, DEFAULT_MIN_WIDTH_MULTIPLIER, densitySpacingStep, ICON_SIZES, ratioMinWidth, spacePx, visibleGapStep } from './scale';
 // #1602 — the weight-role ladder and the default per-category weights, for resolving a component's
@@ -204,6 +204,11 @@ export type FigmaNodePlan = {
    *  DEFAULT value: `planSetProperties` reads it off the node "as built", so a hidden-by-default leading
    *  glyph both renders hidden and defaults its switch to off. */
   visibleProp?: string;
+  /** `pinnedShownAt` (#4461): the BOOLEAN property this node is deliberately NOT wired to at this member. The node is
+   *  built visible and carries no `visibleProp`, so the switch does nothing here. The executor never reads it;
+   *  `planSetProperties` holds it consistent (shown and unbound). That some member still wires the property is
+   *  the def validator's (`figmaPropertyErrors`): a plan list may be one member or one chunk of the set. */
+  pinnedVisibleProp?: string;
   visible?: boolean;
   /** For an `INSTANCE_SWAP` node: the paint for VECTOR descendants INSIDE the instance.
    *
@@ -1332,15 +1337,19 @@ export const figmaAnatomyPlan = (
   // BUILT visibility (also the property's default). Computed HERE, above `present()`, because a
   // boolean-driven part must stay in the tree at every member — the boolean toggles its `visible` in place
   // rather than a variant/slot axis dropping the node — so `present()` has to know which parts these are.
-  const booleanParts = new Map<string, { prop: string; visible: boolean }>();
-  for (const [prop, v] of Object.entries(def.figmaProperties?.booleans ?? {}))
-    for (const part of booleanPartsOf(v)) booleanParts.set(part, { prop: booleanFigmaName(prop, v), visible: booleanDefault(v) });
   // An axis coordinate read off `slots` is a string or it is absent — `leading`/`trailing` share the
   // index signature but are not coordinates, and a def is free to declare an axis named either.
   const axisValue = (axis: string): string | undefined => {
     const v = slots[axis];
     return typeof v === 'string' ? v : undefined;
   };
+  // PINNED SHOWN (#4461, `pinnedShownAt`): at a pinned coordinate the part is built VISIBLE and carries no
+  // `visibleProp` (its node records the boolean it ignores as `pinnedVisibleProp`), so the switch does nothing there.
+  const booleanParts = new Map<string, { prop: string; visible: boolean; pinned: boolean }>();
+  for (const [prop, v] of Object.entries(def.figmaProperties?.booleans ?? {})) {
+    const pinned = booleanPinnedAt(v, axisValue);
+    for (const part of booleanPartsOf(v)) booleanParts.set(part, { prop: booleanFigmaName(prop, v), visible: pinned || booleanDefault(v), pinned });
+  }
   // Validated, not trusted. A typo'd axis value would otherwise resolve no paint keys at all and emit
   // a structurally perfect, entirely unpainted component — a silent failure of exactly the shape #500
   // and #482 were. Every axis the def declares is checked, not just Button's two (#758): the loop is
@@ -2472,7 +2481,8 @@ export const figmaAnatomyPlan = (
       // for a hidden-by-default part so every existing plan stays byte-identical (executors read
       // `n.visible ?? true`). A boolean part is present at every member (see `present()`), so this rides
       // the tree, not a variant coordinate.
-      ...(booleanParts.has(name) ? { visibleProp: booleanParts.get(name)!.prop } : {}),
+      ...(booleanParts.has(name) && !booleanParts.get(name)!.pinned ? { visibleProp: booleanParts.get(name)!.prop } : {}),
+      ...(booleanParts.get(name)?.pinned ? { pinnedVisibleProp: booleanParts.get(name)!.prop } : {}),
       ...(booleanParts.get(name)?.visible === false ? { visible: false as const } : {}),
       ...(textStyle ? { textStyle } : {}),
       ...(literalFont ? { literalFont } : {}),
@@ -3641,6 +3651,41 @@ const refNodes = (n: FigmaNodePlan): FigmaNodePlan[] =>
  *  that already carries a swap or text ref. */
 const visibleRefNodes = (n: FigmaNodePlan): FigmaNodePlan[] =>
   [...(n.visibleProp ? [n] : []), ...n.children.flatMap(visibleRefNodes)];
+/** Every node pinned shown and unbound (`pinnedVisibleProp`, #4461), depth-first. */
+const pinnedNodes = (n: FigmaNodePlan): FigmaNodePlan[] =>
+  [...(n.pinnedVisibleProp ? [n] : []), ...n.children.flatMap(pinnedNodes)];
+
+/** A part pinned shown and unbound (#4461), as the rule the PASTE wire reads off each member's NAME: skip `part`'s
+ *  `visible` ref on a member whose every `where` axis (Figma display name) holds one of its values. A rule, not a
+ *  member list, because the list (63 entries on a field) does not fit the chunk budget the rule fits in a line.
+ *  Derived from the plans and then checked against them: the members the rule selects, among those that build the
+ *  part, must be exactly the members that pin it, or this refuses rather than ship a wire that binds the wrong ones. */
+export const pinRules = (plans: AnatomyPlan[]): { part: string; where: Record<string, string[]> }[] => {
+  const coordOf = (p: AnatomyPlan): Record<string, string> =>
+    Object.fromEntries(planComponentName(p).split(', ').map((seg) => seg.split('=') as [string, string]));
+  const parts = new Map<string, { pinned: Set<AnatomyPlan>; built: AnatomyPlan[] }>();
+  for (const p of plans) for (const n of pinnedNodes(p.root)) {
+    if (!parts.has(n.name)) parts.set(n.name, { pinned: new Set(), built: [] });
+    parts.get(n.name)!.pinned.add(p);
+  }
+  const out: { part: string; where: Record<string, string[]> }[] = [];
+  for (const [part, e] of parts) {
+    const walk = (n: FigmaNodePlan): FigmaNodePlan[] => [n, ...n.children.flatMap(walk)];
+    for (const p of plans) if (walk(p.root).some((n) => n.name === part && (n.visibleProp || n.pinnedVisibleProp))) e.built.push(p);
+    // The axes on which the pinned members do not cover every value the building members carry.
+    const vals = (ps: Iterable<AnatomyPlan>, a: string) => new Set([...ps].map((p) => coordOf(p)[a]));
+    const axes = Object.keys(coordOf(e.built[0]));
+    const where: Record<string, string[]> = {};
+    for (const a of axes) { const pv = vals(e.pinned, a); if (pv.size < vals(e.built, a).size) where[a] = [...pv].sort(); }
+    const selects = (p: AnatomyPlan) => Object.entries(where).every(([a, vs]) => vs.includes(coordOf(p)[a]));
+    const wrong = e.built.filter((p) => selects(p) !== e.pinned.has(p));
+    // An empty `where` selects every member: right only when every member that builds the part pins it (one member).
+    if (wrong.length)
+      throw new Error(`pinRules: '${part}' is pinned on ${e.pinned.size} of ${e.built.length} members in a pattern no axis rule states (${wrong.slice(0, 3).map(planComponentName).join(' | ') || 'every member'}) — the paste wire could not tell them apart`);
+    out.push({ part, where });
+  }
+  return out;
+};
 
 /**
  * The COMPONENT PROPERTIES to declare on a set — derived from the nodes the plans actually BUILD,
@@ -3702,6 +3747,13 @@ export const planSetProperties = (plans: AnatomyPlan[]): FigmaPropertyPlan[] => 
       if (prev && JSON.stringify(prev) !== JSON.stringify(prop))
         throw new Error(`planSetProperties: '${prop.name}' is declared two different ways across the set — ${JSON.stringify(prev)} vs ${JSON.stringify(prop)}`);
       byName.set(prop.name, prop);
+    }
+    // PINNED SHOWN (#4461). A member whose node is pinned shown takes no part in the boolean's default (it is not
+    // wired, so its built visibility is not the property's), which is why the set's message can default hidden
+    // while the error members build it shown. But a pinned node must be exactly that: shown, and wired to nothing.
+    for (const n of pinnedNodes(plan.root)) {
+      if (n.visibleProp || n.visible === false)
+        throw new Error(`planSetProperties: '${n.pinnedVisibleProp}' pins '${n.name}' shown and unbound on ${planComponentName(plan)}, but the node is ${n.visibleProp ? `wired to '${n.visibleProp}'` : 'built hidden'}`);
     }
     // NODE-VISIBILITY BOOLEANS (#1331). A separate walk because these ride `visibleProp`, not `propertyRef`
     // (so the boolean can share a node with a swap). The property's DEFAULT is the node's BUILT visibility
@@ -5479,7 +5531,7 @@ export const hasSlotConstraints = (props: readonly FigmaPropertyPlan[]): boolean
  * and counts against the per-chunk byte budget (a full narrative here pushed `icon-button` from 11 chunks to
  * 12). What the pasted script needs is the rule it follows; the history belongs to whoever edits this emitter.
  */
-const PAYLOAD_WIRE_REFS = `// WIRE the references, per MEMBER. They do NOT propagate: setting one on the first variant left every
+const PAYLOAD_WIRE_REFS_ALL = `// WIRE the references, per MEMBER. They do NOT propagate: setting one on the first variant left every
 // sibling's \`componentPropertyReferences\` empty, so a set wired once looks correct on the variant a
 // designer happens to inspect and is inert on the other twenty.
 // PER-MEMBER OVERRIDES (#1203). \`REFS\` is deduped by part, but an overlay part — the pending spinner —
@@ -5502,7 +5554,7 @@ for(const o of REF_OVERRIDES){let m=refOv.get(o.member);if(!m){m=new Map();refOv
 // search is scoped, not replaced. The plugin executor's \`findOwnPart\` is the same fix; the two must stay
 // in lockstep or the parity gate diverges.
 const inInst=(node,stop)=>{for(let p=node.parent;p&&p!==stop;p=p.parent)if(p.type==='INSTANCE')return true;return false;};
-const findOwnPart=(member,name)=>member.findOne(x=>x.name===name&&!inInst(x,member));
+const findOwnPart=(member,name)=>member.findOne(x=>x.name===name&&!inInst(x,member));/*PIN_DEF*/
 // #1567 — EVERY MEMBER BOUND TO ONE TEXT PROPERTY SHOWS THAT PROPERTY'S SINGLE DEFAULT, so a per-member
 // caption is not expressible and this reports the collapse rather than writing. Captured BEFORE any reference
 // is wired, from the live built nodes (a chunk's \`PLANS\` holds only its own slice), and read only to COUNT the
@@ -5526,6 +5578,7 @@ for(const member of set.children){
     // references, so a part missing everywhere would leave the property undeclared instead.
     if(!node)continue;
     // The member's own prop/field where it diverges from the deduped entry, else the deduped one.
+    /*PIN_SKIP*/
     const o=own&&own.get(r.part+'|'+r.field);
     const field=o?o.field:r.field;
     const prop=o?o.prop:r.prop;
@@ -5595,6 +5648,14 @@ if(declaredDefault.size){
       +'; every member bound to this property displays the set\\'s value, so all of them show the second string)');
   }
 }`;
+
+/** The wire, with the #4461 pin skip only where the set pins a part (`REF_PINS_ALL` non-empty): every other set's payload
+ *  is byte-identical to before, which keeps it inside the chunk budget it was packed to. */
+const payloadWireRefs = (pins: boolean): string => pins
+  ? PAYLOAD_WIRE_REFS_ALL
+    .replace('/*PIN_DEF*/', "\n// #4461: a part pinned shown and unbound on a member (REF_PINS_ALL, read off its name) is not wired there.\nconst pinned=(member,part)=>{const c={};for(const g of member.name.split(', ')){const i=g.indexOf('=');c[g.slice(0,i)]=g.slice(i+1);}return REF_PINS_ALL.some(p=>p.part===part&&Object.entries(p.where).every(([a,vs])=>vs.includes(c[a])));};")
+    .replace('    /*PIN_SKIP*/\n', "    if(r.field==='visible'&&pinned(member,r.part))continue;\n")
+  : PAYLOAD_WIRE_REFS_ALL.replace('/*PIN_DEF*/', '').replace('    /*PIN_SKIP*/\n', '');
 
 /**
  * READ BACK the component properties. Expects `set`, `PROPS`, `propIds` and `defs` (the definitions
@@ -5875,6 +5936,7 @@ export const planSetLayout = (plans: AnatomyPlan[], fn: string) => {
       if (ded && (ded.prop !== n.propertyRef!.prop || ded.field !== n.propertyRef!.field))
         refOverrides.push({ member: planComponentName(plan), part: n.name, ...n.propertyRef! });
     }
+  const refPins = pinRules(plans);
 
   // `rowKeys`/`colKey` and the two ORDERED value lists ride along for the chunked path. It re-derives
   // each member's cell from the member NAME instead of being handed a name→cell map, because the map is
@@ -5892,7 +5954,7 @@ export const planSetLayout = (plans: AnatomyPlan[], fn: string) => {
   // leading-then-trailing order the `group` uses, resolved through `slotFigmaNames`. Empty for a def with
   // no slot axes, so its payload is byte-identical.
   const slotKeys = ['leading', 'trailing'].filter((k) => plan0.slotAxes.includes(k)).map((k) => plan0.slotFigmaNames?.[k] ?? k);
-  return { cells, props, refs: [...refs.values()], refOverrides, axes, rows: rows.length, cols: cols.length, component: plan0.component, rowKeys, colKey: colKey ?? '', rowLabels: rows, colVals: cols, footprintVaries: heldAxes(plan0).map((k) => plan0.axisFigmaNames?.[k] ?? k), slotKeys };
+  return { cells, props, refs: [...refs.values()], refOverrides, refPins, axes, rows: rows.length, cols: cols.length, component: plan0.component, rowKeys, colKey: colKey ?? '', rowLabels: rows, colVals: cols, footprintVaries: heldAxes(plan0).map((k) => plan0.axisFigmaNames?.[k] ?? k), slotKeys };
 };
 
 /**
@@ -5916,12 +5978,13 @@ export const heldAxes = (p: AnatomyPlan): string[] => [
 ];
 
 export const planSetToPluginJs = (plans: AnatomyPlan[]): string => {
-  const { cells, props, refs, refOverrides, axes, rows, cols } = planSetLayout(plans, 'planSetToPluginJs');
+  const { cells, props, refs, refOverrides, refPins, axes, rows, cols } = planSetLayout(plans, 'planSetToPluginJs');
 
   return stripPayloadComments(`const PLANS=${JSON.stringify(cells)};
 const PROPS=${JSON.stringify(props)};
 const REFS=${JSON.stringify(refs)};
 const REF_OVERRIDES=${JSON.stringify(refOverrides)};
+${refPins.length ? `const REF_PINS_ALL=${JSON.stringify(refPins)};` : ''}
 ${PAYLOAD_PREAMBLE}
 ${payloadBuildFor(cells.map((c) => c.root))}
 const built=[];
@@ -5959,7 +6022,7 @@ claimDefaults(set,null,'created');
 built.forEach((c,i)=>{const {row,col}=PLANS[i];c.x=at(colW,col);c.y=at(rowH,row);});
 set.resize(at(colW,colW.length)-GAP+PAD,at(rowH,rowH.length)-GAP+PAD);
 ${PAYLOAD_DECLARE_PROPS}
-${hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${PAYLOAD_WIRE_REFS}
+${hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${payloadWireRefs(refPins.length > 0)}
 // READ BACK the axes Figma actually derived. A name it cannot parse is dropped silently, so a set can
 // come back with fewer properties than the names claimed — present is not parsed.
 const defs=set.componentPropertyDefinitions||{};
@@ -6169,7 +6232,8 @@ const axisMiss=readable&&JSON.stringify(derived)!==JSON.stringify(EXPECTED_AXES.
 // consequences.
 const PROPS=readable?PROPS_ALL:[];
 const REFS=readable?REFS_ALL:[];
-const REF_OVERRIDES=readable?REF_OVERRIDES_ALL:[];`;
+const REF_OVERRIDES=readable?REF_OVERRIDES_ALL:[];
+`;
 
 /**
  * The tail of a CHUNK payload: the two layout read-backs and the report.
@@ -6322,7 +6386,7 @@ export const planSetChunks = (
   // `setLayout` per slice instead would compute `rowLabels`/`colVals` from a fifth of the members, so a
   // later chunk's `col` indices would restart at 0 and it would land on top of the first — #510's
   // stacking bug, reintroduced one chunk at a time.
-  const { cells, props, refs, refOverrides, axes, component, rowKeys, colKey, rowLabels, colVals, footprintVaries, slotKeys } = planSetLayout(plans, 'planSetChunks');
+  const { cells, props, refs, refOverrides, refPins, axes, component, rowKeys, colKey, rowLabels, colVals, footprintVaries, slotKeys } = planSetLayout(plans, 'planSetChunks');
 
   // `name` + `root` only. `row`/`col`/`group` are all derivable from the name inside the payload, and
   // the payload's bytes are the budget this whole function exists to respect.
@@ -6353,11 +6417,12 @@ const SLOT_KEYS=${JSON.stringify(slotKeys)};
 const PROPS_ALL=${JSON.stringify(last ? props : [])};
 const REFS_ALL=${JSON.stringify(last ? refs : [])};
 const REF_OVERRIDES_ALL=${JSON.stringify(last ? refOverrides : [])};
+${last && refPins.length ? `const REF_PINS_ALL=${JSON.stringify(refPins)};` : ''}
 ${PAYLOAD_PREAMBLE}
 ${payloadBuildFor((slice.length ? slice : specs).map((x) => x.root))}
 ${PAYLOAD_CHUNK_BODY}
 ${PAYLOAD_DECLARE_PROPS}
-${last && hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${PAYLOAD_WIRE_REFS}
+${last && hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${payloadWireRefs(last && refPins.length > 0)}
 // RE-READ the definitions, because the read above happened BEFORE the properties existed.
 // The single-shot payload reads once, after declaring, and gets this for free; the chunked one
 // has to read early — the guarded read is how it learns whether the set is coherent enough to declare

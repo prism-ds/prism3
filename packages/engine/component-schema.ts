@@ -1796,8 +1796,16 @@ export type FigmaProperties = {
    *  TOGETHER (`together: true`, #2609, owner decision Q303: Dialog's one `dividers` toggle). A list of parts that
    *  build in the SAME member and show and hide as one choice: the rule above the body and the rule below it. Lifts
    *  refusal (2) below (overlap) for that entry alone; every other refusal stands, and one part with the flag is
-   *  refused, since it states nothing. */
-  booleans?: Record<string, string | { part: string | readonly string[]; default?: boolean; figmaName?: string; figmaOnly?: boolean; together?: true }>;
+   *  refused, since it states nothing.
+   *
+   *  PINNED SHOWN (`pinnedShownAt`, #4461, owner decision B1 on the field's message). Variant axis → the values at
+   *  which the part is built VISIBLE and NOT wired to the boolean, so the switch does nothing at those members.
+   *  TextField's message at every validation status (`status: error | warning | success`) is the case: the code
+   *  writes the message at a validation status whatever `showMessage` says (Q-POC2 A), so Figma's member there
+   *  shows it and the switch cannot hide it. Everywhere else the part is bound as above, at its `default`. Refused
+   *  on an axis the set does not project as a variant, on a value the axis does not declare, and when it pins
+   *  every member the set keeps (the switch would then drive nothing anywhere). */
+  booleans?: Record<string, string | { part: string | readonly string[]; default?: boolean; figmaName?: string; figmaOnly?: boolean; together?: true; pinnedShownAt?: Record<string, readonly string[]> }>;
   /** prop name → the `kind: 'text'` part it drives, plus the PLACEHOLDER the component ships with.
    *
    *  THE ODD SHAPE OUT, and deliberately so: `booleans` and `swaps` are bare part names because
@@ -2599,7 +2607,7 @@ export const swapFigmaName = (prop: string, v: string | { part: string; figmaNam
 /** A `texts` entry's Figma panel name — its `figmaName` decoupling (#1380) or, absent one, the prop KEY. */
 export const textFigmaName = (prop: string, t: { figmaName?: string }): string => t.figmaName ?? prop;
 
-type BooleanEntry = string | { part: string | readonly string[]; default?: boolean; figmaName?: string; figmaOnly?: boolean; together?: true };
+type BooleanEntry = string | { part: string | readonly string[]; default?: boolean; figmaName?: string; figmaOnly?: boolean; together?: true; pinnedShownAt?: Record<string, readonly string[]> };
 /** The parts whose `visible` a `booleans` entry drives — bare string, `{ part }`, or `{ part: [...] }`
  *  (#1331; the list form is switch-control's `state icon`, one toggle over two glyphs). Always a list. */
 export const booleanPartsOf = (v: BooleanEntry): readonly string[] =>
@@ -2611,6 +2619,13 @@ export const booleanFigmaName = (prop: string, v: BooleanEntry): string =>
  *  default. Bare string defaults VISIBLE (Figma's own default for a built node); the object states otherwise. */
 export const booleanDefault = (v: BooleanEntry): boolean =>
   typeof v === 'string' ? true : v.default ?? true;
+/** Whether a `booleans` entry pins its part SHOWN and unbound at this member's coordinate (`pinnedShownAt`, #4461):
+ *  every pinned axis carries one of its pinned values. An axis the member does not carry reads as ABSENT (not pinned). */
+export const booleanPinnedAt = (v: BooleanEntry, coord: (axis: string) => string | undefined): boolean => {
+  const pins = typeof v === 'string' ? undefined : v.pinnedShownAt;
+  if (!pins || !Object.keys(pins).length) return false;
+  return Object.entries(pins).every(([axis, vals]) => { const c = coord(axis); return c !== undefined && vals.includes(c); });
+};
 
 /**
  * Which axis belongs across the COLUMNS (#656) — the declared preference, else the widest axis.
@@ -2817,13 +2832,15 @@ export const figmaPropertyErrors = (def: ComponentDef): string[] => {
   // axis that does neither leaves nothing about the box varying, so exempting it would switch the footprint
   // rule off for the whole def — the blanket this condition exists to refuse. A def whose box moves for a
   // THIRD reason should extend this list and name the reason here, never reach an exemption written for a
-  // different one.
+  // different one. THE THIRD (#4461): a boolean part PINNED SHOWN along the axis (`pinnedShownAt`) — the field's
+  // message, hidden by default and shown at every validation status, so the field is taller there.
+  const pinnedAxes = new Set(Object.values(fp.booleans ?? {}).flatMap((v) => (typeof v === 'object' && v.pinnedShownAt ? Object.keys(v.pinnedShownAt) : [])));
   for (const axis of fp.footprintVaries ?? []) {
     const names = figmaAxisNames(def);
     if (!names.includes(axis))
       e.push(`figmaProperties.footprintVaries: '${axis}' is not an axis this def projects [${names.join(', ')}] — an exempted axis Figma does not carry cannot be recovered from the member name`);
-    else if (!Object.values(parts).some((p) => axis in (p.presentWhen ?? {}) || p.aspectRatio === axis))
-      e.push(`figmaProperties.footprintVaries: '${axis}' neither gates a part (\`presentWhen\`) nor drives a box's aspect-ratio lock (\`aspectRatio\`) — nothing about the box varies along it, so exempting it from the footprint comparison would exempt the whole def for no stated reason`);
+    else if (!pinnedAxes.has(axis) && !Object.values(parts).some((p) => axis in (p.presentWhen ?? {}) || p.aspectRatio === axis))
+      e.push(`figmaProperties.footprintVaries: '${axis}' neither gates a part (\`presentWhen\`), drives a box's aspect-ratio lock (\`aspectRatio\`), nor pins a boolean part shown (\`pinnedShownAt\`) — nothing about the box varies along it, so exempting it from the footprint comparison would exempt the whole def for no stated reason`);
   }
 
   // ---- the excluded coordinates (a sparse grid, 2026-09-28) ----
@@ -2989,6 +3006,17 @@ export const figmaPropertyErrors = (def: ComponentDef): string[] => {
     if (overlap) {
       const both = targeted.filter((part) => builds(part, overlap));
       e.push(`figmaProperties.booleans.${prop} → parts '${both.join("', '")}' both build at ${axes.map((a) => `${a}=${overlap[a]}`).join(', ') || 'every member'} (gated to ${both.map((part) => `${part}: ${gateText(part)}`).join('; ')}) — a boolean drives ONE node per member, so the presence gates of the parts it targets must be disjoint`);
+    }
+    // PINNED SHOWN (#4461): a variant axis the set projects, values it declares, and at least one kept member left bound.
+    const pins = typeof v === 'object' ? v.pinnedShownAt : undefined;
+    if (pins) {
+      for (const [a, vs] of Object.entries(pins)) {
+        if (!axes.includes(a)) e.push(`figmaProperties.booleans.${prop}.pinnedShownAt names '${a}', which is not a projected variant axis (${axes.join(', ') || 'none'}) — a part is pinned per member, and only a variant axis tells members apart`);
+        else for (const val of vs) if (!values(a).includes(val)) e.push(`figmaProperties.booleans.${prop}.pinnedShownAt.${a} names '${val}', which '${a}' does not declare (${values(a).join(', ')})`);
+      }
+      if (!Object.keys(pins).length) e.push(`figmaProperties.booleans.${prop}.pinnedShownAt is empty — it pins nothing; omit it`);
+      else if (kept.every((c) => booleanPinnedAt(v, (a) => c[a])))
+        e.push(`figmaProperties.booleans.${prop}.pinnedShownAt pins every member the set keeps — the switch would be wired to no node anywhere`);
     }
     if (!kept.some((c) => targeted.some((part) => builds(part, c))))
       e.push(`figmaProperties.booleans.${prop} → part${targeted.length > 1 ? 's' : ''} '${targeted.join("', '")}' ${targeted.length > 1 ? 'are' : 'is'} gated to ${targeted.map(gateText).join('; ')}, and no member the set keeps builds ${targeted.length > 1 ? 'any of them' : 'it'}${fp.excludeCoordinates?.length ? ' — excludeCoordinates removes every such member' : ''}; the switch would be declared on the set and toggle a node on no member`);

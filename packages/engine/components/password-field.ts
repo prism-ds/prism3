@@ -30,6 +30,8 @@ import { withMirrors } from '../rtl-mirror';
 export const passwordField: ComponentDef = withMirrors(makeTextField({
   id: 'password-field',
   levers: { controlShape: { squares: ['radius.sm'] }, fieldStyle: { frame: 'control' } },
+  // The message is shown and unbound at every validation status in Figma, as the code writes it there (#4461, B1).
+  messagePinnedAt: ['error', 'warning', 'success'],
   name: 'PasswordField',
   aliases: ['password-input', 'password'],
   summary: 'Password field: a text field with a Show button on its label row that reveals the characters.',

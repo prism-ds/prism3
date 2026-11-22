@@ -7103,7 +7103,10 @@ section('message default off — Update flips the set\'s `message` default to of
   for (const id of ['text-field', 'password-field', 'select', 'textarea']) {
     const d = componentDefs.find((x) => x.id === id)!;
     const fp = d.figmaProperties!;
-    const oldDef = { ...d, figmaProperties: { ...fp, booleans: { ...fp.booleans, showMessage: { ...fp.booleans!.showMessage, default: true } } } };
+    // and from before #4461: no pin, so every member's message is wired, the error, warning and success members' too.
+    const { pinnedShownAt: _pin, ...unpinned } = fp.booleans!.showMessage as Exclude<NonNullable<typeof fp.booleans>[string], string> & { pinnedShownAt?: unknown };
+    const pinnedNow = !!_pin;
+    const oldDef = { ...d, figmaProperties: { ...fp, booleans: { ...fp.booleans, showMessage: { ...unpinned, default: true } }, footprintVaries: pinnedNow ? fp.footprintVaries?.filter((a) => a !== 'status') : fp.footprintVaries } };
     const old = figmaAnatomySet(oldDef, { swapTarget: SWAP_TARGET });
     const planned = plansOf(id);
     const componentProps = id === 'password-field' ? { button: { 'label#7:1': { type: 'TEXT', defaultValue: 'Button' } } } : undefined;
@@ -7131,7 +7134,16 @@ section('message default off — Update flips the set\'s `message` default to of
     ok(applyVerdict(res).ok, `${id} message/verdict: ${applyVerdict(res).headline} (${applyVerdict(res).lines.slice(0, 2).join(' | ').slice(0, 240)})`);
     const defs1 = w.set().componentPropertyDefinitions as Record<string, { type: string; defaultValue?: unknown }>;
     ok(defs1[key]?.defaultValue === false, `${id} message/set default: the same property (${key}) now defaults to off (${String(defs1[key]?.defaultValue)})`);
-    ok(msgNodes().length >= 84 && msgNodes().every((n) => n.visible === false), `${id} message/members: every member's message node is now hidden (${msgNodes().filter((n) => n.visible !== false).length} of ${msgNodes().length} still shown)`);
+    // #4461: on the fields that pin it, the members at a validation status come out of the update with the message
+    // shown and wired to nothing; only the status=default members keep it wired, now hidden.
+    const atStatus = (n: Node): string => { let m: Node | null = n; while (m && m.type !== 'COMPONENT') m = m.parent as Node | null; return /status=(\w+)/.exec(String(m?.name ?? ''))?.[1] ?? 'default'; };
+    const wiredCount = pinnedNow ? 21 : 84;
+    ok(msgNodes().length >= wiredCount && msgNodes().every((n) => n.visible === false) && (!pinnedNow || msgNodes().every((n) => atStatus(n) === 'default')), `${id} message/members: every member's wired message node is now hidden${pinnedNow ? ', and only status=default members keep it wired' : ''} (${msgNodes().filter((n) => n.visible !== false).length} of ${msgNodes().length} still shown; wired at ${JSON.stringify([...new Set(msgNodes().map(atStatus))])})`);
+    if (pinnedNow) {
+      const pinnedNodes = membersOf(w.set()).filter((m) => !/status=default/.test(String(m.name))).flatMap((m) => ((m.children as Node[] | undefined) ?? []).flatMap(function own(n: Node): Node[] { return [...(n.name === 'message' ? [n] : []), ...(n.type === 'INSTANCE' ? [] : ((n.children as Node[] | undefined) ?? []).flatMap(own))]; }));
+      ok(pinnedNodes.length >= 63 && pinnedNodes.every((n) => n.visible !== false && !(n.componentPropertyReferences as Record<string, string> | null)?.visible),
+        `#4461 ${id} message/pinned: the update unwires and shows the message on every member at error, warning and success (${pinnedNodes.filter((n) => n.visible === false || (n.componentPropertyReferences as Record<string, string> | null)?.visible).length} of ${pinnedNodes.length} still hidden or wired)`);
+    }
     ok(valueOf(untouched) === false && valueOf(turnedOff) === false && valueOf(turnedOn) === true,
       `${id} message/instances: the untouched instance follows the new default (off), and each designer's own value is kept (off stays off, on stays on) (${String(valueOf(untouched))}, ${String(valueOf(turnedOff))}, ${String(valueOf(turnedOn))})`);
     const after = identityOf(w.set());
