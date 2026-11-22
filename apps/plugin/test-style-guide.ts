@@ -1035,7 +1035,9 @@ const prism3Variables = (): { cols: ShimCol[]; vars: ShimVar[] } => {
 const input0 = parseDesignMd(readFileSync(join(here, '../../packages/engine/examples/prism3.design.md'), 'utf8')).input;
 // The contract for the same four-mode file: prism3 without Brand B (#1729), its custom mode, palette swap and two ramps.
 const { customModes: _bbModes, modePalettes: _bbSwap, modeLevers: _bbLevers, ...input1 } = input0;
-const input = { ...input1, brandColors: (input1.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
+// Brand B's own surfaces (its snapshot of light's, #1946) go with it: no mode reads them once it is gone.
+const { 'brand-b': _bbSurfaces, ...surfaces1 } = (input1.surfaces ?? {}) as Record<string, unknown>;
+const input = { ...input1, ...(input1.surfaces ? { surfaces: surfaces1 as typeof input1.surfaces } : {}), brandColors: (input1.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
 const contract = resolveAllModes(brandTheme(input));
 
 /** The owner-cell Text table's width (section 2): its fourteen HUG tracks, 2,940px by the shim's own metric, with no

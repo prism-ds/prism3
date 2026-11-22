@@ -21805,7 +21805,8 @@ arm: {
         if (r < 4.5) low.push(`${b}/${m.mode} ${ink} on ${ground} ${r.toFixed(2)}`);
       }
     }
-    ok(pairs.length === 1 && cells === 20 && low.length === 0, `#4110 avatar: the initials' ink clears 4.5:1 on the backdrop the def binds (${pairs.join(', ').replace(/\|/g, ' on ')}) in all ${cells} of 20 brand × mode cells${low.length ? ` — ${low.join('; ')}` : ''}`);
+    const AV_CELLS = 21;   // 5 brands × 4 modes, plus prism3's Brand B (#1729)
+    ok(pairs.length === 1 && cells === AV_CELLS && low.length === 0, `#4110 avatar: the initials' ink clears 4.5:1 on the backdrop the def binds (${pairs.join(', ').replace(/\|/g, ' on ')}) in all ${cells} of ${AV_CELLS} brand × mode cells${low.length ? ` — ${low.join('; ')}` : ''}`);
     // Owner decision (2026-11-20): presence maps online = success, away = warning, busy = danger, offline = neutral.
     // EXPECTED is the decision, typed here; ACTUAL is read from the shipped spec, `out/components/avatar.md`: the
     // `presence` prop row a developer reads and the presence-dot anatomy line a designer reads, never the def's notes,

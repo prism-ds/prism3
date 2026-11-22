@@ -7409,6 +7409,7 @@ if (runs('19')) {
         const o = JSON.parse(localStorage.getItem('prism3:brandInput'));
         // Without the default theme's Brand B (#1729), whose two ramps would be free colors too: accent is the one left.
         delete o.input.customModes; delete o.input.modePalettes; delete o.input.modeLevers;
+        if (o.input.surfaces) delete o.input.surfaces['brand-b'];   // its snapshot of light's surfaces (#1946) goes with it
         o.input.brandColors = (o.input.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-'));
         (o.input.brandColors ??= []).push(...['acc-n', 'own-n'].map((name, h) => ({ name, oklch: { l: 0.55, c: 0.15, h: 40 + 90 * h } })));
         o.input.interactivePalettes = [{ name: 'own-n', palette: 'acc-n' }];
