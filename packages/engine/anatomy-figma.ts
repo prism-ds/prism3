@@ -3673,11 +3673,15 @@ export const pinRules = (plans: AnatomyPlan[]): { part: string; where: Record<st
     const walk = (n: FigmaNodePlan): FigmaNodePlan[] => [n, ...n.children.flatMap(walk)];
     for (const p of plans) if (walk(p.root).some((n) => n.name === part && (n.visibleProp || n.pinnedVisibleProp))) e.built.push(p);
     // The axes on which the pinned members do not cover every value the building members carry.
-    const vals = (ps: Iterable<AnatomyPlan>, a: string) => new Set([...ps].map((p) => coordOf(p)[a]));
-    const axes = Object.keys(coordOf(e.built[0]));
+    // A member with no value on an axis contributes none: the plans name every axis on every member, so this drops nothing.
+    const vals = (ps: Iterable<AnatomyPlan>, a: string) => new Set([...ps].flatMap((p) => coordOf(p)[a] ?? []));
+    // A pinned node is itself a building node, so `e.built` holds at least the member that pins it.
+    const first = e.built[0];
+    if (!first) throw new Error(`pinRules: '${part}' is pinned, but no member builds it`);
+    const axes = Object.keys(coordOf(first));
     const where: Record<string, string[]> = {};
     for (const a of axes) { const pv = vals(e.pinned, a); if (pv.size < vals(e.built, a).size) where[a] = [...pv].sort(); }
-    const selects = (p: AnatomyPlan) => Object.entries(where).every(([a, vs]) => vs.includes(coordOf(p)[a]));
+    const selects = (p: AnatomyPlan) => Object.entries(where).every(([a, vs]) => { const v = coordOf(p)[a]; return v !== undefined && vs.includes(v); });
     const wrong = e.built.filter((p) => selects(p) !== e.pinned.has(p));
     // An empty `where` selects every member: right only when every member that builds the part pins it (one member).
     if (wrong.length)

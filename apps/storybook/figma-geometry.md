@@ -8,8 +8,9 @@ its `--self-test` (in `check:build`) proves the arithmetic on planted records.
 ## What it reads
 
 `figma-geometry.js` reads every member of the `button`, `text-field` and `password-field` component sets in the open
-file. It **writes nothing**: no node, page, style, variable or version. For each member it records the variant, the
-boolean properties' defaults, the extent, padding, stroke weights and corner radii, and every visible layer's box from
+file. It **writes nothing**: no node, page, style, variable or version. For each member it records the variant, each
+boolean property's effective value on that member (#4461: the visibility of the node wired to it, or of the node shown
+there unwired, listed under `unwired`; the set default only when neither exists), the extent, padding, stroke weights and corner radii, and every visible layer's box from
 `absoluteBoundingBox`, relative to the member, with its node id, type and horizontal sizing.
 
 ## Which file

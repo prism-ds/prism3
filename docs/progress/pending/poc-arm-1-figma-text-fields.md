@@ -46,6 +46,9 @@ The set default stays hidden (#2926), and `ErrorNoMessage` stays.
 - **Recorder.** `figma-geometry.js` reads each boolean per member: the visibility of the node wired to it, or, where
   the member wires none, of the node at the path other members wire, listed under `unwired`. The committed record
   predates this, so the two error lines stay until the Mac re-record, and the compare says so.
+- **Review fixes.** `pinRules` guards its indexes, so `typecheck-components.ts` passes on the #1182 clean list
+  again. The chunked paste path now has an executed arm: the text field is pasted in at least two chunks onto one
+  page, and the message must be wired at `status=default` only.
 
 **Trap.** `pinRules` derives the paste rule from the plans and then checks it against them. A pin pattern that no
 axis rule states is refused, rather than shipped as a wire that binds the wrong members. The field findings that repeat across cases are grouped by their exact values. The three content-inset

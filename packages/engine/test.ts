@@ -28558,6 +28558,18 @@ arm: {
           const lastChunk = planSetChunks(tfGrid, 1e9).at(-1)!.js;
           ok(lastChunk.includes('const REF_PINS_ALL=[{"part":"message","where":{"status":["error","success","warning"]}}]'),
             `#4461 the chunked paste path's last chunk carries the message's pin rule (REF_PINS_ALL)`);
+          // The chunked paste RUN, not just its text (#4461 review, should-fix 2): a budget forced small enough to cut the
+          // grid into at least two chunks, each pasted in sequence onto one page, then the wiring read off what they built.
+          // Only the last chunk wires, so a skip missing there would bind the pinned message on every member.
+          const tfUnit = Math.max(...planSetChunks(tfGrid, 1).map((c) => c.js.length));
+          const tfSplit = planSetChunks(tfGrid, tfUnit + 2_500);
+          const tfChunkPage: StubPage = { children: [] };
+          const tfChunkRuns: PayloadResult[] = [];
+          for (const c of tfSplit) tfChunkRuns.push(await runPayload(c.js, { ...tfOpts, page: tfChunkPage }));
+          const chunkAt = refWiring(tfChunkPage).filter((r) => r.includes('/message.visible=')).map((r) => /status=(\w+)/.exec(r)?.[1] ?? '?').sort();
+          const chunkMembers = tfChunkRuns.reduce((n, r) => n + (r.added ?? 0), 0);
+          ok(tfSplit.length >= 2 && chunkMembers === tfGrid.length && JSON.stringify(chunkAt) === '["default"]',
+            `#4461 chunked paste executor: the text field pasted in ${tfSplit.length} chunks (at least 2) builds all ${tfGrid.length} members (${chunkMembers}) and wires the message to 'message' at status=default only — wired at ${JSON.stringify(chunkAt)}`);
         }
         // THE GEOMETRY, read off the two pages. Every member's NAME→POSITION map: the column pitch is
         // measured from the members, so identical positions mean both paths measured every member the
