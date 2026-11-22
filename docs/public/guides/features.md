@@ -4,7 +4,7 @@
 
 What each Prism3 surface can do. The ecosystem diagram (`docs/public/ecosystem/`, #2643) shows how the surfaces connect; this page lists what you can do in each.
 
-- Web studio: the studio in a browser. <!-- src: apps/studio/build-site.mjs:1-8#7ef7bf24 -->
+- Web studio: the studio in a browser. <!-- src: apps/studio/build-site.mjs:1-8#b1876ee9 -->
 - Figma plugin: the same studio inside Figma <!-- src: apps/plugin/src/ui/entry.ts:10-38#6258203d -->, plus **Update file**, which writes to the file. <!-- src: apps/studio/src/state/update-file.ts:330 -->
 - Agent, through the agent link: an AI agent driving the open plugin. See [Use the agent link](agent-link.md). <!-- src: apps/plugin/src/agent-protocol.ts:42#6bb39596 -->
 - Agent, through the Prism3 MCP server: an AI agent using the engine directly, with no Figma file. <!-- src: packages/engine/mcp.ts:314-459#a2dae559 -->
@@ -22,7 +22,7 @@ What each Prism3 surface can do. The ecosystem diagram (`docs/public/ecosystem/`
 | Import a `design.md` brief | ✓ | ✓ | – | ✓ `theme_from_brief` |
 | Export a `design.md` brief | ✓ <!-- src: apps/studio/src/main.ts:1416 --> | ✓ | – | – |
 
-<!-- src: apps/studio/src/shell/start.ts:167-226 --> <!-- src: packages/engine/mcp.ts:320-485#121e0c8c -->
+<!-- src: apps/studio/src/shell/start.ts:167-226 --> <!-- src: packages/engine/mcp.ts:320-483 -->
 
 ## Figma file
 
@@ -47,7 +47,7 @@ What each Prism3 surface can do. The ecosystem diagram (`docs/public/ecosystem/`
 | Write the Figma variable files to a folder | – | – | – | ✓ `export_theme` |
 | Score how generated UI used the tokens | – | – | – | ✓ `score_consumption` |
 
-<!-- src: packages/engine/mcp.ts:429-463 --> <!-- src: packages/engine/mcp.ts:372-407 -->
+<!-- src: packages/engine/mcp.ts:427-461 --> <!-- src: packages/engine/mcp.ts:370-405 -->
 
 TokenPress, a separate Figma plugin, exports any Figma file's variables and styles as DTCG token files. See [Export tokens](export-tokens.md#export-any-figma-file-with-tokenpress). <!-- src: apps/tokenpress/README.md:3#9efac648 -->
 

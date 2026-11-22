@@ -200,6 +200,8 @@ apps/plugin/test-roundtrip.ts #3476
 apps/plugin/test-roundtrip.ts #3554
 apps/plugin/test-roundtrip.ts #3972
 apps/plugin/test-roundtrip.ts #865
+apps/plugin/test-show-set.ts #3119
+apps/plugin/test-show-set.ts #3770
 apps/plugin/test-slot-migration.ts #3697
 apps/plugin/test-slot-migration.ts #3762
 apps/plugin/test-slot-migration.ts #3763
@@ -567,6 +569,7 @@ apps/studio/test-chrome.mjs #3106
 apps/studio/test-chrome.mjs #3113
 apps/studio/test-chrome.mjs #3115
 apps/studio/test-chrome.mjs #3117
+apps/studio/test-chrome.mjs #3119
 apps/studio/test-chrome.mjs #3126
 apps/studio/test-chrome.mjs #3128
 apps/studio/test-chrome.mjs #3129
@@ -691,6 +694,7 @@ apps/studio/test-host-session.ts #2087
 apps/studio/test-host-session.ts #2956
 apps/studio/test-host-session.ts #3081
 apps/studio/test-host-session.ts #3110
+apps/studio/test-host-session.ts #3119
 apps/studio/test-host-session.ts #3129
 apps/studio/test-host-session.ts #3137
 apps/studio/test-host-session.ts #3138
@@ -1249,6 +1253,7 @@ packages/engine/test.ts #3488
 packages/engine/test.ts #349
 packages/engine/test.ts #3505
 packages/engine/test.ts #3506
+packages/engine/test.ts #3510
 packages/engine/test.ts #352
 packages/engine/test.ts #3551
 packages/engine/test.ts #3554
@@ -1281,6 +1286,7 @@ packages/engine/test.ts #388
 packages/engine/test.ts #390
 packages/engine/test.ts #391
 packages/engine/test.ts #3949
+packages/engine/test.ts #3960
 packages/engine/test.ts #3976
 packages/engine/test.ts #3977
 packages/engine/test.ts #3984
