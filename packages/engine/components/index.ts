@@ -70,6 +70,7 @@ import { imagePlaceholder } from './image-placeholder';
 import { spinner } from './spinner';
 import { skeleton } from './skeleton';
 import { badge } from './badge';
+import { avatar } from './avatar';
 import { tag } from './tag';
 import { tagGroup } from './tag-group';
 import { tab } from './tab';
@@ -110,7 +111,7 @@ import { menuItem, menuGroup, menu } from './menu';
  *  be a worse call site, not a better one — a lookup that can return `undefined` standing in for a
  *  binding that cannot. The set is for iteration; these are for the assertions that are ABOUT one
  *  component. */
-export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, imagePlaceholder, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, skeleton, popover, stepItem, steps, menuItem, menuGroup, menu, tooltip };
+export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, imagePlaceholder, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, avatar, skeleton, popover, stepItem, steps, menuItem, menuGroup, menu, tooltip };
 
 /** Every component def the engine defines. The one thing a projection should iterate. */
 export const componentDefs: readonly ComponentDef[] = [
@@ -212,6 +213,8 @@ export const componentDefs: readonly ComponentDef[] = [
   // it into the icon slot by name, like the `icon` it sits beside in the slot.
   spinner,
   badge,
+  // `avatar` (#4110) — nests Badge's dot for presence, so it registers after Badge.
+  avatar,
   // `tag` — the interactive counterpart to `badge`. It nests `icon-button-neutral` (its remove button) and
   // `focus-ring`, both above it; nothing reads this array's order (see the header).
   tag,
