@@ -39,13 +39,14 @@ import type { FigmaCollectionFile } from './emit-figma';
 import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
 import { judgeBelowFloor, KNOWN_PENDING } from './lint-shadcn-contrast';
 import { handoffBrands, readHandoff } from './emit-shadcn';
-import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES } from './emit-dtcg-overlay';
+import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly } from './emit-dtcg-overlay';
+import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme } from './emit-dtcg';
 import { buildAiMetadata } from './ai-metadata';
 import { validate as validateJsonSchema } from './json-schema-lite';
 import { handleRpc, callTool, toolDefs, manifestRootKeys, summarizeDescription, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
-import { ENGINE_VERSION, CONTRACT_VERSION, classify, contractVersionDrift, satisfiesBump, DEPRECATIONS } from './version';
+import { ENGINE_VERSION, CONTRACT_VERSION, COMPONENT_CONTRACT_VERSION, COMPONENT_SCHEMA_VERSION, classify, contractVersionDrift, satisfiesBump, DEPRECATIONS } from './version';
 import { renameMap, validateRenameMap, planVariableRenames, planCollectionRenames, composeVariableRenames, projectionsOf, PROJECTED_ROOTS, isRefusal, COLLECTION_RENAMES, type RenameMap } from './rename-map';
 import {
   MATERIALIZATION_RENAMES, MATERIALIZATION_DELETIONS, accountFor, accountForDiffDriven, isTotal, keysFromEmittedFile, parseVarKey, varKey,
@@ -127,6 +128,8 @@ import { Session as InspectorSession } from 'node:inspector/promises';
 import { componentSpec, specMaterialize } from './component-specs';
 import { renderUncommitted } from './regen'; import * as regenModule from './regen'; // the namespace: #2029 reads restoreTree off it, so main (without it) fails an arm by name, not the import
 import { localeFreeCompare } from './locale-free-order';
+import { buildComponentContract, classifyContract, classifySchema, formatFor, readComponentContract, schemaShape } from './component-contract';
+import type { ContractEntry, ContractProp } from './component-contract';
 
 // ---- #1268 EVERY ASSERTION SITE RAN — a section going quiet is a failure, not a smaller pass ----------
 //
@@ -33295,6 +33298,72 @@ arm: {
   ok(springBounce(0.9) === 0.1 && springBounce(1) === 0 && threw(() => springBounce(1.2)) && threw(() => springBounce(0)),
     'motion: springBounce is 1 − ζ on (0, 1] and throws outside it (0.9 → 0.1; 1.2 and 0 refused)');
 
+  // #3510 (Q-SP1 E): each spring ships to CSS as a `linear()` curve over its settle time, both from spring.ts. The
+  // oracle is the analytic spring, evaluated here densely and independently of the stops the engine wrote: the
+  // curve a browser plays (straight lines between the stops) may differ from it by at most the stated bound,
+  // anywhere on [0, settle]. Run over the shipped springs and a sweep of the domain the bound is argued for.
+  {
+    const errorOf = (sp: Spring): number => {
+      const ms = springSettleMs(sp);
+      const css = springLinearEasing(sp);
+      const stops = /^linear\((.*)\)$/.exec(css)![1].split(', ').map(Number);
+      const n = stops.length - 1;
+      let worst = 0;
+      for (let j = 0; j <= 20000; j++) {
+        const u = j / 20000, x = u * n, i = Math.min(Math.floor(x), n - 1), f = x - i;
+        worst = Math.max(worst, Math.abs(stops[i] * (1 - f) + stops[i + 1] * f - springPosition(sp, u * ms)));
+      }
+      return worst;
+    };
+    const shipped = buildTree(nbTheme()).tree[NB_ROOT].motion.spring as Record<string, { $value: Spring }>;
+    const shippedErr = Object.entries(shipped).map(([k, v]) => [k, errorOf(v.$value)] as const);
+    ok(shippedErr.length === 3 && shippedErr.every(([, e]) => e <= SPRING_EASING_ERROR_BOUND),
+      `#3510: each shipped spring's linear() curve stays within ${SPRING_EASING_ERROR_BOUND} of the analytic spring over its settle time (${shippedErr.map(([k, e]) => `${k} ${e.toFixed(4)}`).join(', ')})`);
+    const sweep: Spring[] = [];
+    for (const damping of [0.1, 0.3, 0.5, 0.7, 0.9, 1]) for (const stiffness of [50, 200, 500, 800, SPRING_MAX_STIFFNESS]) sweep.push({ damping, stiffness });
+    const worstSweep = sweep.map((sp) => ({ sp, e: errorOf(sp) })).sort((a, b) => b.e - a.e)[0];
+    ok(worstSweep.e <= SPRING_EASING_ERROR_BOUND,
+      `#3510: across ${sweep.length} springs (ζ 0.1–1, k 50–${SPRING_MAX_STIFFNESS}) the linear() curve stays within ${SPRING_EASING_ERROR_BOUND} (worst ${worstSweep.e.toFixed(4)} at ζ ${worstSweep.sp.damping}, k ${worstSweep.sp.stiffness})`);
+    // Settled means settled: past the settle time the spring never leaves the threshold band again, and 1ms
+    // earlier it is still outside it, so the duration is not padded. Checked on the analytic curve, finely.
+    const settledRight = sweep.every((sp) => {
+      const ms = springSettleMs(sp);
+      let after = 0;
+      for (let t = ms; t <= ms * 4; t += 0.05) after = Math.max(after, Math.abs(springPosition(sp, t) - 1));
+      let before = 0;
+      for (let t = ms - 1; t < ms; t += 0.01) before = Math.max(before, Math.abs(springPosition(sp, t) - 1));
+      return after <= SPRING_SETTLE_EPSILON && before > SPRING_SETTLE_EPSILON * 0.999;
+    });
+    ok(settledRight, `#3510: each spring's settle time is the first whole millisecond after which it stays within ${SPRING_SETTLE_EPSILON} of its target`);
+    ok(springEasingStops({ damping: 0.9, stiffness: 700 }).length - 1 === Math.ceil(springSettleMs({ damping: 0.9, stiffness: 700 }) / SPRING_SAMPLE_MS),
+      `#3510: one linear() stop every ${SPRING_SAMPLE_MS}ms of the settle time`);
+    ok(threw(() => springSettleMs({ damping: 1.2, stiffness: 700 })) && threw(() => springSettleMs({ damping: 0.5, stiffness: SPRING_MAX_STIFFNESS + 1 })),
+      '#3510: a spring outside the argued domain (ζ in (0, 1], k up to the bound) is refused, not approximated');
+    // The tree pairs them, by name, with the same settle time the description states.
+    const m = buildTree(nbTheme()).tree[NB_ROOT].motion;
+    const paired = Object.keys(shipped).every((k) => m['spring-duration'][k].$value === `${springSettleMs(shipped[k].$value)}ms`
+      && m['spring-duration'][k].$type === 'duration'
+      && m['spring-easing'][k].$value === springLinearEasing(shipped[k].$value) && m['spring-easing'][k].$type === 'linearEasing');
+    ok(paired, '#3510: every motion.spring.<name> has a spring-duration (DTCG duration) and a spring-easing (linearEasing) of the same name');
+    // The description's spacing claim is a ceiling, not an exact step (owner decision 2026-11-20): the stops are evenly
+    // spaced at settle / n, which is under 5ms for snappy (317 / 64). So each description states "at most every Nms",
+    // and the stops it describes are never further apart than N.
+    const spacing = Object.keys(shipped).map((k) => {
+      const claim = /sampled at most every (\d+)ms/.exec(m['spring-easing'][k].$description ?? '');
+      const gap = springSettleMs(shipped[k].$value) / (springEasingStops(shipped[k].$value).length - 1);
+      return { k, claimed: claim ? Number(claim[1]) : NaN, gap };
+    });
+    ok(spacing.every(({ claimed, gap }) => claimed === SPRING_SAMPLE_MS && gap <= claimed),
+      `#3510: each spring-easing description says its stops are "sampled at most every ${SPRING_SAMPLE_MS}ms", and they are (${spacing.map(({ k, claimed, gap }) => `${k} claims ${claimed}, gap ${gap.toFixed(2)}ms`).join('; ')})`);
+    // The CSS-only source carries exactly the linearEasing leaves; the projection carries none of them.
+    const cssOnly = buildCssOnly(buildTree(nbTheme()).tree) as any;
+    const projected = buildOverlaySet(buildTree(nbTheme()).tree).base as any;
+    ok(Object.keys(cssOnly[NB_ROOT].motion).join() === 'spring-easing' && Object.keys(cssOnly[NB_ROOT].motion['spring-easing']).length === 3
+      && !('$extensions' in cssOnly[NB_ROOT].motion['spring-easing'].snappy)
+      && !('spring-easing' in projected[NB_ROOT].motion) && Object.keys(projected[NB_ROOT].motion['spring-duration']).length === 3,
+      '#3510: the CSS-only source holds the three spring-easing curves and nothing else; the projection holds the durations and not the curves');
+  }
+
   // Apply Theme writes it: the motion var plan carries the collection, same rows, typed per row.
   const nbMotionPlan = buildMotionVarPlan(nbTheme()).find((c) => c.name === 'motion');
   ok(!!nbMotionPlan && nbMotionPlan.modes.join() === 'Default' && nbMotionPlan.rows.length === NB_MOTION.length + EASING.length,
@@ -46139,6 +46208,80 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(rising === '', `#3872 rising breakpoints [0, 768.5, 1024] still build (got ${JSON.stringify(rising)})`);
 }
 
+// #1325 — the component contract and the component schema (owner decision Q-CC1 A). Every expectation is a literal:
+// the classifier is what both --check and --accept decide with, so it is held to the bump classes docs/30 states, not
+// to itself. Then the call site, over an injected baseline, so a pure arm nobody calls cannot pass here.
+{
+  const entry = (over: Partial<ContractEntry> = {}): ContractEntry => ({
+    name: 'Thing', status: 'draft', states: ['rest', 'hover'], variants: { size: ['small', 'medium'] }, slots: ['leading'],
+    props: { size: { type: 'enum', default: 'medium', values: ['medium', 'small'] }, label: { type: 'string' } }, ...over,
+  });
+  const lvl = (a: ContractEntry, b: ContractEntry): string => classifyContract({ x: a }, { x: b }).level;
+  const base = entry();
+  ok(lvl(base, entry()) === 'none', '#1325 component contract: an unchanged entry is no change');
+  ok(classifyContract({ x: base }, {}).level === 'major', '#1325 component contract: a removed component is MAJOR');
+  ok(classifyContract({}, { x: base }).level === 'minor', '#1325 component contract: an added component is MINOR');
+  ok(lvl(base, entry({ name: 'Other' })) === 'major', '#1325 component contract: a renamed component is MAJOR');
+  ok(lvl(base, entry({ props: { size: base.props.size } })) === 'major', '#1325 component contract: a removed prop is MAJOR');
+  ok(lvl(base, entry({ props: { ...base.props, extra: { type: 'boolean' } } })) === 'minor', '#1325 component contract: an added optional prop is MINOR');
+  ok(lvl(base, entry({ props: { ...base.props, extra: { type: 'boolean', required: true } } })) === 'major', '#1325 component contract: an added REQUIRED prop is MAJOR');
+  ok(lvl(base, entry({ props: { ...base.props, label: { type: 'node' } } })) === 'major', '#1325 component contract: a retyped prop is MAJOR');
+  ok(lvl(base, entry({ props: { ...base.props, label: { type: 'string', required: true } } })) === 'major', '#1325 component contract: a prop made required is MAJOR');
+  ok(lvl(entry({ props: { label: { type: 'string', required: true } } }), entry({ props: { label: { type: 'string' } } })) === 'minor', '#1325 component contract: a prop made optional is MINOR');
+  ok(lvl(base, entry({ props: { ...base.props, size: { ...base.props.size, default: 'small' } } })) === 'patch', '#1325 component contract: a moved default is PATCH (docs/30: the name holds, the value moves)');
+  ok(lvl(base, entry({ props: { ...base.props, size: { ...base.props.size, values: ['medium', 'sm'] } } })) === 'major', '#1325 component contract: a renamed prop value is MAJOR');
+  ok(lvl(base, entry({ props: { ...base.props, size: { ...base.props.size, values: ['large', 'medium', 'small'] } } })) === 'minor', '#1325 component contract: an added prop value is MINOR');
+  ok(lvl(base, entry({ props: { ...base.props, label: { type: 'string', deprecated: true } } })) === 'minor', '#1325 component contract: a deprecated prop is MINOR');
+  ok(lvl(base, entry({ states: ['rest'] })) === 'major' && lvl(base, entry({ states: ['rest', 'hover', 'pressed'] })) === 'minor', '#1325 component contract: a removed state is MAJOR, an added one MINOR');
+  ok(lvl(base, entry({ variants: {} })) === 'major' && lvl(base, entry({ variants: { ...base.variants, tone: ['default'] } })) === 'minor', '#1325 component contract: a removed variant axis is MAJOR, an added one MINOR');
+  ok(lvl(base, entry({ variants: { size: ['small', 'md'] } })) === 'major', '#1325 component contract: a renamed variant value is MAJOR');
+  ok(lvl(base, entry({ slots: [] })) === 'major' && lvl(base, entry({ slots: ['leading', 'trailing'] })) === 'minor', '#1325 component contract: a removed slot is MAJOR, an added one MINOR');
+  ok(lvl(base, entry({ status: 'stable' })) === 'minor' && lvl(entry({ status: 'stable' }), base) === 'major', '#1325 component contract: draft → stable is MINOR, back to draft is MAJOR');
+  const slot = (o: Partial<ContractProp>): ContractEntry => entry({ props: { items: { type: 'slot', anyOf: ['a', 'b'], minItems: 1, ...o } } });
+  ok(lvl(slot({}), slot({ minItems: 2 })) === 'major' && lvl(slot({}), slot({ maxItems: 3 })) === 'major' && lvl(slot({ maxItems: 3 }), slot({})) === 'minor', '#1325 component contract: a tightened slot bound is MAJOR, a loosened one MINOR');
+  ok(lvl(slot({}), slot({ anyOf: ['a'] })) === 'major' && lvl(slot({}), slot({ anyOf: ['a', 'b', 'c'] })) === 'minor', '#1325 component contract: a slot anyOf id removed is MAJOR, added MINOR');
+  ok(classifyContract({ x: base }, { x: entry({ name: 'Other' }) }).changes.map((c) => c.what).join('|') === 'x: name "Thing" → "Other"', '#1325 component contract: a change is reported by name');
+
+  // The schema shape: prose is no change, the `$id` and a const equal to it are the version, a removed fact is MAJOR.
+  const sch = (o: Record<string, unknown> = {}) => ({ $id: 'p/1.0', type: 'object', required: ['a'], properties: { format: { const: 'p/1.0' }, a: { type: 'string', description: 'x' } }, ...o });
+  const slvl = (a: unknown, b: unknown): string => classifySchema(schemaShape(a), schemaShape(b)).level;
+  ok(slvl(sch(), sch({ $id: 'p/1.1', properties: { format: { const: 'p/1.1' }, a: { type: 'string', description: 'other words' } } })) === 'none', '#1325 component schema: a new $id and reworded prose are no shape change');
+  ok(slvl(sch(), sch({ required: [] })) === 'major', '#1325 component schema: a field no longer required is MAJOR');
+  ok(slvl(sch(), sch({ properties: { format: { const: 'p/1.0' } }, required: [] })) === 'major', '#1325 component schema: a removed field is MAJOR');
+  ok(slvl(sch(), sch({ properties: { format: { const: 'p/1.0' }, a: { type: 'string' }, b: { type: 'number' } } })) === 'minor', '#1325 component schema: an added optional field is MINOR');
+  ok(slvl(sch(), sch({ properties: { format: { const: 'p/1.0' }, a: { type: 'number' } } })) === 'major', '#1325 component schema: a retyped field is MAJOR');
+  ok(formatFor('1.4.0') === 'prism3-component-defs/1.4' && formatFor('2.10.3') === 'prism3-component-defs/2.10', '#1325 component schema: the format names MAJOR.MINOR of the schema version');
+
+  // The committed baseline: the live surface, at the constants.
+  const committedCc = readComponentContract();
+  const liveCc = buildComponentContract();
+  ok(committedCc.componentContractVersion === COMPONENT_CONTRACT_VERSION && committedCc.componentSchemaVersion === COMPONENT_SCHEMA_VERSION,
+    `#1325 component contract: the baseline records the constants (${committedCc.componentContractVersion}/${committedCc.componentSchemaVersion} vs ${COMPONENT_CONTRACT_VERSION}/${COMPONENT_SCHEMA_VERSION})`);
+  ok(classifyContract(committedCc.components, liveCc.components).level === 'none' && classifySchema(committedCc.schema.shape, liveCc.schema.shape).level === 'none',
+    '#1325 component contract: the COMMITTED baseline still matches the defs and the schema (run component-contract.ts --accept after reviewing the diff)');
+  ok(Object.keys(liveCc.components).length >= 60 && liveCc.schema.shape.length >= 700,
+    `#1325 component contract: the surface is represented (${Object.keys(liveCc.components).length} components, ${liveCc.schema.shape.length} schema facts; floors 60 and 700)`);
+
+  // The call site: the CLI over an injected baseline that dropped one prop the defs still have, so --check must name it.
+  const dir = mkdtempSync(join(tmpdir(), 'prism3-component-contract-'));
+  const fixture = join(dir, 'component-contract.json');
+  try {
+    const run = (b: unknown) => {
+      writeFileSync(fixture, JSON.stringify(b, null, 2) + '\n');
+      const r = spawnSync('npx', ['tsx', resolve(HERE, 'component-contract.ts'), '--check'], { encoding: 'utf8', env: { ...process.env, PRISM3_COMPONENT_CONTRACT_BASELINE: fixture } });
+      return { status: r.status, out: `${r.stdout}${r.stderr}` };
+    };
+    const control = run(liveCc);
+    ok(control.status === 0 && control.out.includes(`reading ${fixture}`), `#1325 component contract: the CLI passes over the live surface, read from the injected file (exit ${control.status})`);
+    const id = Object.keys(liveCc.components).find((k) => Object.keys(liveCc.components[k].props).length > 0)!;
+    const prop = Object.keys(liveCc.components[id].props)[0];
+    const shrunk = JSON.parse(JSON.stringify(liveCc));
+    delete shrunk.components[id].props[prop];
+    const added = run(shrunk);
+    ok(added.status === 1 && added.out.includes(`${id}: prop ${prop} added`), `#1325 component contract: the CLI fails by name on a prop the baseline does not record (exit ${added.status})`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
 // #3076 — THE BRAND ICON MAP (owner decision 2026-11-18, A, both; Q1–Q8 at their recommendations). A brand names which of
 // its own icons stands in for each Prism3 icon and carries the art; `applyIconMap` rewrites every def before projection.
 // EXPECTED is typed here from #3076's own table of where the core icons are used (plus the counter, the proposal's
@@ -46531,7 +46674,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(t.hint?.startsWith('Not included: tokens (~890,000 characters') && /Add them with include/.test(t.hint),
     `#4200 the omitted-sections hint says what is not included and how to add it, from one size figure (got ${JSON.stringify(t.hint)})`);
   const desc = toolDefs({}).find((d: any) => d.name === 'theme_brand')!.description as string;
-  ok(desc.includes('roughly 890,000 and 590,000 characters') && /agent link takes the same object as `input`/.test(desc),
+  ok(desc.includes('roughly 890,000 and 690,000 characters') && /agent link takes the same object as `input`/.test(desc),
     `#4200 theme_brand states the one size figure the hint uses, and names the agent link's \`input\` alias`);
 }
 
