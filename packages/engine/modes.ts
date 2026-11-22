@@ -384,8 +384,10 @@ const modeConfigs = (ns: string, neutralPalette: string, neutral: Step[], surfac
   // the page so a card reads against the default page, then stepping on.
   const fgLadder = (pal: string, baseNum: number, dir: number): SurfSet => ({ primary: surfAtP(pal, baseNum + dir * 50), secondary: surfAtP(pal, baseNum + dir * 100), tertiary: surfAtP(pal, baseNum + dir * 150) });
 
-  const resolve = (family: 'light' | 'dark', defBase: SurfaceSpec): { base: Cand; floor: Cand; floorLabel: string; bg: SurfSet; fg: SurfSet; bgInverse: SurfSet; fgInverse: SurfSet; invRgb: RGB } => {
-    const cfg = surfaces[family] ?? {};
+  // `mode` names whose `surfaces.<mode>` entry is read: the family's own for light and dark, the custom
+  // mode's own for a custom mode (#1946 — a custom mode is a snapshot, so it never reads its base's surfaces).
+  const resolve = (family: 'light' | 'dark', defBase: SurfaceSpec, mode: string = family): { base: Cand; floor: Cand; floorLabel: string; bg: SurfSet; fg: SurfSet; bgInverse: SurfSet; fgInverse: SurfSet; invRgb: RGB } => {
+    const cfg = surfaces[mode] ?? {};
     const baseSpec = cfg.base ?? defBase;
     const baseS = specToSurf(baseSpec);
     // The contrast FLOOR is always a neutral step. For a numeric/object base it sits one step past the
@@ -428,7 +430,7 @@ const modeConfigs = (ns: string, neutralPalette: string, neutral: Step[], surfac
       const opts = [...offered.entries()].sort((a, b) => Number(a[0]) - Number(b[0])).map(([, v]) => v);
       const use = opts.length === 0 ? `Remove it — no ${family} page ground sits on a neutral step.`
         : `Use ${opts.length === 1 ? opts[0] : `${opts.slice(0, -1).join(', ')} or ${opts[opts.length - 1]}`}.`;
-      throw new Error(`surfaces.${family}.floorStep: ${cfg.floorStep} is not a step a ${family} page ground sits on — the floor is the ground every floor-gated role is measured against. ${use}`);
+      throw new Error(`surfaces.${mode}.floorStep: ${cfg.floorStep} is not a step a ${family} page ground sits on — the floor is the ground every floor-gated role is measured against. ${use}`);
     }
     // Inverse anchors NEAR the opposite extreme, not AT it — pure black reads
     // harsh/muddy and pure white halates in dark UIs (KB 31 §halation, §tint-not-
@@ -471,10 +473,14 @@ const modeConfigs = (ns: string, neutralPalette: string, neutral: Step[], surfac
   // their family's resolved surfaces (wireframe = light); HC restores the pure black/white extremes
   // and anchors its floor on the same-family standard floor. Byte-identical to the old literal table.
   const out = {} as Record<ModeName, ModeCfg>;
+  // A custom mode (a descriptor no built-in carries) resolves its OWN `surfaces.<name>` against its family's
+  // defaults (#1946), so the surfaces it was given at creation hold whatever later happens to its base's.
+  const builtinNames = new Set<string>(BUILTIN_MODES.map((b) => b.name));
   for (const d of descriptors) {
+    const r = builtinNames.has(d.name) ? resolved[d.family] : resolve(d.family, d.family === 'light' ? 'white' : 950, d.name);
     out[d.name] = d.kind === 'hc'
       ? hcMk(d.family === 'light' ? white : black, d.family === 'light' ? black : white, resolved[d.family].floor, resolved[d.family].floorLabel, d.family, d.mins)
-      : mk(resolved[d.family], d.kind, d.family, d.mins);
+      : mk(r, d.kind, d.family, d.mins);
   }
   return out;
 };
@@ -2874,13 +2880,22 @@ export const interactiveStateRungs = (st: string): number => {
   return st === 'default' || st === 'rest' ? 0 : (st === 'hover' || st === 'focused') ? STATE_RUNGS : STATE_RUNGS * 2;
 };
 
+/** The theme one mode resolves against (#1729): a mode with a palette swap (`theme.modePalettes[mode]`) reads its
+ *  own color routing — roles, link, interactive columns — in place of the brand's; every other mode reads the
+ *  theme unchanged. The swap was resolved in `brandTheme`; nothing here re-derives it. */
+export const withModePalettes = (theme: Theme, mode: ModeName): Theme => {
+  const mp = theme.modePalettes?.[mode];
+  return mp ? { ...theme, roleToPalette: mp.roleToPalette, roleAnchorStep: mp.roleAnchorStep, linkPalette: mp.linkPalette, linkAnchorStep: mp.linkAnchorStep, interactivePalettes: mp.interactivePalettes } : theme;
+};
+
 export const resolveAllModes = (theme: Theme): ModeResult[] => {
   const ramps = new Map(theme.palettes.map((p) => [p.palette, p.steps] as const));
   const neutral = ramps.get(theme.roleToPalette.neutral)!;
-  // Custom modes (C1) — LIVE-INHERIT: each declared custom mode clones its base built-in
-  // descriptor (same kind/family/mins) under the new name, so it re-derives EXACTLY like its
-  // base each build; its own overrides[name]/modeAnchors[name] (A1/A2b) then deviate it. A custom
-  // mode with an unknown base was rejected in brandTheme — guard defensively (skip if not found).
+  // Custom modes (C1) — each declared custom mode clones its base built-in DESCRIPTOR (same
+  // kind/family/mins: the appearance it derives with) under the new name. It reads only its own
+  // overrides[name]/modeAnchors[name]/surfaces[name] (A1/A2b), never the base's, and the base need not
+  // be generated (#1946: a custom mode is a snapshot, not a live link). A custom mode with an unknown
+  // base was rejected in brandTheme — guard defensively (skip if not found).
   const custom: ModeDescriptor[] = (theme.customModes ?? []).flatMap((cm) => {
     const baseDesc = BUILTIN_MODES.find((d) => d.name === cm.base);
     return baseDesc ? [{ ...baseDesc, name: cm.name }] : [];
@@ -2890,7 +2905,7 @@ export const resolveAllModes = (theme: Theme): ModeResult[] => {
   // Only the modes the brand opted into (light always; dark/HC opt-in — docs/11 Pillar 1; customs
   // appended last). Canonical order preserved (Object.keys order: built-ins first, then customs),
   // so `rp.modes` is stable regardless of input order.
-  const results = (Object.keys(cfgs) as ModeName[]).filter((m) => theme.modes.includes(m)).map((m) => resolveMode(m, must(cfgs[m], `mode config '${m}'`), theme, ramps));
+  const results = (Object.keys(cfgs) as ModeName[]).filter((m) => theme.modes.includes(m)).map((m) => resolveMode(m, must(cfgs[m], `mode config '${m}'`), withModePalettes(theme, m), ramps));
   // Tests the lever directly, for the reason spelled out at the `overlay-neutral` branch in `resolveMode`.
   if (theme.outlineInteraction === 'solid-tint') settleSolidTint(theme, results);
   // THE SELECTED TINT FOR EVERY BRAND THAT HAS AN OUTLINE FILL (owner, 2026-09-29). A selectable control (Tag's

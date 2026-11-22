@@ -666,7 +666,10 @@ export type FigmaPropertyPlan =
   /** `swapTarget` is a component NAME; the payload resolves it to the node id Figma demands. A
    *  target that does not resolve makes the property unbuildable rather than merely undefaulted,
    *  which is why the payload reports it as a miss instead of substituting something. */
-  | { name: string; type: 'INSTANCE_SWAP'; swapTarget: string }
+  | { name: string; type: 'INSTANCE_SWAP'; swapTarget: string;
+      /** #4164 (owner decision A): the swap's target is a core icon, so the executors write every icon component the file
+       *  holds (`icon/<glyph>`) as the property's preferred values, which Figma lists first in the swap picker. */
+      preferIcons?: true }
   /** A NATIVE SLOT (#2417): no default (Figma refuses one for SLOT), and declared by the slot node itself, which
    *  `createSlot` makes and the combine merges by name. The executors verify it rather than add it. */
   | { name: string; type: 'SLOT'; slotSettings?: SlotSettingsPlan; preferred?: string[]; preferredWhenBuilt?: string[] };
@@ -817,11 +820,13 @@ export const figmaEffectStyleName = (ref: string): string => {
  * typo and a set swap (`icon-set.ts`'s whole purpose is that a client's branded set replaces ours), and
  * both are answered by seeing what the vocabulary actually holds.
  */
-const glyphPath = (defId: string, part: string, glyph: string | undefined): string => {
+const glyphPath = (defId: string, part: string, glyph: string | undefined, brand?: ComponentDef['brandGlyphs']): string => {
   // Unreachable through `validateComponentDef`, which refuses a vector part with no glyph — this is the
   // backstop for a caller that skipped it, the same relationship every other throw in this file has.
   if (!glyph) throw new Error(`${defId}: anatomy part '${part}' is kind 'vector' and names no glyph`);
-  const path = ICON_PATHS[glyph as keyof typeof ICON_PATHS];
+  // THE BRAND'S ART FIRST (#3076): a glyph the brand input carries, whether a name of its own or a Prism3 name it
+  // redraws (Q5 A), is drawn from `brandGlyphs`, which only `applyIconMap` writes.
+  const path = brand?.[glyph]?.path ?? ICON_PATHS[glyph as keyof typeof ICON_PATHS];
   if (!path) {
     // Nearest by shared prefix, which is what a typo and a renamed glyph both produce. Not a full edit
     // distance: this is an error message, and the cheap heuristic answers both realistic causes.
@@ -929,7 +934,7 @@ const glyphDocument = (path: string, fillRule?: string): string => {
 
 /** `glyphDocument` for a resolved glyph NAME — looks its path and (sparse) winding rule up together, so
  *  the two lookups stay in one place and the caller passes a name rather than re-deriving both (#1012). */
-const glyphSvgFor = (defId: string, part: string, glyph: string | undefined): string => {
+const glyphSvgFor = (defId: string, part: string, glyph: string | undefined, brand?: ComponentDef['brandGlyphs']): string => {
   // A COMPONENT-OWNED glyph (#1670) is looked up first: geometry a component draws that is deliberately not
   // in the icon set (the spinner), composed of several filled layers, each carrying its own layer opacity.
   // Same artboard, same `fill="currentColor"` convention, one `<path>` per layer in drawing order; `id`
@@ -941,7 +946,8 @@ const glyphSvgFor = (defId: string, part: string, glyph: string | undefined): st
       layers.map((l) => `<path id="${l.id}" ${l.fillRule ? `fill-rule="${l.fillRule}" ` : ''}${l.opacity !== undefined ? `opacity="${l.opacity}" ` : ''}d="${l.d}" fill="currentColor"/>`).join('') +
       '</svg>';
   }
-  return glyphDocument(glyphPath(defId, part, glyph), glyph ? ICON_FILL_RULES[glyph as keyof typeof ICON_PATHS] : undefined);
+  const own = glyph ? brand?.[glyph] : undefined;
+  return glyphDocument(glyphPath(defId, part, glyph, brand), own ? own.fillRule : glyph ? ICON_FILL_RULES[glyph as keyof typeof ICON_PATHS] : undefined);
 };
 
 /** The def whose emitted components ARE the provider logos (#2343): `provider-logo`, `emitAsComponents` like `icon`, each
@@ -968,6 +974,9 @@ export const providerLogoComponentName = (mark: string): string => `${PROVIDER_L
 export const ICON_DEF_ID = 'icon';
 /** The component a glyph of the icon set is an instance of (#2380). */
 export const iconComponentName = (glyph: string): string => `${ICON_DEF_ID}/${glyph}`;
+/** The icon a swap shows until a designer picks one (`icon/FPO-default-icon`, "for position only"). It stays a swap's
+ *  default but is never one of its preferred values (#4164, owner decision 2026-11-20): the list offers icons to pick. */
+export const ICON_PLACEHOLDER = iconComponentName('FPO-default-icon');
 /** The layer name of the icon instance an INSET part wraps (#2380, `FigmaNodePlan.glyphInset`): checkbox's
  *  `mark` and `dash` are each a frame holding one instance named this. */
 export const ICON_INSET_CHILD = 'glyph';
@@ -984,7 +993,7 @@ export type NestOverride = { property: string; type: 'TEXT' | 'INSTANCE_SWAP'; v
  * set's component. THROWS on a key the nested def does not declare and on a glyph the icon set does not draw, so a
  * misspelled override fails the projection rather than building an instance that silently keeps its default.
  */
-export const nestOverridesOf = (defId: string, partName: string, p: PartDef): NestOverride[] | undefined => {
+export const nestOverridesOf = (defId: string, partName: string, p: PartDef, brand?: ComponentDef['brandGlyphs']): NestOverride[] | undefined => {
   if (!p.overrides) return undefined;
   const nested = componentDefs.find((d) => d.id === p.nests);
   const fp = nested?.figmaProperties;
@@ -998,7 +1007,7 @@ export const nestOverridesOf = (defId: string, partName: string, p: PartDef): Ne
   for (const [key, glyph] of Object.entries(p.overrides.swaps ?? {})) {
     const v = fp.swaps?.[key];
     if (!v) throw new Error(`${defId}: anatomy part '${partName}' overrides swap '${key}', which '${nested.id}' does not declare — its swaps are [${Object.keys(fp.swaps ?? {}).join(', ') || 'none'}] (#2645)`);
-    if (!(ICON_NAMES as readonly string[]).includes(glyph)) throw new Error(`${defId}: anatomy part '${partName}' swaps '${key}' to '${glyph}', which is no glyph the icon set draws (#2645)`);
+    if (!(ICON_NAMES as readonly string[]).includes(glyph) && !brand?.[glyph]) throw new Error(`${defId}: anatomy part '${partName}' swaps '${key}' to '${glyph}', which is no glyph the icon set draws (#2645)`);
     out.push({ property: swapFigmaName(key, v), type: 'INSTANCE_SWAP', value: iconComponentName(glyph) });
   }
   return out;
@@ -2274,7 +2283,7 @@ export const figmaAnatomyPlan = (
         providerLogoGlyph(def.id, name, p.swapDefault);
         slotDefault = providerLogoComponentName(p.swapDefault);
       } else {
-        glyphPath(def.id, name, p.swapDefault);
+        glyphPath(def.id, name, p.swapDefault, def.brandGlyphs);
         slotDefault = iconComponentName(p.swapDefault);
       }
     }
@@ -2293,7 +2302,7 @@ export const figmaAnatomyPlan = (
     // here. `glyphPath` runs first so a name outside the vocabulary still throws with its own message.
     const glyphName = p.kind === 'vector' ? resolveGlyph(def.id, name, p.glyph, paintCoord) : undefined;
     const iconTarget = glyphName !== undefined && !COMPONENT_GLYPHS[glyphName] && def.id !== ICON_DEF_ID && def.id !== PROVIDER_LOGO_DEF_ID
-      ? (glyphPath(def.id, name, glyphName), iconComponentName(glyphName))
+      ? (glyphPath(def.id, name, glyphName, def.brandGlyphs), iconComponentName(glyphName))
       : undefined;
     // The provider-logo def's own glyph is drawn inline from the MARK vocabulary, on the mark's own artboard (#2343).
     const markGlyph = p.kind === 'vector' && def.id === PROVIDER_LOGO_DEF_ID ? providerLogoGlyph(def.id, name, glyphName) : undefined;
@@ -2338,7 +2347,7 @@ export const figmaAnatomyPlan = (
         ? markGlyph
           ? { glyphSvg: markGlyph.svg, glyphViewBox: markGlyph.dims }
           : {
-              glyphSvg: glyphSvgFor(def.id, name, glyphName),
+              glyphSvg: glyphSvgFor(def.id, name, glyphName, def.brandGlyphs),
               glyphViewBox: glyphArtboard().dims,
             }
         : {}),
@@ -2454,7 +2463,7 @@ export const figmaAnatomyPlan = (
       // These surface as Figma exposed nested-instance properties; the executors mark the instance exposed.
       ...((p.kind === 'absolute' || p.kind === 'nest') && p.nesting?.kind === 'nest-exposed' ? { nestExpose: p.nesting.expose } : {}),
       // The per-instance overrides (#2645), ONLY on a part that declares them, so every other plan is byte-identical.
-      ...((p.kind === 'absolute' || p.kind === 'nest') && p.overrides ? { nestOverrides: nestOverridesOf(def.id, name, p) } : {}),
+      ...((p.kind === 'absolute' || p.kind === 'nest') && p.overrides ? { nestOverrides: nestOverridesOf(def.id, name, p, def.brandGlyphs) } : {}),
       ...(p.kind === 'nest' && p.nestTexts ? { nestTexts: p.nestTexts } : {}),
       ...(p.kind === 'absolute' && p.inset ? { absoluteInset: varOf(p.inset) } : {}),
       // The stroke to compensate for (#801), projected only alongside an inset — on its own it has
@@ -2462,7 +2471,8 @@ export const figmaAnatomyPlan = (
       ...(p.kind === 'absolute' && p.inset && p.strokeInset ? { absoluteStrokeInset: varOf(p.strokeInset) } : {}),
       // THE CORNER PIN (textarea's resize grip): a glyph lifted out of the flow into its parent's corner.
       // Only on a pinned vector, so every other plan is byte-identical; the schema requires the inset.
-      ...(p.kind === 'vector' && p.corner && p.inset ? { cornerInset: varOf(p.inset) } : {}),
+      // A pinned BOX (#4110, Avatar's presence ring) takes the same field: the executors' corner pass reads any node.
+      ...((p.kind === 'vector' || p.kind === 'box') && p.corner && p.inset ? { cornerInset: varOf(p.inset) } : {}),
       // THE FOOT PIN (#2872, Link's current-page bar): a box lifted out of the flow across its parent's bottom edge.
       // Only on such a box, so every other plan is byte-identical.
       ...(p.kind === 'box' && p.foot ? { footPin: true } : {}),
@@ -3027,10 +3037,19 @@ const BORDER_WEIGHT_DEFAULT_REF = 'border-width.hairline';
  *  border onto another key or rung would otherwise keep it while this reported the weight applied. */
 const withBorderWeight = (def: ComponentDef, tokens: Record<string, string>, weight: ButtonBorderWeight): Record<string, string> => {
   if (weight === 'hairline') return tokens;
-  if (tokens[BORDER_WEIGHT_KEY] !== BORDER_WEIGHT_DEFAULT_REF)
-    throw new Error(`${def.id}: "Outline button border" rebinds ${BORDER_WEIGHT_KEY} from ${BORDER_WEIGHT_DEFAULT_REF} to border-width.${weight}, and the def binds ${tokens[BORDER_WEIGHT_KEY] ?? 'nothing'} there`);
-  return { ...tokens, [BORDER_WEIGHT_KEY]: `border-width.${weight}` };
+  // A selection-led def (the toggle pair, #4353 decision 3 A) binds its edge per selection value; the setting moves the
+  // one at the hairline (unselected) and leaves a value already at another rung (selected's thick edge) alone.
+  const keys = borderWeightKeys(def).filter((k) => tokens[k] !== undefined);
+  const moved = keys.filter((k) => tokens[k] === BORDER_WEIGHT_DEFAULT_REF);
+  if (!moved.length)
+    throw new Error(`${def.id}: "Outline button border" rebinds ${BORDER_WEIGHT_KEY} from ${BORDER_WEIGHT_DEFAULT_REF} to border-width.${weight}, and the def binds ${keys.map((k) => `${k}: ${tokens[k]}`).join(', ') || 'nothing'} there`);
+  return { ...tokens, ...Object.fromEntries(moved.map((k) => [k, `border-width.${weight}`])) };
 };
+/** The prefixes a def's appearance-led keys carry: none on a button, one per selection value on a selection-led def (the
+ *  toggle pair, `{selection}.{appearance}.{slot}`, #4112). */
+const appearanceKeyPrefixes = (def: ComponentDef): string[] => ['', ...(def.variants?.selection ?? []).map((s) => `${s}.`)];
+/** The keys "Outline button border" may rebind: `border-width`, or one per selection value (`selected.border-width`). */
+const borderWeightKeys = (def: ComponentDef): string[] => appearanceKeyPrefixes(def).map((p) => `${p}${BORDER_WEIGHT_KEY}`);
 
 /** "One step smaller" (#1667): the ONE size whose content moves, and the size it borrows from. Medium only,
  *  and deliberately: New Balance's 44px button (our `size.md.height`) carries a 12px label and a 16px icon,
@@ -3144,11 +3163,13 @@ export const applyButtonLayout = (def: ComponentDef, layout: ButtonLayout, px: (
   // 5. "Text button hover" (#2324). The def's text appearance keys no wash (the default, "Text & icon only"); under
   //    "Fill" it takes the outline appearance's hover and pressed wash, never a rest one: a text button is never
   //    filled at rest. A brand whose outline method keys no wash (`outlineInteraction: 'none'`) has none to give.
+  //    A selection-led def (ToggleButton, #4353) keys its paint per selection value, so each value's text appearance takes
+  //    its own outline wash: unselected takes Button.Neutral's, and selected, whose tint holds at every state, has none.
   if (layout.textHover === 'fill') {
     tokens = { ...tokens };
-    for (const st of TEXT_FILL_STATES) {
-      const wash = tokens[`outline.overlay.${st}`];
-      if (wash) tokens[`text.overlay.${st}`] = wash;
+    for (const p of appearanceKeyPrefixes(def)) for (const st of TEXT_FILL_STATES) {
+      const wash = tokens[`${p}outline.overlay.${st}`];
+      if (wash) tokens[`${p}text.overlay.${st}`] = wash;
     }
   }
   // 6. "Outline button border" (#576).
@@ -3706,7 +3727,7 @@ export const planSetProperties = (plans: AnatomyPlan[]): FigmaPropertyPlan[] => 
         // the property is not emitted and the payload says so, rather than a swap property that
         // exists and defaults to nothing.
         if (!n.swapTarget) continue;
-        prop = { name: ref.prop, type: 'INSTANCE_SWAP', swapTarget: n.swapTarget };
+        prop = { name: ref.prop, type: 'INSTANCE_SWAP', swapTarget: n.swapTarget, ...(n.swapTarget.startsWith(iconComponentName('')) ? { preferIcons: true as const } : {}) };
         // This swap's node also carries a presence boolean → pair them so the swap sits directly
         // under that boolean in the panel (#1519). Keyed by boolean name (the swap follows it).
         if (n.visibleProp) swapForBool.set(n.visibleProp, ref.prop);
@@ -5462,6 +5483,19 @@ try{set.editComponentProperty(key,{slotSettings:w,preferredValues:pv});}catch(er
 let b;try{b=(set.componentPropertyDefinitions||{})[key];}catch(e){b=undefined;}const bs=(b&&b.slotSettings)||{};
 const g={minChildren:bs.minChildren!=null?bs.minChildren:null,maxChildren:bs.maxChildren!=null?bs.maxChildren:null,allowPreferredValuesOnly:bs.allowPreferredValuesOnly===true,displayEmptyByDefault:bs.displayEmptyByDefault===true};const gk=((b&&b.preferredValues)||[]).map(v=>String(v.key));
 if(JSON.stringify(g)!==JSON.stringify(w)||JSON.stringify(gk)!==JSON.stringify(pv.map(v=>v.key)))misses.push('property '+p.name+'.slotSettings -> NOT KEPT (wrote '+JSON.stringify(w)+' with '+pv.length+' preferred; the set holds '+JSON.stringify(g)+' with '+gk.length+')');}`;
+// #4164 (owner decision A) — the plugin executor's twin is the ICON SWAPS pass in `apps/plugin/src/write-components.ts`.
+const PAYLOAD_ICON_SWAPS = `// #4164 — ICON SWAPS: every icon component the file holds but the placeholder is a swap's preferred value, offered first; none is a named miss.
+{const isw=PROPS.filter(p=>p.type==='INSTANCE_SWAP'&&p.preferIcons===true);if(isw.length){const all=figma.root.findAllWithCriteria({types:['COMPONENT']});
+for(const p of isw){const key=propIds.get(p.name);if(!key)continue;const prefix=p.swapTarget.slice(0,p.swapTarget.indexOf('/')+1);const by=new Map();
+for(const c of all)if(c.name.startsWith(prefix))by.set(c.name,(by.get(c.name)||[]).concat([c]));const names=[...by.keys()].filter(n=>n!==${JSON.stringify(ICON_PLACEHOLDER)}).sort();const twice=names.filter(n=>by.get(n).length>1);
+const pv=names.filter(n=>by.get(n).length===1&&by.get(n)[0].key).map(n=>({type:'COMPONENT',key:by.get(n)[0].key}));
+if(twice.length)misses.push('property '+p.name+'.preferred -> '+twice.length+' icon name(s) held by more than one component ('+twice.slice(0,3).join(', ')+'; not offered in the swap. Rename or remove the stale copies, then rebuild)');
+if(!pv.length){if(!by.size)misses.push('property '+p.name+'.preferred -> no '+prefix+'* component in this file (build the icons first, then rebuild this one; until then the swap lists no icons first)');continue;}
+try{set.editComponentProperty(key,{preferredValues:pv});}catch(err){misses.push('property '+p.name+'.preferred -> REFUSED ('+(err&&err.message?err.message:String(err))+')');continue;}
+let b;try{b=(set.componentPropertyDefinitions||{})[key];}catch(e){b=undefined;}const gk=((b&&b.preferredValues)||[]).map(v=>String(v.key));
+if(JSON.stringify(gk)!==JSON.stringify(pv.map(v=>v.key)))misses.push('property '+p.name+'.preferred -> NOT KEPT (wrote '+pv.length+' icons; the set holds '+gk.length+')');}}}`;
+/** Does any INSTANCE_SWAP in a set prefer the core icons (#4164)? Gates `PAYLOAD_ICON_SWAPS` into a payload. */
+export const hasIconSwaps = (props: readonly FigmaPropertyPlan[]): boolean => props.some((p) => p.type === 'INSTANCE_SWAP' && p.preferIcons === true);
 /** Does any SLOT property in a set declare constraints (#2646)? Gates `PAYLOAD_SLOT_SETTINGS` into a payload. */
 export const hasSlotConstraints = (props: readonly FigmaPropertyPlan[]): boolean =>
   props.some((p) => p.type === 'SLOT' && (p.slotSettings !== undefined || p.preferred !== undefined || p.preferredWhenBuilt !== undefined));
@@ -5719,7 +5753,7 @@ for(const [name,key] of bare)if(!referenced.has(key))propMiss.push('property '+n
 export const CANVAS_FURNITURE: ReadonlySet<string> = new Set([
   'focus-ring', 'button', 'button-destructive', 'button-neutral', 'icon-button', 'icon-button-destructive', 'icon-button-neutral',
   'field-label', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-row', 'checkbox-group', 'radio-control',
-  'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil', 'image-placeholder', 'badge', 'tag', 'tag-group', 'tab-item', 'tabs',
+  'radio-row', 'radio-group', 'switch-control', 'switch-row', 'select', 'veil', 'image-placeholder', 'badge', 'avatar', 'tag', 'tag-group', 'tab-item', 'tabs',
   'divider', '_accordion-indicator', 'accordion', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'list-item',
   'list', 'segmented-control-segment', 'segmented-control', 'link',
   'button-group', 'dialog', 'password-field', 'counter', 'pagination-item', 'pagination', 'progress', 'search-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', '_slider-thumb', 'slider',
@@ -5733,8 +5767,16 @@ export const CANVAS_FURNITURE: ReadonlySet<string> = new Set([
   'sign-in-button',
   // #3345: Page navigation and its item, Breadcrumbs' shape.
   'page-nav-item', 'page-nav',
+  // #4112: ToggleButton and ToggleIconButton, sets with headers like Button's and IconButton's.
+  'toggle-button', 'toggle-icon-button',
+  // #3055: Steps and its step, Breadcrumbs' shape.
+  'step-item', 'steps',
   // #4109: Skeleton, a set with headers like every other.
   'skeleton',
+  // #4007: Menu.Item, a set of 15 with state columns. Menu and Menu.Group build one member each, so they have no grid.
+  'menu-item',
+  // #4009: Tooltip, a set of four placements with headers.
+  'tooltip',
 ]);
 
 export const planSetLayout = (plans: AnatomyPlan[], fn: string) => {
@@ -5984,7 +6026,7 @@ claimDefaults(set,null,'created');
 built.forEach((c,i)=>{const {row,col}=PLANS[i];c.x=at(colW,col);c.y=at(rowH,row);});
 set.resize(at(colW,colW.length)-GAP+PAD,at(rowH,rowH.length)-GAP+PAD);
 ${PAYLOAD_DECLARE_PROPS}
-${hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${PAYLOAD_WIRE_REFS}
+${hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${hasIconSwaps(props) ? PAYLOAD_ICON_SWAPS + '\n' : ''}${PAYLOAD_WIRE_REFS}
 // READ BACK the axes Figma actually derived. A name it cannot parse is dropped silently, so a set can
 // come back with fewer properties than the names claimed — present is not parsed.
 const defs=set.componentPropertyDefinitions||{};
@@ -6398,7 +6440,7 @@ ${payloadBuildFor((slice.length ? slice : specs).map((x) => x.root))}
 ${index === 0 ? PAYLOAD_PLACE_FIRST : PAYLOAD_PLACE_LATER}
 ${PAYLOAD_CHUNK_BODY}
 ${PAYLOAD_DECLARE_PROPS}
-${last && hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${PAYLOAD_WIRE_REFS}
+${last && hasSlotConstraints(props) ? PAYLOAD_SLOT_SETTINGS + '\n' : ''}${last && hasIconSwaps(props) ? PAYLOAD_ICON_SWAPS + '\n' : ''}${PAYLOAD_WIRE_REFS}
 // RE-READ the definitions, because the read above happened BEFORE the properties existed.
 // The single-shot payload reads once, after declaring, and gets this for free; the chunked one
 // has to read early — the guarded read is how it learns whether the set is coherent enough to declare

@@ -303,6 +303,19 @@ const CENSUS_PATH = join(repo, 'packages/engine/schema/paint-census.json');
  * asserting something untrue about the def it names.
  */
 const PROVENANCE_EXCEPTIONS: Record<string, string> = {
+  // Menu.Item (#4007): `default` is the neutral family, and the highlight is the neutral wash on both intents.
+  'menu-item|default.overlay.hover': 'the highlight is the neutral wash on both intents (#4007, OD-M6 A): a destructive action highlights as every other item does, and its ink alone carries the intent',
+  'menu-item|default.overlay.pressed': 'the highlight is the neutral wash on both intents (#4007, OD-M6 A): a destructive action highlights as every other item does, and its ink alone carries the intent',
+  'menu-item|default.overlay.focus-visible': 'the highlight is the neutral wash on both intents (#4007, OD-M6 A): a destructive action highlights as every other item does, and its ink alone carries the intent',
+  'menu-item|destructive.overlay.hover': 'the highlight is the neutral wash on both intents (#4007, OD-M6 A): a destructive action highlights as every other item does, and its ink alone carries the intent',
+  'menu-item|destructive.overlay.pressed': 'the highlight is the neutral wash on both intents (#4007, OD-M6 A): a destructive action highlights as every other item does, and its ink alone carries the intent',
+  'menu-item|destructive.overlay.focus-visible': 'the highlight is the neutral wash on both intents (#4007, OD-M6 A): a destructive action highlights as every other item does, and its ink alone carries the intent',
+  'menu-item|default.label': 'intent `default` maps to the neutral interactive family: a plain menu action takes the neutral ink, and the token tier has no `default` family (#4007)',
+  'menu-item|default.label.hover': 'intent `default` maps to the neutral interactive family: a plain menu action takes the neutral ink, and the token tier has no `default` family (#4007)',
+  'menu-item|default.label.pressed': 'intent `default` maps to the neutral interactive family: a plain menu action takes the neutral ink, and the token tier has no `default` family (#4007)',
+  'menu-item|default.icon': 'intent `default` maps to the neutral interactive family: a plain menu action takes the neutral ink, and the token tier has no `default` family (#4007)',
+  'menu-item|default.icon.hover': 'intent `default` maps to the neutral interactive family: a plain menu action takes the neutral ink, and the token tier has no `default` family (#4007)',
+  'menu-item|default.icon.pressed': 'intent `default` maps to the neutral interactive family: a plain menu action takes the neutral ink, and the token tier has no `default` family (#4007)',
   // Banner (#3225, owner Q-BN3.1 A): the neutral tone has no `neutral` color family to draw from. Its surface is the
   // page's secondary ground and its edge the neutral edge contracted at the non-text bar on every ground.
   'banner|neutral.fill':
@@ -315,6 +328,9 @@ const PROVENANCE_EXCEPTIONS: Record<string, string> = {
   // List.Item (#2319): the key is the `icon` PAINT SLOT (the icon marker's ink), whose spelling matches the `type` value
   // `icon`. It is the slot that leads, not the axis value: the key binds at every type, and only the icon member draws
   // the slot it paints.
+  // Avatar (#4110): List.Item's case again, the slot and a `type` value share a spelling.
+  'avatar|icon':
+    "the key is the `icon` paint slot, not the `type` value `icon`; the two share a spelling. It binds the icon role, `color.icon.secondary`, for the person and organization glyphs, which only the icon type draws",
   'list-item|icon':
     "the key is the `icon` paint slot, not the `type` value `icon`; the two share a spelling. It binds the icon role, `color.icon.primary`, for the icon marker, which only the icon type draws",
   // Progress (#2670): its end-state axis is `status`, active / complete / error. `complete` is the success role and
@@ -331,6 +347,28 @@ const PROVENANCE_EXCEPTIONS: Record<string, string> = {
     'same mapping as `error.icon`, for the linear fill',
   'progress|error.icon':
     "status `error` maps to the `danger` ink role, the mapping `field-message|error.icon` records — the axis names the outcome, `danger` is the token tier's name for its color",
+  // StepItem (#3055): its `status` is a place in a sequence, upcoming / current / complete / error, and none of the four
+  // names a color family. Each key maps the status to the role the approved proposal names for it.
+  'step-item|current.fill':
+    "status `current` maps to the primary interactive fill, the brand color the approved proposal names for the current step's disc; the axis names a place in a sequence, which no color family is named for",
+  'step-item|complete.fill':
+    'same mapping as `current.fill`, for the complete step\'s disc, so a complete and a current disc read as one brand color',
+  'step-item|upcoming.border':
+    "status `upcoming` maps to `color.border.tertiary`, the neutral edge contracted at 3:1 on every ground, for the outlined disc of a step not started yet",
+  'step-item|current.body':
+    "status `current` maps to `color.interactive.primary.on-fill`, the ink contracted on the primary fill, for the number in the filled disc",
+  'step-item|upcoming.body':
+    "status `upcoming` maps to `color.text.secondary`, the quieter text role, for the number in an outlined disc",
+  'step-item|complete.icon':
+    "status `complete` maps to `color.interactive.primary.on-fill`, the ink contracted on the primary fill, for the check in the filled disc (Checkbox.Control's check binds the same role)",
+  'step-item|error.icon':
+    "status `error` maps to the `danger` icon role, the mapping `progress|error.icon` records: the axis names the outcome, `danger` is the token tier's name for its color",
+  'step-item|current.label':
+    "status `current` maps to `color.text.primary`, the strongest text role, for the step the person is on",
+  'step-item|upcoming.label':
+    "status `upcoming` maps to `color.text.secondary`, the quieter text role, for a step not started yet",
+  'step-item|error.label':
+    "status `error` maps to `color.text.primary`: the name of a step with an error stays at full strength, and the glyph carries the danger color",
   // Dialog (#2880): the key is the panel's `fill` PAINT SLOT (its surface), whose spelling matches the `footer` value
   // `fill` (Q492 B). It is the slot that leads, not the axis value: the key binds at every footer.
   'dialog|fill':
@@ -985,6 +1023,10 @@ const UNREACHED_EXPLAINED: Record<string, string> = {
     'same shape as `icon-button|focus-ring`, on the #1225 sibling — a nomination for the nested ring, not a paint on any node of this def. It shares IconButton\'s exact anatomy (off `makeIconButton`), so it nests the ring the same way and can no more carry a ring stroke (#740).',
   'icon-button-neutral|focus-ring':
     'same shape as `icon-button|focus-ring`, on the #1225 sibling — a nomination for the nested ring, not a paint on any node of this def. It shares IconButton\'s exact anatomy (off `makeIconButton`), so it nests the ring the same way and can no more carry a ring stroke (#740).',
+  'toggle-button|focus-ring':
+    'same as `button|focus-ring` — a nomination for the nested ring, not a paint on any node of this def; the toggle nests the ring as Button does (#4112).',
+  'toggle-icon-button|focus-ring':
+    'same as `icon-button|focus-ring` — a nomination for the nested ring, not a paint on any node of this def; the icon toggle nests the ring as IconButton does (#4112).',
   'checkbox-control|focus-ring':
     'the third instance of the same shape, and since #1226 step 2 it is on the ATOMIC control rather than the row — the checkbox split, and the ring moved with the painted box into `checkbox-control`, which nests it inside its own `control` box. Still a nomination: it names the colour the nested `focus-ring` draws, and no node of this def can carry a ring stroke (#740).',
   'radio-control|focus-ring':

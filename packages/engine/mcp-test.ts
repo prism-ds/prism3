@@ -176,7 +176,9 @@ await new Promise((r) => setTimeout(r, 3000));
   // The size ceiling that keeps discovery affordable — the schema must be inlined once, not per tool.
   // 60,000 is our own ceiling, not raised (#1368). Since #1760 it fails 5,000 chars BEFORE that wall,
   // room for ~20 more levers, and the inline schema carries one-line summaries so a lever's full prose
-  // never counts here. Kept in lockstep with test.ts, which also holds the per-summary cap.
+  // never counts here. Kept in lockstep with test.ts, which also holds the per-summary cap. At 54,509 and 491
+  // under the alarm (2026-11-21) the owner chose to scale again rather than move it: the inline copy now drops
+  // the descriptions beneath every optional field (54,897 → 41,731), and test.ts holds where prose stays.
   const listChars = JSON.stringify(list.tools ?? []).length;
   ok(listChars <= 55_000, `conformance: tools/list keeps 5,000 chars of headroom under its 60,000 ceiling (${listChars.toLocaleString()} chars; fails above 55,000)`);
 
@@ -287,10 +289,10 @@ await new Promise((r) => setTimeout(r, 3000));
   // validator's own words. EXPECTED typed here literally. BY-NAME MUTATION: drop `minItems` from the schema →
   // both arms fail (the empty list falls through to `brandTheme`'s sentence, and one floor validates).
   const empty = (await server.callJson('validate_brand', { ...B, layout: { breakpoints: [] } })).payload;
-  ok(empty.valid === false && empty.errors.length === 1 && empty.errors[0] === 'layout.breakpoints: 0 item(s) < minItems 2',
+  ok(empty.valid === false && empty.errors.length === 1 && empty.errors[0] === 'layout.breakpoints has 0 item(s); it takes at least 2',
     `#2137 / #3698 R2 validate_brand refuses an empty breakpoints list (got ${JSON.stringify(empty)})`);
   const one = (await server.callJson('validate_brand', { ...B, layout: { breakpoints: [0] } })).payload;
-  ok(one.valid === false && one.errors.length === 1 && one.errors[0] === 'layout.breakpoints: 1 item(s) < minItems 2',
+  ok(one.valid === false && one.errors.length === 1 && one.errors[0] === 'layout.breakpoints has 1 item(s); it takes at least 2',
     `#3698 R2 validate_brand refuses a single breakpoint (got ${JSON.stringify(one)})`);
   // #2159: refusals that fire only in `buildTree`, once the modes resolve, after `brandTheme` has accepted the
   // brand. `validate_brand` runs the same build path `theme_brand` does, so they are reported in the engine's
@@ -567,6 +569,20 @@ await new Promise((r) => setTimeout(r, 3000));
   // Matched past the first sentence, so only the full text passes (#2053 retired the lever; the text says so).
   ok(/is always emitted/.test(described?.properties?.radiusHairline?.description ?? ''),
     'journey ①b: list_levers describe returns a field\'s full description over the wire');
+  // ①c What tools/list no longer carries, `describe` does (2026-11-21): a description beneath an optional
+  // field is absent from the inline schema and comes back in full over the wire. A required field keeps its
+  // sub-field summaries inline, so a first call can be written from tools/list alone.
+  const listed = (await server.reply(server.send('tools/list'))).result?.tools ?? [];
+  const inlineBrand = listed.find((t: any) => t.name === 'theme_brand')?.inputSchema?.properties?.brand;
+  const familiesFull = (await server.callJson('list_levers', { describe: ['typography'] })).payload.described?.properties?.typography?.properties?.families?.description;
+  ok(typeof inlineBrand?.properties?.typography?.description === 'string'
+    && inlineBrand?.properties?.typography?.properties?.families !== undefined
+    && !('description' in inlineBrand.properties.typography.properties.families)
+    && typeof familiesFull === 'string' && familiesFull.length > 0,
+    'journey ①c: a description beneath an optional field is dropped from tools/list and returned by list_levers describe');
+  ok(typeof inlineBrand?.properties?.neutral?.properties?.hue?.oneOf?.[0]?.description === 'string'
+    && typeof inlineBrand?.$defs?.oklch?.properties?.l?.description === 'string',
+    'journey ①c: the required fields (and the oklch shape they use) keep their sub-field summaries in tools/list');
 
   // ② Generate from a brief, the way an agent working from prose would.
   const brief = ['---', 'id: journey', 'primary: { l: 0.58, c: 0.17, h: 265 }', 'neutral: { hue: 265, chroma: 0.008 }',
@@ -643,6 +659,59 @@ await new Promise((r) => setTimeout(r, 3000));
     '#4118 theme_from_brief returns the color classification, so a misread swatch is visible');
   ok(gen.payload.dialect === undefined && gen.payload.xWarnings === undefined,
     '#4118 theme_from_brief keeps an engine-native brief off the standard converter');
+}
+
+// ------------------------------------ #4150 / #4147: what a result costs the agent that reads it
+// Measured over the wire, where an agent pays for it. #4150: a structured result's text copy is the
+// object, unindented; indented it was half again the size (2.7 MB for theme_brand with tokens and
+// aiMetadata). Every size an agent reads in the tool descriptions, the withheld-sections hint and the
+// engine README is held to ±15% of the size measured here, so the four statements cannot disagree again.
+// #4147: list_levers {summary:true} is the compact catalog, under 8,000 characters, and still names every
+// lever the full catalog names. EXPECTED for the sizes is the prose itself; ACTUAL is the measured result.
+// BY-NAME MUTATIONS: restore `JSON.stringify(obj, null, 2)` in mcp.ts `structured()` → the compact arm fails
+// (and test.ts's ±15% arm, which measures the text copy); put back the hint's "~850KB" → the size arm fails;
+// drop the `summary` branch from the list_levers handler → both #4147 arms fail.
+{
+  const B = { id: 'size-probe', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } };
+  const base = await server.call('theme_brand', { brand: B, include: [] });
+  const full = await server.call('theme_brand', { brand: B, include: ['tokens', 'aiMetadata'] });
+  ok(full.content[0].text === JSON.stringify(full.structuredContent) && base.content[0].text === JSON.stringify(base.structuredContent),
+    `#4150: a structured result's text copy is its structuredContent, compact (theme_brand with tokens and aiMetadata: text ${full.content[0].text.length.toLocaleString('en-US')} chars, structuredContent ${JSON.stringify(full.structuredContent).length.toLocaleString('en-US')})`);
+  const measured = {
+    tokens: JSON.stringify(full.structuredContent.tokens).length,
+    aiMetadata: JSON.stringify(full.structuredContent.aiMetadata).length,
+  };
+  const near = (stated: number, m: number): boolean => Math.abs(stated - m) / m <= 0.15;
+  const num = (s: string | undefined): number => (s === undefined ? NaN : +s.replace(/,/g, ''));
+  const toolsId = server.send('tools/list');
+  const tools = ((await server.reply(toolsId)).result?.tools ?? []) as Array<{ name: string; description: string }>;
+  const descOf = (n: string): string => tools.find((t) => t.name === n)?.description ?? '';
+  const themeDesc = descOf('theme_brand').match(/roughly ([\d,]+) and ([\d,]+) characters/);
+  const exportDesc = descOf('export_theme').match(/the DTCG tree alone is roughly ([\d,]+) characters/);
+  const hint = String(base.structuredContent.hint ?? '').match(/tokens \(~([\d,]+) characters[^)]*\), aiMetadata \(~([\d,]+) characters/);
+  const readme = readFileSync(resolve(HERE, 'README.md'), 'utf8').match(/a four-mode token tree is roughly ([\d,]+) characters in a tool result/);
+  const claims: Array<[string, number, number]> = [
+    ['theme_brand description, tokens', num(themeDesc?.[1]), measured.tokens],
+    ['theme_brand description, aiMetadata', num(themeDesc?.[2]), measured.aiMetadata],
+    ['export_theme description, tokens', num(exportDesc?.[1]), measured.tokens],
+    ['theme_brand hint, tokens', num(hint?.[1]), measured.tokens],
+    ['theme_brand hint, aiMetadata', num(hint?.[2]), measured.aiMetadata],
+    ['engine README, tokens', num(readme?.[1]), measured.tokens],
+  ];
+  const off = claims.filter(([, stated, m]) => !near(stated, m)).map(([where, stated, m]) => `${where}: states ${Number.isNaN(stated) ? 'nothing' : stated.toLocaleString('en-US')}, measured ${m.toLocaleString('en-US')}`);
+  ok(off.length === 0, `#4150: every stated payload size is within 15% of the measured one (${claims.length} statements; off: ${off.join('; ') || 'none'})`);
+
+  const summary = await server.call('list_levers', { summary: true });
+  const catalog = await server.call('list_levers', {});
+  const fullKeys = (catalog.structuredContent?.levers?.levers ?? []).map((l: { key: string }) => l.key);
+  const summaryKeys = (summary.structuredContent?.summary ?? []).map((l: { key: string }) => l.key);
+  ok(summary.isError !== true && summary.content[0].text.length < 8_000,
+    `#4147: list_levers {summary:true} is the compact catalog, under 8,000 characters (${summary.content[0].text.length.toLocaleString('en-US')}; the full catalog is ${catalog.content[0].text.length.toLocaleString('en-US')})`);
+  const missing = fullKeys.filter((k: string) => !summaryKeys.includes(k));
+  const nonLever = (summary.structuredContent?.nonLeverFields ?? []).map((f: { key: string }) => f.key).sort().join(',');
+  const fullNonLever = (catalog.structuredContent?.nonLeverFields ?? []).map((f: { key: string }) => f.key).sort().join(',');
+  ok(fullKeys.length > 0 && missing.length === 0 && summaryKeys.length === fullKeys.length && nonLever === fullNonLever && nonLever.length > 0,
+    `#4147: the summary names every lever and non-lever field the full catalog names (${summaryKeys.length} of ${fullKeys.length} levers; missing: ${missing.join(', ') || 'none'})`);
 }
 
 server.stop();

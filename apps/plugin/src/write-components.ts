@@ -34,9 +34,10 @@
  * So both long loops here — building members, and wiring property references across them — run in chunks
  * with a `yieldTo` between them, and report progress at every boundary. See `ComponentApplyOptions`.
  *
- * UNDO IS ONE STEP FOR THE WHOLE SET, and we get that by NOT calling `figma.commitUndo()` anywhere: by
+ * UNDO IS ONE STEP FOR THE WHOLE SET, and we get that by NOT calling `figma.commitUndo()` during a run: by
  * Figma's own default, plugin actions are not committed to undo history individually, so the entire run
- * collapses into a single undo entry. Chunking would let us commit per chunk and it is deliberately not
+ * collapses into a single undo entry. The one call is as a write STARTS (`guarded`, `main.ts`, #4158), which
+ * closes the step an earlier run is in, so the step is this run's alone. Chunking would let us commit per chunk and it is deliberately not
  * done — a designer who did not mean to build presses ⌘Z once and the set is gone, because "Build Button
  * set" was one action from where they were standing. This is the one host behavior here that is a
  * DECISION rather than a measurement, so it is stated rather than left to be inferred from an absence.
@@ -54,12 +55,12 @@
  * assertion instead, because with no caller the port could have drifted out of satisfaction with the
  * whole suite green; the trigger retired it rather than leaving two mechanisms for one guarantee.
  */
-import { planSetLayout, nestMissAdvice, nestVariantMatch, nestVariantMissAdvice, resolveNestMember, applyNestOverrides, applyNestItemPrefers, swapMissAdvice, SWAP_PLACEHOLDER, SWAP_NO_PROPERTY, planComponentName, planStamp, glyphLayerOpacities, type AnatomyPlan, type FigmaNodePlan, type SwapFound } from '@prism3/engine/components';
+import { planSetLayout, nestMissAdvice, nestVariantMatch, nestVariantMissAdvice, resolveNestMember, applyNestOverrides, applyNestItemPrefers, swapMissAdvice, SWAP_PLACEHOLDER, SWAP_NO_PROPERTY, ICON_PLACEHOLDER, planComponentName, planStamp, glyphLayerOpacities, type AnatomyPlan, type FigmaNodePlan, type SwapFound } from '@prism3/engine/components';
 import { ENGINE_VERSION, coordKey } from '@prism3/engine';
 import { tailOf } from '@prism3/engine/figma';
 import { NS } from './persist-figma';
-import { searchComponents } from './component-search';
 import { EXECUTOR_REVISION } from './executor-revision';
+import { searchComponents } from './component-search';   // #4160
 import { labelColumns, readLabelColumn } from './label-columns';
 import { BASELINE_KEY, UPDATING_KEY, baselineOf, builtByPrism3, mainOf, readBaseline, snapshotMember, writeBaseline, type OwnershipRead } from './member-baseline';
 import { REACTIONS_PATH, writeSetReactions } from './reactions';
@@ -1699,7 +1700,7 @@ const claimDefaults = (node: Wr, n: FigmaNodePlan | null, misses: string[], mode
 // does is press the button again — on top of them.
 //
 // WHY MARK RATHER THAN DELETE, since deleting is the obvious repair. `figma.commitUndo()` is called
-// nowhere in this plugin (see the header), so the whole run is ONE undo entry and a single undo already
+// only as a write starts (see the header), so the whole run is ONE undo entry and a single undo already
 // unwinds a partial write completely. A cleanup pass would therefore duplicate an unwind that exists,
 // spend hundreds of host calls on the least reliable code path available — a host that has just refused a
 // call — and destroy the evidence a designer or an agent needs to diagnose the failure. So the nodes stay
@@ -1983,7 +1984,7 @@ const writeComponentSet = async (
   await api.loadAllPagesAsync();
   // The cast lives HERE, next to the criteria that make it true: `types: ['COMPONENT']` is what
   // guarantees every result is a `CompRef` (see the port's note on why the port itself cannot say so).
-  // #4160 (owner decision C): with Figma skipping hidden instance children, which no component can sit inside.
+  // #4160 — each whole-file search for components or sets runs with hidden instance children skipped (`searchComponents`).
   const comps = searchComponents(['COMPONENT'], () => api.root.findAllWithCriteria({ types: ['COMPONENT'] })) as readonly CompRef[];
   const compByName = new Map(comps.map((c) => [c.name, c] as const));
   // HOW MANY plain components carry each name (#1796). A nest or swap target resolves only when exactly ONE does:
@@ -3840,10 +3841,10 @@ const writeComponentSet = async (
   // preferred def id resolves to the set built under its name, found fresh because the set's key is what Figma
   // stores; a def not built in this file is a named miss and the rest are written. A preferred-only slot with none
   // of its preferred sets built is written open, since preferred-only with nothing preferred flags every child.
-  // #4160 (owner decision C): the file's sets and components, searched ONCE for every slot property, and only when one
-  // names a preferred def. They were two whole-file searches per SLOT property; nothing in this loop adds a component.
-  let slotFound: { sets: readonly CompSetRef[]; singles: readonly CompRef[] } | null = null;
-  const slotSearch = (): { sets: readonly CompSetRef[]; singles: readonly CompRef[] } => (slotFound ??= {
+  // #4160 — the file's sets and components are searched ONCE for the whole pass, not once per slot property, and only
+  // when a slot names a preferred def. Nothing is built inside the loop, so one search answers every slot.
+  let slotLookup: { sets: readonly CompSetRef[]; singles: readonly CompRef[] } | undefined;
+  const slotFound = (): NonNullable<typeof slotLookup> => (slotLookup ??= {
     sets: searchComponents(['COMPONENT_SET'], () => api.root.findAllWithCriteria({ types: ['COMPONENT_SET'] })) as readonly CompSetRef[],
     singles: searchComponents(['COMPONENT'], () => api.root.findAllWithCriteria({ types: ['COMPONENT'] })) as readonly CompRef[],
   });
@@ -3862,7 +3863,7 @@ const writeComponentSet = async (
     const ids = [...(p.preferred ?? []), ...optional];
     if (ids.length) {
       // A def with variants builds a set under its id; a single-component def (#2296) builds one component under it.
-      const { sets, singles } = slotSearch();
+      const { sets, singles } = slotFound();
       for (const id of ids) {
         const asSet = sets.filter((x) => x.name === id);
         const named: { key?: string }[] = asSet.length ? asSet : singles.filter((x) => x.name === id);
@@ -3896,6 +3897,43 @@ const writeComponentSet = async (
     const gotKeys = (back?.preferredValues ?? []).map((v) => String(v.key));
     if (JSON.stringify(gotSettings) !== JSON.stringify(slotSettings) || JSON.stringify(gotKeys) !== JSON.stringify(preferredValues.map((v) => v.key)))
       misses.push(`property ${p.name}.slotSettings -> NOT KEPT (wrote ${JSON.stringify(slotSettings)} with ${preferredValues.length} preferred; the set holds ${JSON.stringify(gotSettings)} with ${gotKeys.length})`);
+  }
+
+  // ---- ICON SWAPS' PREFERRED VALUES (#4164, owner decision A) ----------------------------------------------------
+  // An INSTANCE_SWAP whose target is a core icon (`preferIcons`) offers every icon component the file holds first in its
+  // swap picker: each component whose name shares the target's prefix (`icon/`), in name order, by key. The placeholder
+  // (`ICON_PLACEHOLDER`) is left out (owner decision 2026-11-20): it stays the swap's default, not an icon to pick. Found fresh, as
+  // the slot pass finds its sets, since a component's key is what Figma stores. No icon in the file, or a name held by
+  // more than one component, is a named miss, and the rest are written. Read back off the set, as a slot's are. The
+  // paste payload's twin is `PAYLOAD_ICON_SWAPS` in `anatomy-figma.ts`.
+  const iconSwaps = readable ? props.filter((p): p is Extract<typeof p, { type: 'INSTANCE_SWAP' }> => p.type === 'INSTANCE_SWAP' && p.preferIcons === true) : [];
+  if (iconSwaps.length) {
+    const all = searchComponents(['COMPONENT'], () => api.root.findAllWithCriteria({ types: ['COMPONENT'] })) as readonly CompRef[];   // #4160
+    for (const p of iconSwaps) {
+      const key = propIds.get(p.name);
+      if (!key) continue; // reported as not created, above
+      const prefix = p.swapTarget.slice(0, p.swapTarget.indexOf('/') + 1);
+      const byName = new Map<string, CompRef[]>();
+      for (const c of all) if (c.name.startsWith(prefix)) byName.set(c.name, [...(byName.get(c.name) ?? []), c]);
+      const names = [...byName.keys()].filter((n) => n !== ICON_PLACEHOLDER).sort();
+      const twiceHeld = names.filter((n) => byName.get(n)!.length > 1);
+      const preferredValues: SlotPreferredValue[] = names.filter((n) => byName.get(n)!.length === 1 && byName.get(n)![0].key).map((n) => ({ type: 'COMPONENT', key: byName.get(n)![0].key! }));
+      if (twiceHeld.length) misses.push(`property ${p.name}.preferred -> ${twiceHeld.length} icon name(s) held by more than one component (${twiceHeld.slice(0, 3).join(', ')}; not offered in the swap. Rename or remove the stale copies, then rebuild)`);
+      // Icons with no key are a host that cannot name a component by key (Figma always keys one): nothing to write there.
+      if (!preferredValues.length) {
+        if (!byName.size) misses.push(`property ${p.name}.preferred -> no ${prefix}* component in this file (build the icons first, then rebuild this one; until then the swap lists no icons first)`);
+        continue;
+      }
+      const edit = liveSet().editComponentProperty;
+      if (!edit) { misses.push(`property ${p.name}.preferred -> NOT WRITTEN (this host cannot edit a component property)`); continue; }
+      try { edit.call(liveSet(), key, { preferredValues }); }
+      catch (err) { misses.push(`property ${p.name}.preferred -> REFUSED (${failureDetail(err)})`); continue; }
+      let back: { preferredValues?: readonly { key?: unknown }[] } | undefined;
+      try { back = (liveSet().componentPropertyDefinitions ?? {})[key] as typeof back; } catch { back = undefined; }
+      const gotKeys = (back?.preferredValues ?? []).map((v) => String(v.key));
+      if (JSON.stringify(gotKeys) !== JSON.stringify(preferredValues.map((v) => v.key)))
+        misses.push(`property ${p.name}.preferred -> NOT KEPT (wrote ${preferredValues.length} icons; the set holds ${gotKeys.length})`);
+    }
   }
 
   // WIRE the references, per MEMBER. They do NOT propagate: setting one on the first variant leaves

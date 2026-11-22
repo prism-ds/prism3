@@ -76,6 +76,23 @@
       ]
     },
     {
+      "from": "avatar",
+      "to": "badge",
+      "part": "presenceDot",
+      "partKind": "nest",
+      "relation": "nest-exposed",
+      "variant": {
+        "type": "dot",
+        "style": "contained",
+        "size": "medium",
+        "emphasis": "bold",
+        "tone": "success"
+      },
+      "expose": [
+        "tone"
+      ]
+    },
+    {
       "from": "banner",
       "to": "button",
       "part": "action",
@@ -972,6 +989,88 @@
       ]
     },
     {
+      "from": "menu",
+      "to": "menu-item",
+      "part": "item1",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "type": "action",
+        "intent": "default",
+        "state": "rest"
+      }
+    },
+    {
+      "from": "menu",
+      "to": "menu-item",
+      "part": "item2",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "type": "action",
+        "intent": "default",
+        "state": "rest"
+      }
+    },
+    {
+      "from": "menu",
+      "to": "menu-item",
+      "part": "item3",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "type": "action",
+        "intent": "default",
+        "state": "rest"
+      }
+    },
+    {
+      "from": "menu-group",
+      "to": "menu-item",
+      "part": "item1",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "type": "action",
+        "intent": "default",
+        "state": "rest"
+      }
+    },
+    {
+      "from": "menu-group",
+      "to": "menu-item",
+      "part": "item2",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "type": "action",
+        "intent": "default",
+        "state": "rest"
+      }
+    },
+    {
+      "from": "menu-group",
+      "to": "menu-item",
+      "part": "item3",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "type": "action",
+        "intent": "default",
+        "state": "rest"
+      }
+    },
+    {
+      "from": "menu-item",
+      "to": "focus-ring",
+      "part": "focusRing",
+      "partKind": "absolute",
+      "relation": "nest-fixed",
+      "variant": {
+        "surface": "default"
+      }
+    },
+    {
       "from": "page-nav",
       "to": "page-nav-item",
       "part": "item1",
@@ -1714,6 +1813,75 @@
       ]
     },
     {
+      "from": "step-item",
+      "to": "link",
+      "part": "link",
+      "partKind": "nest",
+      "relation": "nest-exposed",
+      "variant": {
+        "style": "inline",
+        "weight": "default",
+        "size": "medium",
+        "surface": "default",
+        "selection": "unselected",
+        "state": "rest"
+      },
+      "follow": [
+        "size"
+      ],
+      "expose": [
+        "state"
+      ]
+    },
+    {
+      "from": "steps",
+      "to": "step-item",
+      "part": "step1",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "status": "complete",
+        "orientation": "horizontal",
+        "size": "medium"
+      },
+      "follow": [
+        "orientation",
+        "size"
+      ]
+    },
+    {
+      "from": "steps",
+      "to": "step-item",
+      "part": "step2",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "status": "current",
+        "orientation": "horizontal",
+        "size": "medium"
+      },
+      "follow": [
+        "orientation",
+        "size"
+      ]
+    },
+    {
+      "from": "steps",
+      "to": "step-item",
+      "part": "step3",
+      "partKind": "nest",
+      "relation": "nest-fixed",
+      "variant": {
+        "status": "upcoming",
+        "orientation": "horizontal",
+        "size": "medium"
+      },
+      "follow": [
+        "orientation",
+        "size"
+      ]
+    },
+    {
       "from": "switch-control",
       "to": "focus-ring",
       "part": "focusRing",
@@ -1967,6 +2135,26 @@
       }
     },
     {
+      "from": "toggle-button",
+      "to": "focus-ring",
+      "part": "focusRing",
+      "partKind": "absolute",
+      "relation": "nest-fixed",
+      "variant": {
+        "surface": "default"
+      }
+    },
+    {
+      "from": "toggle-icon-button",
+      "to": "focus-ring",
+      "part": "focusRing",
+      "partKind": "absolute",
+      "relation": "nest-fixed",
+      "variant": {
+        "surface": "default"
+      }
+    },
+    {
       "from": "wallet-button",
       "to": "focus-ring",
       "part": "focusRing",
@@ -2041,13 +2229,26 @@
       "affectedByChange": [],
       "inheritedBy": []
     },
+    "avatar": {
+      "nests": [
+        "badge"
+      ],
+      "nestsTransitively": [
+        "badge"
+      ],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inheritedBy": []
+    },
     "badge": {
       "nests": [],
       "nestsTransitively": [],
       "nestedBy": [
+        "avatar",
         "tab-item"
       ],
       "affectedByChange": [
+        "avatar",
         "tab-item",
         "tabs"
       ],
@@ -2179,7 +2380,8 @@
       "nestedBy": [],
       "affectedByChange": [],
       "inheritedBy": [
-        "icon-button-neutral"
+        "icon-button-neutral",
+        "toggle-button"
       ]
     },
     "card-number-field": {
@@ -2457,6 +2659,7 @@
         "icon-button-destructive",
         "icon-button-neutral",
         "link",
+        "menu-item",
         "pagination-item",
         "radio-control",
         "segmented-control-segment",
@@ -2464,6 +2667,8 @@
         "switch-control",
         "tab-item",
         "tag",
+        "toggle-button",
+        "toggle-icon-button",
         "wallet-button"
       ],
       "affectedByChange": [
@@ -2488,6 +2693,9 @@
         "icon-button-destructive",
         "icon-button-neutral",
         "link",
+        "menu",
+        "menu-group",
+        "menu-item",
         "page-nav",
         "page-nav-item",
         "pagination",
@@ -2501,6 +2709,8 @@
         "segmented-control-segment",
         "sign-in-button",
         "slider",
+        "step-item",
+        "steps",
         "switch-control",
         "switch-row",
         "tab-item",
@@ -2508,6 +2718,8 @@
         "tag",
         "tag-group",
         "toast",
+        "toggle-button",
+        "toggle-icon-button",
         "wallet-button"
       ],
       "inheritedBy": []
@@ -2564,7 +2776,8 @@
       "affectedByChange": [],
       "inherits": "button-neutral",
       "inheritedBy": [
-        "flush-icon-button-neutral"
+        "flush-icon-button-neutral",
+        "toggle-icon-button"
       ]
     },
     "image-placeholder": {
@@ -2585,14 +2798,17 @@
         "banner",
         "breadcrumb-item",
         "breadcrumbs",
-        "page-nav-item"
+        "page-nav-item",
+        "step-item"
       ],
       "affectedByChange": [
         "banner",
         "breadcrumb-item",
         "breadcrumbs",
         "page-nav",
-        "page-nav-item"
+        "page-nav-item",
+        "step-item",
+        "steps"
       ],
       "inheritedBy": []
     },
@@ -2615,6 +2831,47 @@
       ],
       "affectedByChange": [
         "list"
+      ],
+      "inheritedBy": []
+    },
+    "menu": {
+      "nests": [
+        "menu-item"
+      ],
+      "nestsTransitively": [
+        "focus-ring",
+        "menu-item"
+      ],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inheritedBy": []
+    },
+    "menu-group": {
+      "nests": [
+        "menu-item"
+      ],
+      "nestsTransitively": [
+        "focus-ring",
+        "menu-item"
+      ],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inheritedBy": []
+    },
+    "menu-item": {
+      "nests": [
+        "focus-ring"
+      ],
+      "nestsTransitively": [
+        "focus-ring"
+      ],
+      "nestedBy": [
+        "menu",
+        "menu-group"
+      ],
+      "affectedByChange": [
+        "menu",
+        "menu-group"
       ],
       "inheritedBy": []
     },
@@ -2901,6 +3158,35 @@
       ],
       "inheritedBy": []
     },
+    "step-item": {
+      "nests": [
+        "link"
+      ],
+      "nestsTransitively": [
+        "focus-ring",
+        "link"
+      ],
+      "nestedBy": [
+        "steps"
+      ],
+      "affectedByChange": [
+        "steps"
+      ],
+      "inheritedBy": []
+    },
+    "steps": {
+      "nests": [
+        "step-item"
+      ],
+      "nestsTransitively": [
+        "focus-ring",
+        "link",
+        "step-item"
+      ],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inheritedBy": []
+    },
     "switch-control": {
       "nests": [
         "focus-ring"
@@ -3035,6 +3321,37 @@
       "affectedByChange": [],
       "inheritedBy": []
     },
+    "toggle-button": {
+      "nests": [
+        "focus-ring"
+      ],
+      "nestsTransitively": [
+        "focus-ring"
+      ],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inherits": "button-neutral",
+      "inheritedBy": []
+    },
+    "toggle-icon-button": {
+      "nests": [
+        "focus-ring"
+      ],
+      "nestsTransitively": [
+        "focus-ring"
+      ],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inherits": "icon-button-neutral",
+      "inheritedBy": []
+    },
+    "tooltip": {
+      "nests": [],
+      "nestsTransitively": [],
+      "nestedBy": [],
+      "affectedByChange": [],
+      "inheritedBy": []
+    },
     "veil": {
       "nests": [],
       "nestsTransitively": [],
@@ -3061,6 +3378,7 @@
     "_breadcrumb-separator": 0,
     "_slider-thumb": 1,
     "accordion": 1,
+    "avatar": 1,
     "badge": 0,
     "banner": 2,
     "breadcrumb-item": 2,
@@ -3092,6 +3410,9 @@
     "link": 1,
     "list": 1,
     "list-item": 0,
+    "menu": 2,
+    "menu-group": 2,
+    "menu-item": 1,
     "page-nav": 3,
     "page-nav-item": 2,
     "pagination": 2,
@@ -3111,6 +3432,8 @@
     "skeleton": 0,
     "slider": 2,
     "spinner": 0,
+    "step-item": 2,
+    "steps": 3,
     "switch-control": 1,
     "switch-row": 2,
     "tab-item": 1,
@@ -3120,6 +3443,9 @@
     "text-field": 1,
     "textarea": 1,
     "toast": 2,
+    "toggle-button": 1,
+    "toggle-icon-button": 1,
+    "tooltip": 0,
     "veil": 0,
     "wallet-button": 1
   }

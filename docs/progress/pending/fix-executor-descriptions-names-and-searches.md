@@ -1,6 +1,6 @@
-## (2026-11-20) — Executor revision 68: set descriptions follow the summary, duplicate names aren't picked, searches skip hidden instance children (#2865, #3828, #4160)
+## (2026-11-20) — Executor revision 74: set descriptions follow the summary, duplicate names aren't picked (#2865, #3828, #4160 arms)
 
-One `EXECUTOR_REVISION` bump (67 → 68, reach `"all"`; 67 went to #4295, Skeleton, before this merged) carries three executor changes, as the owner asked on #4160 (decision C): designers see one round of every set reading as due.
+One `EXECUTOR_REVISION` bump (73 → 74, reach `"all"`; 67 to 73 went to other PRs before this merged) carries two executor changes, #2865 and #3828: designers see one round of every set reading as due. #4160's executor searches, planned to ride this bump (decision C), rode #4359's revision instead, which landed first.
 
 ### #2865 — the description record (owner decision A)
 - **Executor.** `writeDescription` (`write-components.ts`) writes a set's (or an emitted component's) description and records it in shared plugin data `prism3`/`description`. `descriptionIsOurs` reads a description as Prism3's when it is empty, has no record, or still equals its record. An existing set Prism3 built (some member stamped, the check's own test) now takes the summary on those terms, where before it took it only while empty. A set with no stamped member keeps a non-empty description, record or not: decision A is scoped to a Prism3-built set (review should-fix 1). The build marks that description as the designer's (`DESCRIPTION_THEIRS`), so a later build, after it has stamped a member it added, still keeps it. An empty description is filled on any existing set, as #1623 did (delta review should-fixes 1 and 2).
@@ -14,9 +14,8 @@ One `EXECUTOR_REVISION` bump (67 → 68, reach `"all"`; 67 went to #4295, Skelet
 - **Nest override.** `applyNestOverrides` takes an optional `ambiguous` resolver. Both executors pass the #1796 rule (`oneComp`/`one`, the `AMBIGUOUS` words), so a swap value two plain components hold is named, and the nested instance keeps its default.
 - **Icon re-run.** The emit loop refuses a coordinate whose `<id>/<value>` two plain components hold, with a `member … -> AMBIGUOUS` miss. It never reads the last one as the existing member, and never adds a third.
 
-### #4160 option B
-- The executor's whole-file searches run through `searchComponents`. `component-search.ts` is #4261's file byte for byte, so whichever lands first, the other merges clean.
-- The slot pass's two searches are hoisted and made once per build, lazily.
+### #4160 option B (landed by #4359)
+- #4359 put the executor's whole-file searches through `searchComponents` and hoisted the slot pass's two searches, under its own revision, before this PR merged. At the merge this branch took main's code for those call sites. It keeps its three `#4160` arms in `test-write-components.ts` (searched once, flag, flag restored), which now read main's code.
 
 ### Why reach is "all"
 `lint-executor-reach` measured most sets as drawn differently, through the new `description` record on every write. Two reach tests read a record with their quiet set left out of every entry since 42 (`"all"` expanded), since the committed record now reaches everything.

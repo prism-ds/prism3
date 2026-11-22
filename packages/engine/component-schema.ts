@@ -1380,6 +1380,12 @@ export type PartFields = {
    *  (`layoutPositioning: 'ABSOLUTE'`), place it at `parent − artboard − inset` on both axes, and constrain
    *  it `MAX`/`MAX`, so it stays in the corner when a designer resizes the instance. `lint-absolute-inset.ts`
    *  holds the inset to the parent's stroke weight in every brand, so the artboard never overlaps the edge. */
+  /*
+   *  A `box` takes the same pin (#4110, Avatar's presence ring): the box keeps its own size, hugging what it holds,
+   *  and both executors place it exactly as they place the grip, since their corner pass reads any node by name. The
+   *  ring is the def's own frame (a page-colored disc around a nested Badge dot), so it is a box, not an `absolute`
+   *  instance sized by its parent. A pinned box takes no `grow` or `crossAxisFill`: out of the flow there is no
+   *  cell for it to fill. */
   corner?: 'bottom-right';
   /** For a `box`: PIN it across its parent's BOTTOM EDGE, out of the auto-layout flow (#2872, Link's current-page bar,
    *  owner decisions Q507). The box keeps its own bound `height` and spans the parent's full width, flush with its
@@ -1503,7 +1509,7 @@ export type BoxKey =
   | 'contentSlot' | 'slotSettings' | 'preferred' | 'preferredWhenBuilt' | 'paintSlots' | 'paintGroup' | 'gradient'
   | 'clipsContent' | 'scroll' | 'minWidth' | 'placementWidth' | 'placementHeight' | 'directionWhen' | 'sizingWhen'
   | 'builtSize' | 'elevation' | 'radiusEdges' | 'minHeight' | 'minWidthKey' | 'minWidthRatio' | 'flush' | 'center'
-  | 'aspectRatio' | 'foot' | 'footShare' | 'hiddenWhenAbsent';
+  | 'aspectRatio' | 'foot' | 'footShare' | 'hiddenWhenAbsent' | 'corner' | 'inset';
 export type TextKey =
   | 'innerTarget' | 'size' | 'presentWhen' | 'positionWhen' | 'literal' | 'paintSlot' | 'type'
   | 'verticalAlign' | 'wrap' | 'lines' | 'characters';
@@ -2153,6 +2159,12 @@ export type ComponentDef = {
    *  edit the projector. Absent, or a key absent, means that setting leaves the def as authored. See `ComponentLevers`.
    *  Maintainer data: no emitted shape carries it (`project-def.ts` projects named fields). Validated (`leverErrors`). */
   levers?: ComponentLevers;
+
+  /** THE BRAND'S OWN ICON ART (#3076), written ONLY by `applyIconMap` (`icon-map.ts`) from the brand input's
+   *  `icons.glyphs`, never authored on a def. The projector looks a glyph up here before the core set
+   *  (`ICON_PATHS`), so the `icon` def draws the brand's icons and every other def may name one. Absent on every
+   *  authored def and for every brand without glyphs. Maintainer data: no emitted shape carries it. */
+  brandGlyphs?: Record<string, { path: string; fillRule?: 'evenodd' }>;
 
   /** A LAYER GAP DERIVED FROM THE GAP THE EYE SEES (owner, 2026-09-29, the dismissible Tag). Each entry names
    *  three `tokens` keys (`{size}` expands as in `densitySpacing`): `visible`, the distance the eye reads, a
@@ -4577,7 +4589,7 @@ const leverErrors = (def: ComponentDef): string[] => {
     // The key is restated from `BORDER_WEIGHT_KEY` (anatomy-figma.ts): the schema cannot import the materializer.
     if (setting === 'buttonBorderWeight') {
       if (entry.edge !== true) errors.push(`levers.buttonBorderWeight.edge must be true when set (got ${JSON.stringify(entry.edge)})`);
-      else if (def.tokens['border-width'] === undefined) errors.push('levers.buttonBorderWeight needs a border-width key: the setting rebinds the edge it binds');
+      else if (!['', ...(def.variants?.selection ?? []).map((s) => `${s}.`)].some((p) => def.tokens[`${p}border-width`] !== undefined)) errors.push('levers.buttonBorderWeight needs a border-width key (or one per selection value): the setting rebinds the edge it binds');
     }
     if (setting === 'outlineInteraction' && entry.opaqueFill !== true) errors.push(`levers.outlineInteraction.opaqueFill must be true when set (got ${JSON.stringify(entry.opaqueFill)})`);
   }
@@ -5410,16 +5422,18 @@ const anatomyErrors = (def: ComponentDef): string[] => {
     // ONE EXCEPTION, and it is the other out-of-flow placement: a `vector` pinned into a `corner` is also
     // outside the flow, and its `inset` is the distance in from that corner's two edges. Refused on a
     // vector with no `corner`, where it would again read as an offset from a cell.
-    if (p.kind !== 'absolute' && p.inset !== undefined && !(p.kind === 'vector' && p.corner))
-      e.push(`anatomy part '${n}' is kind '${p.kind}' but binds 'inset' — only an 'absolute' part, or a 'vector' pinned into a 'corner', sits outside the flow to be inset from it`);
+    if (p.kind !== 'absolute' && p.inset !== undefined && !((p.kind === 'vector' || p.kind === 'box') && p.corner))
+      e.push(`anatomy part '${n}' is kind '${p.kind}' but binds 'inset' — only an 'absolute' part, or a 'vector' or 'box' pinned into a 'corner', sits outside the flow to be inset from it`);
     // ---- THE CORNER PIN (textarea's resize grip) ----
     // Four ways to author it so it validates and then projects nothing, or projects into the flow: on a kind
     // whose branch never reads it; with no `inset`, so the executor has no distance to place it at; on the
     // ROOT, which has no parent corner; and under a parent that is not an auto-layout box, where Figma
     // ignores `layoutPositioning` silently and the glyph takes a cell after all.
     if (p.corner !== undefined) {
-      if (p.kind !== 'vector')
-        e.push(`anatomy part '${n}' is kind '${p.kind}' but declares 'corner' — only a 'vector' draws its own glyph at its own artboard size and can be pinned into a corner (an 'absolute' part is sized by its parent instead)`);
+      if (p.kind !== 'vector' && p.kind !== 'box')
+        e.push(`anatomy part '${n}' is kind '${p.kind}' but declares 'corner' — only a 'vector' (its own artboard) or a 'box' (its own frame) keeps its own size and can be pinned into a corner (an 'absolute' part is sized by its parent instead)`);
+      if (p.kind === 'box' && (p.grow !== undefined || p.crossAxisFill !== undefined || p.foot !== undefined))
+        e.push(`anatomy part '${n}' is a 'box' pinned into corner '${p.corner}' and also declares 'grow', 'crossAxisFill' or 'foot' — a pinned box is out of the flow, so it has no cell to fill and no second placement`);
       if (!p.inset)
         e.push(`anatomy part '${n}' declares corner '${p.corner}' but binds no 'inset' — the executor places the glyph 'inset' in from the corner's two edges, so without one it has no distance to write and the part lands on the parent's own border`);
       if (n === a.root)

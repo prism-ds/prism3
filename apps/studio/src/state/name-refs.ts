@@ -18,6 +18,7 @@
  */
 import { brandTheme, type BrandInput, resolvePreview } from '@prism3/engine';
 import { brandState } from './store';
+import { modeLabel } from './mode-label';
 
 type Rec = Record<string, unknown>;
 type ByMode = Record<string, Rec | undefined>;
@@ -100,7 +101,7 @@ export const PALETTE_REFS: readonly NameRef[] = [
     field: 'accentPalette', kind: 'palette',
     rename: (b, p, n) => { if (b.accentPalette === p) b.accentPalette = n; },
     remove: (b, x) => { if (b.accentPalette === x) delete b.accentPalette; },
-    effects: (b, x) => (b.accentPalette === x && !b.interactivePalettes ? ['Its accent column is removed.'] : []),
+    effects: (b, x) => (b.accentPalette === x && !b.interactivePalettes ? ['Its accent button set is removed.'] : []),
   },
   {
     field: 'roleColors.<role>', kind: 'palette',
@@ -115,6 +116,31 @@ export const PALETTE_REFS: readonly NameRef[] = [
       (['success', 'warning', 'danger', 'info'].includes(r) ? `The ${r} color goes back to Auto.` : `The ${r} role goes back to its default palette.`)),
   },
   {
+    // A per-mode palette swap (#1729) names a palette on both sides: the palette a mode replaces and its replacement.
+    // A rename follows either side; a removal drops every swap naming the palette, so that mode stops swapping it. The
+    // confirm names the mode as the mode control does ("In Brand B"), not by its slug (owner decision 2026-11-19).
+    field: 'modePalettes.<mode>.<palette>', kind: 'palette',
+    rename: (b, p, n) => {
+      for (const sw of Object.values((b.modePalettes ?? {}) as Record<string, Record<string, string> | undefined>)) {
+        if (!sw) continue;
+        for (const [from, to] of Object.entries(sw)) if (to === p) sw[from] = n;
+        if (p in sw) { sw[n] = sw[p]!; delete sw[p]; }
+      }
+    },
+    remove: (b, x) => {
+      const mp = b.modePalettes as Record<string, Record<string, string> | undefined> | undefined;
+      if (!mp) return;
+      for (const [m, sw] of Object.entries(mp)) {
+        if (!sw) continue;
+        for (const [from, to] of Object.entries(sw)) if (from === x || to === x) delete sw[from];
+        if (!Object.keys(sw).length) delete mp[m];
+      }
+      if (!Object.keys(mp).length) b.modePalettes = undefined;
+    },
+    effects: (b, x) => Object.entries((b.modePalettes ?? {}) as Record<string, Record<string, string> | undefined>).flatMap(([m, sw]) =>
+      Object.entries(sw ?? {}).filter(([from, to]) => from === x || to === x).map(([from, to]) => `In ${modeLabel(m)}, ${from} is no longer swapped for ${to}.`)),
+  },
+  {
     field: 'interactivePalettes[].palette', kind: 'palette',
     rename: (b, p, n) => { b.interactivePalettes?.forEach((e) => { if (e.palette === p) e.palette = n; }); },
     remove: (b, x) => {
@@ -122,7 +148,7 @@ export const PALETTE_REFS: readonly NameRef[] = [
       b.interactivePalettes = b.interactivePalettes.filter((e) => e.palette !== x);
       if (!b.interactivePalettes.length) b.interactivePalettes = undefined;
     },
-    effects: (b, x) => (b.interactivePalettes?.some((e) => e.palette === x) ? ['Its interactive color column is removed.'] : []),
+    effects: (b, x) => (b.interactivePalettes?.some((e) => e.palette === x) ? ['Its button set is removed.'] : []),
   },
   {
     field: 'gradients[].stops[].palette', kind: 'palette',
@@ -325,8 +351,17 @@ export const COLUMN_REFS: readonly NameRef[] = [
 
 // ── mode rows ───────────────────────────────────────────────────────────────────────────────────
 
+/** A mode row: a field keyed by mode, which a custom mode's creation also copies (#1946). */
+type ModeRef = NameRef & {
+  /** Copy `from`'s entry to `to`, deep, so the two never share an object afterward. Nothing to copy, nothing written. */
+  readonly copy: (b: BrandInput, from: string, to: string) => void;
+};
 /** A field keyed by mode: a rename moves the key, a removal drops it, and a container it empties is pruned. */
-const byMode = (field: 'overrides' | 'modeLevers' | 'modeAnchors' | 'surfaces' | 'outlineHoverFill', line: (k: string, v: unknown) => string[]): NameRef => ({
+const byMode = (field: 'overrides' | 'modeLevers' | 'modeAnchors' | 'modePalettes' | 'surfaces' | 'outlineHoverFill', line: (k: string, v: unknown) => string[]): ModeRef => ({
+  copy: (b, from, to) => {
+    const o = bag(b)[field] as Rec | undefined;
+    if (o && isObj(o) && from in o) o[to] = structuredClone(o[from]);
+  },
   field: `${field}.<mode>`, kind: 'mode',
   rename: (b, p, n) => { const o = bag(b)[field] as Rec | undefined; if (o && p in o) { o[n] = o[p]; delete o[p]; } },
   remove: (b, x) => {
@@ -342,10 +377,11 @@ const leaves = (o: unknown, p: string): string[] => (isObj(o)
   ? Object.entries(o).flatMap(([k, v]) => leaves(v, `${p}${p ? '.' : ''}${k}`))
   : [`${p} = ${String(o)}`]);
 
-export const MODE_REFS: readonly NameRef[] = [
+export const MODE_REFS: readonly ModeRef[] = [
   byMode('overrides', (r) => [`Role override: ${r}`]),
   byMode('modeLevers', (k, v) => leaves(v, k).map((l) => `Setting: ${l}`)),
   byMode('modeAnchors', (c, v) => [`Anchor: ${c} at ${String(v)}`]),
+  byMode('modePalettes', (from, to) => [`Palette swap: ${from} → ${String(to)}`]),
   byMode('surfaces', (k, v) => [`Surface: ${k} = ${isObj(v) ? `${(v as { palette?: string }).palette} ${(v as { step?: number }).step}` : String(v)}`]),
   byMode('outlineHoverFill', (k, v) => (k === 'sets'
     ? Object.entries(isObj(v) ? v : {}).map(([set, p]) => `Outline hover fill of ${set}: ${(p as { hover?: string }).hover}`)
@@ -380,6 +416,9 @@ export const paletteRemovalEffects = (b: BrandInput, name: string): string[] => 
 export const removeColumn = (b: BrandInput, col: string): void => { for (const r of COLUMN_REFS) r.remove(b, col); };
 export const renameMode = (b: BrandInput, prev: string, next: string): void => { for (const r of MODE_REFS) r.rename(b, prev, next); };
 export const removeMode = (b: BrandInput, mode: string): void => { for (const r of MODE_REFS) r.remove(b, mode); };
+/** Custom mode `to` takes a snapshot of mode `from`'s per-mode input (#1946, owner decision 2026-11-18 A): every mode
+ *  row's entry, copied deep. Afterward the two are unlinked: an edit to either reaches only that one. */
+export const copyMode = (b: BrandInput, from: string, to: string): void => { for (const r of MODE_REFS) r.copy(b, from, to); };
 export const modeRemovalEffects = (b: BrandInput, mode: string): string[] => MODE_REFS.flatMap((r) => r.effects(b, mode));
 
 // ── the atomic commit ───────────────────────────────────────────────────────────────────────────

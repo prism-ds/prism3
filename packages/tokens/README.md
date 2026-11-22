@@ -31,7 +31,7 @@ npm install ./prism3-tokens-<version>.tgz       # in the client project
 ```
 
 ```css
-@import "@prism3/tokens";                       /* every block: :root and light, dark, hc-dark, hc-light */
+@import "@prism3/tokens";                       /* every block: :root and light, brand-b, dark, hc-dark, hc-light */
 
 .card { color: var(--pds3-color-text-primary); }
 ```
@@ -47,7 +47,7 @@ npm install ./prism3-tokens-<version>.tgz       # in the client project
 |---|---|
 | `@prism3/tokens` (also `@prism3/tokens/prism3.css`) | every block, `:root` first |
 | `@prism3/tokens/prism3/base.css` | the light defaults, on `:root` and `[data-theme="light"]` |
-| `@prism3/tokens/prism3/<mode>.css` | one `[data-theme="<mode>"]` block: `dark`, `hc-dark`, `hc-light`. `dark.css` also holds the system-preference block below |
+| `@prism3/tokens/prism3/<mode>.css` | one `[data-theme="<mode>"]` block: `brand-b`, `dark`, `hc-dark`, `hc-light`. `dark.css` also holds the system-preference block below |
 
 **Following the OS (#4140).** A page that sets no `data-theme` follows the system setting: the dark values also apply
 under `@media (prefers-color-scheme: dark)` on `:root:not([data-theme])`, with no script and no flash of light. A page
@@ -73,8 +73,32 @@ guaranteed name, in every mode block. It also checks each name's value against t
 that mode, read from `packages/engine/out/prism3.tokens.json`, which the build never reads (#3563).
 That check ignores spelling (`#0000001a` or `rgba(0, 0, 0, 0.1)`, quoted or not), but not order: a
 reversed `cubic-bezier( )` or reordered shadow layers fail it. Each per-mode file
-(`prism3/<mode>.css`) gets the same checks on its own, not only the joined file (#3877). A non-DTCG type (today the three `spring` tokens) isn't in the
-projection, so it isn't in the CSS (#642).
+(`prism3/<mode>.css`) gets the same checks on its own, not only the joined file (#3877). A non-DTCG type isn't in the projection (#642).
+
+### Springs (#3510)
+
+Plain CSS can't run spring physics, so the CSS carries each spring as an easing curve and a duration to play
+it over (owner decision Q-SP1 E):
+
+```css
+.sheet {
+  transition: transform var(--pds3-motion-spring-duration-snappy) var(--pds3-motion-spring-easing-snappy);
+}
+```
+
+- `--pds3-motion-spring-easing-<name>` is the spring sampled into a `linear()` curve.
+- `--pds3-motion-spring-duration-<name>` is how long the spring takes to settle. Use the same `<name>` for both.
+
+The springs' damping and stiffness (`motion.spring.*`) aren't in the CSS. They stay in the DTCG tree
+(`<brand>.tokens.json`) and in Figma, where a JavaScript animation library or Figma can run the spring itself.
+`packages/engine/spring.ts` derives the curve and the duration and states the numbers behind them: the settle
+threshold, the sampling density and the error bound `test.ts` holds the curve to.
+
+DTCG has no type for a `linear()` function, so the curves have the custom type `linearEasing` and aren't in the
+conforming projection. The engine writes them to a third source, `<brand>.css-only.json`, which only
+`sd.ship.mjs` reads. Stock Style Dictionary has no transform for that type and writes the string as it stands,
+so the build still runs no custom code. The durations are DTCG `duration` tokens and travel in the projection
+like any other. `check-package.mjs` expects both, from its own list of the types the package carries.
 
 Each typeface ships with its fallback stack, ending in a generic family:
 `--pds3-core-font-typeface-inter: Inter, system-ui, …, sans-serif` (#4155). If a face doesn't load, text
@@ -414,9 +438,35 @@ where the text's size is set:
 | Android (views) | `android:letterSpacing` takes em already: set the number as it is. |
 | Compose | `letterSpacing = (-0.04).em`. |
 
-The typography composites (`type.*`) alias a letter-spacing role, so they carry the same multiplier.
-The CSS `font` shorthand the stock `css` group writes for a composite has no letter-spacing field, so
-on web, set `letter-spacing` from the role beside it. Composites on native are #2432's gap.
+In the canonical tree the typography composites (`type.*`) alias a letter-spacing role. In the
+conforming projection a composite's `letterSpacing` is resolved to px instead (#4128): the role's
+multiplier times that style's own font size, as a DTCG `dimension` (`{ "value": -0.96, "unit": "px" }`
+for -0.02 at 48px), because DTCG §9.8 types it as a dimension. It is exact at the style's size, and
+the em multiplier stays on the role for anything that scales the size. The CSS `font` shorthand the
+stock `css` group writes for a composite has no letter-spacing field, so on web, set `letter-spacing`
+from the role beside it. Composites on native are #2432's gap.
+
+### Value forms: DTCG 2025.10 objects, durations aside (#4123)
+
+The conforming projection writes literal colors and dimensions in DTCG 2025.10's object forms, and
+stock Style Dictionary 5.5 reads them with no custom code:
+
+| Type | Form in the projection | Spec |
+|---|---|---|
+| `color` | `{ "colorSpace": "srgb", "components": [r, g, b], "alpha": a, "hex": "#rrggbb" }`, components 0–1, `alpha` only below 1 | Color module §4.1 |
+| `dimension` | `{ "value": 16, "unit": "px" }`, `px` or `rem` | Format §8.2 |
+| `duration` | `"200ms"`, a string | departs from Format §8.5 |
+
+A shadow layer's color and lengths follow the same forms. The CSS is unchanged, except that a color
+inside a shadow layer prints as `rgb(3.92% 7.06% 15.69% / 0.102)` where it printed `#0a12281a`: the
+same color in CSS Color 4 syntax.
+
+**Why durations stay strings.** Stock Style Dictionary 5.5 can't read a duration object: alone or as
+a transition's `delay`, `{ "value": 200, "unit": "ms" }` comes out as `[object Object]` in CSS, Swift,
+Kotlin and Android, where `"200ms"` comes out as `200ms`. Owner decision A on #4123 kept the string
+form wherever stock Style Dictionary can't read the object, so durations change when it can. The
+canonical `<brand>.tokens.json` keeps the string forms for every type; it is the engine's own tree,
+not the handoff.
 
 The no-custom-code rule stands. The gate runs built-in transform groups and formats only, so no
 reference production config with custom transforms ships for now, and the `[GAP]` pins stay as the

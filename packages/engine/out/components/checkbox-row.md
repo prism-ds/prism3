@@ -10,7 +10,7 @@
 
 ## Overview
 
-A control for an independent binary choice that is staged into a form and submitted — on/off, included/excluded, agreed/not — optionally one of many in a set. The labeled row: control and rich-content label, with the whole row as the hit target. Carries the indeterminate (mixed) visual state for select-all hierarchy, which no sibling control has. Not an immediate-effect toggle (Switch.Row), not a mutually-exclusive one-of-many (Radio.Group), not an action with a pressed state (a toggle button, not built yet).
+A control for an independent binary choice that is staged into a form and submitted — on/off, included/excluded, agreed/not — optionally one of many in a set. The labeled row: control and rich-content label, with the whole row as the hit target. Carries the indeterminate (mixed) visual state for select-all hierarchy, which no sibling control has. Not an immediate-effect toggle (Switch.Row), not a mutually-exclusive one-of-many (Radio.Group), not an action with a pressed state (ToggleButton).
 
 - **Purpose:** Capture an independent binary choice that is staged into a form and submitted, with an associated label that doubles as the hit target and an optional indeterminate state for select-all hierarchy.
 - **Use when:** A single opt-in (consent, "remember me", "include X"), or any-number-from-a-set selection where the change applies on save rather than instantly. The indeterminate state when a parent row summarizes a partially-selected set of children.
@@ -91,7 +91,7 @@ The label states what becomes true when checked. Group errors read "Select at le
 ## Related components
 
 - **Built from:** `checkbox-control`
-- **Instead, consider:** `switch-row`, `radio-row`, `text-field`
+- **Instead, consider:** `switch-row`, `radio-row`, `text-field`, `toggle-button`
 - **Often used with:** `checkbox-group`, `field-label`, `field-message`, `focus-ring`, `button`
 - **Replaces:**
   - a bare `<input type="checkbox">` with no label wiring
@@ -111,7 +111,7 @@ The label states what becomes true when checked. Group errors read "Select at le
 | `defaultChecked` | boolean | `false` | no | Uncontrolled initial value. Never true for a consent checkbox — pre-checked consent is a dark pattern and, for marketing consent, often unlawful. |
 | `indeterminate` | boolean | `false` | no | The mixed visual state — dash glyph, aria-checked="mixed". Presentational: the underlying value is still true/false, and this is for parent/child select-all hierarchy only, never a third state a user can click to. There is no indeterminate HTML attribute — it is a DOM property (node.indeterminate = true), which is the single most common checkbox bug; in React apply it through a synchronous ref callback rather than a JSX prop. |
 | `label` | node | — | no | Rich content: a node, not a string. The substrate's label is a string above the field; this one sits inline-end, doubles as the hit target, and must be able to hold a link, because the single most common real checkbox label is a consent line with one in it ("I agree to the Terms of Service"). A standalone control with no label is checkbox-control, which then requires an external aria-label/aria-labelledby. |
-| `description` | node | — | no | Optional helper beneath the label, describedby-wired — the detail that qualifies the choice without lengthening the label. |
+| `description` | node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the label: the detail that qualifies the choice without lengthening the label. |
 | `onChange` | (checked: boolean, event) => void | — | no | Restated rather than inherited: the substrate's change yields a string, this one yields the resulting boolean alongside the event. |
 | `value` | string | — | no | The string submitted when checked (the platform default is "on"), and the element this row contributes to a Checkbox.Group's array. An unchecked box submits nothing at all rather than a false value — the missing-key trap. |
 | `disabled` | boolean | `false` | no | Native disabled: removed from the tab order, not submitted, contrast-exempt. Disables the whole row: the nested control takes its disabled skin and the label dims. Reserve for an option that does not apply in the current state. |

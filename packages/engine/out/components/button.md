@@ -13,7 +13,7 @@ In-flow trigger for an action that happens now, in the current context — submi
 
 - **Purpose:** Trigger an action in place, in the brand's primary style.
 - **Use when:** The user needs to act on this surface — submit, confirm, open, apply, or start async work.
-- **Avoid when:** The target is a different location/URL → use Link (or give the button an `href`, which renders an `<a>`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use a toggle button (not built yet). Icon-only with no visible text → use IconButton (the accessible name is required there at the type level). The action deletes or removes something → use Button.Destructive. The action carries no brand emphasis (a toolbar control, a dense row) → use Button.Neutral.
+- **Avoid when:** The target is a different location/URL → use Link (or give the button an `href`, which renders an `<a>`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use ToggleButton. Icon-only with no visible text → use IconButton (the accessible name is required there at the type level). The action deletes or removes something → use Button.Destructive. The action carries no brand emphasis (a toolbar control, a dense row) → use Button.Neutral.
 
 ## Anatomy
 
@@ -51,7 +51,7 @@ Use for an immediate action in the current context — submit/save/reset a form,
 - Keep exactly one filled button per view; demote the rest to outline / text, so a view of three actions is three buttons at three appearances rather than three fills competing
 - Set `surface=inverse` for a button on a dark or brand-filled band, so its fill, ink, border and disabled treatment bind the inverse counterparts instead of losing contrast against the flipped ground
 - Set inset=flush on a button at appearance=text that starts, ends or centers a row of content, so its label lines up with the content edge; give it `padding-inline: 0` and no `min-inline-size`, and, at medium and large sizes, extend its hit area to at least 44×44px with a transparent `::before` inset outward and centered on the label, so the target clears 44px while the box stays label-width; extend it the same way to at least 24×24px at small
-- Use isInactive (focusable) for a control blocked by satisfiable state; reserve disabled for the irrelevant
+- Use isInactive for a control the user can still unblock, such as Submit on an unfinished form; it stays focusable and says why. Use disabled only when the control doesn't apply right now
 
 ### Don't
 
@@ -96,8 +96,8 @@ Verb-first, specific, sentence case, no terminal punctuation, ≤3 words to boun
 ## Related components
 
 - **Built from:** `focus-ring`, `spinner`
-- **Instead, consider:** `icon-button`, `switch-row`, `tag`, `link`
-- **Often used with:** `icon`, `button-group`, `popover`
+- **Instead, consider:** `icon-button`, `switch-row`, `tag`, `link`, `toggle-button`
+- **Often used with:** `icon`, `button-group`, `popover`, `menu`, `tooltip`
 - **Replaces:**
   - input[type=button\|submit]
   - `div[role=button]`

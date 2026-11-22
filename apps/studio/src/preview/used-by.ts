@@ -6,7 +6,7 @@
  * never imports the definitions themselves (UI redesign S7, T4; the generator's header says why).
  */
 export const USED_BY = {
-  defs: 65,
+  defs: 74,
   radius: {
     rounded: {
       "radius.2xl": [
@@ -17,17 +17,23 @@ export const USED_BY = {
       ],
       "radius.lg": [
         "CodeInput",
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
         "Button",
         "WalletButton",
         "SignInButton",
         "IconButton",
+        "ToggleButton",
+        "ToggleIconButton",
+        "Avatar",
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu",
+        "Tooltip"
       ],
       "radius.none": [
         "FlushIconButton",
@@ -41,10 +47,12 @@ export const USED_BY = {
         "Radio.Control",
         "Switch.Control",
         "Badge",
+        "Avatar",
         "Tag",
         "List",
         "Slider",
-        "Skeleton"
+        "Skeleton",
+        "StepItem"
       ],
       "radius.sm": [
         "ProviderLogo",
@@ -52,6 +60,7 @@ export const USED_BY = {
         "Textarea",
         "Select",
         "Badge",
+        "Avatar",
         "SegmentedControl",
         "PasswordField",
         "Counter",
@@ -73,17 +82,23 @@ export const USED_BY = {
         "WalletButton",
         "SignInButton",
         "IconButton",
+        "ToggleButton",
+        "ToggleIconButton",
         "Progress"
       ],
       "radius.lg": [
         "CodeInput",
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
+        "Avatar",
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu",
+        "Tooltip"
       ],
       "radius.none": [
         "FlushIconButton",
@@ -97,10 +112,12 @@ export const USED_BY = {
         "Radio.Control",
         "Switch.Control",
         "Badge",
+        "Avatar",
         "Tag",
         "List",
         "Slider",
-        "Skeleton"
+        "Skeleton",
+        "StepItem"
       ],
       "radius.sm": [
         "ProviderLogo",
@@ -108,6 +125,7 @@ export const USED_BY = {
         "Textarea",
         "Select",
         "Badge",
+        "Avatar",
         "SegmentedControl",
         "PasswordField",
         "Counter",
@@ -128,13 +146,17 @@ export const USED_BY = {
         "Progress"
       ],
       "radius.lg": [
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
+        "Avatar",
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu",
+        "Tooltip"
       ],
       "radius.none": [
         "Button",
@@ -142,6 +164,8 @@ export const USED_BY = {
         "SignInButton",
         "IconButton",
         "FlushIconButton",
+        "ToggleButton",
+        "ToggleIconButton",
         "TextField",
         "Textarea",
         "Checkbox.Control",
@@ -160,14 +184,17 @@ export const USED_BY = {
         "Radio.Control",
         "Switch.Control",
         "Badge",
+        "Avatar",
         "Tag",
         "List",
         "Slider",
-        "Skeleton"
+        "Skeleton",
+        "StepItem"
       ],
       "radius.sm": [
         "ProviderLogo",
         "Badge",
+        "Avatar",
         "SegmentedControl",
         "Counter",
         "Skeleton"
@@ -188,6 +215,8 @@ export const USED_BY = {
         "WalletButton",
         "SignInButton",
         "IconButton",
+        "ToggleButton",
+        "ToggleIconButton",
         "TextField",
         "Textarea",
         "Checkbox.Control",
@@ -198,13 +227,17 @@ export const USED_BY = {
         "CodeInput"
       ],
       "radius.lg": [
-        "Popover"
+        "Popover",
+        "Menu"
       ],
       "radius.md": [
+        "Avatar",
         "SegmentedControl",
         "Pagination",
         "Banner",
-        "Skeleton"
+        "Skeleton",
+        "Menu",
+        "Tooltip"
       ],
       "radius.none": [
         "FlushIconButton",
@@ -218,14 +251,17 @@ export const USED_BY = {
         "Radio.Control",
         "Switch.Control",
         "Badge",
+        "Avatar",
         "Tag",
         "List",
         "Slider",
-        "Skeleton"
+        "Skeleton",
+        "StepItem"
       ],
       "radius.sm": [
         "ProviderLogo",
         "Badge",
+        "Avatar",
         "SegmentedControl",
         "Counter",
         "Skeleton"
@@ -242,6 +278,8 @@ export const USED_BY = {
       "SignInButton",
       "IconButton",
       "FlushIconButton",
+      "ToggleButton",
+      "ToggleIconButton",
       "TextField",
       "Checkbox.Row",
       "Radio.Row",
@@ -263,6 +301,8 @@ export const USED_BY = {
       "SignInButton",
       "IconButton",
       "FlushIconButton",
+      "ToggleButton",
+      "ToggleIconButton",
       "Checkbox.Row",
       "Radio.Row",
       "Switch.Row",
@@ -280,6 +320,8 @@ export const USED_BY = {
       "SignInButton",
       "IconButton",
       "FlushIconButton",
+      "ToggleButton",
+      "ToggleIconButton",
       "Checkbox.Row",
       "Radio.Row",
       "Switch.Row",

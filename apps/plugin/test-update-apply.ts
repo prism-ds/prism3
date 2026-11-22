@@ -281,7 +281,7 @@
  *
  * Run: `npx tsx apps/plugin/test-update-apply.ts`
  */
-import { figmaAnatomySet, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, planComponentName, planStamp, type AnatomyPlan, componentDefs, type ComponentDef } from '@prism3/engine/components';
+import { applyIconMap, figmaAnatomySet, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, planComponentName, planStamp, type AnatomyPlan, componentDefs, type ComponentDef } from '@prism3/engine/components';
 import { ENGINE_VERSION, coordKey, parseDesignMd, type BrandInput } from '@prism3/engine';
 import { createHash } from 'node:crypto';
 import { adoptions, applyComponentPlan, memberStamp, respaceSets, snugSets, STAMP_KEY } from './src/write-components';
@@ -296,7 +296,7 @@ import { figmaInstances, fixHostMethods, makeShim, STYLE_FONT, type Node, type P
 import { adoptMembers, breakingClause, breakingLine, breakingOf, breaksConsumers, consumerLines, breakingSection, breakingSummary, captureBaselines, checkedSetOf, dryRunSet, hostPorts, previewLine, previewUpdate, previewVerdict, readSetView, readSingleView, type Breaking, type UpdateHost, type UpdateTarget } from './src/update-plan';
 import { drawnFaults, faultLine, varsById } from './src/drawn';
 import { BASELINE_V, baselineOf, resetStyleNames, snapshotMember } from './src/member-baseline';
-import { applyUpdate, applyVerdict as applyVerdictOf, ledgerAfter, previewHashOf, namesMember, DEPRECATED_PREFIX, RETAINED_KEY, nestedFirst, changedSets, type ApplyHost } from './src/update-apply';
+import { applyUpdate, applyVerdict as applyVerdictOf, fallbackLine, fontMissHead, ledgerAfter, previewHashOf, namesMember, DEPRECATED_PREFIX, RETAINED_KEY, nestedFirst, changedSets, type ApplyHost } from './src/update-apply';
 import { headerFor } from './src/page-header';
 import { readFileSync } from 'node:fs';
 
@@ -2408,25 +2408,25 @@ const singleWorld = async (plans: AnatomyPlan[], extraVars: string[] = [], o: { 
   const next = plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; (q.root as unknown as Record<string, unknown>).descendantFills = 'color/icon/secondary'; return q; });
   const t = { def: 'icon', plans: next, single: true };
   const pre = await previewUpdate(w.host, [t]);
-  ok(pre.sets[0]?.counts.update === 46, `premise: the dry run reads all 46 icons out of date (${JSON.stringify(pre.sets[0]?.counts)})`);
+  ok(pre.sets[0]?.counts.update === 48, `premise: the dry run reads all 48 icons out of date (${JSON.stringify(pre.sets[0]?.counts)})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const v = applyVerdict(res);
-  ok(v.ok && v.headline === '✓ updated 46 in place', `single/update: ${v.headline} (${v.lines.slice(0, 2).join(' | ').slice(0, 220)})`);
+  ok(v.ok && v.headline === '✓ updated 48 in place', `single/update: ${v.headline} (${v.lines.slice(0, 2).join(' | ').slice(0, 220)})`);
   const after = new Map(w.comps().map((c) => [String(c.name), { key: String(c.key), id: String(c.id) }] as const));
-  ok(after.size === 46 && [...before].every(([n, b]) => after.get(n)?.key === b.key && after.get(n)?.id === b.id), 'single/keys: every icon keeps its key and id');
+  ok(after.size === 48 && [...before].every(([n, b]) => after.get(n)?.key === b.key && after.get(n)?.id === b.id), 'single/keys: every icon keeps its key and id');
   const sec = (await w.api.variables.getLocalVariablesAsync()).find((x: { name: string }) => x.name.endsWith('/color/icon/secondary')).id;
   const inked = w.comps().filter((c) => ((c.children as Node[]) ?? []).filter((k) => k.type === 'VECTOR').every((k) => (k.fills as { boundVariables?: { color?: { id: string } } }[])[0]?.boundVariables?.color?.id === sec)).length;
-  ok(inked === 46, `single/written: every icon's ink is the plan's new color (${inked})`);
+  ok(inked === 48, `single/written: every icon's ink is the plan's new color (${inked})`);
   const post = (await previewUpdate(w.host, [t])).sets[0];
   const markers = w.comps().filter((c) => (c.getSharedPluginData as (a: string, b: string) => string)(NS, 'memberUpdating') !== '').length;
-  ok(post.counts.current === 46 && markers === 0, `single/finished: each icon is finished as a set member is, current with its marker off (${JSON.stringify(post.counts)}, ${markers} markers left)`);
+  ok(post.counts.current === 48 && markers === 0, `single/finished: each icon is finished as a set member is, current with its marker off (${JSON.stringify(post.counts)}, ${markers} markers left)`);
 }
 {
   const plans = plansOf('icon');
   const w = await singleWorld(plans.filter((_, i) => i !== 5));
   const res = await applyUpdate(w.host, w.api as any, [{ def: 'icon', plans, single: true }], previewHashOf(await previewUpdate(w.host, [{ def: 'icon', plans, single: true }])));
   const at = w.comps().map((c) => `${c.x},${c.y}`);
-  ok(res.outcomes[0]?.added === 1 && w.comps().length === 46 && new Set(at).size === at.length,
+  ok(res.outcomes[0]?.added === 1 && w.comps().length === 48 && new Set(at).size === at.length,
     `single/add: the glyph the plan gained is built, in a slot no other icon holds (${res.outcomes[0]?.added}, ${w.comps().length} icons, ${new Set(at).size} distinct places)`);
 }
 {
@@ -2443,6 +2443,34 @@ const singleWorld = async (plans: AnatomyPlan[], extraVars: string[] = [], o: { 
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(await previewUpdate(w.host, [t])));
   ok(applyVerdict(res).ok && dump() === before && res.outcomes[0]?.skipped.some((x) => x.member === 'name=my-logo' && x.reason === 'not built by Prism3'),
     `single/owner: the owner's hand-made icon is left exactly as it is, and named (${JSON.stringify(res.outcomes[0]?.skipped)})`);
+}
+// #3076, owner decision 2026-11-20 A: BRAND ART THAT DUPLICATES AN ICON IS REPORTED, NEVER BLOCKED. The brand's set is
+// built, then updated to a new ink. Its `dash` is core `minus` (and so `minus-filled`) drawn the other way round, its
+// `oblique` is core `slash` from another start vertex; its `checkmark` is core `check`'s art, and `check` is mapped away,
+// so no duplicate. Absolute `L` only: the shim reads a path's numbers as x,y pairs (see the provider logos below), and
+// `test.ts` holds the relative spellings.
+// EXPECTED is typed here, never read from `icon-map.ts`. The dry run names the two groups, refuses nothing, and the apply
+// it hashes goes through.
+{
+  const DUP = { map: { plus: 'add', check: 'checkmark' }, glyphs: { add: { path: 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z' }, checkmark: { path: 'M10.0007 15.1709L19.1931 5.97852L20.6073 7.39273L10.0007 17.9993L3.63672 11.6354L5.05093 10.2212L10.0007 15.1709Z' }, dash: { path: 'M19 13L5 13L5 11L19 11Z' }, oblique: { path: 'M16.17 4L9.97 20L7.83 20L14.03 4Z' } } };
+  const plans = figmaAnatomySet(applyIconMap(componentDefs.find((d) => d.id === 'icon')!, DUP), { swapTarget: SWAP_TARGET });
+  const w = await singleWorld(plans, ['color/icon/secondary']);
+  const next = plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; (q.root as unknown as Record<string, unknown>).descendantFills = 'color/icon/secondary'; return q; });
+  const t = { def: 'icon', plans: next, single: true };
+  const pre = await previewUpdate(w.host, [t]);
+  ok(JSON.stringify(pre.iconDuplicates) === JSON.stringify([['dash', 'minus', 'minus-filled'], ['oblique', 'slash']]),
+    `#3076 duplicate art/reported: the dry run names each brand glyph that draws an icon's shape, with it (got ${JSON.stringify(pre.iconDuplicates)})`);
+  const v = previewVerdict(pre);
+  ok(v.lines.includes('Icons: 2 groups draw the same shape (dash, minus and minus-filled; oblique and slash). Each is built as its own icon.'),
+    `#3076 duplicate art/summary: the dry run summary carries the line (${JSON.stringify(v.lines.filter((l) => l.startsWith('Icons')))})`);
+  ok(v.ok && !pre.refused.length && !pre.missing.length && pre.sets.length === 1 && !pre.sets[0].blockers.length && pre.sets[0].counts.update === 50,
+    `#3076 duplicate art/not blocked: the set is checked with no blocker and all 50 icons to update (${v.headline}; ${JSON.stringify(pre.sets[0]?.blockers)}; ${JSON.stringify(pre.sets[0]?.counts)})`);
+  const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
+  const av = applyVerdictOf(res);
+  ok(av.ok && av.headline === '✓ updated 50 in place', `#3076 duplicate art/applied: the apply the dry run hashed goes through (${av.headline}; ${av.lines.slice(0, 2).join(" | ")})`);
+  const plain = await previewUpdate((await singleWorld(plansOf('icon'))).host, [{ def: 'icon', plans: plansOf('icon'), single: true }]);
+  ok(plain.iconDuplicates === undefined && !previewVerdict(plain).lines.some((l) => l.startsWith('Icons:')),
+    `#3076 duplicate art/none: Prism3's own set reports no duplicate art (got ${JSON.stringify(plain.iconDuplicates)})`);
 }
 // THE PROVIDER LOGOS (#2343): single components too, and each value carries its kind, `provider-logo/payment/visa`, so a
 // value with a `/` is still a member when it is one of the def's own coordinates. The icon set cannot catch a reader
@@ -2545,8 +2573,8 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   ok(JSON.stringify(nowVec?.vectorPaths) === JSON.stringify(REDRAWN) && applyVerdict(res).ok,
     `redraw/kept: the update keeps the designer's drawing rather than laying a fresh import over it (${JSON.stringify(nowVec?.vectorPaths)?.slice(0, 80)}; ${applyVerdict(res).headline})`);
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(post.handEdits.some((h) => h.member === member && h.path === '.') && post.counts.current === 45,
-    `redraw/still listed: the next dry run still reports the redraw, and the other 45 read current (${JSON.stringify(post.handEdits.filter((h) => h.member === member))}; ${JSON.stringify(post.counts)})`);
+  ok(post.handEdits.some((h) => h.member === member && h.path === '.') && post.counts.current === 47,
+    `redraw/still listed: the next dry run still reports the redraw, and the other 47 read current (${JSON.stringify(post.handEdits.filter((h) => h.member === member))}; ${JSON.stringify(post.counts)})`);
   // CONTROL: an untouched glyph's artwork reads the same across a rebuild, so the arm cannot fire on every glyph.
   ok(!pre.sets[0].handEdits.some((h) => h.member !== member), `redraw/control: no other glyph reads as redrawn (${pre.sets[0].handEdits.filter((h) => h.member !== member).length})`);
 }
@@ -2578,12 +2606,12 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   const named = res.outcomes[0]?.misses.filter((x) => x.startsWith(`name=${String(hit.name).split('/').pop()}.asBuilt -> NOT RECORDED`)) ?? [];
   ok(named.length === 1, `recordfail/named: the outcome names the icon as not recorded (${JSON.stringify(named)}; ${v.headline})`);
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(post.counts.current === 45 && post.counts.current + (post.counts.update ?? 0) + (post.counts.noBaseline ?? 0) === 46 && !post.handEdits.some((h) => h.member.endsWith(String(hit.name).split('/').pop()!)),
-    `recordfail/out of date: the next dry run reads it out of date, never current, the other 45 current (${JSON.stringify(post.counts)})`);
+  ok(post.counts.current === 47 && post.counts.current + (post.counts.update ?? 0) + (post.counts.noBaseline ?? 0) === 48 && !post.handEdits.some((h) => h.member.endsWith(String(hit.name).split('/').pop()!)),
+    `recordfail/out of date: the next dry run reads it out of date, never current, the other 47 current (${JSON.stringify(post.counts)})`);
   const glyph = String(hit.name).split('/').pop();
-  ok(!v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 45 updated in place.'
+  ok(!v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 47 updated in place.'
     && v.lines.includes(`icon: 1 variant not finished — name=${glyph} (its as-built record could not be written). It still reads as out of date; run Update file again to finish it.`),
-    `recordfail/verdict: the verdict is not a ✓, counts 45 updated and names the icon not finished (${JSON.stringify(v)})`);
+    `recordfail/verdict: the verdict is not a ✓, counts 47 updated and names the icon not finished (${JSON.stringify(v)})`);
 }
 {
   // THE SAME FAILURE ON A SET MEMBER: `finishUpdated` is the set path's finish too, called from its own loop.
@@ -2633,7 +2661,7 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   const o = res.outcomes[0];
   const v = applyVerdict(res);
   ok(o?.skipped.some((x) => x.member === 'name=check') && o.misses.some((x) => x.startsWith('name=check-circle.asBuilt -> NOT RECORDED'))
-    && !v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 44 updated in place, 1 left as it is.'
+    && !v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 46 updated in place, 1 left as it is.'
     && v.lines.includes('icon: 1 variant not finished — name=check-circle (its as-built record could not be written). It still reads as out of date; run Update file again to finish it.'),
     `recordfail/prefix: a skip on name=check leaves the refused record on name=check-circle in the misses and the verdict (skipped ${JSON.stringify(o?.skipped)}; misses ${JSON.stringify(o?.misses)}; ${JSON.stringify(v)})`);
 }
@@ -2732,16 +2760,16 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   for (const c of w.comps()) putPd(c, BASELINE_KEY, '');
   const t = { def: 'icon', plans: reinked(plans), single: true };
   const pre = await previewUpdate(w.host, [t]);
-  ok(pre.sets[0]?.counts.noBaseline === 46, `premise: the dry run reads all 46 icons with no record (${JSON.stringify(pre.sets[0]?.counts)})`);
+  ok(pre.sets[0]?.counts.noBaseline === 48, `premise: the dry run reads all 48 icons with no record (${JSON.stringify(pre.sets[0]?.counts)})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const o = res.outcomes[0];
   const v = applyVerdict(res);
-  ok(v.ok && o?.updated.length === 46 && o.unrecorded.length === 46,
+  ok(v.ok && o?.updated.length === 48 && o.unrecorded.length === 48,
     `unrecorded single/updated: by default every record-less icon is updated and named as updated without a record (${v.headline}; ${o?.updated.length} updated, ${o?.unrecorded.length} unrecorded)`);
   const sec = await varIdOf(w as unknown as World, 'color/icon/secondary');
   const inked = w.comps().filter((c) => ((c.children as Node[]) ?? []).filter((k) => k.type === 'VECTOR').every((k) => (k.fills as { boundVariables?: { color?: { id: string } } }[])[0]?.boundVariables?.color?.id === sec)).length;
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(inked === 46 && post.counts.current === 46 && w.comps().every((c) => !!pdOf(c, BASELINE_KEY)),
+  ok(inked === 48 && post.counts.current === 48 && w.comps().every((c) => !!pdOf(c, BASELINE_KEY)),
     `unrecorded single/recorded: each takes the plan's ink and a record, and reads current after (${inked} inked; ${JSON.stringify(post.counts)})`);
 }
 {
@@ -2756,8 +2784,8 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre), { choices: { noBaseline: 'skip' } });
   const o = res.outcomes[0];
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(o?.updated.length === 45 && dump() === before && JSON.stringify(o.skipped.map((x) => x.reason)) === JSON.stringify(['no as-built record']) && post.counts.noBaseline === 1,
-    `unrecorded single/skip: under noBaseline 'skip' the record-less icon is left exactly as it is and named, the other 45 updated (${o?.updated.length}, ${JSON.stringify(o?.skipped)}, ${dump() === before ? 'untouched' : 'written'}; ${JSON.stringify(post.counts)})`);
+  ok(o?.updated.length === 47 && dump() === before && JSON.stringify(o.skipped.map((x) => x.reason)) === JSON.stringify(['no as-built record']) && post.counts.noBaseline === 1,
+    `unrecorded single/skip: under noBaseline 'skip' the record-less icon is left exactly as it is and named, the other 47 updated (${o?.updated.length}, ${JSON.stringify(o?.skipped)}, ${dump() === before ? 'untouched' : 'written'}; ${JSON.stringify(post.counts)})`);
 }
 {
   // A DUPLICATE OF THE FILE, FOR THE SINGLE COMPONENTS (#2436): `format/duplicate` for the icons and the spinner. The
@@ -4790,14 +4818,14 @@ section('mixed — in a set the build updates, a member from an earlier plugin s
   }
   const t = { def: 'icon', plans, single: true };
   const pre = await previewUpdate(w.host, [t]);
-  ok(pre.sets[0]?.counts.revisionUnknown === 46 && previewVerdict(pre).headline === '✓ No changes found',
-    `premise: all 46 icons read "built by an earlier plugin", and nothing changes (${JSON.stringify(pre.sets[0]?.counts)}; ${previewVerdict(pre).headline})`);
+  ok(pre.sets[0]?.counts.revisionUnknown === 48 && previewVerdict(pre).headline === '✓ No changes found',
+    `premise: all 48 icons read "built by an earlier plugin", and nothing changes (${JSON.stringify(pre.sets[0]?.counts)}; ${previewVerdict(pre).headline})`);
   const logs = w.comps().map((c) => watchWrites(c));
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const other = logs.flat().filter((x) => !new RegExp(`setSharedPluginData\\(${NS}, (${STAMP_KEY}|${BASELINE_KEY})\\)$`).test(x));
   const again = (await previewUpdate(w.host, [t])).sets[0];
-  ok(res.outcomes[0]?.restamped?.length === 46 && other.length === 0 && again.counts.current === 46,
-    `single/stamped: each icon takes its stamp and nothing else, and all 46 read current (${res.outcomes[0]?.restamped?.length} stamped; ${other.length} other writes; ${JSON.stringify(again.counts)}; ${applyVerdict(res).headline})`);
+  ok(res.outcomes[0]?.restamped?.length === 48 && other.length === 0 && again.counts.current === 48,
+    `single/stamped: each icon takes its stamp and nothing else, and all 48 read current (${res.outcomes[0]?.restamped?.length} stamped; ${other.length} other writes; ${JSON.stringify(again.counts)}; ${applyVerdict(res).headline})`);
 }
 
 {
@@ -4818,14 +4846,14 @@ section('mixed — in a set the build updates, a member from an earlier plugin s
   const pre = await previewUpdate(w.host, [t]);
   const st = pre.sets[0];
   const stateOf = st?.states.find((x) => x.member === `name=${String(hit.name).replace(/^icon\//, '')}`)?.state;
-  ok(stateOf === 'update' && st?.counts.revisionUnknown === 45 && st.changes.some((c) => c.field === 'fills' && /stored #000000/.test(c.from)),
+  ok(stateOf === 'update' && st?.counts.revisionUnknown === 47 && st.changes.some((c) => c.field === 'fills' && /stored #000000/.test(c.from)),
     `single/damage: the icon drawn black under its binding reads "to update", named, though its record matches and its stamp is an earlier plugin's (${stateOf}; ${st?.counts.revisionUnknown} from an earlier plugin; ${st?.changes.map((c) => `${c.field}: ${c.from}`).join(' | ')})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const vars = await varsById(w.api as any);
   const left = w.comps().flatMap((c) => drawnFaults(c, vars));
   const again = (await previewUpdate(w.host, [t])).sets[0];
-  ok(applyVerdict(res).ok && res.outcomes[0]?.updated.length === 1 && res.outcomes[0]?.restamped?.length === 45 && left.length === 0 && again.counts.current === 46,
-    `single/damage repaired: the update re-applies that icon, which then draws its variable's color; the other 45 take their stamps; all 46 read current (${applyVerdict(res).headline}; ${res.outcomes[0]?.updated.length} updated, ${res.outcomes[0]?.restamped?.length} stamped; ${left.length} faults; ${again.counts.current} current)`);
+  ok(applyVerdict(res).ok && res.outcomes[0]?.updated.length === 1 && res.outcomes[0]?.restamped?.length === 47 && left.length === 0 && again.counts.current === 48,
+    `single/damage repaired: the update re-applies that icon, which then draws its variable's color; the other 47 take their stamps; all 48 read current (${applyVerdict(res).headline}; ${res.outcomes[0]?.updated.length} updated, ${res.outcomes[0]?.restamped?.length} stamped; ${left.length} faults; ${again.counts.current} current)`);
 }
 
 {
@@ -5448,7 +5476,7 @@ section('reach — a member stamped under an older revision is to update only wh
   // record's floor is to update, as every member was before #3101. Read off the dry run of the host's own members; the
   // stamps are rewritten on the host, as an older plugin left them.
   const QUIET = '_accordion-indicator';
-  // Revision 68 (#2865, the description record) redraws every set (`"all"`), so the record is read here with QUIET left
+  // Revision 74 (#2865, the description record) redraws every set (`"all"`), so the record is read here with QUIET left
   // out of every entry since 42, an "all" entry as every other projected set, and put back after.
   const committedReach = EXECUTOR_REACH.reach;
   const everySet = componentDefs.filter((d) => d.figmaProperties).map((d) => d.id);
@@ -7330,6 +7358,136 @@ section('tint — SignInButton\'s white glyph on a dark fill reads current, and 
   const tint = o.content.filter((x) => x.includes('literalTint'));
   ok(o.updated.length === 96 && tint.length === 0,
     `glyph tint/verify: all 96 updated, and no tinted glyph reads as differing from the plan (${o.updated.length} updated; ${tint.length} tint lines${tint.length ? `: ${tint[0]}` : ''})`);
+}
+
+// #4068, THE OWNER'S UPDATE FILE RUN, 2026-11-18: Sign-in button's Google labels declare Google Sans Medium with a
+// fallback, Roboto Medium (the def's `font.fallback`). Google Sans was not installed, the executor wrote Roboto Medium,
+// and the summary read "36 parts not written as planned". A declared fallback that landed is the designed outcome: it is
+// reported as a fallback, one line per part and face, and is not a part to check. A face whose fallback did not land either
+// stays a miss. Expected counts are literals typed here: 96 members, 36 of them on Google Sans. The font refusal is the
+// host's (`loadFontAsync` throwing), set after the build so the update meets it. Mutations: `splitFontFallbacks` not
+// called → `fallback/reported`, `fallback/not a miss`, `fallback/line`; its `notLanded` read dropped → `fallback/miss kept`,
+// `fallback/miss line`.
+section("fallback — a declared font fallback that landed is reported as a fallback, not as parts not written (#4068)");
+{
+  const id = 'sign-in-button';
+  const plans = plansOf(id);
+  const google = plans.filter((p) => JSON.stringify(p.root).includes('"family":"Google Sans"')).map(planComponentName);
+  ok(plans.length === 96 && google.length === 36, `fallback/premise: 96 members, 36 of them on Google Sans (${plans.length}, ${google.length})`);
+  const deep = (n: Node, name: string): Node | undefined => (n.children as Node[] | undefined)?.reduce<Node | undefined>((f, c) => f ?? (c.name === name ? c : deep(c, name)), undefined);
+  const labelsOf = (set: Node): Node[] => membersOf(set).filter((m) => google.includes(String(m.name))).map((m) => deep(m, 'label')).filter((l): l is Node => !!l);
+  // `hold` runs on the host's own built label nodes before the update, for a host that does not keep a font write.
+  const run = async (refused: readonly string[], hold?: (label: Node) => void) => {
+    const allowMisses: string[] = [];
+    const w = await world(id, plans, { extraVars: ['space/999'], allowMisses });
+    if (hold) for (const l of labelsOf(w.set())) hold(l);
+    // The host's own refusal, in Figma's words, for each face the test names; the shim's methods are fixed, so a copy.
+    const api = { ...w.api, loadFontAsync: async (fn: { family: string; style: string }) => {
+      if (refused.includes(`${fn.family} ${fn.style}`)) throw new Error(`The font "${fn.family} ${fn.style}" could not be loaded`);
+      return w.api.loadFontAsync(fn);
+    } };
+    const moved = plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; (q.root.bound as Record<string, string>).itemSpacing = 'space/999'; return q; });
+    const targets = [{ def: id, plans: moved }];
+    const pre = await previewUpdate(w.host, targets);
+    const res = await applyUpdate(w.host, api as any, targets, previewHashOf(pre));
+    return { w, res, o: res.outcomes[0], v: applyVerdict(res) };
+  };
+  // THE FALLBACK LANDED: Google Sans refused, Roboto Medium written.
+  {
+    const { w, o, v } = await run(['Google Sans Medium']);
+    // The witness is the host's own label nodes, never the update's report.
+    const labels = labelsOf(w.set()).map((l) => l.fontName as { family: string; style: string } | undefined);
+    ok(labels.length === 36 && labels.every((f) => f?.family === 'Roboto' && f.style === 'Medium'),
+      `fallback/premise written: the host's 36 Google labels hold Roboto Medium (${labels.length}; ${JSON.stringify(labels[0])})`);
+    ok(o.updated.length === 96 && JSON.stringify(o.fallbacks) === JSON.stringify([{ part: 'label', face: 'Google Sans Medium', used: 'Roboto Medium', count: 36 }]),
+      `fallback/reported: one fallback, 36 labels (${JSON.stringify(o.fallbacks)})`);
+    ok(!o.misses.some((x) => x.startsWith('label.font -> ')), `fallback/not a miss: no label font miss is left (${o.misses.filter((x) => x.startsWith('label.font')).length})`);
+    ok(v.lines.includes("sign-in-button: Google Sans Medium isn't installed, so 36 labels use Roboto Medium, as the component allows.")
+      && !v.lines.some((l) => l.includes('not written as planned') && l.includes('.font ->')),
+      `fallback/line: one line for the font, none "not written as planned" (${JSON.stringify(v.lines.filter((l) => l.includes('font') || l.includes('Google')))})`);
+    // The harness's provider logo is a stand-in with no size, so the mark's aspect lock is the set's one other finding
+    // (as in `tint` above): the set is still to check for that, and for nothing about its font.
+    ok(!v.causes.some((c) => c.reasons.some((r) => r.includes('Google Sans') || r.includes('label.font'))),
+      `fallback/not to check: no cause names the font (${JSON.stringify(v.causes.flatMap((c) => c.reasons.filter((r) => r.includes('font')))).slice(0, 300)})`);
+  }
+  // THE FALLBACK DID NOT LAND EITHER: both faces refused. Each label is a real miss, and none reads as a fallback.
+  {
+    const { o, v } = await run(['Google Sans Medium', 'Roboto Medium']);
+    // THE FORM IS THE EXECUTOR'S (#4358): every label face miss the real executor reported, matched on the part and the
+    // face alone, starts with `fontMissHead`, so the head `splitFontFallbacks` keys on is the one the executor writes.
+    // Mutation: `fontMissHead` worded without `REFUSED` (the form before #4358) → `fallback/miss form`.
+    const named = o.misses.filter((x) => x.startsWith('label.font -> Google Sans Medium ') || x.startsWith('label.font -> Roboto Medium '));
+    ok(named.length === 108 && named.every((x) => x.startsWith(fontMissHead('label', 'Google Sans Medium')) || x.startsWith(fontMissHead('label', 'Roboto Medium'))),
+      `fallback/miss form: the executor's 108 label font misses each start with fontMissHead (${named.length}; ${named[0]})`);
+    const face = o.misses.filter((x) => x.startsWith(fontMissHead('label', 'Google Sans Medium'))).length;
+    const back = o.misses.filter((x) => x.startsWith(fontMissHead('label', 'Roboto Medium'))).length;
+    // Each label reports its face twice (the literal's load, then the text write's load of the face it still holds).
+    ok(face === 72 && back === 36 && !o.fallbacks,
+      `fallback/miss kept: 72 face misses and 36 fallback misses stay misses, no fallback reported (${face}, ${back}, ${JSON.stringify(o.fallbacks)})`);
+    const line = v.lines.find((l) => l.startsWith('sign-in-button: ') && l.includes('not written as planned')) ?? '';
+    ok(Number(line.match(/^sign-in-button: (\d+) parts not written as planned/)?.[1] ?? 0) >= 108
+      && !v.lines.some((l) => l.includes("isn't installed")) && v.headline.startsWith('⚠') && v.lines.includes('To check: sign-in-button. The lines above say what differs on each.'),
+      `fallback/miss line: the 108 font misses read as parts not written, the set to check, no fallback line (${v.headline}; ${line.slice(0, 200)})`);
+  }
+  // THE FALLBACK LOADED BUT WAS NOT KEPT: Google Sans refused, Roboto Medium loads, and the host keeps the face the label
+  // already holds when the executor writes Roboto (no throw). The face misses must stay misses: "uses Roboto Medium"
+  // would be false. Mutation: the `DISCARDED` clause of `notLanded` dropped → `fallback/discarded kept`.
+  {
+    const { o, v } = await run(['Google Sans Medium'], (l) => {
+      let held = l.fontName;
+      Object.defineProperty(l, 'fontName', { configurable: true, enumerable: true, get: () => held, set: (f: { family: string }) => { if (f.family !== 'Roboto') held = f; } });
+    });
+    const gone = o.misses.filter((x) => x.startsWith('label.literalFont -> DISCARDED (set Roboto Medium ')).length;
+    const face = o.misses.filter((x) => x.startsWith(fontMissHead('label', 'Google Sans Medium'))).length;
+    ok(gone === 36 && face >= 36 && !o.fallbacks && !v.lines.some((l) => l.includes("isn't installed")),
+      `fallback/discarded kept: 36 discarded Roboto writes keep every face miss a miss, no fallback line (${gone}, ${face}, ${JSON.stringify(o.fallbacks)})`);
+  }
+  // THE FALLBACK'S WRITE THREW: Google Sans refused, Roboto Medium loads, the font lands but the size write throws. The
+  // miss names the fallback through `literalFont ->` alone (the size already read as planned, so no DISCARDED), and the
+  // face misses stay misses. Mutation: the `literalFont -> <fallback>` clause of `notLanded` dropped → `fallback/thrown kept`.
+  {
+    const { o, v } = await run(['Google Sans Medium'], (l) => {
+      const size = l.fontSize;
+      Object.defineProperty(l, 'fontSize', { configurable: true, enumerable: true, get: () => size, set: () => { throw new Error('fontSize is read-only here'); } });
+    });
+    const thrown = o.misses.filter((x) => x.startsWith('label.literalFont -> Roboto Medium ')).length;
+    const gone = o.misses.filter((x) => x.startsWith('label.literalFont -> DISCARDED')).length;
+    ok(thrown === 36 && gone === 0 && !o.fallbacks && !v.lines.some((l) => l.includes("isn't installed")),
+      `fallback/thrown kept: 36 thrown Roboto writes, none read as discarded, keep every face miss a miss, no fallback line (${thrown}, ${gone}, ${JSON.stringify(o.fallbacks)})`);
+  }
+  // ONE PART: the singular form of the line. Mutation: the verb swapped → `fallback/line one`.
+  ok(fallbackLine('sign-in-button', { part: 'label', face: 'Google Sans Medium', used: 'Roboto Medium', count: 1 })
+    === "sign-in-button: Google Sans Medium isn't installed, so 1 label uses Roboto Medium, as the component allows.",
+    `fallback/line one: one label reads in the singular (${fallbackLine('sign-in-button', { part: 'label', face: 'Google Sans Medium', used: 'Roboto Medium', count: 1 })})`);
+}
+
+// #4067, THE SAME RUN: ONE SUMMARY GAVE THREE SET COUNTS, "6 sets updated" (Update file's run line, from the in-place
+// pass's progress: the sets whose members it writes), "Updated 44 sets · 1 to check" (the verdict, which counted every set
+// given that was not refused, stopped, off or idle, so also those with nothing to write) and "Saved before Prism3 updated
+// 37 sets" (the version, the sets the check planned to write). A set updated is now one thing, a set the run wrote to, and
+// the verdict carries its count (`sets`) for the run line. One plan, typed here: a set whose members are written, one whose
+// only work is its usage panel, one with nothing to write, and one with nothing to write that still differs from the plan,
+// which is the set to check. Mutations: `wroteTo` counting `asPreviewed` again → `counts/headline`, `counts/sets`; the To
+// check line dropped → `counts/to check named`, `fallback/miss line`.
+section('counts — one run gives one count of sets updated, and names the set to check (#4067)');
+{
+  const base = { updated: [] as string[], added: 0, renamed: 0, deprecated: [] as string[], skipped: [], kept: [], unrecorded: [], handEdits: 'keep' as const, identity: [] as string[], content: [] as string[], misses: [] as string[] };
+  const planned = [{ set: 'tag' }, { set: 'badge' }];
+  const version = `Saved before Prism3 updated ${planned.length} sets`;
+  const res = {
+    outcomes: [
+      { ...base, def: 'tag', set: 'tag', updated: ['a', 'b'] },
+      { ...base, def: 'badge', set: 'badge', furniture: { labels: 0, backdrops: 0, clear: 0, panels: 1 } as never },
+      { ...base, def: 'divider', set: 'divider', asPreviewed: { line: 'divider: up to date.', upToDate: true } },
+      { ...base, def: 'link', set: 'link', content: ['link/label.fills: a (the plan says b)'], asPreviewed: { line: 'link: 1 to update.', upToDate: false } },
+    ],
+    refused: [], missing: [], version,
+  } as never;
+  const v = applyVerdict(res);
+  ok(v.headline.startsWith(`⚠ Updated ${planned.length} sets · 1 to check`), `counts/headline: the sets written to, the planned 2 (${v.headline})`);
+  ok(v.sets === planned.length, `counts/sets: the verdict carries the same count for the run line (${v.sets})`);
+  ok(v.lines.includes(`Saved a version first: "${version}".`), `counts/version: the version names the same 2 (${JSON.stringify(v.lines.slice(-2))})`);
+  ok(v.lines.includes('To check: link. The lines above say what differs on each.'), `counts/to check named: the set to check, by name (${JSON.stringify(v.lines)})`);
 }
 
 /* ── updates off (#2956) ──────────────────────────────────────────────────────────────────────────────── */

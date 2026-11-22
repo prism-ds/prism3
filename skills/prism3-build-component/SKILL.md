@@ -130,7 +130,8 @@ identity (`id`, `name`, `aliases`, `category`, `status`), `inherits` where the d
 (`paintKeys`, `densitySpacing`, `visibleGaps`), `tokens`, `anatomy`, `figmaProperties`, `accessibility`, `content`, `docs`, `ai`,
 `composition`, `motion` and `notes`. `summary` comes before `description`. Button's factory and the Icon
 button factory write them the other way round; do not copy that (#2712). Which keys to write empty is still open there; the one empty
-value that is already a statement is `figmaProperties.booleans` (§6).
+value that is already a statement is `figmaProperties.booleans` (§6). Never write `brandGlyphs`: `applyIconMap`
+attaches it from the brand input's icon art (#3076).
 
 ### What ships, and who reads it
 
@@ -525,7 +526,7 @@ library. Its `ai.whenToUse` opens with one of two wordings: "Only as a child of 
 (Q394): a designer inserts it from the assets panel, which works only for a published set, so it stays
 unprefixed even where its `ai.whenToUse` says "Only as a child of …". The slot items are `tab-item`,
 `list-item`, `segmented-control-segment`, `breadcrumb-item`, `pagination-item`, `page-nav-item`,
-`code-input-cell` and `radio-row`. The checkbox and radio controls (`checkbox-control`,
+`step-item`, `code-input-cell`, `radio-row` and `menu-item`. The checkbox and radio controls (`checkbox-control`,
 `radio-control`) stay unprefixed because they may be used on their own.
 
 **Figma property names are lowercase (owner decision Q345).** Every name a designer reads in the
@@ -921,11 +922,18 @@ skill-only change like this file needs no note.
 guaranteed **token-name** surface only. A component id, prop name or variant value is not a
 token name, so binding existing roles leaves `CONTRACT_VERSION` unmoved.
 
-The component-API surface has its own decided direction: a distinct `COMPONENT_CONTRACT_VERSION`
-(#1325 Option 3, #1326 decision 3), MAJOR/MINOR by add-versus-rename, evolved from the
-component-surface baseline. **The direction is settled; the mechanism is a separate follow-up arc
-and does not exist in code today** — do not stamp a component-contract version or gate against
-one until that arc builds it.
+The component-API surface has its own two versions (#1325, owner decision Q-CC1 A), both in
+`packages/engine/version.ts`. `COMPONENT_CONTRACT_VERSION` covers the **component contract**: each
+def's id and name, status, props (type, required, default, values), states, variant axes and
+values, and slots. `COMPONENT_SCHEMA_VERSION` covers the **component schema**, the shape of one
+published entry. Say "component contract" or "token contract", never a bare "contract".
+
+`npx tsx packages/engine/component-contract.ts --check` fails when a def moves that surface, and
+names each change with its class: a removed or renamed name is MAJOR, an added one MINOR, a moved
+default PATCH (`docs/30` has the full table). A new def is a MINOR. Raise
+`COMPONENT_CONTRACT_VERSION` by that increment in the same PR, then run
+`npx tsx packages/engine/component-contract.ts --accept`, which refuses until the number is high
+enough. Like `CONTRACT_VERSION`, you raise this number yourself; the fold does not assign it.
 
 ## Before you finish
 

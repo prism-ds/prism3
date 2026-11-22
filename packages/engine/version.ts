@@ -726,7 +726,64 @@ export const ENGINE_VERSION = '0.239.0';
  * (`motion.brand.*`) is not on the surface: no corpus member emits it. A MAJOR (#4165 with #1421) is being batched
  * separately and is not part of this raise.
  */
-export const CONTRACT_VERSION = '15.2.0';
+/**
+ * 15.3.0 (owner OD-A3 A on #4110, 2026-11-19; name OD-A3.1 A, 2026-11-20): MINOR. `icon.size.2xl` (64px) joins the
+ * guaranteed surface: Avatar's x-large size. Avatar binds the icon ladder at its other four sizes, so the one new step
+ * extends that ladder past the control rungs it pairs with (`ICON_PAIRED` in `scale.ts`). One added path; an added path
+ * cannot break a reference. Nothing is removed or retyped.
+ */
+/**
+ * 15.4.0 (#3510, owner Q-SP1 E, 2026-11-18): MINOR. Each spring joins the guaranteed surface as a pair CSS can play:
+ * `motion.spring-easing.{snappy,gentle,bouncy}`, the spring sampled into a CSS `linear()` curve (a custom
+ * `linearEasing` type, since DTCG has none for it), and `motion.spring-duration.{snappy,gentle,bouncy}`, the time
+ * the spring takes to settle, a DTCG `duration`. Both come from `spring.ts`. Six added paths; an added path cannot
+ * break a reference. Nothing is removed or retyped: `motion.spring.*` keeps its damping and stiffness.
+ */
+export const CONTRACT_VERSION = '15.4.0';
+
+/**
+ * THE COMPONENT VERSIONS (#1325 Option 3, #1326 decision 3, owner decision Q-CC1 A, 2026-11-18). Two more numbers,
+ * after Nathan Curtis's *Component Contracts and Schemas*: a component CONTRACT is one component's spec as data, a
+ * component SCHEMA is the model a contract is written in, and the two are versioned apart from each other and from
+ * the token contract above.
+ *
+ *  - `COMPONENT_SCHEMA_VERSION`   — "can my reader still parse a component contract?" The model: the published shape of
+ *                                   one component's entry, as `schema/component-defs.schema.json` states it. Its
+ *                                   MAJOR.MINOR is that schema's `$id` and the export's `format`
+ *                                   (`prism3-component-defs/<major>.<minor>`); a PATCH is reserved, since a wording-only
+ *                                   edit to the schema moves no shape and needs no bump.
+ *  - `COMPONENT_CONTRACT_VERSION` — "can my file and my code still resolve the component API they reference?" The
+ *                                   guaranteed component-API surface: each def's id and name, its props (name, type,
+ *                                   required, default, values), its states, its variant axes and values, and its
+ *                                   slots.
+ *
+ * Neither is `CONTRACT_VERSION`: a component consumer and a token consumer hold different names, and one number for
+ * both would cry wolf at each of them for the other's changes (#1325 Option 2, rejected).
+ *
+ * Both are gated by `component-contract.ts --check` against `schema/component-contract.json`, which only
+ * `component-contract.ts --accept` writes, and only after the version the diff needs is raised here. The bump classes
+ * are in that file's header and in `docs/30`. Like `CONTRACT_VERSION`, a PR raises these itself, in the PR that moves
+ * the surface; the fold does not assign them.
+ *
+ * 1.0.0 (the contract): the first baseline, every registered def recorded whatever its `status`.
+ * 1.4.0 (the schema): starts at the shape the export already declared, `prism3-component-defs/1.4`, so the number
+ * a consumer has been reading does not move under them.
+ * 1.1.0 (the contract, MINOR): `tag-group` added, a component main registered after the first baseline was cut, and
+ *   `dialog`'s `hideTitle` prop added (#4057).
+ * 1.5.0 (the schema, MINOR): #4074's `prism3-component-defs/1.5`, the button's `borderWeight` setting added.
+ * 1.2.0 (the contract, MINOR): `popover` added (#4252).
+ * 2.0.0 (the contract, MAJOR): `dialog`'s `size` variant axis removed (#4091, #3392 A: a width-only size is no variant).
+ * 1.6.0 (the schema, MINOR): #4099's `prism3-component-defs/1.6`, the `docs.implementation` field added.
+ * 2.1.0 (the contract, MINOR): `skeleton` added (#4295).
+ * 2.2.0 (the contract, MINOR): `menu`, `menu-item` and `menu-group` added (#4260).
+ * 2.3.0 (the contract, MINOR): `tooltip` added (#4251).
+ * 1.7.0 (the schema, MINOR): #4096's `prism3-component-defs/1.7`, the optional brand `icons` map added.
+ * 2.4.0 (the contract, MINOR): `steps` and `step-item` added (#4341).
+ * 2.5.0 (the contract, MINOR): `avatar` added, and the icon's `person` and `organization` names (#4345).
+ * 2.6.0 (the contract, MINOR): `toggle-button` and `toggle-icon-button` added (#4353).
+ */
+export const COMPONENT_SCHEMA_VERSION = '1.7.0';
+export const COMPONENT_CONTRACT_VERSION = '2.6.0';
 
 /** A guaranteed path that was removed, and where its consumers should point instead. */
 export type Deprecation = {

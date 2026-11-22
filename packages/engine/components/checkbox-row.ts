@@ -151,7 +151,7 @@ export const checkboxRow: ComponentDef = {
   inherits: 'text-field',
   summary: 'Labeled checkbox for a staged on/off choice. The whole row is the hit target.',
   description:
-    'A control for an independent binary choice that is staged into a form and submitted — on/off, included/excluded, agreed/not — optionally one of many in a set. The labeled row: control and rich-content label, with the whole row as the hit target. Carries the indeterminate (mixed) visual state for select-all hierarchy, which no sibling control has. Not an immediate-effect toggle (Switch.Row), not a mutually-exclusive one-of-many (Radio.Group), not an action with a pressed state (a toggle button, not built yet).',
+    'A control for an independent binary choice that is staged into a form and submitted — on/off, included/excluded, agreed/not — optionally one of many in a set. The labeled row: control and rich-content label, with the whole row as the hit target. Carries the indeterminate (mixed) visual state for select-all hierarchy, which no sibling control has. Not an immediate-effect toggle (Switch.Row), not a mutually-exclusive one-of-many (Radio.Group), not an action with a pressed state (ToggleButton).',
 
   // THE DELTA ONLY (brief §3, §15). The form-field substrate — `description`/helper, `error`, the
   // aria-describedby wiring, `name`, `id`, `required`, `disabled`, `readOnly`, `onFocus`/`onBlur` — is
@@ -167,7 +167,7 @@ export const checkboxRow: ComponentDef = {
     { name: 'defaultChecked', type: 'boolean', default: false, required: false, description: 'Uncontrolled initial value. Never true for a consent checkbox — pre-checked consent is a dark pattern and, for marketing consent, often unlawful.' },
     { name: 'indeterminate', type: 'boolean', default: false, required: false, description: 'The mixed visual state — dash glyph, aria-checked="mixed". Presentational: the underlying value is still true/false, and this is for parent/child select-all hierarchy only, never a third state a user can click to. There is no indeterminate HTML attribute — it is a DOM property (node.indeterminate = true), which is the single most common checkbox bug; in React apply it through a synchronous ref callback rather than a JSX prop.' },
     { name: 'label', type: 'node', required: false, description: 'Rich content: a node, not a string. The substrate\'s label is a string above the field; this one sits inline-end, doubles as the hit target, and must be able to hold a link, because the single most common real checkbox label is a consent line with one in it ("I agree to the Terms of Service"). A standalone control with no label is checkbox-control, which then requires an external aria-label/aria-labelledby.' },
-    { name: 'description', type: 'node', required: false, description: 'Optional helper beneath the label, describedby-wired — the detail that qualifies the choice without lengthening the label.' },
+    { name: 'description', type: 'node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the label: the detail that qualifies the choice without lengthening the label.' },
     { name: 'onChange', type: '(checked: boolean, event) => void', required: false, description: 'Restated rather than inherited: the substrate\'s change yields a string, this one yields the resulting boolean alongside the event.' },
     { name: 'value', type: 'string', required: false, description: 'The string submitted when checked (the platform default is "on"), and the element this row contributes to a Checkbox.Group\'s array. An unchecked box submits nothing at all rather than a false value — the missing-key trap.' },
     { name: 'disabled', type: 'boolean', default: false, required: false, description: 'Native disabled: removed from the tab order, not submitted, contrast-exempt. Disables the whole row: the nested control takes its disabled skin and the label dims. Reserve for an option that does not apply in the current state.' },
@@ -618,7 +618,7 @@ export const checkboxRow: ComponentDef = {
     // Brief §12's alternatives that exist. `select` is NOT one — it is single-value, and the brief's
     // large-set alternative is a MULTI-select combobox or listbox (#1698); those and a selectable chip
     // are not built yet, so they sit in `planned`.
-    alternativeTo: ['switch-row', 'radio-row', 'text-field'],
+    alternativeTo: ['switch-row', 'radio-row', 'text-field', 'toggle-button'],
     replacesPatterns: [
       'a bare `<input type="checkbox">` with no label wiring',
       'a `role="checkbox"` div where a styled native input would do',
@@ -627,7 +627,7 @@ export const checkboxRow: ComponentDef = {
     // pass here, which typed Switch and Combobox as `superseded-by`: they are sibling alternatives
     // chosen by intent and scale, not replacements. Carried so the corrected reading reaches the engine.
     supersededBy: [],
-    planned: ['form', 'toggle-button', 'combobox', 'listbox'],
+    planned: ['form', 'combobox', 'listbox'],
   },
 
   // Brief §8. The Row draws no motion of its own; the glyph transition belongs to the nested control.

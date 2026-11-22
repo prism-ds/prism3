@@ -39,10 +39,10 @@ import { ComponentDef } from '../component-schema';
 import { BUTTON_SPACING } from '../button-spacing';
 
 /** One size's spacing entries from `BUTTON_SPACING`, spread beside that size's height and type. */
-const BUTTON_SPACING_AT = Object.fromEntries(['small', 'medium', 'large'].map((sz) =>
+export const BUTTON_SPACING_AT = Object.fromEntries(['small', 'medium', 'large'].map((sz) =>
   [sz, Object.fromEntries(Object.entries(BUTTON_SPACING).filter(([k]) => k.startsWith(`size.${sz}.`)))])) as Record<string, Record<string, string>>;
 
-type IntentFamily = 'primary' | 'neutral' | 'destructive';
+export type IntentFamily = 'primary' | 'neutral' | 'destructive';
 
 /**
  * The per-family PAINT (docs/20), authored ONCE and called per component — #1223 split the three
@@ -58,7 +58,7 @@ type IntentFamily = 'primary' | 'neutral' | 'destructive';
  * `disabled.*` is cross-cutting (intent-independent, docs/20 §7) and lives in the shared token block, not
  * here — its identity across all three components is the whole reason the split loses no coverage.
  */
-const intentTokens = (family: IntentFamily): Record<string, string> => ({
+export const intentTokens = (family: IntentFamily): Record<string, string> => ({
   // filled — interactive fill + on-fill ink
   'filled.fill': `color.interactive.${family}.fill.rest`,
   'filled.fill.hover': `color.interactive.${family}.fill.hover`,
@@ -776,7 +776,8 @@ const makeButton = (id: string, name: string, summary: string, description: stri
       'Set `surface=inverse` for a button on a dark or brand-filled band, so its fill, ink, border and disabled treatment bind the inverse counterparts instead of losing contrast against the flipped ground',
       // #2350 (owner Q143) — DRAFT words, for the owner.
       'Set inset=flush on a button at appearance=text that starts, ends or centers a row of content, so its label lines up with the content edge; give it `padding-inline: 0` and no `min-inline-size`, and, at medium and large sizes, extend its hit area to at least 44×44px with a transparent `::before` inset outward and centered on the label, so the target clears 44px while the box stays label-width; extend it the same way to at least 24×24px at small',
-      'Use isInactive (focusable) for a control blocked by satisfiable state; reserve disabled for the irrelevant',
+      // #4204 (owner decision 2 a) — the one place "inactive" and "disabled" are defined; Counter and Pagination reuse the words. DRAFT.
+      'Use isInactive for a control the user can still unblock, such as Submit on an unfinished form; it stays focusable and says why. Use disabled only when the control doesn\'t apply right now',
       ...sibling.do,
     ],
     implementation: [
@@ -811,10 +812,10 @@ const makeButton = (id: string, name: string, summary: string, description: stri
     // #3555 Q-MD14 A: one line per sibling, in the imperative register every def's primaryPurpose takes.
     primaryPurpose: { primary: 'Trigger an action in place, in the brand\'s primary style.', destructive: 'Trigger an action in place that deletes or removes something.', neutral: 'Trigger an action in place that carries no brand emphasis.' }[family],
     whenToUse: 'The user needs to act on this surface — submit, confirm, open, apply, or start async work.',
-    avoidWhen: `The target is a different location/URL → use Link (or give the button an \`href\`, which renders an \`<a>\`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use a toggle button (not built yet). Icon-only with no visible text → use ${ICON_BUTTON_OF[family]} (the accessible name is required there at the type level). ${sibling.avoidWhen}`,
+    avoidWhen: `The target is a different location/URL → use Link (or give the button an \`href\`, which renders an \`<a>\`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use ToggleButton. Icon-only with no visible text → use ${ICON_BUTTON_OF[family]} (the accessible name is required there at the type level). ${sibling.avoidWhen}`,
     // #1697 — `spinner` (the pending state swaps it in, #1670) and `focus-ring` (every focus-visible member
     // nests it) are the two components this one always builds with, beside the icon in its slots.
-    commonPartners: ['icon', 'spinner', 'focus-ring', 'button-group', 'popover'],
+    commonPartners: ['icon', 'spinner', 'focus-ring', 'button-group', 'popover', 'menu', 'tooltip'],
     triggerKeywords: sibling.triggerKeywords,
     generationPriority: sibling.generationPriority,
   },
@@ -825,8 +826,8 @@ const makeButton = (id: string, name: string, summary: string, description: stri
     composesWith: ['focus-ring', 'spinner'],
     // #1697 — each sibling points at the icon-button of its OWN family, so the destructive button's
     // icon-only alternative is the destructive icon-button rather than the primary one.
-    alternativeTo: [family === 'primary' ? 'icon-button' : `icon-button-${family}`, 'switch-row', ...(family === 'primary' ? ['tag', 'link'] : [])],
-    planned: ['tooltip', 'menu', 'toggle-button', 'split-button'],
+    alternativeTo: [family === 'primary' ? 'icon-button' : `icon-button-${family}`, 'switch-row', ...(family === 'primary' ? ['tag', 'link'] : []), ...(family === 'destructive' ? [] : ['toggle-button'])],
+    planned: ['split-button'],
     replacesPatterns: ['input[type=button|submit]', '`div[role=button]`'],
   },
 
