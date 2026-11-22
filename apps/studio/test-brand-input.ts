@@ -15,7 +15,7 @@ import { brandTheme, resolveAllModes, type BrandInput } from '@prism3/engine';
 import { EXAMPLE_BRANDS_JSON as exampleBrands } from '@prism3/engine';
 import * as store from './src/state/store';
 import * as B from './src/state/brand-input';
-import { MODE_REFS } from './src/state/name-refs';
+import { MODE_REFS, paletteRemovalEffects } from './src/state/name-refs';
 
 let executed = 0, failed = 0;
 const ok = (cond: boolean, label: string): void => {
@@ -25,7 +25,16 @@ const ok = (cond: boolean, label: string): void => {
   console.error(`  ✗ ${label}`);
 };
 const prism3 = (exampleBrands as Record<string, BrandInput>).prism3;
-const reset = (): void => store.initSession(structuredClone(prism3), { kind: 'example', id: 'prism3' });
+/** The default theme without Brand B (#1729), its one custom mode: sections 3b and 4 build their custom modes from
+ *  none, so their names and counts are the ones typed below. Section 6 works on the default theme as it ships. */
+const withoutBrandB = (b: BrandInput): BrandInput => {
+  const { customModes: _c, modePalettes: _p, modeLevers: _l, ...rest } = structuredClone(b);
+  // Brand B's own surfaces (its snapshot of light's, #1946) go with it: no mode reads them once it is gone.
+  const { 'brand-b': _s, ...surfaces } = (rest.surfaces ?? {}) as Record<string, unknown>;
+  return { ...rest, ...(rest.surfaces ? { surfaces: surfaces as BrandInput['surfaces'] } : {}), brandColors: (rest.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
+};
+const reset = (): void => store.initSession(withoutBrandB(prism3), { kind: 'example', id: 'prism3' });
+const resetShipped = (): void => store.initSession(structuredClone(prism3), { kind: 'example', id: 'prism3' });
 const takes = (): boolean => { try { brandTheme(structuredClone(store.brandState)); return true; } catch { return false; } };
 
 console.log('\n1. The namespace (T2)');
@@ -125,9 +134,11 @@ const PROMISED = ['overrides', 'modeLevers', 'modeAnchors', 'surfaces', 'outline
 const rows = MODE_REFS.map((r) => r.field.replace(/\.<mode>$/, ''));
 ok(PROMISED.every((k) => rows.includes(k)), `#1946: each promised snapshot field is a mode row of name-refs (rows: ${rows.join(', ')})`);
 const SNAPSHOT = [...new Set([...PROMISED, ...rows])];
-// modeLevers.light is the one entry light cannot hold (the engine refuses it, above), so it alone may stay unset.
-const unset = SNAPSHOT.filter((k) => b2[k]?.light === undefined && k !== 'modeLevers');
-ok(unset.length === 0, `#1946: light carries an entry in every snapshot field but modeLevers, so a dropped copy would show (unset: ${unset.join(', ') || 'none'})`);
+// modeLevers.light and modePalettes.light are the entries light cannot hold (the engine refuses both: light's levers are
+// the brand-wide ones, and light is the baseline a palette swap moves away from, #1729), so they alone may stay unset.
+// modePalettes' copy is held in 3d instead, from dark.
+const unset = SNAPSHOT.filter((k) => b2[k]?.light === undefined && k !== 'modeLevers' && k !== 'modePalettes');
+ok(unset.length === 0, `#1946: light carries an entry in every snapshot field but modeLevers and modePalettes, so a dropped copy would show (unset: ${unset.join(', ') || 'none'})`);
 const lightInput = JSON.stringify(SNAPSHOT.map((k) => b2[k]?.light ?? null));
 const added = B.addCustomMode();
 const copied = (): string => JSON.stringify(SNAPSHOT.map((k) => b2[k]?.[added] ?? null));
@@ -154,15 +165,19 @@ const b3 = store.brandState as unknown as Record<string, Record<string, unknown>
 const dstep = store.theme.palettes.find((p) => p.palette === 'primary')!.steps[3];
 b3.overrides = { dark: { 'text.link.default': { palette: 'primary', step: dstep.key } } };
 b3.modeLevers = { dark: { density: 'compact' } };
+// A palette swap in dark (#1729's modePalettes, a mode row since the merge with #1946): light cannot hold one, so dark's
+// is where its copy is checked.
+b3.modePalettes = { dark: { primary: 'accent' } };
 b3.surfaces = { light: { base: 50 }, dark: { base: 900 } };
 store.rebuild();
 ok(store.lastError === null, `dark carries per-mode input of its own (${store.lastError ?? 'no error'})`);
-const darkInput = JSON.stringify(['overrides', 'modeLevers', 'surfaces'].map((k) => b3[k]?.dark ?? null));
+const DARK_FIELDS = ['overrides', 'modeLevers', 'modePalettes', 'surfaces'];
+const darkInput = JSON.stringify(DARK_FIELDS.map((k) => b3[k]?.dark ?? null));
 const fromDark = B.addCustomMode('dark');
 ok(fromDark === 'custom-1' && JSON.stringify(store.brandState.customModes) === '[{"name":"custom-1","base":"dark"}]',
   `#1946 O1 B: a custom mode created from Dark records dark as where it started (${JSON.stringify(store.brandState.customModes)})`);
-ok(JSON.stringify(['overrides', 'modeLevers', 'surfaces'].map((k) => b3[k]?.['custom-1'] ?? null)) === darkInput,
-  `#1946 O1 B: it holds a copy of dark's per-mode input, not light's (${JSON.stringify(['overrides', 'modeLevers', 'surfaces'].map((k) => b3[k]?.['custom-1'] ?? null))})`);
+ok(JSON.stringify(DARK_FIELDS.map((k) => b3[k]?.['custom-1'] ?? null)) === darkInput,
+  `#1946 O1 B: it holds a copy of dark's per-mode input, not light's (${JSON.stringify(DARK_FIELDS.map((k) => b3[k]?.['custom-1'] ?? null))})`);
 store.rebuild();
 const pageOf = (m: string): string | null => resolveAllModes(brandTheme(structuredClone(store.brandState))).find((r) => r.mode === m)?.roles['background.primary']?.path ?? null;
 ok(store.lastError === null && pageOf('custom-1') === pageOf('dark') && pageOf('custom-1') !== pageOf('light'),
@@ -246,6 +261,26 @@ for (const [a, b] of [['soft', 'sharp'], ['dense', 'generous'], ['calm', 'energe
   }
 }
 ok(B.PERSONALITY_ORDER_LINE.length > 0 && B.PERSONALITY_ORDER_LINE.length <= 90, `#3976 the order line is one line of at most 90 characters (${B.PERSONALITY_ORDER_LINE.length})`);
+
+console.log('\n6. Brand B, the default theme\'s custom mode (#1729)');
+// The default theme ships one custom mode, brand-b, with a palette swap and a per-mode font. Renaming it carries both
+// per-mode keys to the new name; removing it takes both out, and the engine still builds. Names and keys typed here.
+resetShipped();
+ok(JSON.stringify(B.customModes()) === '[{"name":"brand-b","base":"light"}]' && takes(), `#1729 the default theme ships brand-b, built on light (${JSON.stringify(B.customModes())})`);
+ok(B.renameCustomMode(0, 'second') && takes()
+  && JSON.stringify(Object.keys(store.brandState.modePalettes ?? {})) === '["second"]' && JSON.stringify(Object.keys(store.brandState.modeLevers ?? {})) === '["second"]',
+  `#1729 renaming brand-b carries its palette swap and its font to the new name (${JSON.stringify({ modePalettes: store.brandState.modePalettes, modeLevers: Object.keys(store.brandState.modeLevers ?? {}) })})`);
+resetShipped();
+B.removeCustomMode(0);
+ok(store.brandState.customModes === undefined && store.brandState.modePalettes === undefined && store.brandState.modeLevers === undefined && takes(),
+  `#1729 removing brand-b takes its palette swap and its font with it, and the engine still builds (${JSON.stringify({ modePalettes: store.brandState.modePalettes, modeLevers: store.brandState.modeLevers })})`);
+
+// The removal confirm names the mode as the mode control shows it, "Brand B", never the slug `brand-b` (owner decision
+// 2026-11-19 on #4269). The line is typed here, not read from `name-refs.ts` or the label rule.
+resetShipped();
+const swapLines = paletteRemovalEffects(structuredClone(store.brandState), 'brand-b-accent').filter((l) => l.includes('swapped'));
+ok(JSON.stringify(swapLines) === JSON.stringify(['In Brand B, accent is no longer swapped for brand-b-accent.']),
+  `#1729 removing brand-b-accent confirms "In Brand B, accent is no longer swapped for brand-b-accent." (${JSON.stringify(swapLines)})`);
 
 console.log(`\n${executed - failed}/${executed} brand-input assertions passed.`);
 if (failed) process.exit(1);
