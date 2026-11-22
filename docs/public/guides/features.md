@@ -22,7 +22,7 @@ What each Prism3 surface can do. The ecosystem diagram (`docs/public/ecosystem/`
 | Import a `design.md` brief | ✓ | ✓ | – | ✓ `theme_from_brief` |
 | Export a `design.md` brief | ✓ <!-- src: apps/studio/src/main.ts:1416 --> | ✓ | – | – |
 
-<!-- src: apps/studio/src/shell/start.ts:167-226 --> <!-- src: packages/engine/mcp.ts:320-483 -->
+<!-- src: apps/studio/src/shell/start.ts:167-226 --> <!-- src: packages/engine/mcp.ts:320-485#121e0c8c -->
 
 ## Figma file
 
@@ -47,7 +47,7 @@ What each Prism3 surface can do. The ecosystem diagram (`docs/public/ecosystem/`
 | Write the Figma variable files to a folder | – | – | – | ✓ `export_theme` |
 | Score how generated UI used the tokens | – | – | – | ✓ `score_consumption` |
 
-<!-- src: packages/engine/mcp.ts:427-461 --> <!-- src: packages/engine/mcp.ts:370-405 -->
+<!-- src: packages/engine/mcp.ts:429-463#2d429c3c --> <!-- src: packages/engine/mcp.ts:372-407#171b17f0 -->
 
 TokenPress, a separate Figma plugin, exports any Figma file's variables and styles as DTCG token files. See [Export tokens](export-tokens.md#export-any-figma-file-with-tokenpress). <!-- src: apps/tokenpress/README.md:3#9efac648 -->
 
