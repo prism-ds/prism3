@@ -732,7 +732,14 @@ export const ENGINE_VERSION = '0.239.0';
  * extends that ladder past the control rungs it pairs with (`ICON_PAIRED` in `scale.ts`). One added path; an added path
  * cannot break a reference. Nothing is removed or retyped.
  */
-export const CONTRACT_VERSION = '15.3.0';
+/**
+ * 15.4.0 (#3510, owner Q-SP1 E, 2026-11-18): MINOR. Each spring joins the guaranteed surface as a pair CSS can play:
+ * `motion.spring-easing.{snappy,gentle,bouncy}`, the spring sampled into a CSS `linear()` curve (a custom
+ * `linearEasing` type, since DTCG has none for it), and `motion.spring-duration.{snappy,gentle,bouncy}`, the time
+ * the spring takes to settle, a DTCG `duration`. Both come from `spring.ts`. Six added paths; an added path cannot
+ * break a reference. Nothing is removed or retyped: `motion.spring.*` keeps its damping and stiffness.
+ */
+export const CONTRACT_VERSION = '15.4.0';
 
 /**
  * THE COMPONENT VERSIONS (#1325 Option 3, #1326 decision 3, owner decision Q-CC1 A, 2026-11-18). Two more numbers,
