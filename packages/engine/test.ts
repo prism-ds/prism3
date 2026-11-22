@@ -66,7 +66,7 @@ import { rtlNote, withMirrors } from './rtl-mirror';
 import { RTL_MIRRORED_GLYPHS, ICON_SOURCES } from './icon-set';
 import { docSections } from './component-doc-sections';
 import { validateComponentDef, VARIANT_AXES, axisKindOf, figmaPropertyErrors, figmaAxisNames, figmaVariantCount, variantAxisFigmaName, isExcludedCoordinate, fillPaintKey, replacesCandidates, statesOf, PAINT_SLOTS, ComponentDef, AnatomyDef, type PartDef } from './component-schema';
-import { figmaAnatomyPlan, figmaAnatomySet, planBindingErrors, planSetProperties, planSetLayout, planPartNames, planBoundVars, planPaintVars, planEffectStyles, planTextStyles, planToPluginJs, planSetToPluginJs, planSetChunks, settleChunks, stripPayloadComments, SET_CHUNK_BYTES, planComponentName, figmaVarName, figmaTextStyleName, figmaEffectStyleName, nestVariantMatch, swapMissAdvice, SWAP_TARGET_SLOT, SWAP_PLACEHOLDER, SWAP_NO_PROPERTY, applyControlShape, applyFieldStyle, applyTagStyle, applyDialogTitleSize, applyBannerStyle, applyCurrentIndicator, fieldStyleFor, applyWeightIntent, applyOutlineInteraction, applyButtonLayout, applySpacingDensity, applyMinWidthRatio, DEFAULT_BUTTON_LAYOUT, isButtonFamily, resolveWeightIntent, DEFAULT_WEIGHT_AVAILABILITY, PILL_RADIUS_RUNG, BOXED_RADIUS_RUNG, HAIRLINE_RADIUS_RUNG, CONTROL_SHAPE_RUNG, ROUNDED_RADIUS_RUNG, variantSetErrors, variantNameErrors, glyphLayerOpacities, applyNestOverrides, type AnatomyPlan, type SwapFound } from './anatomy-figma';
+import { figmaAnatomyPlan, figmaAnatomySet, planBindingErrors, planSetProperties, planSetLayout, planPartNames, planBoundVars, planPaintVars, planEffectStyles, planTextStyles, planToPluginJs, planSetToPluginJs, planSetChunks, settleChunks, stripPayloadComments, SET_CHUNK_BYTES, planComponentName, figmaVarName, figmaTextStyleName, figmaEffectStyleName, nestVariantMatch, swapMissAdvice, SWAP_TARGET_SLOT, SWAP_PLACEHOLDER, SWAP_NO_PROPERTY, applyControlShape, applyFieldStyle, applyTagStyle, applyDialogTitleSize, applyBannerStyle, applyCurrentIndicator, fieldStyleFor, applyWeightIntent, applyOutlineInteraction, applyButtonLayout, applySpacingDensity, applyMinWidthRatio, DEFAULT_BUTTON_LAYOUT, isButtonFamily, resolveWeightIntent, DEFAULT_WEIGHT_AVAILABILITY, PILL_RADIUS_RUNG, BOXED_RADIUS_RUNG, HAIRLINE_RADIUS_RUNG, CONTROL_SHAPE_RUNG, ROUNDED_RADIUS_RUNG, variantSetErrors, variantNameErrors, glyphLayerOpacities, applyNestOverrides, ICON_PLACEHOLDER, type AnatomyPlan, type SwapFound, type FigmaPropertyPlan } from './anatomy-figma';
 import type { ControlShape } from './scale';
 import { COMPONENT_RENAMES, coordKey, currentDefId, formerDefIds, partRenames, renameCoordinate, renameProperty, isDeclaredDrop, unaccounted as renamesUnaccounted, danglingTargets as renamesDangling, slotTextUnclaimed, slotTextMigrationOf, type ComponentRename, type AxesBaseline } from './component-renames';
 // One of the two imports this suite makes ACROSS the engine/plugin boundary, and the parity gate (#487 step 5)
@@ -958,6 +958,8 @@ const nbFixName = (n: string): string => nbVar(CORE_GROUPS.has(n.split('/')[0]) 
   // non-primary icon at the non-text bar (3:1, 4.5:1 in HC).
   const MODE_OF: Record<string, { family: 'light' | 'dark'; hc: boolean }> = {
     light: { family: 'light', hc: false }, dark: { family: 'dark', hc: false }, 'hc-light': { family: 'light', hc: true }, 'hc-dark': { family: 'dark', hc: true },
+    // prism3's Brand B (#1729), a custom mode built on light: light's bars.
+    'brand-b': { family: 'light', hc: false },
   };
   const barOf = (fam: 'text' | 'icon', ink: string, hc: boolean, icon31: boolean): number =>
     (fam === 'icon' && icon31) || ink === 'tertiary' ? (hc ? 4.5 : 3) : (hc ? 7 : 4.5);
@@ -1034,9 +1036,13 @@ const nbFixName = (n: string): string => nbVar(CORE_GROUPS.has(n.split('/')[0]) 
       const before = std.roles as Roles;
       const step = new RegExp(`\\.${pal}\\.(\\d+)$`).exec(before['background.tertiary'].path)?.[1];
       if (!step) { ok(false, `Q689 deeper floor: ${id} ${fam} — background.tertiary sits on no neutral step (${before['background.tertiary'].path})`); continue; }
-      const deeper: Theme = { ...theme, surfaces: { ...(theme.surfaces ?? {}), [fam]: { ...(theme.surfaces?.[fam] ?? {}), floorStep: Number(step) } } as Theme['surfaces'] };
-      const tertiary = before['background.tertiary'].hex;
       const famModes = modes.filter((m) => MODE_OF[m]?.family === fam);
+      // A custom mode reads its own `surfaces.<name>` since #1946 (a snapshot, not its base's live surfaces), so the
+      // deeper floor is set on each custom mode of the family too, or the sweep would hold it to a floor it never got.
+      const own = (theme.customModes ?? []).map((c) => c.name).filter((n) => famModes.includes(n));
+      const deeper: Theme = { ...theme, surfaces: { ...(theme.surfaces ?? {}),
+        ...Object.fromEntries([fam, ...own].map((k) => [k, { ...((theme.surfaces as Record<string, object> | undefined)?.[k] ?? {}), floorStep: Number(step) }])) } as Theme['surfaces'] };
+      const tertiary = before['background.tertiary'].hex;
       const r = missesOf(deeper, (all, mode, side) => side ? leverFloor(deeper)(all, mode, side) : tertiary, famModes);
       const after = resolveAllModes(deeper).find((m) => m.mode === fam)!.roles as Roles;
       const moved = INKS.filter((ink) => after[`text.${ink}`]?.hex !== before[`text.${ink}`]?.hex).length;
@@ -6651,6 +6657,99 @@ arm: {
     'C1(g): an empty customModes array produces byte-identical output (the primary guard)');
 }
 
+// BRAND B AND THE PER-MODE PALETTE SWAP (#1729, owner decision Q-BB1 A). Prism3, the default theme, carries a second
+// brand as the custom mode `brand-b` (built on light): `modePalettes` swaps primary and accent for Aurora's pair, and
+// `modeLevers.families` puts display and title on Aurora's display face. Expected values are WRITTEN here, never read
+// off the theme under test, so a lever that stops swapping fails by name rather than agreeing with itself (docs/34).
+{
+  const threw = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+  const prism3 = exampleBrands()['prism3'] as BrandInput;
+  const theme = brandTheme(prism3);
+  const modes = resolveAllModes(theme);
+  const bb = modes.find((r) => r.mode === 'brand-b');
+  const light = modes.find((r) => r.mode === 'light')!;
+  ok(JSON.stringify(theme.modes) === '["light","dark","hc-light","hc-dark","brand-b"]',
+    `#1729 prism3 declares brand-b after the four built-in modes (${JSON.stringify(theme.modes)})`);
+  ok(!!bb, '#1729 resolveAllModes resolves prism3\'s brand-b mode');
+
+  // (a) EVERY contrast contract passes in brand-b — each gated role, each second tier, each second pair — and no
+  // override warning is raised. The same three counts `buildTree` exits on, filtered to the one mode.
+  const failsIn = (mr: NonNullable<typeof bb>): string[] => [
+    ...Object.entries(mr.roles).filter(([, r]) => r.min > 0 && r.ratio < r.min).map(([k, r]) => `${k} ${r.ratio}<${r.min}`),
+    ...(mr.tierChecks ?? []).filter((c) => c.ratio < c.min).map((c) => `${c.role} on ${c.against} ${c.ratio}<${c.min}`),
+    ...Object.entries(mr.roles).filter(([, r]) => r.alsoAgainst).filter(([, r]) => {
+      const partner = mr.roles[r.alsoAgainst!.against];
+      return !partner || contrast(hexToRgb(r.hex), hexToRgb(partner.hex)) < r.alsoAgainst!.min;
+    }).map(([k]) => `${k} second pair`),
+  ];
+  const gated = Object.values(bb!.roles).filter((r) => r.min > 0).length;
+  ok(gated > 100 && failsIn(bb!).length === 0 && !(bb!.warnings ?? []).length,
+    `#1729 every contrast contract passes in brand-b (${gated} gated roles; failing: ${JSON.stringify(failsIn(bb!))}; warnings: ${JSON.stringify(bb!.warnings ?? [])})`);
+
+  // (b) The swap moves every role off Prism3's primary and accent: no brand-b role draws from either, and every
+  // role that draws from one in light draws from its replacement in brand-b.
+  const onPal = (path: string, pal: string): boolean => path.startsWith(`pds3.core.palette.${pal}.`);
+  const leftover = Object.entries(bb!.roles).filter(([, r]) => onPal(r.path, 'primary') || onPal(r.path, 'accent')).map(([k]) => k);
+  ok(leftover.length === 0, `#1729 no brand-b role draws from Prism3's primary or accent (left: ${JSON.stringify(leftover.slice(0, 5))})`);
+  const movedFromPrimary = Object.entries(light.roles).filter(([, r]) => onPal(r.path, 'primary')).map(([k]) => k);
+  const notMoved = movedFromPrimary.filter((k) => !onPal(bb!.roles[k]?.path ?? '', 'brand-b-primary'));
+  ok(movedFromPrimary.length > 30 && notMoved.length === 0,
+    `#1729 every one of light's ${movedFromPrimary.length} primary roles draws from brand-b-primary in brand-b (not: ${JSON.stringify(notMoved.slice(0, 5))})`);
+  ok(bb!.roles['interactive.primary.fill.rest']?.path === 'pds3.core.palette.brand-b-primary.550',
+    `#1729 brand-b's primary fill anchors on Brand B's own shade, brand-b-primary.550 (${bb!.roles['interactive.primary.fill.rest']?.path})`);
+
+  // (c) Nothing else moves: dropping the swap leaves light, dark and the high-contrast modes byte-identical.
+  const { modePalettes: _drop, ...unswapped } = prism3;
+  const plain = resolveAllModes(brandTheme(unswapped as BrandInput));
+  for (const m of ['light', 'dark', 'hc-light', 'hc-dark'])
+    ok(JSON.stringify(plain.find((r) => r.mode === m)?.roles) === JSON.stringify(modes.find((r) => r.mode === m)?.roles),
+      `#1729 the swap leaves ${m} untouched`);
+
+  // (d) The gradients follow the swap in brand-b, and only there: light's stops stay on Prism3's palettes.
+  const tree = buildTree(theme).tree.pds3;
+  const stopsIn = (g: string, m?: string): string => JSON.stringify((m ? tree.gradient[g].$extensions.prism3.modes?.[m]?.$value : tree.gradient[g].$value)?.map((st: { color: string }) => st.color));
+  ok(stopsIn('brand', 'brand-b') === '["{pds3.core.palette.brand-b-primary.600}","{pds3.core.palette.brand-b-accent.500}"]',
+    `#1729 the brand gradient in brand-b runs Brand B's primary to its accent (${stopsIn('brand', 'brand-b')})`);
+  ok(stopsIn('glow', 'brand-b') === '["{pds3.core.palette.brand-b-accent.400}","{pds3.core.palette.brand-b-primary.700}"]',
+    `#1729 the glow gradient in brand-b runs Brand B's accent to its primary (${stopsIn('glow', 'brand-b')})`);
+  ok(stopsIn('brand') === '["{pds3.core.palette.primary.600}","{pds3.core.palette.accent.500}"]',
+    `#1729 light's brand gradient keeps Prism3's stops (${stopsIn('brand')})`);
+  ok(JSON.stringify(Object.keys(tree.gradient.brand.$extensions.prism3.modes ?? {})) === '["brand-b"]',
+    `#1729 only brand-b carries a gradient mode entry (${JSON.stringify(Object.keys(tree.gradient.brand.$extensions.prism3.modes ?? {}))})`);
+
+  // (e) The display face: display and title on Clash Display in brand-b, with the mode's own description; body
+  // and the other categories stay Prism3's.
+  const fam = tree.core.font.family;
+  ok(fam.display.$extensions.prism3.modes?.['brand-b']?.$value === '{pds3.core.font.typeface.clash-display}'
+    && fam.title.$extensions.prism3.modes?.['brand-b']?.$value === '{pds3.core.font.typeface.clash-display}',
+    '#1729 display and title set in Clash Display in brand-b');
+  ok(fam.display.$extensions.prism3.modes?.['brand-b']?.description === 'font family — display → Clash Display',
+    `#1729 the brand-b family entry names its own face (${fam.display.$extensions.prism3.modes?.['brand-b']?.description})`);
+  ok(!fam.body.$extensions.prism3.modes?.['brand-b'] && !fam.eyebrow.$extensions.prism3.modes?.['brand-b'],
+    '#1729 body and eyebrow keep Prism3\'s faces in brand-b');
+
+  // (f) Radius, density and motion stay Prism3's: brand-b carries no per-mode value for any of them.
+  ok(!theme.dims.radiusByMode?.['brand-b'] && !theme.dims.sizesByMode?.['brand-b'] && !theme.motion.motionByMode?.['brand-b'] && !theme.motion.easingRolesByMode?.['brand-b'],
+    '#1729 radius, density and motion stay Prism3\'s in brand-b');
+
+  // (g) Validation, each refusal by name.
+  const swapBase = { id: 'mp', root: 'mp', primary: { l: 0.55, c: 0.18, h: 285 }, neutral: { hue: 285, chroma: 0.01 },
+    brandColors: [{ name: 'other', oklch: { l: 0.55, c: 0.12, h: 200 } }], customModes: [{ name: 'b', base: 'light' }] } as unknown as BrandInput;
+  const withSwap = (mp: unknown) => brandTheme({ ...swapBase, modePalettes: mp } as unknown as BrandInput);
+  ok(threw(() => withSwap({ light: { primary: 'other' } })).startsWith("modePalettes: 'light' is the baseline"), '#1729 a light swap is refused');
+  ok(threw(() => withSwap({ 'hc-light': { primary: 'other' } })).includes('generate-only'), '#1729 a generate-only mode swap is refused');
+  ok(threw(() => withSwap({ nope: { primary: 'other' } })).includes("mode 'nope' is not in this brand's modes"), '#1729 an unknown mode is refused');
+  ok(threw(() => withSwap({ b: { neutral: 'other' } })).includes("'neutral' is not a palette a mode can swap"), '#1729 swapping neutral is refused');
+  ok(threw(() => withSwap({ b: { primary: 'success' } })).includes("'success' is not a brandColors name"), '#1729 a replacement outside brandColors is refused');
+  ok(threw(() => withSwap({ b: { other: 'other' } })).includes('swaps the palette for itself'), '#1729 a self-swap is refused');
+
+  // (h) An empty swap map is byte-identical to none, and the lever survives the design.md round trip.
+  ok(JSON.stringify(buildTree(brandTheme(swapBase)).tree) === JSON.stringify(buildTree(withSwap({ b: {} })).tree),
+    '#1729 an empty modePalettes entry produces byte-identical output');
+  ok(JSON.stringify(parseDesignMd(toDesignMd(prism3)).input.modePalettes) === JSON.stringify(prism3.modePalettes),
+    `#1729 parseDesignMd(toDesignMd(prism3)) preserves modePalettes (${JSON.stringify(parseDesignMd(toDesignMd(prism3)).input.modePalettes)})`);
+}
+
 // #1946 (owner decision 2026-11-18, A): a custom mode is a SNAPSHOT. Its per-mode input lives under its own name,
 // copied from the mode it started from at creation; nothing reads the source's per-mode input again. So editing the
 // source, or turning it off, leaves the custom mode as it was, and `base` is kept as the record of where it started.
@@ -7408,8 +7507,9 @@ arm: {
     ['harbor', exampleTheme('harbor', () => brandTheme(exampleBrands()['harbor'] as BrandInput))],
     ['wendys', exampleTheme('wendys', () => brandTheme(standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input))],
   ]);
-  // 5 brands x 4 modes, a literal: a brand or a mode silently dropping out of the measurement fails the count.
-  const CELLS = 20;
+  // 5 brands x 4 modes, plus prism3's Brand B (#1729), a literal: a brand or a mode silently dropping out of the
+  // measurement fails the count.
+  const CELLS = 21;
   const measure = (a: string, b: string, floor: number): { measured: number; low: string[] } => {
     const low: string[] = [];
     let measured = 0;
@@ -7496,7 +7596,7 @@ arm: {
   // the page's INVERSE: near-black on the light and hc-light pages, near-white on dark and hc-dark (owner decision
   // Q2983.6 A, 2026-10-24, keeps it). Held per mode from literal luminance bands, so a fill that stopped inverting, or a near-black
   // that drifted grey, fails by cell; the ink on it is held at 4.5:1 by the contrast loop above.
-  const NEAR: Record<string, 'black' | 'white'> = { light: 'black', 'hc-light': 'black', dark: 'white', 'hc-dark': 'white' };
+  const NEAR: Record<string, 'black' | 'white'> = { light: 'black', 'hc-light': 'black', dark: 'white', 'hc-dark': 'white', 'brand-b': 'black' };   // brand-b: prism3's light-based Brand B (#1729)
   const offNeutral: string[] = [];
   let neutralCells = 0;
   for (const [brand, th] of themes) for (const m of resolveAllModes(th)) {
@@ -7800,7 +7900,7 @@ arm: {
       ['harbor', exampleTheme('harbor', () => brandTheme(exampleBrands()['harbor'] as BrandInput))],
       ['wendys', exampleTheme('wendys', () => brandTheme(standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input))],
     ]);
-    const CELLS = 20;
+    const CELLS = 21;   // 5 brands × 4 modes, plus prism3's Brand B (#1729)
     const measure = (a: string, b: string, floor: number): { measured: number; low: string[]; min: number } => {
       const low: string[] = [];
       let measured = 0, min = Infinity;
@@ -7868,7 +7968,7 @@ arm: {
     ['wendys', exampleTheme('wendys', () => brandTheme(standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input))],
   ]);
   // The non-text bar per mode, as a literal: 3:1, and 4.5:1 in the two high-contrast modes.
-  const NON_TEXT: Record<string, number> = { light: 3, dark: 3, 'hc-light': 4.5, 'hc-dark': 4.5 };
+  const NON_TEXT: Record<string, number> = { light: 3, dark: 3, 'hc-light': 4.5, 'hc-dark': 4.5, 'brand-b': 3 };   // brand-b: prism3's light-based Brand B (#1729)
   const wrong: string[] = [];
   let cells = 0;
   for (const [brand, th] of themes) for (const m of resolveAllModes(th)) {
@@ -7879,8 +7979,8 @@ arm: {
     if (fill?.against !== 'background.primary' || fill?.min !== bar) wrong.push(`${brand}/${m.mode} inverse.foreground.tertiary ${fill?.against}@${fill?.min}`);
     if (JSON.stringify(fill?.alsoAgainst) !== JSON.stringify({ against: 'inverse.text.primary', min: 4.5 })) wrong.push(`${brand}/${m.mode} inverse.foreground.tertiary second pair ${JSON.stringify(fill?.alsoAgainst)}`);
   }
-  ok(cells === 20 && wrong.length === 0,
-    `#1745 the three neutral pairs are contracted in all ${cells} of 20 brand × mode cells: border.tertiary and inverse.foreground.tertiary against background.primary at 3:1 (4.5:1 in HC), and inverse.text.primary on inverse.foreground.tertiary at 4.5:1${wrong.length ? ` — ${wrong.slice(0, 6).join('; ')}` : ''}`);
+  ok(cells === 21 && wrong.length === 0,
+    `#1745 the three neutral pairs are contracted in all ${cells} of 21 brand × mode cells: border.tertiary and inverse.foreground.tertiary against background.primary at 3:1 (4.5:1 in HC), and inverse.text.primary on inverse.foreground.tertiary at 4.5:1${wrong.length ? ` — ${wrong.slice(0, 6).join('; ')}` : ''}`);
 
   const ratioOf = (m: any, a: string, b: string): number => contrast(hexToRgb(m.roles[a].hex), hexToRgb(m.roles[b].hex));
   const lightOf = (bi: BrandInput) => resolveAllModes(brandTheme(bi)).find((m) => m.mode === 'light')!;
@@ -8480,7 +8580,7 @@ arm: {
       ['prism3', on('prism3', exampleBrands()['prism3'])], ['wendys', on('wendys', wendysInput)],
     ]);
   };
-  const TAG_CELLS = 20;
+  const TAG_CELLS = 21;   // 5 brands × 4 modes, plus prism3's Brand B (#1729)
   const ref = (key: string) => tagDef.tokens[key]?.replace(/^color\./, '') ?? `(unbound ${key})`;
   const colorOf = (roles: any, name: string, under: RGB): RGB | undefined => {
     const r = roles[name];
@@ -13161,7 +13261,8 @@ arm: {
   // (#3219, owner Q3212.4 A), so its light text and icon secondary are pinned at the page fit, #767576 (4.6:1 on
   // white; main's floor fit was #696869). Its inverse ink stays on the band's floor and does not move.
   const BEFORE: Record<string, Record<string, string>> = {
-    prism3: { light: '#67696b #67696b #808284', dark: '#808284 #808284 #67696b', 'hc-light': '#424346 #424346 #999a9c', 'hc-dark': '#a6a7a9 #a6a7a9 #4e5052' },
+    // brand-b (#1729): prism3's light-based Brand B swaps only brand colors, so its neutral inks are light's.
+    prism3: { light: '#67696b #67696b #808284', dark: '#808284 #808284 #67696b', 'hc-light': '#424346 #424346 #999a9c', 'hc-dark': '#a6a7a9 #a6a7a9 #4e5052', 'brand-b': '#67696b #67696b #808284' },
     aurora: { light: '#68686d #818286 #818286', dark: '#818286 #68686d #68686d', 'hc-light': '#434347 #68686d #9a9a9e', 'hc-dark': '#a7a7aa #818286 #4f4f54' },
     harbor: { light: '#5e5b58 #5e5b58 #83817e', dark: '#83817e #83817e #6b6865', 'hc-light': '#454341 #454341 #9c9a98', 'hc-dark': '#a8a6a5 #a8a6a5 #514f4c' },
     wendys: { light: '#67696a #67696a #808283', dark: '#808283 #808283 #67696a', 'hc-light': '#424345 #424345 #999a9c', 'hc-dark': '#a6a7a8 #a6a7a8 #4e5051' },
@@ -13662,7 +13763,7 @@ arm: {
 //   4. `border.tertiary` is the FIRST step that clears: one notch toward the page misses the bar somewhere.
 //   (Distinct rungs are (10g-ii)'s, just above.)
 {
-  const NON_TEXT_2569: Record<string, number> = { light: 3, dark: 3, 'hc-light': 4.5, 'hc-dark': 4.5, wireframe: 3 };
+  const NON_TEXT_2569: Record<string, number> = { light: 3, dark: 3, 'hc-light': 4.5, 'hc-dark': 4.5, wireframe: 3, 'brand-b': 3 };   // brand-b: prism3's light-based Brand B (#1729)
   const GROUNDS_2569 = ['background.primary', 'background.secondary', 'background.tertiary', 'foreground.primary', 'foreground.secondary', 'foreground.tertiary'];
   const rows2569: { id: string; theme: any }[] = [
     ...corpus(),
@@ -13882,7 +13983,8 @@ arm: {
     hueCells++;
     const inkPal = paletteOf(m.roles['interactive.primary.text.rest']?.path), fillPal = paletteOf(m.roles['interactive.primary.fill.rest']?.path);
     if (!inkPal || inkPal !== fillPal) offHue.push(`${id}/${m.mode}: interactive.primary.text.rest on '${inkPal}', the primary fill on '${fillPal}'`);
-    const linkWant = m.mode === 'wireframe' ? theme.roleToPalette.neutral : theme.linkPalette;
+    // A mode with a palette swap (#1729) puts its link on the swapped palette.
+    const linkWant = m.mode === 'wireframe' ? theme.roleToPalette.neutral : (theme.modePalettes?.[m.mode]?.linkPalette ?? theme.linkPalette);
     for (const st of ['default', 'hover', 'pressed', 'visited', 'focused']) {
       const lp = paletteOf(m.roles[`text.link.${st}`]?.path);
       if (lp !== linkWant) offHue.push(`${id}/${m.mode}: text.link.${st} on '${lp}', the link palette is '${linkWant}'`);
@@ -15057,7 +15159,7 @@ const NB_KNOWN_SCOPE_DIVERGENCES: { name: string; nb: string[]; engine: string[]
   // holds pure black under a white glass and pure white under a black glass), and the WCAG 2 math is written out here
   // rather than imported from `./color`. A 32px blur cannot lower the floor: a uniform worst-case ground blurs to itself.
   {
-    const GLASS_STEP: Record<string, string> = { light: 'white-alpha.70', dark: 'black-alpha.70', 'hc-light': 'white-alpha.90', 'hc-dark': 'black-alpha.90' };
+    const GLASS_STEP: Record<string, string> = { light: 'white-alpha.70', dark: 'black-alpha.70', 'hc-light': 'white-alpha.90', 'hc-dark': 'black-alpha.90', 'brand-b': 'white-alpha.70' };
     const lin = (c: number) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
     const lum = ([r, g, b]: number[]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
     const wcag = (a: number[], b: number[]) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
@@ -15076,7 +15178,9 @@ const NB_KNOWN_SCOPE_DIVERGENCES: { name: string; nb: string[]; engine: string[]
       const leafOf = (ref: string): any => { let v: any = ref; for (let i = 0; i < 8 && /^\{.+\}$/.test(String(v)); i++) v = String(v).slice(1, -1).split('.').reduce((n: any, k) => n?.[k], tr)?.$value; return v; };
       const surf = tr[root].color?.glass?.surface, text = tr[root].color?.text?.primary, page = tr[root].color?.background?.primary;
       const seen = ['light', ...Object.keys(surf?.$extensions?.prism3?.modes ?? {})];
-      ok(seen.length === 4 && seen.every((m) => m in GLASS_STEP), `glass ${brand}: the modes read are exactly light, dark, hc-light, hc-dark (got ${seen.join(', ')})`);
+      // prism3 adds its light-based Brand B (#1729); every other brand ships the four built-in modes.
+      const wantModes = brand === 'prism3' ? 'light, dark, hc-light, hc-dark, brand-b' : 'light, dark, hc-light, hc-dark';
+      ok(seen.join(', ') === wantModes && seen.every((m) => m in GLASS_STEP), `glass ${brand}: the modes read are exactly ${wantModes} (got ${seen.join(', ')})`);
       const steps: string[] = [], polarity: string[] = [], floor: string[] = [];
       for (const m of Object.keys(GLASS_STEP)) {
         const ref = inMode(surf, m);
@@ -20316,7 +20420,7 @@ arm: {
         ['harbor', exampleTheme('harbor', () => brandTheme(exampleBrands()['harbor'] as BrandInput))],
         ['wendys', exampleTheme('wendys', () => brandTheme(standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input))],
       ]);
-      const SLIDER_CELLS = 20;
+      const SLIDER_CELLS = 21;   // 5 brands × 4 modes, plus prism3's Brand B (#1729)
       const role = (v: unknown): string => String(v ?? '(unbound)').replace(/^color\//, '').replace(/\//g, '.');
       // The ring the thumb nests at focus-visible, at the coordinate it nests (surface=default), as that member strokes it.
       const ringNest = findIn(tOf('medium', 'focus-visible')!.root, 'focusRing');
@@ -21718,7 +21822,8 @@ arm: {
         if (r < 4.5) low.push(`${b}/${m.mode} ${ink} on ${ground} ${r.toFixed(2)}`);
       }
     }
-    ok(pairs.length === 1 && cells === 20 && low.length === 0, `#4110 avatar: the initials' ink clears 4.5:1 on the backdrop the def binds (${pairs.join(', ').replace(/\|/g, ' on ')}) in all ${cells} of 20 brand × mode cells${low.length ? ` — ${low.join('; ')}` : ''}`);
+    const AV_CELLS = 21;   // 5 brands × 4 modes, plus prism3's Brand B (#1729)
+    ok(pairs.length === 1 && cells === AV_CELLS && low.length === 0, `#4110 avatar: the initials' ink clears 4.5:1 on the backdrop the def binds (${pairs.join(', ').replace(/\|/g, ' on ')}) in all ${cells} of ${AV_CELLS} brand × mode cells${low.length ? ` — ${low.join('; ')}` : ''}`);
     // Owner decision (2026-11-20): presence maps online = success, away = warning, busy = danger, offline = neutral.
     // EXPECTED is the decision, typed here; ACTUAL is read from the shipped spec, `out/components/avatar.md`: the
     // `presence` prop row a developer reads and the presence-dot anatomy line a designer reads, never the def's notes,
@@ -25133,7 +25238,7 @@ arm: {
      *  Both exist because they answer different questions: `insetValue` is how the not-a-number case is
      *  reached (one bad value, whichever name asks), and `varOverrides` is how the two halves of the ring's
      *  coordinate are given DIFFERENT values, which is the only way to tell a sum from a doubling (#801). */
-    type StubOpts = { vars?: string[]; styles?: string[]; comps?: string[]; page?: StubPage; insetValue?: unknown; varOverrides?: Record<string, unknown>; varValues?: Record<string, number>; fileNodes?: StubFileNode[]; nestedInstanceParts?: string[]; nestedItems?: Record<string, { name: string; set: string; member: string }[]>; compTexts?: Record<string, Record<string, string>>; effectStyles?: string[]; gradientDiscard?: 'paint' | 'bindings'; textMetrics?: { fontSize: number; lineHeight: { unit: string; value: number } }; setStrokes?: Record<string, unknown>[]; noSlots?: boolean; colors?: Record<string, { r: number; g: number; b: number; a: number }>; componentProps?: Record<string, Record<string, { type: string; defaultValue: string | boolean }>>; unavailableFonts?: string[]; fontRefusal?: 'error' | 'string'; discardLiteralFills?: string[] };
+    type StubOpts = { vars?: string[]; styles?: string[]; comps?: string[]; page?: StubPage; insetValue?: unknown; varOverrides?: Record<string, unknown>; varValues?: Record<string, number>; fileNodes?: StubFileNode[]; nestedInstanceParts?: string[]; nestedItems?: Record<string, { name: string; set: string; member: string }[]>; compTexts?: Record<string, Record<string, string>>; effectStyles?: string[]; gradientDiscard?: 'paint' | 'bindings'; textMetrics?: { fontSize: number; lineHeight: { unit: string; value: number } }; setStrokes?: Record<string, unknown>[]; noSlots?: boolean; colors?: Record<string, { r: number; g: number; b: number; a: number }>; componentProps?: Record<string, Record<string, { type: string; defaultValue: string | boolean }>>; unavailableFonts?: string[]; fontRefusal?: 'error' | 'string'; discardLiteralFills?: string[]; compKeys?: boolean };
     /** The two halves of a focus ring's coordinate, the real NB values (`focus.ring.offset` /
      *  `focus.ring.width` — both 2 in every emitted brand). NAMED, and named HERE, because they are the
      *  stub's INPUT and the geometry assertions' EXPECTED at once, and #801 is what that costs when the
@@ -25744,6 +25849,9 @@ arm: {
             // resolved set is read off the host rather than off the name the payload asked for.
             const mk = (name: string, i: number, owner: { name: string; type: string } = { name: 'Page 1', type: 'PAGE' }) => ({
               name, id: `73:${37 + i}`, type: 'COMPONENT',
+              // #4164 — opt-in: a plain component's KEY, `CK:<name>`, which an icon swap's preferred value names. Off by
+              // default, so every arm written before it still sees the keyless components it was written against.
+              ...(opts.compKeys ? { key: `CK:${name}` } : {}),
               createInstance: () => {
                 const inst = mkNode('INSTANCE'); const vec = mkNode('VECTOR'); inst.findAll = () => [vec];
                 Object.defineProperty(inst, 'mainComponent', { configurable: true, enumerable: false, writable: true, value: { name, type: 'COMPONENT', parent: { ...owner } } });
@@ -28078,6 +28186,52 @@ arm: {
           && JSON.stringify(nSlot?.slotSettings) === '{"minChildren":1,"maxChildren":2,"allowPreferredValuesOnly":false,"displayEmptyByDefault":false}'
           && JSON.stringify(nSlot?.preferredValues) === '[]',
           `#2646 paste, preferred def not built: the payload names Badge as a miss and writes the slot open (${JSON.stringify(nRun.misses.filter((m) => /dismiss\./.test(m)))})`);
+
+        // #4164 (owner decision A) — AN ICON SWAP PREFERS EVERY CORE ICON. Projection: a swap whose target is a core icon
+        // (`icon/…`) carries `preferIcons`; one whose target is not, does not. Paste: the payload writes every `icon/`
+        // component the file holds, by key in name order, and nothing else, onto the swap. Expected values are literals.
+        // Mutations: the flag not projected → `#4164 projection`; `PAYLOAD_ICON_SWAPS` not shipped → `#4164 paste`.
+        const tagDef4164 = componentDefs.find((d) => d.id === 'tag')!;
+        const iconTag = figmaAnatomySet(tagDef4164, { swapTarget: 'icon/FPO-default-icon' });
+        const swaps4164 = (pl: AnatomyPlan[]) => planSetProperties(pl).filter((pp) => pp.type === 'INSTANCE_SWAP') as Extract<FigmaPropertyPlan, { type: 'INSTANCE_SWAP' }>[];
+        ok(swaps4164(iconTag).length > 0 && swaps4164(iconTag).every((pp) => pp.preferIcons === true) && swaps4164(figmaAnatomySet(tagDef4164, { swapTarget: 'FPO-default-icon' })).every((pp) => pp.preferIcons === undefined),
+          `#4164 projection: Tag's swaps prefer the icons when their target is icon/FPO-default-icon, and not when it is FPO-default-icon (${JSON.stringify(swaps4164(iconTag))})`);
+        const iPage = { children: [] as Record<string, unknown>[] };
+        const iRun = await runPayload(planSetToPluginJs(iconTag), { vars: iconTag.flatMap((pl) => [...planBoundVars(pl.root), ...planPaintVars(pl.root)]), styles: iconTag.flatMap((pl) => planTextStyles(pl.root)),
+          comps: ['icon/FPO-default-icon', 'icon/search', 'icon/check', 'provider-logo/payment/generic'], compKeys: true, page: iPage });
+        const iDefs = Object.values((((iPage.children.find((c) => c.type === 'COMPONENT_SET') ?? {}) as Record<string, unknown>).componentPropertyDefinitions ?? {}) as Record<string, Record<string, unknown>>).filter((d) => d.type === 'INSTANCE_SWAP');
+        // The placeholder is left out (owner decision 2026-11-20): it stays the default, it is not an icon to pick.
+        const ICONS = '[{"type":"COMPONENT","key":"CK:icon/check"},{"type":"COMPONENT","key":"CK:icon/search"}]';
+        ok(iDefs.length > 0 && iDefs.every((d) => JSON.stringify(d.preferredValues) === ICONS) && !iRun.misses.some((m) => /\.preferred ->/.test(m)),
+          `#4164 paste: every icon swap prefers the two icon components, by key in name order, and not the placeholder or the provider logo (${JSON.stringify(iDefs.map((d) => d.preferredValues))}${iRun.misses.length ? `; misses ${JSON.stringify(iRun.misses.filter((m) => /preferred/.test(m)).slice(0, 2))}` : ''})`);
+        // THE PLACEHOLDER (owner decision 2026-11-20): no icon swap offers `icon/FPO-default-icon` as a preferred value, and
+        // each still defaults to it: `73:37`, the stub's id for the first of `comps`, which is the placeholder. Mutation: the
+        // payload's exclusion dropped (`.filter(n=>n!==…)` removed) → `#4164 paste, placeholder`.
+        const iPlaceholderId = '73:37';
+        ok(ICON_PLACEHOLDER === 'icon/FPO-default-icon' && iDefs.length > 0
+          && iDefs.every((d) => Array.isArray(d.preferredValues) && (d.preferredValues as { key?: string }[]).length > 0 && !(d.preferredValues as { key?: string }[]).some((v) => v.key === 'CK:icon/FPO-default-icon'))
+          && iDefs.every((d) => d.defaultValue === iPlaceholderId),
+          `#4164 paste, placeholder: no icon swap prefers the placeholder, and each still defaults to it (${JSON.stringify(iDefs.map((d) => ({ default: d.defaultValue, preferred: d.preferredValues })))})`);
+        // A name two components hold (a stale copy of icon/check) is left out of the list and named; the rest are written.
+        // Mutation: the exclusion dropped (`by.get(n).length===1&&by.get(n)[0].key` → `by.get(n)[0].key`) → `#4164 paste, duplicate`.
+        const dPage = { children: [] as Record<string, unknown>[] };
+        const dRun = await runPayload(planSetToPluginJs(iconTag), { vars: iconTag.flatMap((pl) => [...planBoundVars(pl.root), ...planPaintVars(pl.root)]), styles: iconTag.flatMap((pl) => planTextStyles(pl.root)),
+          comps: ['icon/FPO-default-icon', 'icon/search', 'icon/check', 'icon/check', 'provider-logo/payment/generic'], compKeys: true, page: dPage });
+        const dDefs = Object.values((((dPage.children.find((c) => c.type === 'COMPONENT_SET') ?? {}) as Record<string, unknown>).componentPropertyDefinitions ?? {}) as Record<string, Record<string, unknown>>).filter((d) => d.type === 'INSTANCE_SWAP');
+        const dMisses = dRun.misses.filter((m) => /\.preferred ->/.test(m));
+        ok(dDefs.length > 0 && dDefs.every((d) => JSON.stringify(d.preferredValues) === '[{"type":"COMPONENT","key":"CK:icon/search"}]') && dMisses.length === dDefs.length
+          && dMisses.every((m) => /^property \S.*\.preferred -> 1 icon name\(s\) held by more than one component \(icon\/check; not offered in the swap\. Rename or remove the stale copies, then rebuild\)$/.test(m)),
+          `#4164 paste, duplicate: an icon name two components hold is left out of the list and named as a miss (${JSON.stringify(dDefs.map((d) => d.preferredValues))}; ${JSON.stringify(dMisses)})`);
+        // A file whose only `icon/` component is the placeholder: nothing to prefer, so nothing is written, and it is no
+        // miss either, since the file does hold an icon. Mutation: the miss keyed on the filtered list (`if(!by.size)` →
+        // `if(!names.length)`) → `#4164 paste, placeholder only`.
+        const oPage = { children: [] as Record<string, unknown>[] };
+        const oRun = await runPayload(planSetToPluginJs(iconTag), { vars: iconTag.flatMap((pl) => [...planBoundVars(pl.root), ...planPaintVars(pl.root)]), styles: iconTag.flatMap((pl) => planTextStyles(pl.root)),
+          comps: ['icon/FPO-default-icon', 'provider-logo/payment/generic'], compKeys: true, page: oPage });
+        const oDefs = Object.values((((oPage.children.find((c) => c.type === 'COMPONENT_SET') ?? {}) as Record<string, unknown>).componentPropertyDefinitions ?? {}) as Record<string, Record<string, unknown>>).filter((d) => d.type === 'INSTANCE_SWAP');
+        const oMisses = oRun.misses.filter((m) => /\.preferred ->/.test(m));
+        ok(oDefs.length > 0 && oDefs.every((d) => d.preferredValues === undefined) && oMisses.length === 0,
+          `#4164 paste, placeholder only: a file whose only icon is the placeholder gets no preferred list and no miss (${JSON.stringify(oDefs.map((d) => d.preferredValues))}; ${JSON.stringify(oMisses)})`);
       }
 
       // ---- #2645: PER-INSTANCE OVERRIDES on a nested instance — validator, projection, and the PASTE executor ----
@@ -29186,6 +29340,8 @@ arm: {
             comps: [...new Set(plans.flatMap((p) => walkPlan(p.root)).flatMap((n) => [n.swapTarget, n.nestTarget,
               ...(n.nestOverrides ?? []).filter((o) => o.type === 'INSTANCE_SWAP').map((o) => o.value)]).filter((c): c is string => !!c))].filter((c) => !slotSets.includes(c)),
             fileNodes: slotSets.map((id) => ({ name: id, type: 'COMPONENT_SET' as const, variants: figmaAnatomySet(componentDefs.find((d) => d.id === id)!, { swapTarget: 'FPO-default-icon' }).map(planComponentName) })),
+            // #4164 — as on a real host, every component carries a key, which an icon swap's preferred value names.
+            compKeys: true,
             // #2317 — each nested component's TEXT properties, from the NESTED def's own declaration (never from the
             // host's `nestTexts`, the value under test), so a nested instance has the property a host overrides.
             compTexts: Object.fromEntries(componentDefs.filter((d) => d.figmaProperties?.texts).map((d) =>
@@ -32016,7 +32172,9 @@ arm: {
     `#1119 reachable: the picker offers harbor (${picker.join(', ')}) and the reference emission holds ${reference.length} files`);
   for (const b of picker) {
     const have = filesOf(b);
-    const missing = reference.filter((f) => !have.includes(f));
+    // A brand with per-mode typography (prism3's Brand B, #1729) splits `core.font.json` into one file per mode, so
+    // the single file counts as held when its per-mode files are.
+    const missing = reference.filter((f) => !have.includes(f) && !(f === 'core.font.json' && have.includes('core.font.Default.json')));
     ok(have.length > 0 && missing.length === 0,
       `#1119 ${b}: out/figma/${b}/ holds every Figma file the reference brand ships${have.length ? (missing.length ? ` — missing ${missing.slice(0, 4).join(', ')}` : '') : ' — the directory is absent'}`);
   }
@@ -32257,7 +32415,10 @@ arm: {
     if (!files) continue;
     // Same reason as the budget loop: a pass that throws fails this brand's arm by name and the suite goes on.
     try {
-      const modes = MODE_ORDER.filter((m) => files.has(`color.${m}.json`));
+      // The built-in modes in order, then any custom mode the brand emits (prism3's brand-b, #1729), sorted — the
+      // order `materialise-to-figma.ts` reads them in.
+      const extra = [...files.keys()].flatMap((f) => /^color\.([^.]+)\.json$/.exec(f)?.[1] ?? []).filter((m) => !MODE_ORDER.includes(m)).sort();
+      const modes = [...MODE_ORDER.filter((m) => files.has(`color.${m}.json`)), ...extra];
       const colorFiles = modes.map((m) => JSON.parse(files.get(`color.${m}.json`)!) as FigmaCollectionFile);
       // EXPECTED, from the emitted colour files: `<var> @ <mode>` -> the alias each file names.
       const expected = new Map<string, string>();
@@ -37544,6 +37705,7 @@ arm: {
     'wendys light': [5.88, 4.85, 4.25], 'wendys dark': [4.05, 3.73, 3.32], 'wendys hc-light': [9.77, 9.77, 9.77], 'wendys hc-dark': [9.19, 9.19, 9.19],
     'minimal light': [4.97, 4.1, 3.59], 'minimal dark': [3.91, 3.61, 3.22], 'minimal hc-light': [8.65, 8.65, 8.65], 'minimal hc-dark': [8.44, 8.44, 8.44],
     'prism3 light': [7.82, 6.44, 5.65], 'prism3 dark': [4.24, 3.91, 3.51], 'prism3 hc-light': [9.38, 9.38, 9.38], 'prism3 hc-dark': [8.88, 8.88, 8.88],
+    'prism3 brand-b': [6.42, 5.29, 4.64],   // Brand B (#1729): Brand B's own primary, brand-b-primary.550, on light's page tiers
     'NB master light': [19.36, 15.95, 14.01],
   };
   const tierWrong: string[] = [];
@@ -42410,8 +42572,8 @@ arm: {
   ok(li.tokens.icon === 'color.icon.primary' && li.tokens.indicator === 'color.icon.primary' && li.tokens.label === 'color.text.primary',
     `#2319 list-item inks: the bullet (indicator) and the icon on color.icon.primary, the number and text (label) on color.text.primary (Q273.8, #1471) (got ${li.tokens.indicator}, ${li.tokens.icon}, ${li.tokens.label})`);
   const props = planSetProperties(liPlans);
-  ok(JSON.stringify(props) === JSON.stringify([{ name: 'label', type: 'TEXT', default: 'List item' }, { name: 'number', type: 'TEXT', default: '1.' }, { name: 'swap icon', type: 'INSTANCE_SWAP', swapTarget: 'icon/check' }]),
-    `#2319 #3554 list-item properties: label "List item" (Q-CC19 A, the layer's name), number "1." and the icon swap defaulting to icon/check, with no presence toggle (Q273.3) (got ${JSON.stringify(props)})`);
+  ok(JSON.stringify(props) === JSON.stringify([{ name: 'label', type: 'TEXT', default: 'List item' }, { name: 'number', type: 'TEXT', default: '1.' }, { name: 'swap icon', type: 'INSTANCE_SWAP', swapTarget: 'icon/check', preferIcons: true }]),
+    `#2319 #3554 list-item properties: label "List item" (Q-CC19 A, the layer's name), number "1." and the icon swap defaulting to icon/check and preferring the core icons (#4164), with no presence toggle (Q273.3) (got ${JSON.stringify(props)})`);
 
   // THE LIST (Q273.2; #2649, owner decision Q307 A): an "items" slot of three List.Items stretched across the list,
   // every item following the list's type and size, the item gap on the slot. No item toggles remain.
@@ -42813,7 +42975,7 @@ arm: {
       ['harbor', exampleTheme('harbor', () => brandTheme(exampleBrands()['harbor'] as BrandInput))],
       ['wendys', exampleTheme('wendys', () => brandTheme(standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input))],
     ]);
-    const CELLS = 20;
+    const CELLS = 21;   // 5 brands × 4 modes, plus prism3's Brand B (#1729)
     const role = (v: string | undefined) => (v ?? '(unbound)').replace(/^color\//, '').replace(/\//g, '.');
     const at = (sel: string, st: string, type = 'page', style = 'border') => items.find((m) => (m.coord as Record<string, string>).type === type && (m.coord as Record<string, string>).selection === sel && (m.coord as Record<string, string>).style === style && m.size === 'medium' && (m.coord as Record<string, string>).state === st)!;
     const sel = at('selected', 'rest'), under = at('selected', 'rest', 'page', 'underline');
@@ -46129,6 +46291,10 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
     const help = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), '--help'], { cwd: HERE, encoding: 'utf8' }).stdout ?? '';
     ok(help.includes('<id>.base.tokens.json') && help.includes('<id>.<mode>.overlay.tokens.json'),
       `#4153 --help names the base and per-mode overlay files beside <id>.tokens.json (got ${JSON.stringify(help.split('\n').find((l) => l.includes('--out')))})`);
+    // #3510 follow-up (owner decision 2026-11-20 on #3998): --help also names the CSS-only source the run writes, and
+    // the run really writes it, so the help line and the directory agree.
+    ok(/<id>\.css-only\.json/.test(help) && onDisk.includes('harbor.css-only.json'),
+      `#3510 --help names <id>.css-only.json, the CSS-only source the CLI writes (help ${help.includes('css-only') ? 'names it' : 'does not name it'}; on disk ${onDisk.includes('harbor.css-only.json') ? 'written' : 'missing'})`);
     // #4170: a failed contrast contract printed only a count. The issue's brief (a dark tinted light page) fails some;
     // each failure must be listed with its mode, pair, ratio and floor, and the listing must account for the whole count.
     const brief4170 = join(dir, 'fernway.design.md');

@@ -50,6 +50,7 @@
     "68": ["menu-item"],
     "69": [],
     "70": [],
-    "71": ["avatar"]
+    "71": ["avatar"],
+    "72": ["button", "button-destructive", "button-neutral", "card-number-field", "flush-icon-button", "flush-icon-button-destructive", "flush-icon-button-neutral", "icon-button", "icon-button-destructive", "icon-button-neutral", "link", "list-item", "menu-item", "password-field", "search-field", "segmented-control-segment", "select", "tab-item", "tag", "text-field"]
   }
 }
