@@ -579,7 +579,7 @@ const primMeaning = (seg: string[], node?: any): string => {
   // Not "grid": 1, 2, 3, 5, 6, 10, 18 and 30px are off the 4px grid (#3555 F6). The tree's own word.
   if (seg[0] === 'dimension') return `${seg[1]}px dimension primitive`;
   if (seg[0] === 'motion' && seg[1] === 'brand') return 'Brand-only motion value — set by this brand, outside the guaranteed names';
-  if (seg[0] === 'motion') return seg[1] === 'easing' ? 'Easing curve primitive (cubic-bezier)' : seg[1] === 'spring' ? 'Spring primitive (damping / stiffness)' : seg[1] === 'stagger' ? 'Stagger delay primitive' : 'Motion duration primitive';
+  if (seg[0] === 'motion') return seg[1] === 'easing' ? 'Easing curve primitive (cubic-bezier)' : seg[1] === 'spring' ? 'Spring primitive (damping / stiffness)' : seg[1] === 'spring-easing' ? 'Spring as a CSS linear() curve, for code that cannot run a spring' : seg[1] === 'spring-duration' ? 'Spring settle time — the duration its CSS curve plays over' : seg[1] === 'stagger' ? 'Stagger delay primitive' : 'Motion duration primitive';
   if (seg[0] === 'font') {
     if (seg[1] === 'family') return `Font family stack — ${seg[2]} role`;
     if (seg[1] === 'size') return `Font size primitive — ${seg[2]}px (rem)`;
@@ -1027,6 +1027,14 @@ export const buildAiMetadata = (theme: Theme, tree: any, opts: AiMetadataOptions
       when_to_use: 'Brand / marketing surfaces, hero backgrounds, decorative fills.',
       avoid_when: avoid,
       resolves_to: g.stops.map((s) => `{${s.aliasOf}}`),
+      // A mode whose palette swap moves a stop (#1729): the stops in each mode, read off the token's own mode entries.
+      ...(() => {
+        const modeOv = nodeAt(`gradient.${g.name}`)?.$extensions?.prism3?.modes;
+        if (!modeOv || typeof modeOv !== 'object') return {};
+        const per: Record<string, string[]> = { light: g.stops.map((s) => `{${s.aliasOf}}`) };
+        for (const [m, v] of Object.entries<any>(modeOv)) if (Array.isArray(v?.$value)) per[m] = v.$value.map((st: { color: string }) => st.color);
+        return { mode_overrides: per };
+      })(),
       a11y: { worst_on_white: r2(g.worstOnWhite), worst_on_black: r2(g.worstOnBlack) },
     };
   }

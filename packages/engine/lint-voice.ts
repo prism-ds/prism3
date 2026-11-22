@@ -550,6 +550,8 @@ const gated: string[] = [
   // The token-name baseline — deliberately not a `regen` artifact (see CLAUDE.md principle 5), so
   // named by hand here exactly as lint-us-english.ts names it.
   join(repo, 'packages/engine/schema/token-contract.json'),
+  // The component-contract baseline (#1325) — kept out of `regen` for the same reason, named by hand the same way.
+  join(repo, 'packages/engine/schema/component-contract.json'),
   // The paint census (#758) — the second baseline kept out of `regen`, named by hand for the same reason.
   join(repo, 'packages/engine/schema/paint-census.json'),
   // The docs/34 shape-index baseline (#786) — the third, same reason. Its shape titles are quoted
@@ -956,6 +958,8 @@ const NOTE_SWEEP: [string, Record<string, unknown>][] = [
   ['modes', { modes: ['light', 'dark', 'wireframe'], customModes: [{ name: 'promo', base: 'dark' }], overrides: { light: { 'text.link.default': { palette: 'primary', step: 600 } } }, modeAnchors: { dark: { primary: 400 } }, modeLevers: { dark: { density: 'compact', easings: { emphasized: 'calm' } } } }],
   ['root, gamut, supplied status, decoupled action and link', { root: 'acme', brandColors: [{ name: 'accent', oklch: { l: 0.55, c: 0.3, h: 235 } }], actionPalette: 'accent', linkPalette: 'primary', status: { success: { h: 150, chroma: 0.15 }, danger: { h: 27, chroma: 0.2 } } }],
   ['neutral anchor', { neutral: { hue: 262, chroma: 0.008, anchor: { l: 0.6, c: 0.01, h: 262 } } }],
+  // #1729: a per-mode palette swap, as the default theme's Brand B makes one.
+  ['palette swap', { brandColors: [{ name: 'second', oklch: { l: 0.5, c: 0.15, h: 200 } }], customModes: [{ name: 'brand-b', base: 'light' }], modePalettes: { 'brand-b': { primary: 'second' } } }],
   ['neutral auto, link same as action', { neutral: { hue: 262, chroma: 0.008, auto: true }, linkPalette: 'primary' }],
   ['red primary', { primary: { l: 0.5, c: 0.2, h: 25 }, neutral: { hue: 25, chroma: 0.01 } }],
   ['greige primary', { primary: { l: 0.5, c: 0.03, h: 30 }, neutral: { hue: 30, chroma: 0.01 } }],
@@ -1000,6 +1004,7 @@ const PRODUCERS: Producer[] = [
   { id: 'overrides', re: /^overrides: color overrides in /, kind: 'site' },
   { id: 'modeAnchors', re: /^modeAnchors: /, kind: 'site' },
   { id: 'modeLevers', re: /^modeLevers: /, kind: 'site' },
+  { id: 'modePalettes', re: /^modePalettes: in /, kind: 'site' },
   { id: 'namespace', re: /^namespace: tokens emit under /, kind: 'site' },
   { id: 'primary anchor', re: /^primary: the brand color is pinned at step \d+/, kind: 'site' },
   { id: 'out of gamut', re: /^anchor '[^']+' \(oklch [^)]+\) is outside the sRGB gamut/, kind: 'site' },
@@ -1086,8 +1091,8 @@ const NOTES_UNREACHABLE = ['typography: empty display tier (the "below the usual
 // never reaches: one the sweep reaches is an unclaimed note already. A literal per file, written here.
 // theme-brand.ts (`brandTheme`, in theme.ts until #3698 R5 split it per axis): 45 note pushes (#3052 added the grid-link notes' spread) + the one that copies vocabulary.ts's notes in. vocabulary.ts: 2.
 // #3284 added a pinned-action note (52). #4133 added the one that copies hex-anchors.ts's notes in (53), and hex-anchors.ts's own push.
-// #3079 added the line height pin's note (54).
-const NOTE_PUSH_SITES: Record<string, number> = { 'packages/engine/theme-brand.ts': 54, 'packages/engine/vocabulary.ts': 2, 'packages/engine/hex-anchors.ts': 1 };
+// #1729 added the palette swap's note (54). #3079 added the line height pin's note (55).
+const NOTE_PUSH_SITES: Record<string, number> = { 'packages/engine/theme-brand.ts': 55, 'packages/engine/vocabulary.ts': 2, 'packages/engine/hex-anchors.ts': 1 };
 // The rules a NOTE must also pass, beyond §2 and `normative`. Each is a thing an engine note has carried.
 const ALLCAPS_OK = new Set(['AA', 'AAA', 'WCAG', 'OKLCH', 'HC']);
 const NOTE_RULES: { rule: string; re: RegExp }[] = [
