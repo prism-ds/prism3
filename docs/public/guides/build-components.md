@@ -2,8 +2,8 @@
 
 <!-- DRAFT for owner review (#2637, lane 4; corrected to the Components area and Update file for #3264). -->
 
-Prism3 defines its components once, and the plugin builds each one as a Figma component set bound to the brand's variables. <!-- src: packages/engine/components/index.ts:116-306#2754f116 -->
-The engine currently defines 71 component sets, from Button and Checkbox to Tabs, Accordion and List. <!-- src: packages/engine/components/index.ts:116-306#2754f116 -->
+Prism3 defines its components once, and the plugin builds each one as a Figma component set bound to the brand's variables. <!-- src: packages/engine/components/index.ts:117-309#293fae30 -->
+The engine currently defines 72 component sets, from Button and Checkbox to Tabs, Accordion and List. <!-- src: packages/engine/components/index.ts:117-309#293fae30 -->
 
 You choose sets in the **Components** area of the rail, and **Update file** builds them. <!-- src: apps/studio/src/state/update-file.ts:330 -->
 Building needs the Figma plugin. On the web, the Components area lists the same sets and says "Building sets needs the Figma plugin." <!-- src: apps/studio/src/preview/sections/component-sets.ts:29 -->
@@ -33,7 +33,7 @@ For each set, the plugin: <!-- src: apps/plugin/src/main.ts:924-1047#34f3a25b --
 - adds the page header and the labels beside the set;
 - draws the family's usage panel beside its lead, while Docs has usage panels on. <!-- src: apps/plugin/src/main.ts:1012-1013#03cbfa05 --> A family has one panel, beside its lead set: the Buttons page has one, beside Button, and the other sets on the page have none of their own. An icon, the spinner and a provider logo are single components, with no set and no panel. <!-- src: apps/plugin/src/doc-panel.ts:232-233#b6f87a5f -->
 
-A new set's description in Figma is its one-line summary from the engine. A description you wrote on an existing set is kept. <!-- src: apps/plugin/src/write-components.ts:149-150#7bb3ec74 -->
+A new set's description in Figma is its one-line summary from the engine. A description you wrote on an existing set is kept. <!-- src: apps/plugin/src/write-components.ts:150-151#7bb3ec74 -->
 
 *[Screenshot placeholder: the Components area with a family ticked, and Update file's To add list.]*
 

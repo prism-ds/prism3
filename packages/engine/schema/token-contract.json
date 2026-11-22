@@ -506,6 +506,7 @@
     "grid.sm.columns": "number",
     "grid.sm.gutter": "dimension",
     "grid.sm.margin": "dimension",
+    "icon.size.2xl": "dimension",
     "icon.size.lg": "dimension",
     "icon.size.md": "dimension",
     "icon.size.sm": "dimension",
