@@ -38,7 +38,7 @@
  */
 import type { Catalog } from './component-catalog';
 import { displayNameOf, inListOrder, isPrivate, neededOf } from './component-groups';
-import type { CheckedSetView, FacetView, MovedView, SetDueView } from '../write-adapter';
+import type { ChangeKinds, CheckedSetView, FacetView, MovedView, SetDueView } from '../write-adapter';
 
 /** `update` is the in-place update of the due sets (Q2909.8 A); `sets` builds the add queue (#3129); `cover` draws the
  *  cover and About this library at the end of a run that sets the file up and writes its theme (#3308, Q3308.4 A). */
@@ -442,8 +442,26 @@ export const UPDATE_COPY = {
   /** #3711 (Q-UF2 A), DRAFT: the button while the update passes changes on to files that use the library, and the
    *  callout above it that names each one. */
   goLibrary: (n: number): string => `Update, including ${n} library change${n === 1 ? '' : 's'}`,
-  library: 'Files that use this library',
-  librarySub: (n: number): string => `${n} change${n === 1 ? '' : 's'} in this update ${n === 1 ? 'reaches' : 'reach'} them at the next library publish:`,
+  /** #4481 (owner decision A, 2026-11-23; DRAFT for the owner's sign-off): the callout is one line, the changes counted
+   *  by what they do to files that use the library, each kind naming its sets, then a control that shows the full list.
+   *  Without the host's split (`kinds` null), the total alone. */
+  librarySummary: (lib: { readonly count: number; readonly kinds: ChangeKinds | null; readonly setsBy: Readonly<Record<keyof ChangeKinds, readonly string[]>> }, nameOf: (id: string) => string = (id) => id): string => {
+    const n = lib.count;
+    const head = `${n} change${n === 1 ? '' : 's'} ${n === 1 ? 'reaches' : 'reach'} files that use this library`;
+    if (!lib.kinds) return `${head}.`;
+    const named = (k: keyof ChangeKinds): string => ` (${andList([...new Set(lib.setsBy[k].map(nameOf))])})`;
+    const { breaks, retired, leaves } = lib.kinds;
+    const parts = [
+      breaks ? `${breaks} ${breaks === 1 ? 'breaks' : 'break'} their instances${named('breaks')}` : '',
+      retired ? `${retired} ${retired === 1 ? 'is' : 'are'} retired${named('retired')}` : '',
+      leaves ? `${leaves} ${leaves === 1 ? 'takes a set' : 'take sets'} out of the library${named('leaves')}` : '',
+    ].filter(Boolean);
+    return `${head}: ${parts.join(', ')}.`;
+  },
+  libraryShow: 'Show the changes',
+  libraryHide: 'Hide the changes',
+  /** The list's accessible name, as a region that scrolls. */
+  libraryList: 'Changes that reach files that use this library',
   /** #3712 (Q-UD2, direction C; DRAFT for the owner's sign-off): Components' status chip, what its card holds, said on its
    *  head row so a folded card still says it. Each part only when it counts. */
   compsChip: (n: { readonly add: number; readonly due: number; readonly blocked: number; readonly kept: number; readonly panels: number; readonly off?: number }): string =>
@@ -522,9 +540,24 @@ export const STEP_TITLE: Readonly<Record<StepKey, string>> = { setup: UPDATE_COP
 /** #3711 (Q-UF2 A): the changes the update step would pass on to files that use the library, from the sets it runs
  *  (`updateDefsOf`), each named, and how many in all. The callout above the button lists the lines; the button carries
  *  the count, so the click is the acknowledgement. Empty when no set the update runs has any. */
-export const libraryChangesOf = (defs: readonly string[], check: { readonly sets: readonly CheckedSetView[] } | null): { readonly count: number; readonly lines: readonly string[] } => {
-  const hit = defs.flatMap((id) => check?.sets.find((c) => c.def === id)?.changes ?? []);
-  return { count: hit.reduce((k, c) => k + c.count, 0), lines: hit.flatMap((c) => c.lines) };
+export type LibraryChanges = {
+  readonly count: number;
+  readonly lines: readonly string[];
+  /** #4481: the count split by kind, summed over the sets; null when a set the update runs came without its split. */
+  readonly kinds: ChangeKinds | null;
+  /** #4481: the sets with changes of each kind, in run order, for the summary to name. */
+  readonly setsBy: Readonly<Record<keyof ChangeKinds, readonly string[]>>;
+};
+export const libraryChangesOf = (defs: readonly string[], check: { readonly sets: readonly CheckedSetView[] } | null): LibraryChanges => {
+  const hit = defs.flatMap((id) => { const c = check?.sets.find((x) => x.def === id)?.changes; return c ? [{ id, c }] : []; });
+  const split = hit.every(({ c }) => !!c.kinds);
+  const sum = (k: keyof ChangeKinds): number => hit.reduce((t, { c }) => t + (c.kinds?.[k] ?? 0), 0);
+  const ids = (k: keyof ChangeKinds): string[] => hit.filter(({ c }) => (c.kinds?.[k] ?? 0) > 0).map(({ id }) => id);
+  return {
+    count: hit.reduce((k, { c }) => k + c.count, 0), lines: hit.flatMap(({ c }) => c.lines),
+    kinds: split ? { breaks: sum('breaks'), retired: sum('retired'), leaves: sum('leaves') } : null,
+    setsBy: split ? { breaks: ids('breaks'), retired: ids('retired'), leaves: ids('leaves') } : { breaks: [], retired: [], leaves: [] },
+  };
 };
 
 /** #3712 (Q-UD3 A, the owner's decision of 2026-11-14): Components' card opens by itself only while it holds something

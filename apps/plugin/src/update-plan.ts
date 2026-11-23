@@ -59,7 +59,7 @@ import { labelColumns, readLabelColumn } from './label-columns';
 import { NS } from './persist-figma';
 import { isLiveSpecPanel, readSpecTag } from './spec-tag';
 import { DOC_PANEL_KEY, DOC_PANEL_NS, PANEL_GAP, SPEC_GAP, SPEC_WIDTH, docPanelBlockers, docPanelDue, docPanelReaches, ownerSet, type PanelReach, isLivePanel, panelModes, planDocPanel, readPanelTag, type PanelApi, type PNode } from './doc-panel';
-import type { CheckedSet } from './messages';
+import type { ChangeKinds, CheckedSet } from './messages';
 import type { ApplyProgress } from './update-apply';
 import { BASELINE_V, UPDATING_KEY, baselineDiff, baselineOf, builtByPrism3, readBaseline, recordFormat, snapshotMember, writeBaseline, type Baseline, type OwnershipRead, type SnapNode } from './member-baseline';
 import { drawnFaults, faultLine, type DrawnFault, type DrawVar } from './drawn';
@@ -1969,7 +1969,17 @@ export const checkedSetOf = (p: SetPreview, def: string): CheckedSet => ({
   ...(p.blockers.length ? { reasons: [...p.blockers] } : {}),
   ...(p.breaking?.length ? { breaks: breakingSummary(p.breaking, p.set) } : {}),
   // #3711 (Q-UF2 A): each of those changes named, for the callout above Update file's button, and how many in all.
-  ...(p.breaking?.length ? { changes: { count: p.breaking.length, lines: consumerLines(p.set, p.breaking) } } : {}),
+  ...(p.breaking?.length ? { changes: { count: p.breaking.length, lines: consumerLines(p.set, p.breaking), kinds: changeKinds(p.breaking) } } : {}),
+});
+
+/** #4481 (owner decision A): a set's changes for files that use the library, counted by what they do there, uncapped,
+ *  so Update file's one-line summary counts every change even where the lines stop at the cap. Every change is exactly
+ *  one kind: it breaks them (`breaksConsumers`), it retires a member (`drop`), or it takes the set out of the library
+ *  (`private`), so the three add up to the count. */
+export const changeKinds = (breaking: readonly Breaking[]): ChangeKinds => ({
+  breaks: breaking.filter(breaksConsumers).length,
+  retired: breaking.filter((b) => b.kind === 'drop').length,
+  leaves: breaking.filter((b) => b.kind === 'private').length,
 });
 
 /** How many named differences each set's lines carry, so a set that differs everywhere stays a few lines long. */

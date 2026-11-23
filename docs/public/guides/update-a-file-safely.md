@@ -70,7 +70,7 @@ When a ticked set carries hand edits, a **Hand edits** choice appears beside the
 - **Overwrite**: the update writes Prism3's values over your edits.
 - **Accept as baseline**: your edits become the values later updates compare against.
 
-If the update passes changes on to files that use this library, a callout above the button, **Files that use this library**, names each one, and the button reads "Update, including *N* library changes". The changes reach those files at the next library publish. <!-- src: apps/studio/src/state/update-file.ts:444-446 -->
+If the update passes changes on to files that use this library, a callout above the button counts them by what they do to those files, for example "12 changes reach files that use this library: 8 break their instances (Button), 4 are retired (Select)." **Show the changes** lists each one in a short box that scrolls, and the button reads "Update, including *N* library changes". The changes reach those files at the next library publish. <!-- src: apps/studio/src/state/update-file.ts:444-466 -->
 
 Before its first write, the update saves a named version in the file's version history: "Saves a version first. If Figma refuses the save, nothing is written." <!-- src: apps/studio/src/state/update-file.ts:408 -->
 
@@ -114,7 +114,7 @@ When a brand drops a mode, a ramp step or a text style, the old one stays in the
 
 1. Choose **Update file**, then the **Clean up** tab. It checks the file as it opens and reads "Checking for stale items…". Nothing is deleted yet. <!-- src: apps/studio/src/state/update-file.ts:438 -->
 2. The tab states what it found, including the modes by name. When there is nothing, it says "Nothing stale in this file." <!-- src: apps/studio/src/state/update-file.ts:439 -->
-3. Choose **Remove *N* items** to delete them, or **Close** to stop. <!-- src: apps/studio/src/shell/update-file.ts:727-736 -->
+3. Choose **Remove *N* items** to delete them, or **Close** to stop. <!-- src: apps/studio/src/shell/update-file.ts:747-756 -->
 
 *[Screenshot placeholder: the Clean up tab with its summary and Delete button.]*
 
