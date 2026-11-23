@@ -153,8 +153,11 @@ export type CheckedSetView = {
   /** #2831 — on a published set, what the update breaks for library consumers, as one line. Absent otherwise. */
   readonly breaks?: string;
   /** #3711 (Q-UF2 A) — those changes, each named, and how many in all, for the callout before the run. Absent otherwise. */
-  readonly changes?: { readonly count: number; readonly lines: readonly string[] };
+  readonly changes?: { readonly count: number; readonly lines: readonly string[]; readonly kinds?: ChangeKinds };
 };
+/** #4481 — a set's changes for files that use the library, counted by what they do there: break them, retire a member,
+ *  or take the set out of the library. The three add up to the set's count. */
+export type ChangeKinds = { readonly breaks: number; readonly retired: number; readonly leaves: number };
 
 /** What the library home states about the library a file uses (#2879), as the host found it on the current page. */
 export type LibraryFileView = {
@@ -439,7 +442,15 @@ const checkedSet = (x: unknown): CheckedSetView[] => {
 const changesOf = (x: unknown): { changes?: CheckedSetView['changes'] } => {
   const c = x as Record<string, unknown> | null;
   const k = c && typeof c === 'object' ? count(c.count) : null;
-  return k && Array.isArray(c!.lines) && c!.lines.length && c!.lines.every(str) ? { changes: { count: k, lines: [...c!.lines as string[]] } } : {};
+  return k && Array.isArray(c!.lines) && c!.lines.length && c!.lines.every(str) ? { changes: { count: k, lines: [...c!.lines as string[]], ...kindsOf(c!.kinds, k) } } : {};
+};
+/** #4481: the changes' counts by kind, kept only when each is a count and they add up to the set's count, so the summary
+ *  never states a split the host didn't send. Absent otherwise, and the summary then gives the total alone. */
+const kindsOf = (x: unknown, total: number): { kinds?: ChangeKinds } => {
+  const c = x as Record<string, unknown> | null;
+  if (!c || typeof c !== 'object') return {};
+  const [breaks, retired, leaves] = [count(c.breaks), count(c.retired), count(c.leaves)];
+  return breaks !== null && retired !== null && leaves !== null && breaks + retired + leaves === total ? { kinds: { breaks, retired, leaves } } : {};
 };
 const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid'];
 /** The style guide's catalog (S11.2), checked entry by entry: an entry with a field of the wrong type is dropped, and

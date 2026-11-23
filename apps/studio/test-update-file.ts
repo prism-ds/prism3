@@ -41,7 +41,7 @@
  * setting changes …`; the reduce keeping an older answer (`m.seq < s.liveDue.seq` dropped) → `Q810 A recount: an
  * answer overtaken by a newer request never shows`.
  */
-import { UPDATE_COPY, offSetsOf, offReasonOf, compsOpensOf, goWhyOf, blockedDueOf, blockedLine, blockedReason, keptChoicesOf, libraryChangesOf, keptSetsOf, recheckFirst, recheckHolds, awaitingRead, badgeCount, badgeParts, checkScopeOf, defaultTicks, themeDueOf, themeMatchesOf, panelSetsOf, updateDefsOf, dueCount, engineWhy, dueSetsOf, newSetsOf, queuedOf, setupOfferedOf, startUpdate, statusesOf, stepDone, stepOf, stepsOf, stopUpdate, unrecordedOf, updatableOf } from './src/state/update-file';
+import { UPDATE_COPY, offSetsOf, offReasonOf, compsOpensOf, goWhyOf, blockedDueOf, blockedLine, blockedReason, keptChoicesOf, libraryChangesOf as libraryChangesOfFull, keptSetsOf, recheckFirst, recheckHolds, awaitingRead, badgeCount, badgeParts, checkScopeOf, defaultTicks, themeDueOf, themeMatchesOf, panelSetsOf, updateDefsOf, dueCount, engineWhy, dueSetsOf, newSetsOf, queuedOf, setupOfferedOf, startUpdate, statusesOf, stepDone, stepOf, stepsOf, stopUpdate, unrecordedOf, updatableOf } from './src/state/update-file';
 import type { Catalog } from './src/state/component-catalog';
 import { initialHostSession, reduce } from './src/state/host-session';
 
@@ -369,6 +369,8 @@ ok(reduce(s2, fd(3, false)).liveDue?.theme === false, 'Q810 A recount (control):
 {
   const set = (def: string, changes?: { count: number; lines: string[] }) => ({ def, hash: def, members: 4, update: 1, add: 0, drop: 0, handEdited: 0, noBaseline: 0, blocked: false, upToDate: false, ...(changes ? { changes } : {}) });
   const check = { sets: [set('wallet-button', { count: 2, lines: ['Wallet button · variant=a · retired', 'Wallet button · variant=b · retired'] }), set('tag', { count: 1, lines: ['Tag · property label · removed'] }), set('badge')] };
+  // #4481: these arms read the count and the lines; the split by kind has its own arms below.
+  const libraryChangesOf = (defs: readonly string[], c: Parameters<typeof libraryChangesOfFull>[1]) => { const x = libraryChangesOfFull(defs, c); return { count: x.count, lines: x.lines }; };
   ok(same(libraryChangesOf(['wallet-button', 'badge'], check), { count: 2, lines: ['Wallet button · variant=a · retired', 'Wallet button · variant=b · retired'] }),
     `uf2/only the run's sets: the callout names the changes of the sets the update runs, and counts them (${JSON.stringify(libraryChangesOf(['wallet-button', 'badge'], check))})`);
   ok(same(libraryChangesOf(['wallet-button', 'tag'], check), { count: 3, lines: ['Wallet button · variant=a · retired', 'Wallet button · variant=b · retired', 'Tag · property label · removed'] }),
@@ -377,14 +379,12 @@ ok(reduce(s2, fd(3, false)).liveDue?.theme === false, 'Q810 A recount (control):
     'uf2/none: no callout while no set the update runs has changes, or before the check answers');
   ok(UPDATE_COPY.goLibrary(2) === 'Update, including 2 library changes' && UPDATE_COPY.goLibrary(1) === 'Update, including 1 library change',
     `uf2/button: the button carries the count (${UPDATE_COPY.goLibrary(2)} | ${UPDATE_COPY.goLibrary(1)})`);
-  ok(UPDATE_COPY.library === 'Files that use this library' && UPDATE_COPY.librarySub(2) === '2 changes in this update reach them at the next library publish:'
-    && UPDATE_COPY.librarySub(1) === '1 change in this update reaches them at the next library publish:', `uf2/callout words: the title and the count line (${UPDATE_COPY.librarySub(1)})`);
   // Review of #3751 at 6fa8b4cd, S2: THE PANEL'S COUNT PAST THE CAP. The host caps a set's lines at 8 plus one "n more"
   // line but counts every change (`uf2/checked set past the cap`, plugin side); the panel's count must be the host's
   // count, not the lines it was sent. Literal: 11 changes arrive as 9 lines. (mutation: `libraryChangesOf` summing
   // `c.lines.length` → this arm)
   const nine = [...Array.from({ length: 8 }, (_, i) => `Wallet button · variant=v${i + 1} · retired`), 'wallet-button: 3 more changes not listed.'];
-  const cap = libraryChangesOf(['wallet-button'], { sets: [set('wallet-button', { count: 11, lines: nine })] });
+  const cap = libraryChangesOfFull(['wallet-button'], { sets: [set('wallet-button', { count: 11, lines: nine })] });
   ok(cap.count === 11 && cap.lines.length === 9 && UPDATE_COPY.goLibrary(cap.count) === 'Update, including 11 library changes',
     `uf2/past the cap: the button counts all 11 changes while the callout lists 9 lines (${JSON.stringify({ count: cap.count, lines: cap.lines.length })})`);
   // Review of #3751, should-fix 2, pinned AS BUILT pending the owner's call: a set the check read as blocked only by
@@ -398,6 +398,41 @@ ok(reduce(s2, fd(3, false)).liveDue?.theme === false, 'Q810 A recount (control):
   const tdefs = updateDefsOf(tticks, tcheck, []);
   ok(same(tdefs, ['wallet-button', 'tag']) && same(libraryChangesOf(tdefs, tcheck), { count: 2, lines: ['Wallet button · variant=a · retired', 'Wallet button · variant=b · retired'] }),
     `uf2/theme-blocked: a set only Theme blocks runs with Theme ticked, and adds nothing to the callout or the count until the owner decides (${JSON.stringify(tdefs)})`);
+}
+
+// #4481 (owner decision A, 2026-11-23): THE CALLOUT'S ONE LINE COUNTS THE CHANGES BY KIND. Each set's split comes from
+// the host (`changeKinds`, plugin side); the summary adds the run's sets together and names each kind's sets. Neutral
+// fixtures and literals typed here: 8 changes break one set, 2 retire members of each of two others, and the line says
+// 8 + 4 = 12. A set the update does not run adds nothing. A set sent without its split leaves the total alone, never a
+// guessed split. MUTATIONS: `libraryChangesOf` summing one set's split only, or reading every checked set → `#4481 counts
+// by kind`; `librarySummary` dropping the retired clause → `#4481 summary words`; a split dropped for one set still
+// summed → `#4481 no split`.
+{
+  const set = (def: string, changes?: { count: number; lines: string[]; kinds?: { breaks: number; retired: number; leaves: number } }) => ({ def, hash: def, members: 4, update: 1, add: 0, drop: 0, handEdited: 0, noBaseline: 0, blocked: false, upToDate: false, ...(changes ? { changes } : {}) });
+  const lines = (name: string, n: number, what: string) => Array.from({ length: n }, (_, i) => `${name} · variant=v${i + 1} · ${what}`);
+  const check = { sets: [
+    set('panel', { count: 8, lines: lines('Panel', 8, 'merged and removed'), kinds: { breaks: 8, retired: 0, leaves: 0 } }),
+    set('chip', { count: 2, lines: lines('Chip', 2, 'retired'), kinds: { breaks: 0, retired: 2, leaves: 0 } }),
+    set('glyph', { count: 2, lines: lines('Glyph', 2, 'retired'), kinds: { breaks: 0, retired: 2, leaves: 0 } }),
+    set('meter', { count: 3, lines: lines('Meter', 3, 'removed'), kinds: { breaks: 3, retired: 0, leaves: 0 } }),
+  ] };
+  const names: Record<string, string> = { panel: 'Panel', chip: 'Chip', glyph: 'Glyph', meter: 'Meter' };
+  const nameOf = (id: string): string => names[id] ?? id;
+  const lib = libraryChangesOfFull(['panel', 'chip', 'glyph'], check);
+  ok(lib.count === 12 && same(lib.kinds, { breaks: 8, retired: 4, leaves: 0 }) && same(lib.setsBy, { breaks: ['panel'], retired: ['chip', 'glyph'], leaves: [] }) && lib.lines.length === 12,
+    `#4481 counts by kind: the run's 12 changes split 8 that break, 4 retired, each kind naming its sets, the unrun set left out (${JSON.stringify({ count: lib.count, kinds: lib.kinds, setsBy: lib.setsBy })})`);
+  ok(UPDATE_COPY.librarySummary(lib, nameOf) === '12 changes reach files that use this library: 8 break their instances (Panel), 4 are retired (Chip and Glyph).',
+    `#4481 summary words: one line, the total, then each kind with its sets (${UPDATE_COPY.librarySummary(lib, nameOf)})`);
+  const one = libraryChangesOfFull(['chip'], { sets: [set('chip', { count: 1, lines: ['Chip · variant=a · retired'], kinds: { breaks: 0, retired: 1, leaves: 0 } })] });
+  const gone = libraryChangesOfFull(['tag'], { sets: [set('tag', { count: 1, lines: ['Tag · renamed'], kinds: { breaks: 0, retired: 0, leaves: 1 } })] });
+  ok(UPDATE_COPY.librarySummary(one, nameOf) === '1 change reaches files that use this library: 1 is retired (Chip).'
+    && UPDATE_COPY.librarySummary(gone) === '1 change reaches files that use this library: 1 takes a set out of the library (tag).',
+    `#4481 summary words: one change, and a set leaving the library (${UPDATE_COPY.librarySummary(one, nameOf)} | ${UPDATE_COPY.librarySummary(gone)})`);
+  const mixed = { sets: [check.sets[0], set('chip', { count: 2, lines: lines('Chip', 2, 'retired') })] };
+  const ns = libraryChangesOfFull(['panel', 'chip'], mixed);
+  ok(ns.count === 10 && ns.kinds === null && UPDATE_COPY.librarySummary(ns, nameOf) === '10 changes reach files that use this library.',
+    `#4481 no split: a set sent without its split leaves the total alone (${JSON.stringify({ count: ns.count, kinds: ns.kinds })} | ${UPDATE_COPY.librarySummary(ns, nameOf)})`);
+  ok(UPDATE_COPY.libraryShow === 'Show the changes' && UPDATE_COPY.libraryHide === 'Hide the changes', '#4481 summary words: the control that shows the full list');
 }
 
 // #3713 (2 of 4): THE DUE SETS THE ANSWER BLOCKS ARE LISTED APART. Literals (docs/34). MUTATION: `blockedDueOf` returning

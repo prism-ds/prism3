@@ -6774,8 +6774,21 @@ section('published — on a set in a team library, what breaks consumer files is
     // (11), the callout's lines the capped 8 plus the count of the rest. Literal. Mutations: `count` read off the capped
     // lines (9), or the lines left uncapped (11) → `uf2/checked set past the cap`.
     const past = checkedSetOf({ ...p, breaking: many }, TAG).changes;
-    ok(JSON.stringify(past) === JSON.stringify({ count: 11, lines: wantCap.slice(1, 10) }),
+    ok(JSON.stringify(past) === JSON.stringify({ count: 11, lines: wantCap.slice(1, 10), kinds: { breaks: 0, retired: 11, leaves: 0 } }),
       `uf2/checked set past the cap: the button counts all 11 changes, the callout lists 8 and counts the other 3 (${JSON.stringify(past && { count: past.count, lines: past.lines.length })})`);
+    // #4481 (owner decision A): THE SPLIT BY KIND, for Update file's one-line summary, counted over every change, never
+    // the capped lines. A literal mix typed here: 8 members merged and removed, 1 property removed, 1 layer replaced and
+    // 1 layer removed break consumers (11); 2 members retired; 1 rename out of the library. 14 in all, 9 of them past the
+    // cap of 8 lines. MUTATIONS: `changeKinds` counting `merge` as retired, or reading the capped lines → `#4481 split`.
+    const mix: Breaking[] = [
+      ...Array.from({ length: 8 }, (_, i) => ({ kind: 'merge' as const, member: `size=m${i}`, into: 'size=medium' })),
+      { kind: 'property', name: 'label', change: 'removed' }, { kind: 'replace', member: 'size=small', path: 'content/label', reason: 'a layer' },
+      { kind: 'layer', path: 'content/check', members: 3 }, { kind: 'drop', member: 'size=a' }, { kind: 'drop', member: 'size=b' },
+      { kind: 'private', from: TAG, to: `_${TAG}` },
+    ];
+    const split = checkedSetOf({ ...p, breaking: mix }, TAG).changes;
+    ok(split?.count === 14 && split.lines.length === 9 && JSON.stringify(split.kinds) === JSON.stringify({ breaks: 11, retired: 2, leaves: 1 }),
+      `#4481 split: a set's changes cross counted by kind, 11 that break, 2 retired, 1 leaving the library, adding up to all 14 past the cap (${JSON.stringify(split && { count: split.count, lines: split.lines.length, kinds: split.kinds })})`);
   }
 
   // A LAYER REMOVED AND RE-ADDED (#2864): Tag built while its check layer was `check`, updated to plans naming it
@@ -6808,7 +6821,7 @@ section('published — on a set in a team library, what breaks consumer files is
       `published/checklist set: the checked set posted for the checklist carries the published set's line, and the unpublished set's none (${checkedSetOf(p, TAG).breaks} | ${checkedSetOf(qp, TAG).breaks})`);
     // #3711 (Q-UF2 A): the checked set also carries each change named and the count, for the callout before the run; the
     // unpublished set carries none. Literal. Mutation: `changes` dropped from `checkedSetOf` → `uf2/checked set`.
-    ok(JSON.stringify(checkedSetOf(p, TAG).changes) === JSON.stringify({ count: 1, lines: [`${TAG} · ${CHECK} · removed from 15 variants — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`] })
+    ok(JSON.stringify(checkedSetOf(p, TAG).changes) === JSON.stringify({ count: 1, lines: [`${TAG} · ${CHECK} · removed from 15 variants — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`], kinds: { breaks: 1, retired: 0, leaves: 0 } })
       && !('changes' in checkedSetOf(qp, TAG)),
       `uf2/checked set: the published set's changes are named and counted for the callout, the unpublished set's absent (${JSON.stringify(checkedSetOf(p, TAG).changes)})`);
     const shipped = (await previewUpdate(w.host, [{ def: TAG, plans: planned }])).sets[0];

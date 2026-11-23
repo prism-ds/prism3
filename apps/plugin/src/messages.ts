@@ -227,8 +227,11 @@ export type CheckedSet = {
   breaks?: string;
   /** #3711 (Q-UF2 A) — the same changes, each named (`consumerLines`, capped as the check's section is), and how many
    *  in all, for the callout above Update file's button. Absent where `breaks` is. */
-  changes?: { count: number; lines: string[] };
+  changes?: { count: number; lines: string[]; kinds: ChangeKinds };
 };
+/** #4481 — those changes counted by what they do to files that use the library (`changeKinds`): break them, retire a
+ *  member, or take the set out of the library. The three add up to `count`. */
+export type ChangeKinds = { breaks: number; retired: number; leaves: number };
 
 /** A style-guide specimen (#259) — the `type` axis of `_style-guide-swatches` a table row instances. */
 export type SwatchType = 'default' | 'text' | 'icon' | 'border' | 'transparency';

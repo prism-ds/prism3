@@ -19106,7 +19106,7 @@ for (const host of ['web', 'figma']) for (const theme of ['light', 'dark']) {
         `${where}: Q699 A: the checklist's due read and its check each send the brand the panel holds (${askedSets.length} file-sets-request; ${[...askedSets, ...asked].map((m) => wireDiff(m.input, PANEL_BRAND)).join(', ')})`);
       const sets = [
         { def: 'button', hash: 'hb', members: 648, update: 12, add: 0, drop: 0, handEdited: 2, noBaseline: 0, blocked: false, upToDate: false, breaks: '1 change affects files that use this library: 1 layer removed, which breaks those files: overrides on it are lost.',
-          changes: { count: 1, lines: ['Button · content/check · removed from 12 variants — breaks files that use this library: overrides on it are lost.'] } },
+          changes: { count: 1, lines: ['Button · content/check · removed from 12 variants — breaks files that use this library: overrides on it are lost.'], kinds: { breaks: 1, retired: 0, leaves: 0 } } },
         { def: 'select', hash: 'hs', members: 30, update: 0, add: 0, drop: 0, handEdited: 0, noBaseline: 0, blocked: false, upToDate: true },
       ];
       // #3302 (the owner's Q3302.1–.3 A, 2026-11-02; the strings approved as written): the check's progress in the
@@ -19170,17 +19170,68 @@ for (const host of ['web', 'figma']) for (const theme of ['light', 'dark']) {
       ok(ck.hand?.value === 'keep', `${where}: Q2909.8 A: the update keeps hand edits by default (${JSON.stringify(ck.hand)})`);
       // #3711 (Q-UF2 A): the change the update passes on to files that use the library is named in a callout directly
       // above the button, and the button carries the count. Since #3712 (Q-UD2) the callout is the foot's last message
-      // row, the buttons' row next. Literals (DRAFT copy). (mutation: the callout or the button's count dropped → this arm)
-      const lib = await page.evaluate(() => {
-        const call = document.querySelector('[data-p3="update-library"]');
-        return { title: call?.querySelector('[data-p3="update-library-title"]')?.textContent ?? null, sub: call?.querySelector('[data-p3="update-library-sub"]')?.textContent ?? null,
+      // row, the buttons' row next. Since #4481 (owner decision A) it is one summary line and "Show the changes", the
+      // named lines in a list it holds closed. Literals (DRAFT copy). (mutation: the callout or the button's count
+      // dropped → this arm)
+      const libOf = () => page.evaluate(() => {
+        const call = document.querySelector('[data-p3="update-library"]'), list = call?.querySelector('[data-p3="update-library-list"]'), show = call?.querySelector('[data-p3="update-library-show"]');
+        return { summary: call?.querySelector('[data-p3="update-library-summary"]')?.textContent ?? null,
+          show: show ? { text: show.textContent, expanded: show.getAttribute('aria-expanded'), controls: show.getAttribute('aria-controls') === list?.id } : null,
+          shown: !!list && list.getClientRects().length > 0,
           lines: [...(call?.querySelectorAll('[data-p3="update-library-line"]') ?? [])].map((n) => n.textContent),
           last: call?.parentElement?.getAttribute('data-p3') === 'update-foot-msg' && call.parentElement.nextElementSibling?.getAttribute('data-p3') === 'update-foot-actions', go: document.querySelector('[data-p3="update-go"]')?.textContent ?? null };
       });
-      ok(lib.title === 'Files that use this library' && lib.sub === '1 change in this update reaches them at the next library publish:'
+      const lib = await libOf();
+      ok(lib.summary === '1 change reaches files that use this library: 1 breaks their instances (Button).'
+        && JSON.stringify(lib.show) === JSON.stringify({ text: 'Show the changes', expanded: 'false', controls: true }) && !lib.shown
         && JSON.stringify(lib.lines) === JSON.stringify(['Button · content/check · removed from 12 variants — breaks files that use this library: overrides on it are lost.'])
         && lib.last && lib.go === 'Update, including 1 library change',
-        `${where}: #3711 Q-UF2 A: a callout above the button names the library change, and the button carries the count (${JSON.stringify(lib)})`);
+        `${where}: #3711 Q-UF2 A, #4481: a callout above the button sums up the library change, its line held under Show the changes, and the button carries the count (${JSON.stringify(lib)})`);
+      // #4481 (the owner's decision A, 2026-11-23: "that won't work", of a 12-change list that filled the dialog): A LONG
+      // LIST NEVER TAKES OVER THE DIALOG. Twelve changes, 8 that break Button and 4 retired on Select (neutral fixture
+      // lines typed here). Closed, the callout is the summary line and its control, at most 3 control heights tall (a
+      // literal: the one line may wrap once beside the glyph, plus the control), and each step's head row (Theme,
+      // Components, Style guides) stays inside the body's visible area. Opened, the list is a box that scrolls inside
+      // itself, at most 4 control heights (`chrome.css`, a literal here), holding all 12 lines; the first steps still
+      // show and the body keeps at least 360px (40% of the 900px window, a literal), scrolling to the rest (Components
+      // is open here with its due sets, so Style guides sits under the fold once the box opens). Then it closes again
+      // for the arms below. MUTATIONS (each after a `wip:` commit): the list never hidden
+      // (`list.hidden = false`) → `#4481 steps stay in view` (closed); the box's `max-height` dropped → `#4481 steps
+      // stay in view` (open), by name.
+      {
+        const twelve = [
+          ...Array.from({ length: 8 }, (_, i) => `Button · size=s${i + 1} · merged into size=medium and removed — breaks files that use this library: their instances of it stop updating until swapped to size=medium.`),
+          ...Array.from({ length: 4 }, (_, i) => `Select · variant=v${i + 1} · retired — its instances in files that use this library keep working and show as deprecated.`),
+        ];
+        const long = [{ ...sets[0], changes: { count: 8, lines: twelve.slice(0, 8), kinds: { breaks: 8, retired: 0, leaves: 0 } } }, { ...sets[1], upToDate: false, update: 4, changes: { count: 4, lines: twelve.slice(8), kinds: { breaks: 0, retired: 4, leaves: 0 } } }];
+        await postMsg(page, { type: 'update-check', previewHash: 'H-1', missing: [], refused: [], sets: long });
+        await page.waitForFunction(() => document.querySelectorAll('[data-p3="update-library-line"]').length === 12, null, { timeout: 5000 }).catch(() => {});
+        const roomOf = () => page.evaluate(() => {
+          const body = document.querySelector('[data-p3="update-body"]'), call = document.querySelector('[data-p3="update-library"]'), list = call?.querySelector('[data-p3="update-library-list"]');
+          const ctl = call ? parseFloat(getComputedStyle(call).getPropertyValue('--p3-ctl-h')) || 0 : 0;
+          const b = body?.getBoundingClientRect();
+          const heads = [['theme', document.querySelector('[data-p3="update-item-theme"]')], ['components', document.querySelector('[data-p3="update-item-components"]')], ['guides', document.querySelector('[data-p3="update-item-guides"]')]]
+            .map(([k, card]) => { const r = card?.firstElementChild?.getBoundingClientRect();
+            return [k, !!r && !!b && r.height > 0 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5 && r.bottom <= innerHeight, r && b ? Math.round(r.bottom - b.bottom) : null]; });
+          return { ctl, call: Math.round(call?.getBoundingClientRect().height ?? -1), heads, body: b ? { h: Math.round(b.height), scrolls: body.scrollHeight > body.clientHeight + 1 } : null, list: list && list.getClientRects().length ? { h: Math.round(list.getBoundingClientRect().height), scrolls: list.scrollHeight > list.clientHeight + 1, tab: list.tabIndex, lines: list.querySelectorAll('[data-p3="update-library-line"]').length } : null };
+        });
+        const sum = (await libOf()).summary;
+        const closed = await roomOf();
+        ok(sum === '12 changes reach files that use this library: 8 break their instances (Button), 4 are retired (Select).',
+          `${where}: #4481 summary: the callout's one line counts the 12 changes by kind, naming each kind's sets (${sum})`);
+        ok(closed.ctl > 0 && closed.call > 0 && closed.call <= 3 * closed.ctl && closed.list === null && closed.heads.every(([, inView]) => inView),
+          `${where}: #4481 steps stay in view (closed): with 12 changes the callout is ${closed.call}px, at most 3 control heights (${3 * closed.ctl}px), its list closed, and every step's head row shows (${JSON.stringify(closed)})`);
+        await hooks.click(page.locator('[data-p3="update-library-show"]'));
+        await page.waitForFunction(() => document.querySelector('[data-p3="update-library-show"]')?.getAttribute('aria-expanded') === 'true', null, { timeout: 5000 }).catch(() => {});
+        const opened = await roomOf();
+        const showText = await page.evaluate(() => document.querySelector('[data-p3="update-library-show"]')?.textContent ?? null);
+        ok(showText === 'Hide the changes' && !!opened.list && opened.list.lines === 12 && opened.list.h <= 4 * opened.ctl && opened.list.scrolls && opened.list.tab === 0
+          && opened.heads.slice(0, 2).every(([, inView]) => inView) && !!opened.body && opened.body.h >= 360,
+          `${where}: #4481 steps stay in view (open): Show the changes opens all 12 lines in a box at most 4 control heights (${4 * opened.ctl}px) that scrolls and takes focus; Theme's and Components' head rows still show and the steps keep at least 360px, 40% of the 900px window, scrolling to the rest (${JSON.stringify({ showText, ...opened })})`);
+        await hooks.click(page.locator('[data-p3="update-library-show"]'));
+        await postMsg(page, { type: 'update-check', previewHash: 'H-1', missing: [], refused: [], sets });
+        await page.waitForFunction(() => document.querySelectorAll('[data-p3="update-library-line"]').length === 1 && document.querySelector('[data-p3="update-library-show"]')?.getAttribute('aria-expanded') === 'false', null, { timeout: 5000 }).catch(() => {});
+      }
       // #3083 (the owner's Q3083.3 A and Q3083.4 A, 2026-10-28): the hand-edits choice is a compact select, "Hand edits",
       // in the foot just before Cancel and Update file, 32px tall, never in the body; its words are the short forms
       // (DRAFT). Literals, the owner's. MUTATION: the select pushed to the body (`sets.append`) → this arm.
@@ -19640,7 +19691,8 @@ for (const host of ['web', 'figma']) for (const theme of ['light', 'dark']) {
           above: msgs.every((m) => r(m).bottom <= top + 0.5),
           buttons: btns.map((b) => b.getAttribute('data-p3')), oneRow: btns.length > 0 && btns.every((b) => Math.abs(r(b).top - top) <= 1),
           inside: btns.every((b) => r(b).right <= r(foot).right + 0.5 && r(b).left >= r(foot).left - 0.5),
-          loose: foot.querySelectorAll('button').length - btns.length,
+          // #4481: a message's own control (the library callout's Show the changes) is part of its row, not loose.
+          loose: [...foot.querySelectorAll('button')].filter((b) => !btns.includes(b) && !b.closest('[data-p3="update-foot-msg"]')).length,
         };
       });
       const indentOf = () => page.evaluate(() => {

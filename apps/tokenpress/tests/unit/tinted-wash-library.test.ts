@@ -119,7 +119,8 @@ describe('a tinted wash over a team-library variable (#2365, #4166)', () => {
   test('with Figma extensions on, aliasOf names the library color by its name', async () => {
     installFigma();
     const t = await exportToken(['button', 'wash'], { includeFigmaExtensions: true });
-    expect(t && t.$extensions.figma.aliasOf).toEqual({ color: '{brand.primary}' });
+    // The literal 30% is kept beside the reference since #4475.
+    expect(t && t.$extensions.figma.aliasOf).toEqual({ color: '{brand.primary}', opacity: 30 });
   });
 
   test('the validator reports a wash over a dangling id, and accepts one over a library variable', async () => {
