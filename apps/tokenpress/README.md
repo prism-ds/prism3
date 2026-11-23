@@ -386,6 +386,33 @@ mode, as Figma resolves it when no mode is set.
 The dot-notation format writes a wash as its reference and its opacity, then
 the color it resolves to: `color.fill.selected: "{color.fill.rest} @ 30%" -> "rgba(61, 104, 252, 0.30)"`.
 
+### Team-Library Aliases → Values
+
+A variable that aliases a variable from an enabled team library exports as the
+value that variable resolves to, so the export builds without the library's
+tokens. The value is read in the library collection's default mode, as Figma
+resolves an alias into another collection. The reference is kept in
+`$extensions.figma.externalAlias`, whether or not Figma extensions are on:
+
+```json
+{
+  "$type": "color",
+  "$value": { "colorSpace": "srgb", "components": [1, 0.502, 0], "alpha": 1 },
+  "$extensions": {
+    "figma": {
+      "externalAlias": {
+        "reference": "{brand.primary}",
+        "variableId": "VariableID:abc123/7:1",
+        "variableKey": "abc123",
+        "collection": "Brand library"
+      }
+    }
+  }
+}
+```
+
+A library alias that doesn't reach a value keeps the reference as its `$value`.
+
 ### Gradient Paint Styles → Gradient Tokens
 
 A paint style whose one visible paint is a gradient exports as a DTCG

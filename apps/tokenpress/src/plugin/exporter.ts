@@ -785,16 +785,35 @@ export class TokenExporter {
     if (variable.resolvedType === 'EASING') {
       dtcgType = this.easingTypeOf(this.resolveAliasSourceValue(value, variableMap));
     }
+    // An alias to a team-library variable exports as the value it resolves to (prism3 #4490, option A), so the
+    // export stands alone: the library's tokens are not in it, and a reference to them broke every consumer that
+    // resolves references (Style Dictionary, the CSS format's `var()`). The reference is kept beside the value, in
+    // `$extensions.figma.externalAlias` below. The value is read through the library collection's default mode, as
+    // Figma resolves an alias into another collection; a chain that does not reach a value keeps the reference.
+    const external = isVariableAlias(value) ? this.externalVariables.get(value.id) : undefined;
+    const resolved = external
+      ? this.resolveInMode(value, variableMap, variable.variableCollectionId, modeId)
+      : value;
+    const standalone = external !== undefined && !isVariableAlias(resolved);
     const token: DTCGToken = {
       $type: dtcgType,
-      $value: this.convertVariableValue(
-        value,
-        variable.resolvedType,
-        variableMap,
-        dtcgType,
-        variable.scopes,
-        variable.name
-      ),
+      $value: standalone
+        ? this.convertVariableValue(
+            resolved as VariableValue,
+            variable.resolvedType,
+            variableMap,
+            dtcgType,
+            effectiveScopes,
+            variable.name
+          )
+        : this.convertVariableValue(
+            value,
+            variable.resolvedType,
+            variableMap,
+            dtcgType,
+            variable.scopes,
+            variable.name
+          ),
     };
 
     if (variable.description) {
@@ -815,14 +834,15 @@ export class TokenExporter {
       }
     }
 
-    // A reference to a team-library variable resolves only where that library's tokens are exported
-    // too, so it says where it points (prism3 #4166, owner decision C). Written whether or not the Figma
-    // metadata option is on: it qualifies the `$value`, it isn't metadata about this variable.
-    const external = isVariableAlias(value) ? this.externalVariables.get(value.id) : undefined;
+    // A team-library alias says where it points (prism3 #4166), and keeps the reference its value was
+    // resolved from (prism3 #4490), so a tool that exports the library alongside can rebuild it. Written
+    // whether or not the Figma metadata option is on: it qualifies the `$value`, it isn't metadata about
+    // this variable.
     if (external) {
       const extensions = (token.$extensions || {}) as Record<string, Record<string, unknown>>;
       const figmaExt = extensions.figma || {};
       figmaExt.externalAlias = {
+        reference: this.convertVariableValue(value, variable.resolvedType, variableMap, dtcgType),
         variableId: external.id,
         variableKey: external.key,
         collection: this.externalCollectionNames[external.variableCollectionId] || null,

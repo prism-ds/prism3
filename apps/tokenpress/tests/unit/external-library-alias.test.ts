@@ -10,6 +10,10 @@
  * Owner decision C on #4166 (2026-11-19): the alias exports as a normal reference by the target's name, and
  * `$extensions.figma.externalAlias` marks it as living outside this export. An id the API cannot resolve keeps today's
  * broken-alias behavior.
+ *
+ * prism3 #4490 (option A) moves the reference into the marker: `$value` is the value the library variable resolves
+ * to, so the export stands alone, and `externalAlias.reference` keeps `{brand.primary}`. Its own cases are in
+ * `library-alias-standalone.test.ts`; the two assertions here that read `$value` follow it.
  */
 
 import JSZip from 'jszip';
@@ -129,7 +133,7 @@ describe('team-library alias (#4166)', () => {
     expect(lookups.filter(id => id === remote.id).length).toBe(1);
   });
 
-  test('the DTCG token is a reference by the target name, marked external', async () => {
+  test('the DTCG token keeps the reference by the target name, marked external', async () => {
     installFigma();
     const exporter = new TokenExporter({ tokenNameCase: 'preserve' } as never);
     const found = await new TokenScanner().resolveExternalAliasTargets([local]);
@@ -137,8 +141,9 @@ describe('team-library alias (#4166)', () => {
     const e = exporter as any;
     e.setExternalAliasTargets(found);
     const token = e.convertVariableToDTCG(local, local.valuesByMode[MODE], e.variableMapOf([local]));
-    expect(token.$value).toBe('{brand.primary}');
+    expect(token.$value).toEqual({ colorSpace: 'srgb', components: [1, 0, 0], alpha: 1 });
     expect(token.$extensions.figma.externalAlias).toEqual({
+      reference: '{brand.primary}',
       variableId: remote.id,
       variableKey: 'abc123',
       collection: 'Brand library',
@@ -185,18 +190,18 @@ describe('team-library alias (#4166)', () => {
     expect(found.variables.map(v => v.id)).toEqual([remoteChain.id, remote.id]);
   });
 
-  test('the real export (exportToZip) writes a library alias as a reference by name, marked external', async () => {
+  test('the real export (exportToZip) keeps a library alias as a reference by name, marked external', async () => {
     installFigma();
     const files = await exportFiles();
     const fill = findToken(files, ['button', 'fill']);
-    expect(fill && fill.$value).toBe('{brand.primary}');
     expect(fill && fill.$extensions && fill.$extensions.figma.externalAlias).toEqual({
+      reference: '{brand.primary}',
       variableId: remote.id,
       variableKey: 'abc123',
       collection: 'Brand library',
     });
     const accent = findToken(files, ['button', 'accent']);
-    expect(accent && accent.$value).toBe('{brand.accent}');
+    expect(accent && accent.$extensions && accent.$extensions.figma.externalAlias.reference).toBe('{brand.accent}');
   });
 
   test('the multi-format raw-figma data maps a library alias target, so it is not "Unknown"', async () => {

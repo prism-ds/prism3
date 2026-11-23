@@ -32,19 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolves through that collection's default mode, as Figma resolves it. A
   wash over a team-library variable resolves the same way, and a wash over a
   variable that no longer exists is reported as a broken alias.
-- **An alias to a team-library variable exports as a reference.** A local
-  variable that aliases a variable from an enabled team library now exports
-  as a reference by the target's name, such as `{brand.primary}`. The token's
-  `$extensions.figma.externalAlias` marks it as external, with the target's
-  `variableId`, `variableKey` and the name of its collection. The marker is
-  written whether or not Figma metadata is on, because the reference resolves
-  only where the library's tokens are exported too. Before, the export wrote
-  the raw `{VariableID:…}`, validation reported it as a broken alias, which
-  blocks the export, and the raw Figma format named the target `Unknown`.
-  Targets are looked up with `figma.variables.getVariableByIdAsync`, which
-  needs no new permission. An id it can't resolve is still reported as broken.
-  With a namespace set, the reference takes this export's namespace, so it
-  resolves where the library is exported under the same one.
+- **An alias to a team-library variable exports as the library's value.** A
+  local variable that aliases a variable from an enabled team library now
+  exports as the value that variable resolves to, so the export builds on its
+  own: `button/fill` aliasing the library's `brand/primary` exports as
+  `brand/primary`'s color. The value is read in the library collection's
+  default mode, as Figma resolves an alias into another collection, and a
+  library variable that is itself an alias is followed to its value. The
+  token's `$extensions.figma.externalAlias` keeps the reference
+  (`"reference": "{brand.primary}"`) with the target's `variableId`,
+  `variableKey` and the name of its collection, so a tool that exports the
+  library too can rebuild it. The marker is written whether or not Figma
+  metadata is on. Before, the export wrote the raw `{VariableID:…}`, validation
+  reported it as a broken alias, which blocks the export, and the raw Figma
+  format named the target `Unknown`. Targets are looked up with
+  `figma.variables.getVariableByIdAsync`, which needs no new permission. An id
+  it can't resolve is still reported as broken, and a library chain that
+  doesn't reach a value keeps the reference. With a namespace set, the kept
+  reference takes this export's namespace.
 - **Gradients are exported.** Gradient paint styles now export to
   `gradients.json` (`shared/gradients.json` in a multi-mode export) as DTCG
   `gradient` tokens: an array of `{ color, position }` stops, with a stop bound
