@@ -410,7 +410,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
           const head = copy.split('\n').slice(0, copy.split('\n').length - (src.split('\n').length - end - 1)).join('\n');
           const refs = scanFile(join(to, dest, f), head, repo, DELIVERED.source, to, `${dest}/${f}`).a;
           if (refs.length) bad.push(`${dest}/${f}: its header still points into the repo: ${refs.map((x) => `${x.kind} (${x.text})`).join('; ')}`);
-          if (/GENERATED|regenerate/i.test(head)) bad.push(`${dest}/${f}: its header still says GENERATED or regenerate: ${head.split('\n')[0]}`);
+          if (/GENERATED|do not edit/i.test(head)) bad.push(`${dest}/${f}: its header still says GENERATED or "do not edit": ${head.split('\n')[0]}`);
           if (!copy.endsWith(src.split('\n').slice(end + 1).join('\n'))) bad.push(`${dest}/${f}: what follows the header is not byte for byte its source`);
         }
       }
