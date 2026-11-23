@@ -5,7 +5,7 @@
 What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows how the surfaces connect; this page lists what you can do in each.
 
 - Web Studio: Studio in a browser. <!-- src: apps/studio/build-site.mjs:1-8#b1876ee9 -->
-- Figma plugin: the same studio inside Figma <!-- src: apps/plugin/src/ui/entry.ts:10-38#6258203d -->, plus **Update file**, which writes to the file. <!-- src: apps/studio/src/state/update-file.ts:330 -->
+- Figma plugin: the same studio inside Figma <!-- src: apps/plugin/src/ui/entry.ts:10-38#6258203d -->, plus **Update file**, which writes to the file. <!-- src: apps/studio/src/state/update-file.ts:331 -->
 - Agent, through the agent link: an AI agent driving the open plugin. See [Use the agent link](agent-link.md). <!-- src: apps/plugin/src/agent-protocol.ts:42#6bb39596 -->
 - Agent, through the Prism3 MCP server: an AI agent using the engine directly, with no Figma file. <!-- src: packages/engine/mcp.ts:314-459#a2dae559 -->
 
@@ -37,7 +37,7 @@ What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows ho
 | Draw spec panels | – | ✓ Docs › Specs <!-- src: apps/studio/src/shell/pages.ts:536-541#aed5e5ff --> | ✓ `draw-specs` | – |
 | Read the file back | – | ✓ when the plugin opens | ✓ `readback`, `status` | – |
 
-<!-- src: apps/studio/src/state/update-file.ts:333-362 --> <!-- src: apps/plugin/src/agent-protocol.ts:42 -->
+<!-- src: apps/studio/src/state/update-file.ts:334-363 --> <!-- src: apps/plugin/src/agent-protocol.ts:42 -->
 
 ## Tokens
 
