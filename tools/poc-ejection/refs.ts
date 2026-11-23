@@ -7,7 +7,7 @@
  *         only resolves inside a workspace);
  *       - an import of a `@prism3/*` package the client was not given (`@prism3/engine`, or `@prism3/css` in source
  *         mode, where the components are copied, not installed);
- *       - a relative or absolute path, in an import, `href`, `src` or `url()`, that resolves inside the repo;
+ *       - a relative or absolute path, in an import, `new URL()`, `href`, `src` or `url()`, that resolves inside the repo;
  *       (those two read code lines only: a usage example in a comment is a mention, counted in (b));
  *       - the repo's absolute path anywhere;
  *       - a path that names a file in the repo (`packages/css/generate.ts`), anywhere, comments included;
@@ -28,6 +28,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { localeFreeCompare } from '../../packages/engine/locale-free-order';
 
 export type Ref = { file: string; line: number; kind: string; text: string };
 export type Repo = { root: string; topDirs: string[]; workspaceNames: string[]; urls: string[] };
@@ -125,9 +126,14 @@ export const scanFile = (file: string, text: string, repo: Repo, delivered: stri
     // Specifiers: imports, requires, CSS @import and url(), href and src attributes. Not on a comment line: a usage
     // example in a header (`//   import '@prism3/web-components/button';`) is a mention, counted in (b), not an import.
     // A path or URL in a comment is still caught above.
+    // `from '…'` matches on its own line: a multi-line `import {…} from` or `export {…} from` puts it on a line with no
+    // `import` or `export` (prettier's usual form, #4471 M1). A relative `new URL('…', import.meta.url)` is a specifier
+    // the bundler resolves too. These are lines; the build's metafile (`eject.ts`, `outsideInputs`) is the check that
+    // does not depend on any of them.
     if (/^\s*(\/\/|\/\*|\*|<!--)/.test(ln)) return;
     const specs = [
-      ...ln.matchAll(/\b(?:import|export)\b[^'"`]*?\bfrom\s*['"]([^'"]+)['"]/g),
+      ...ln.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g),
+      ...ln.matchAll(/\bnew\s+URL\s*\(\s*['"]([^'"]+)['"]/g),
       ...ln.matchAll(/\bimport\s*\(?\s*['"]([^'"]+)['"]/g),
       ...ln.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]/g),
       ...ln.matchAll(/@import\s+(?:url\()?\s*['"]?([^'")\s;]+)/g),
@@ -171,5 +177,5 @@ export const countRefs = (client: string, repo: Repo, delivered: string[]): Coun
 export const byKind = (refs: Ref[]): string => {
   const c = new Map<string, number>();
   for (const r of refs) c.set(r.kind, (c.get(r.kind) ?? 0) + 1);
-  return [...c].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([k, v]) => `${k} ×${v}`).join(', ');
+  return [...c].sort((x, y) => y[1] - x[1] || localeFreeCompare(x[0], y[0])).map(([k, v]) => `${k} ×${v}`).join(', ');
 };

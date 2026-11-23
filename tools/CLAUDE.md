@@ -417,7 +417,8 @@ records yet.
 
 Ejection, both modes (#3408, plan item 3). `eject.ts` builds a standalone client in `$TMPDIR` with the tokens and all
 three POC components in both forms: package mode from `npm pack` tarballs, source mode through `copy-source.mjs`, with
-the tokens still a tarball. It checks that the client builds clean and renders in Chromium. It measures the steps, the
+the tokens still a tarball. It checks that the client builds clean, that every file its bundle reads (esbuild's metafile) lies inside the client,
+and that it renders in Chromium. It measures the steps, the
 time, and two counts of references left to prism3 (`refs.ts`): (a) back into the repo or workspace, and (b) `@prism3/*`
 names. It also records how an upstream change arrives. Owner decision D1 picks the scored count; until then it's (a).
 **No gate sibling, and not in CI, on purpose:** it needs the npm registry and Chromium, and its target, 0 references,

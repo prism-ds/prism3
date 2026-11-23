@@ -4,14 +4,18 @@
 npx tsx tools/poc-ejection/eject.ts --mode package        # every package from `npm pack` tarballs (Q84 A)
 npx tsx tools/poc-ejection/eject.ts --mode source         # the component source copied in; the tokens stay a tarball
 npx tsx tools/poc-ejection/eject.ts --mode <m> --keep     # leave the client in $TMPDIR and print where
-npx tsx tools/poc-ejection/eject.ts --mode <m> --plant file-link|engine-import|repo-url   # a planted leak
+npx tsx tools/poc-ejection/eject.ts --mode <m> --plant file-link|engine-import|repo-url|multiline-import   # a planted leak
 npx tsx tools/poc-ejection/eject.ts --self-test           # the counter and the summary line, on planted fixtures
 ```
 
 Each run builds a standalone client in `$TMPDIR`, outside the repo. The client has the brand's token CSS and all
 three POC components (button, text field and password field), each in both forms: plain HTML/CSS and the custom
-element. The page is `client/index.html`, and the entry is `client/main.<mode>.js`. The run then checks two things:
+element. The page is `client/index.html`, and the entry is `client/main.<mode>.js`. The run then checks three things:
 - **It builds clean:** esbuild exits 0 and prints no warning.
+- **Its bundle reads only the client:** the build writes esbuild's metafile, and every input esbuild resolved must lie
+  inside the client folder. Otherwise the run fails with "the bundle reads N files outside the client: …". This check
+  reads what the bundler resolved, so it doesn't depend on the counter's patterns. A multi-line import, a `new URL()`,
+  a `tsconfig` path or an alias into the repo all show here (#4471 M1).
 - **It renders, in Chromium, from disk:**
   - no script error;
   - every element is defined and renders its markup;
@@ -39,7 +43,8 @@ says "D1 pending". The choice is `SCORED` in `eject.ts`.
 `dist/`, so in source mode it includes the copies. References in the installed `node_modules/@prism3/` files are
 printed on their own line and never added to (a).
 
-**It exits 1 on:** a failed step, a build warning, a failed render check, or a scored count above 0. The scorecard
+**It exits 1 on:** a failed step, a build warning, a bundle input outside the client, a failed render check, or a
+scored count above 0. A failed npm step quotes npm's first `npm error` line. The scorecard
 then reads FAIL with this tool's line, never a count. The rows are `eject-package` and `eject-source` in
 `tools/poc-scorecard/measures.ts`. It needs the npm registry for Lit and esbuild (a warm npm cache serves them) and
 Chromium.
@@ -47,4 +52,7 @@ Chromium.
 **Independence (`docs/34`):** the counter never reads the copy script, the install output or the step list. It knows
 the repo from the repo: its root, its folders and files, its workspace names and its URL. The packages each mode
 delivers are written down in `eject.ts`. The self-test plants each kind of reference into a clean fixture, and each
-must count exactly 1, by that kind. `--plant` does the same to a real run, which must FAIL by kind.
+must count exactly 1, by that kind. So must each specifier form the line patterns once missed: a multi-line
+`import {…} from` or `export {…} from`, into the repo or from `@prism3/engine`, and a relative `new URL(…)`. `--plant`
+does the same to a real run, which must FAIL by kind. `--plant multiline-import` goes in before the build, so the
+metafile check fails it by name first.

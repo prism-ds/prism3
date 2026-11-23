@@ -7,7 +7,7 @@
  *   npx tsx tools/poc-ejection/eject.ts --mode package      (install every package from `npm pack` tarballs)
  *   npx tsx tools/poc-ejection/eject.ts --mode source       (copy the component source in; the tokens stay a tarball)
  *   npx tsx tools/poc-ejection/eject.ts --mode <m> --keep   (leave the client in $TMPDIR and print where)
- *   npx tsx tools/poc-ejection/eject.ts --mode <m> --plant file-link|engine-import|repo-url   (a planted leak)
+ *   npx tsx tools/poc-ejection/eject.ts --mode <m> --plant file-link|engine-import|repo-url|multiline-import   (a planted leak)
  *   npx tsx tools/poc-ejection/eject.ts --self-test         (the counter and the summary line, on planted fixtures)
  *
  * WHAT IT MEASURES, per mode:
@@ -22,7 +22,13 @@
  * scored: count (a), with a target of 0. The summary line says "D1 pending" while it is.
  *
  * WHAT FAILS (exit 1, so the scorecard's cell reads FAIL with this tool's FAIL line, never a count): a step that
- * fails, a build that warns, a render check that fails, or a scored count above 0. A measurement, not a CI gate: it
+ * fails, a build that warns, a bundle that reads a file outside the client, a render check that fails, or a scored
+ * count above 0.
+ *
+ * THE BUNDLE'S INPUTS (#4471 M1). The client builds with esbuild's `--metafile`, and every input esbuild resolved must
+ * lie inside the client folder ("the bundle reads N files outside the client: …"). That measures "builds outside the
+ * repo" from what the bundler actually read, so it does not depend on the counter's line regexes: a multi-line import,
+ * a `new URL()`, a `tsconfig` path or an alias into the repo all show here, whatever the counter matches. A measurement, not a CI gate: it
  * needs the npm registry for Lit and esbuild (the npm cache serves them when warm), and Chromium for the render check.
  */
 import { spawnSync } from 'node:child_process';
@@ -31,6 +37,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { localeFreeCompare } from '../../packages/engine/locale-free-order';
 import { byKind, countRefs, KIND, readRepo, scanFile, type Count, type Repo } from './refs';
 
 const HERE = import.meta.dirname ?? '';
@@ -73,7 +80,7 @@ export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {})
     const s = Date.now();
     const r = spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8', maxBuffer: 1 << 26 });
     steps.push({ kind: 'command', what, seconds: (Date.now() - s) / 1000 });
-    if (r.status !== 0) throw new Error(`FAIL eject (${mode}): step "${what}" exited ${r.status}: ${(r.stderr || r.stdout || '').trim().split('\n').slice(-1)[0] ?? ''}`);
+    if (r.status !== 0) throw new Error(`FAIL eject (${mode}): step "${what}" exited ${r.status}: ${stepError(r.stderr, r.stdout)}`);
     return `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   };
   const file = (what: string, rel: string, content: string) => {
@@ -93,7 +100,7 @@ export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {})
     const tgz = DELIVERED[mode].map(pack);
     file('write package.json', 'package.json', `${JSON.stringify({
       name: 'ejected-client', version: '1.0.0', private: true,
-      scripts: { build: 'esbuild src/main.js --bundle --format=iife --outdir=dist --log-level=warning && cp index.html dist/' },
+      scripts: { build: 'esbuild src/main.js --bundle --format=iife --outdir=dist --metafile=dist/meta.json --log-level=warning && cp index.html dist/' },
     }, null, 2)}\n`);
     cmd(`npm install ${DELIVERED[mode].join(' ')} (tarballs)`, ['npm', 'install', ...tgz, ...npmI], client);
     if (mode === 'source') {
@@ -105,10 +112,13 @@ export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {})
     cmd(`npm install -D esbuild@${ESBUILD}`, ['npm', 'install', '-D', '--save-exact', `esbuild@${ESBUILD}`, ...npmI], client);
     file('write index.html (both forms of all three components)', 'index.html', readFileSync(join(HERE, 'client', 'index.html'), 'utf8'));
     file('write src/main.js (the entry)', 'src/main.js', readFileSync(join(HERE, 'client', `main.${mode}.js`), 'utf8'));
+    if (opts.plant && PRE_BUILD.includes(opts.plant)) plant(opts.plant, client);
     const built = cmd('npm run build', ['npm', 'run', '--silent', 'build'], client);
     // esbuild's own warning marker (`▲ [WARNING]`), not npm's echo of the script, which names `--log-level=warning`.
     const warn = built.split('\n').filter((l) => /\[WARNING\]|▲/.test(l));
     if (warn.length) throw new Error(`FAIL eject (${mode}): the build warns: ${warn[0].trim()}`);
+    const far = outsideInputs(client, JSON.parse(readFileSync(join(client, 'dist', 'meta.json'), 'utf8')));
+    if (far.length) throw new Error(`FAIL eject (${mode}): ${bundleReadsOutside(far)}`);
     res.seconds = Math.round((Date.now() - t0) / 100) / 10;
 
     const c0 = Date.now();
@@ -116,7 +126,7 @@ export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {})
     res.checkSeconds = Math.round((Date.now() - c0) / 100) / 10;
     if (why) throw new Error(`FAIL eject (${mode}): the built client ${why}`);
 
-    if (opts.plant) plant(opts.plant, client);
+    if (opts.plant && !PRE_BUILD.includes(opts.plant)) plant(opts.plant, client);
     res.count = countRefs(client, readRepo(REPO), DELIVERED[mode]);
     res.upstream = upstream(client, mode);
   } catch (e) {
@@ -127,7 +137,31 @@ export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {})
   return res;
 };
 
-/** A leak planted into the built client, before the count, for the hand mutations the PR body lists. */
+/**
+ * The first line that says what went wrong: npm's first `npm error` line (its last one is the debug-log path, #4471
+ * N1), else the last line of output.
+ */
+export const stepError = (stderr = '', stdout = ''): string => {
+  const lines = `${stderr}\n${stdout}`.split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.find((l) => /^npm (error|ERR!)/.test(l) && !/A complete log of this run can be found in/.test(l)) ?? (stderr || stdout || '').trim().split('\n').slice(-1)[0] ?? '';
+};
+
+/**
+ * The inputs of an esbuild metafile that resolve outside the client folder, as paths relative to it. esbuild writes
+ * input paths relative to its working directory, the client. A namespaced input (`<runtime>`, `(disabled):…`) is no file.
+ */
+export const outsideInputs = (client: string, meta: { inputs?: Record<string, unknown> }): string[] =>
+  Object.keys(meta.inputs ?? {}).filter((i) => !/^[<(]/.test(i))
+    .map((i) => resolve(client, i)).filter((p) => { const r = relative(client, p); return r.startsWith('..') || isAbsolute(r); })
+    .map((p) => relative(client, p)).sort(localeFreeCompare);
+
+export const bundleReadsOutside = (far: string[]): string =>
+  `the bundle reads ${far.length} files outside the client: ${far.slice(0, 5).join(', ')}${far.length > 5 ? `, and ${far.length - 5} more` : ''}`;
+
+/** Plants written into the client before the build, so the build reads them; the rest go in after it, before the count. */
+const PRE_BUILD = ['multiline-import'];
+
+/** A leak planted into the client, for the hand mutations the PR body lists. */
 const plant = (kind: string, client: string) => {
   if (kind === 'file-link') {
     const pj = JSON.parse(readFileSync(join(client, 'package.json'), 'utf8'));
@@ -135,7 +169,11 @@ const plant = (kind: string, client: string) => {
     writeFileSync(join(client, 'package.json'), JSON.stringify(pj, null, 2));
   } else if (kind === 'engine-import') appendFileSync(join(client, 'src/main.js'), "import '@prism3/engine';\n");
   else if (kind === 'repo-url') appendFileSync(join(client, 'src/main.js'), '// https://github.com/prism-ds/prism3\n');
-  else throw new Error(`FAIL eject: unknown --plant ${kind} (file-link, engine-import, repo-url)`);
+  else if (kind === 'multiline-import') {
+    // Prettier's usual form of an import into the repo: `from` on a line of its own (#4471 M1).
+    const into = relative(join(client, 'src'), join(REPO, 'packages/web-components/p3-button.js'));
+    appendFileSync(join(client, 'src/main.js'), `import {\n  P3Button,\n} from '${into}';\nconsole.log(P3Button);\n`);
+  } else throw new Error(`FAIL eject: unknown --plant ${kind} (file-link, engine-import, repo-url, multiline-import)`);
 };
 
 /**
@@ -280,6 +318,35 @@ export const SELF: { name: string; check: () => string | null }[] = [
       return c.a.length === 1 && c.a[0].kind === kind ? null : `counted ${c.a.length}: ${c.a.map((x) => `${x.kind} (${x.text})`).join('; ') || 'nothing'}`;
     } finally { rmSync(d, { recursive: true, force: true }); }
   } })),
+  // #4471 M1: the specifier forms the line regexes once missed. Each counts exactly 1, by kind, on the line of the specifier.
+  ...(() => {
+    const into = relative(join('/', 'x', 'src'), join(REPO, 'packages/web-components/p3-button.js'));
+    const forms: [string, string, string, number][] = [
+      ['a multi-line import {…} from a relative path into the repo', `import {\n  P3Button,\n} from '${into}';\n`, KIND.pathInto, 3],
+      ['a multi-line export {…} from a relative path into the repo', `export {\n  P3Button,\n} from '${into}';\n`, KIND.pathInto, 3],
+      ['a multi-line import {…} from @prism3/engine', "import {\n  generate,\n} from '@prism3/engine';\n", KIND.undelivered, 3],
+      ['a relative new URL(…, import.meta.url) into the repo', `const u = new URL('${into}', import.meta.url);\n`, KIND.pathInto, 1],
+    ];
+    return forms.map(([what, text, kind, line]) => ({ name: `${what} counts 1 in (a), by kind`, check: () => {
+      const r = scanFile('/x/src/main.js', text, readRepo(REPO), DELIVERED.package, '/x', 'src/main.js');
+      return r.a.length === 1 && r.a[0].kind === kind && r.a[0].line === line ? null : `counted ${r.a.length}: ${r.a.map((x) => `${x.line} ${x.kind} (${x.text})`).join('; ') || 'nothing'}`;
+    } }));
+  })(),
+  { name: 'the bundle\'s metafile: an input outside the client is named; inputs inside it, and namespaced ones, are not', check: () => {
+    const client = join('/', 'tmp', 'e', 'client');
+    const repoFile = relative(client, join(REPO, 'packages/web-components/p3-button.js'));
+    const far = outsideInputs(client, { inputs: { 'src/main.js': {}, 'node_modules/lit/index.js': {}, '<runtime>': {}, [repoFile]: {}, '../../../etc/x.js': {} } });
+    if (far.join() !== [repoFile, '../../../etc/x.js'].sort(localeFreeCompare).join()) return `named ${JSON.stringify(far)}`;
+    if (outsideInputs(client, { inputs: { 'src/main.js': {}, 'node_modules/@prism3/css/button.css': {} } }).length) return 'a clean bundle named an input';
+    const line = bundleReadsOutside(far);
+    return /^the bundle reads 2 files outside the client: .*packages\/web-components\/p3-button\.js/.test(line) ? null : line;
+  } },
+  { name: 'a failed npm step quotes npm\'s first error line, not its debug-log path', check: () => {
+    const err = 'npm error code ETARGET\nnpm error notarget No matching version found for esbuild@0.0.0-nope.\nnpm error A complete log of this run can be found in: /root/.npm/_logs/x.log\n';
+    const got = stepError(err, '');
+    if (got !== 'npm error code ETARGET') return `quoted "${got}"`;
+    return stepError('', 'just this\n') === 'just this' ? null : 'a non-npm failure lost its last line';
+  } },
   { name: 'in source mode an import of @prism3/css is a package the client was not given', check: () => {
     const repo = readRepo(REPO);
     const r = scanFile('/x/src/main.js', "import '@prism3/css/button.css';\nimport '@prism3/tokens/prism3.css';\n", repo, DELIVERED.source, '/x', 'src/main.js');
