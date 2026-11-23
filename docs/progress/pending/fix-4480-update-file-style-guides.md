@@ -1,30 +1,46 @@
-## (2026-11-23) — Update file's Style guides step: the in-session selection is drawn, and why a picked collection is not a narrowing (#4480)
+## (2026-11-23) — Update file's Style guides step draws what the Style guides page shows, and its row says how many tables (#4480)
 
-### What was suspected
+### What was seen
 
 The owner picked a minimal set of style guide tables on Documentation › Style guides, ran Update file with Style guides
 ticked, and saw 45 tables drawn. The suspicion was that Update file's step ignores the saved choices
 (`apps/plugin/src/doc-settings.ts` `styleGuide`) or builds its own options.
 
-### What the code does
+### Diagnosis
 
-It reads them. The step asks for a fresh catalog, then posts `savedDrawOptions(catalog, readSaved(host.docSettings.styleGuide))`
-(`apps/studio/src/main.ts`, `advanceUpdate`). `host.docSettings` is the main thread's answer to each `doc-settings-save`,
-the record as `writeDocSettings` kept it. The main thread's `runStyleGuide` narrows to `options.tables` by key. There is
-no other caller of the style guide run.
+The step does read the saved record: it asks for a fresh catalog, then posts
+`savedDrawOptions(catalog, readSaved(host.docSettings.styleGuide))` (`apps/studio/src/main.ts`, `advanceUpdate`), and
+`host.docSettings` is the main thread's answer to each `doc-settings-save`. The cause was the page's **Collection**
+select. It was a view over the tree, not a selection, and `selectionOf` read `rec.tables` and ignored `rec.view`. Every
+table starts selected, so with Collection set to core, **Deselect all** and the **Color** kind changed core only and every
+other collection's tables stayed selected out of view. On the test's 7-table catalog that path drew 5 tables; on a
+45-table file, nearly all of them.
 
-The existing browser arm (Q2909.23 A) covered a record the host posted before the page opened. It never answered a
-save, so it could not see a save that the host had dropped. The new arm in `apps/plugin/test-style-guides-page.mjs`
-covers the owner's path. Nothing is saved when the panel opens. Core's two color tables are picked on the page, and
-each save is answered as the main thread answers it. Update file then runs with Style guides ticked and posts those
-two keys and no other. Mutation: posting `savedDrawOptions(m.catalog, null)` (the saved options dropped) fails
-`#4480: Update file with Style guides ticked draws only the tables picked on the page this session` by name.
+### Owner decisions built (2026-11-23)
 
-### The likely cause of the 45, an owner decision
+- **Q1 A, what you see is drawn.** `drawnOf` (`apps/studio/src/state/style-guides.ts`) narrows a selection to the
+  tables of the collection in view; Every collection, or a view the file no longer holds, narrows nothing. The page's
+  summary, its Draw label and post, the kinds its Options show, and `savedDrawOptions` (Update file's step) all go
+  through it. The selection itself is unchanged, so tables ticked in another collection come back with Every collection.
+  "Draw it again" on a table outside the view opens the view to every collection, so the retried table is drawn.
+- **Q2 A, show the count.** Update file's Style guides row carries a chip, `UPDATE_COPY.guidesCount` (DRAFT wording,
+  "2 tables"), counted by `savedDrawCount`, which reads `savedDrawOptions` itself, so the count and the draw cannot
+  disagree. Opening Update file asks for the file's catalog (`countGuides`), so the count reads the file as it is; the
+  chip is absent until the host answers.
 
-The page's **Collection** select is a view over the tree, not a selection. Each table starts selected. With Collection
-set to core, **Deselect all** and the **Color** kind act on core alone, so every other collection's tables stay
-selected. On the arm's catalog, that path leaves 5 of 7 tables selected, the summary says "5 tables", and Update file
-draws those 5. On a 45-table file the same path draws nearly every table. Whether picking a collection should narrow
-what is drawn, and whether Update file's Style guides row should say how many tables it will draw, are design
-decisions, held on #4480. No product code changed.
+### Tests and mutations
+
+The existing #4480 browser arm (`apps/plugin/test-style-guides-page.mjs`) became the owner's path: Collection = core,
+Deselect all, Color, each save answered as the main thread answers it; then Update file with Style guides ticked. Before
+the change it failed by name: the summary said 5 tables, the run drew 5 keys, and the row had no count. New assertions:
+the row says "2 tables" and matches the run's key count; opening Update file asks for the tables once; the saved-record
+arm reads "2 tables" and the control "7 tables". Node arms in `apps/studio/test-style-guides.ts` assert `drawnOf` and
+`savedDrawCount` by literal. Mutations, each failing by name: `savedDrawOptions` ignoring the view; the count reading
+the selection instead of the draw; the page's summary and Draw ignoring the view; Update file not asking for the tables
+on open (this one survived until the open-request assertion was added, because the test answers the catalog unasked).
+
+### Trap
+
+The browser arm's fake host echoes `doc-settings-save` as sent. The real host first normalizes with `docSettingsOf`,
+which drops a `styleGuide` over `MAX_BYTES` (32,000) to `null`, and `null` means every table. A record that size would
+show the same symptom silently; it is not covered here and was not shown reachable.
