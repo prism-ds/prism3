@@ -1405,7 +1405,7 @@ export interface SgNode extends CellNode {
   getPluginData?(key: string): string;
   setExplicitVariableModeForCollection?(collection: unknown, modeId: string): void;
   setProperties?(props: Record<string, string | boolean>): void;
-  getStyledTextSegments?(fields: ('fontName' | 'fontSize' | 'fontWeight' | 'textStyleId')[]): readonly { fontName: unknown }[];
+  getStyledTextSegments?(fields: ('fontName' | 'fontSize' | 'fontWeight' | 'textStyleId' | 'boundVariables')[]): readonly { fontName: unknown }[];
   getMainComponentAsync?(): Promise<unknown>;
   remove?(): void;
   /** Phase 2: bind a node property (a bar's `width`, a corner, a text's `fontSize`) to a variable. */
@@ -1806,6 +1806,47 @@ const FINGERPRINT_FIELDS = [
 const FONT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as const;
 
 /**
+ * A TEXT'S TYPE BY WHAT IT IS BOUND TO (#4470), for a print taken with `bindings`. A text in a text style reads as that
+ * style's id, never the font, size or weight the style resolves to: the file's text styles bind their family to a font
+ * variable, so a theme that changes the display or title family re-resolves every styled text's `fontName`, and a print
+ * that read it called every panel with a styled text edited by hand (35 usage panels on the template, 2026-11-22). A
+ * text in no style reads its font, size and weight, each field bound to a variable as that variable's id. A run of
+ * several styles (a code span drawn in the code style, #3552) reads each segment the same way.
+ *
+ * What a designer does still moves it: a font, size or weight set by hand on a styled text detaches the style, so the
+ * text then reads by its values; a different style reads a different id; a value typed over a variable reads the value.
+ */
+type FontRead = { fontName?: unknown; fontSize?: unknown; fontWeight?: unknown; textStyleId?: unknown; boundVariables?: unknown };
+const BOUND_FONT = { family: 'fontFamily', style: 'fontStyle', size: 'fontSize', weight: 'fontWeight' } as const;
+// A TextNode lists a bound text field as an array of aliases (`VariableAlias[]`); a styled segment's `boundVariables`
+// holds one alias. Read both: an array as every alias's id, in order.
+const boundOf = (bv: unknown, k: string): string | null => {
+  const b = bv && typeof bv === 'object' ? (bv as Record<string, unknown>)[k] : undefined;
+  const idOf = (a: unknown): unknown => (a && typeof a === 'object' ? (a as { id?: unknown }).id : undefined);
+  const ids = (Array.isArray(b) ? b.map(idOf) : [idOf(b)]).filter((id): id is string => typeof id === 'string' && id !== '');
+  return ids.length ? ids.join(',') : null;
+};
+const typeByBinding = (t: FontRead): string => {
+  if (typeof t.textStyleId === 'string' && t.textStyleId) return `style:${t.textStyleId}`;
+  const bv = t.boundVariables;
+  const f = (t.fontName && typeof t.fontName === 'object' ? t.fontName : {}) as { family?: unknown; style?: unknown };
+  const at = (k: keyof typeof BOUND_FONT, v: unknown): unknown => { const id = boundOf(bv, BOUND_FONT[k]); return id ? `@${id}` : v; };
+  const font = typeof t.fontName === 'object' && t.fontName ? { family: at('family', f.family), style: at('style', f.style) } : t.fontName;
+  return stable([font, at('size', t.fontSize), at('weight', t.fontWeight)]);
+};
+const SEGMENT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as const;
+const boundTypeKey = (n: SgNode): string => {
+  const own: FontRead = { fontName: read(n, 'fontName'), fontSize: read(n, 'fontSize'), fontWeight: read(n, 'fontWeight'), textStyleId: read(n, 'textStyleId'), boundVariables: read(n, 'boundVariables') };
+  if (![own.fontName, own.fontSize, own.fontWeight, own.textStyleId].some((v) => typeof v === 'symbol')) return typeByBinding(own);
+  // Mixed: each run as its own, with its bindings where the host can list them.
+  let segs: readonly unknown[] | undefined;
+  try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS, 'boundVariables']); } catch { segs = undefined; }
+  if (!segs) { try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS]); } catch { segs = undefined; } }
+  if (!Array.isArray(segs)) return 'mixed';
+  return segs.map((s) => { const q = (s ?? {}) as FontRead & { start?: unknown; end?: unknown }; return `${String(q.start)}-${String(q.end)}:${typeByBinding(q)}`; }).join(';');
+};
+
+/**
  * THE FINGERPRINT of a table: what a designer would change, read off the frame. Every node in it, in order (its
  * children and their order), each with its type, name, visibility, size, text, fills and strokes (a bound paint by
  * its variable's id), pinned modes, `FINGERPRINT_FIELDS`, its text font, and for an instance its main component and
@@ -1816,8 +1857,12 @@ const FONT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as con
  * cell component that reaches every instance) reads as an edit, and the table is kept. That is the safe direction,
  * since the other one deletes a designer's work. Async because an instance's main component is read with
  * `getMainComponentAsync` under dynamic-page.
+ *
+ * `bindings` (#4470) reads each text's type by what it is bound to (`boundTypeKey`) instead of the values it resolves
+ * to. Off by default: every print recorded before it (the style guide's tables, the About frame, a usage panel's fourth
+ * form) was taken over the resolved values, and is still compared the way it was taken.
  */
-export const fingerprintOf = async (wrap: SgNode): Promise<string> => {
+export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean } = {}): Promise<string> => {
   const parts: string[] = [];
   // A TITLE CELL IS NOT AN EDIT (owner decision 15): a designer renames rows there, so a table with a title column
   // leaves the title column out (its cells and its "Name" header, which fills the column), and with it the widths that follow the title column's width: the table's own, its
@@ -1834,7 +1879,7 @@ export const fingerprintOf = async (wrap: SgNode): Promise<string> => {
     const fields = FINGERPRINT_FIELDS.map((k) => stable(read(n, k)));
     // A text set in more than one font reads `figma.mixed` on these; its segments carry each run's font instead.
     const font = FONT_FIELDS.map((k) => read(n, k));
-    const fontKey = font.some((v) => typeof v === 'symbol')
+    const fontKey = opts.bindings ? boundTypeKey(n) : font.some((v) => typeof v === 'symbol')
       ? stable(n.getStyledTextSegments?.([...FONT_FIELDS]) ?? 'mixed') : stable(font);
     let main = '';
     if (n.type === 'INSTANCE') {

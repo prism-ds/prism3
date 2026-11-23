@@ -786,15 +786,29 @@ const specimenView = (sp: PNode): SgNode => {
   const fields = new Set((mine?.overriddenFields ?? []).filter((k) => !UNPRINTED.has(k) && k !== 'componentProperties'));
   return overrideView(sp, fields, [], false);
 };
-export const panelPrint = async (n: PNode): Promise<string> => `${PRINT_V4}${await fingerprintOf(ownView(n as unknown as SgNode, specimenView))}`;
+/** A print in the fourth form (#4070): each text's type read as the values it resolves to. Exported so a test can age a
+ *  panel to it. */
+export const printV4 = async (n: PNode): Promise<string> => `${PRINT_V4}${await fingerprintOf(ownView(n as unknown as SgNode, specimenView))}`;
 /**
- * Whether `n` still prints as `print`, read in the form it was recorded in. A print in the second form (#2927) is
+ * THE PANEL'S TYPE BY ITS BINDINGS (#4470). The fourth form read each text's resolved font, size and weight. The file's
+ * text styles bind their family to a font variable, so a theme that changed the display or title family moved the print
+ * of every panel with a styled text, and Update kept each aside as "(edited)" below a fresh one (about 35 on the template,
+ * 2026-11-22). In the fifth form a text in a style reads as that style, and a font field bound to a variable as that
+ * variable (`fingerprintOf`'s `bindings`). A font set by hand detaches the style, so it still moves the print, as a
+ * different style does.
+ */
+const PRINT_V5 = '5:';
+export const panelPrint = async (n: PNode): Promise<string> => `${PRINT_V5}${await fingerprintOf(ownView(n as unknown as SgNode, specimenView), { bindings: true })}`;
+/**
+ * Whether `n` still prints as `print`, read in the form it was recorded in. A print in the fourth form (#4070) is compared
+ * in that form: a panel drawn before #4470 still matches until its theme's fonts change, and then reads as edited, as it
+ * did; that form cannot tell a theme's font from a designer's. Once redrawn, a panel carries the fifth. A print in the second form (#2927) is
  * compared in that form: a panel drawn before #3303 and untouched since still matches until a component it nests is
  * rebuilt, and then reads as edited, as it did. That is the safe rule for those panels: the second form cannot tell a
  * rebuild from a hand edit, so nothing a designer did is drawn over. Once redrawn, a panel carries this form.
  */
 export const printMatches = async (n: PNode, print: string): Promise<boolean> =>
-  !!print && (print.startsWith(PRINT_V4) ? (await panelPrint(n)) === print : print.startsWith(PRINT_V3) ? (await printV3(n)) === print : print.startsWith(PRINT_V2) ? (await printV2(n)) === print : false);
+  !!print && (print.startsWith(PRINT_V5) ? (await panelPrint(n)) === print : print.startsWith(PRINT_V4) ? (await printV4(n)) === print : print.startsWith(PRINT_V3) ? (await printV3(n)) === print : print.startsWith(PRINT_V2) ? (await printV2(n)) === print : false);
 /**
  * THE TEXT PRISM3 WRITES INTO `defId`'s PANEL (#2968), today or before one panel per family (#2927): every string of its
  * plan; the wording #2927 changed (each part's own anatomy line, the def's own Do and Don't items and their count); a
@@ -875,7 +889,7 @@ const legacyUnedited = async (api: Pick<PanelApi, 'root'>, n: PNode, print: stri
 export const panelUnedited = async (api: Pick<PanelApi, 'root'>, n: PNode): Promise<boolean> => {
   const print = n.getSharedPluginData?.(DOC_PANEL_NS, DOC_PANEL_PRINT) ?? '';
   if (!print) return false;
-  return print.startsWith(PRINT_V4) || print.startsWith(PRINT_V3) || print.startsWith(PRINT_V2) ? printMatches(n, print) : legacyUnedited(api, n, print);
+  return print.startsWith(PRINT_V5) || print.startsWith(PRINT_V4) || print.startsWith(PRINT_V3) || print.startsWith(PRINT_V2) ? printMatches(n, print) : legacyUnedited(api, n, print);
 };
 
 /**
