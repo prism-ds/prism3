@@ -150,6 +150,8 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
   /** #3137: Clean up's panel count was asked for in this opening; the Usage panels group's names are shown. */
   let panelsAsked = false;
   let panelsOpen = false;
+  /** #4481: the library callout's full list is shown in this opening. */
+  let libOpen = false;
   /** The sets this opening asked the scoped check for, or null before it has (Q2909.8 A). */
   let checkedFor: readonly string[] | null = null;
   /** #3422 Q44 A: the live recount as this opening found it. Theme's default tick and its "Up to date" tag read it, and
@@ -187,6 +189,7 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     pruneAsked = false;
     panelsAsked = false;
     panelsOpen = false;
+    libOpen = false;
     checkedFor = null;
     rechecking = false;
     shownFile = null;
@@ -714,11 +717,28 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     }
     // #3711 (Q-UF2 A): the callout directly above the button it qualifies; #3712 (Q-UD2): the foot's last message row,
     // a boxed warning with its glyph.
+    // #4481 (owner decision A): one line counting the changes by what they do, then "Show the changes", which opens the
+    // full list in a short box that scrolls inside itself, so a long list never pushes the steps out of view.
     if (lib.count) {
       const call = hook(h('div', 'p3-sg-note p3-sg-warn p3-upd-libcall'), 'update-library');
       const text = h('div', 'p3-sg-warn-text');
-      text.append(hook(h('b', undefined, UPDATE_COPY.library), 'update-library-title'), hook(h('p', 'p3-sub', UPDATE_COPY.librarySub(lib.count)), 'update-library-sub'));
-      for (const line of lib.lines) text.append(hook(h('p', 'p3-sub', line), 'update-library-line'));
+      text.append(hook(h('p', 'p3-sub', UPDATE_COPY.librarySummary(lib, nameOf)), 'update-library-summary'));
+      const more = hook(h('button', 'p3-btn p3-btn-ghost p3-upd-disclose'), 'update-library-show');
+      more.type = 'button';
+      more.dataset.key = 'library-show';
+      more.setAttribute('aria-expanded', String(libOpen));
+      more.setAttribute('aria-controls', 'p3-upd-library-list');
+      more.append(glyph('chev'), document.createTextNode(libOpen ? UPDATE_COPY.libraryHide : UPDATE_COPY.libraryShow));
+      more.onclick = () => { libOpen = !libOpen; paint(); };
+      const list = hook(h('div', 'p3-upd-liblist'), 'update-library-list');
+      list.id = 'p3-upd-library-list';
+      list.hidden = !libOpen;
+      // A box that scrolls is reached by keyboard, so its lines can be read without a pointer.
+      list.tabIndex = 0;
+      list.setAttribute('role', 'region');
+      list.setAttribute('aria-label', UPDATE_COPY.libraryList);
+      for (const line of lib.lines) list.append(hook(h('p', 'p3-sub', line), 'update-library-line'));
+      text.append(more, list);
       call.append(glyph('warn'), text);
       messages.push(call);
     }

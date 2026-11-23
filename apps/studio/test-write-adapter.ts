@@ -250,6 +250,15 @@ accepts('style-guide-result with a malformed stopped leaves it off', { type: 'st
     accepts(`update-check whose changes hold ${label} leaves them off`, { type: 'update-check', previewHash: 'H', missing: [], refused: [], sets: [{ ...base, changes: bad }] },
       { kind: 'update-check', previewHash: 'H', missing: [], sets: [base], error: null });
   }
+  // #4481: the changes' split by kind crosses when each part is a count and the parts add up to the set's count; else
+  // the split alone is left off, the changes kept, so the summary never states a split the host didn't send. Literals.
+  const K = { breaks: 0, retired: 2, leaves: 0 };
+  accepts('update-check with the changes split by kind', { type: 'update-check', previewHash: 'H', missing: [], refused: [], sets: [{ ...base, changes: { ...CH, kinds: K } }] },
+    { kind: 'update-check', previewHash: 'H', missing: [], sets: [{ ...base, changes: { ...CH, kinds: K } }], error: null });
+  for (const [label, bad] of [['parts that don\'t add up', { breaks: 1, retired: 2, leaves: 0 }], ['a part not a number', { ...K, leaves: '0' }], ['a part missing', { breaks: 0, retired: 2 }], ['no object', 'x']] as const) {
+    accepts(`update-check whose split holds ${label} leaves the split off`, { type: 'update-check', previewHash: 'H', missing: [], refused: [], sets: [{ ...base, changes: { ...CH, kinds: bad } }] },
+      { kind: 'update-check', previewHash: 'H', missing: [], sets: [{ ...base, changes: CH }], error: null });
+  }
   // #3302: the check's progress: its counts, the set being checked now, and the one just checked; a count of the wrong
   // type, or more done than in all, drops the reading, and a set that does not read as one is left off it.
   // #3713: a blocked set carries its reasons; a set not blocked carries none, and a reason of the wrong type is left off.
