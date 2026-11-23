@@ -337,8 +337,10 @@ console.log('\na saved record restored, and Update file draws with it (Q2909.23 
 const SAVED = { tables: [ALL_KEYS[1], ALL_KEYS[3]], view: null, titles: '', opt: { ...DEFAULT_OPT, tokenNames: 'short', rem: true } };
 /** Open Update file on a set-up file holding every set, and run its Style guides item alone. The file's tables are
  *  answered as the overlay opens, before the file's sets, so the checklist is drawn with them heard: `ticks.count` is
- *  the Style guides row's count as the checklist shows it before the run (#4480 Q2 A), null when the row shows none. */
+ *  the Style guides row's count as the checklist shows it before the run (#4480 Q2 A), null when the row shows none, and
+ *  `ticks.asked` how many times opening Update file asked the main thread for the file's tables. */
 const runGuides = async (page) => {
+  const before = (await read(page)).sent.filter((m) => m.type === 'style-guide-catalog-request').length;
   await hooks.click(page.locator('[data-p3="update-file"]'));
   await posted(page, 'file-sets-request', 1);
   await post(page, { type: 'style-guide-catalog', catalog: CAT });
@@ -346,6 +348,8 @@ const runGuides = async (page) => {
   await until(page, 'the checklist drawn', () => !!document.querySelector('[data-p3="update-check-guides"]'));
   const ticks = await page.evaluate(() => ({ theme: document.querySelector('[data-p3="update-check-theme"]')?.getAttribute('aria-checked'), guides: document.querySelector('[data-p3="update-check-guides"]')?.getAttribute('aria-checked'),
     count: document.querySelector('[data-p3="update-item-guides"] [data-p3="update-guides-count"]')?.textContent ?? null }));
+  // The checklist is drawn after the panel heard the answers to this opening's posts, so every post it made is caught.
+  ticks.asked = (await read(page)).sent.filter((m) => m.type === 'style-guide-catalog-request').length - before;
   // #3023 Q701 B: unticking Theme checks the file again; it is answered as the first read was. Since #3422 (Q44 A) Theme
   // opens unticked on a file that matches the brand, so there may be nothing to untick.
   if (ticks.theme === 'true') {
@@ -447,6 +451,7 @@ const runGuides = async (page) => {
   ok(canon(drawn?.tables) === canon([ALL_KEYS[0], ALL_KEYS[1]]), `#4480 Q1 A: Update file with Style guides ticked draws only the tables shown picked on the page, core's two color tables (${JSON.stringify(drawn?.tables ?? 'every table')})`);
   ok(ticks.count === '2 tables' && ticks.count === `${drawn?.tables?.length ?? ALL_KEYS.length} tables`,
     `#4480 Q2 A: before the run, Update file's Style guides row says "2 tables", the number of tables the run then draws (row ${JSON.stringify(ticks.count)}, drawn ${drawn?.tables?.length ?? 'every table'})`);
+  ok(ticks.asked === 1, `#4480 Q2 A: opening Update file asks the main thread for the file's tables once, so the row counts the file as it is (${ticks.asked} asked)`);
   ok(errors.length === 0, `no console errors (${errors.slice(0, 2).join(' · ')})`);
   await page.close();
 }
