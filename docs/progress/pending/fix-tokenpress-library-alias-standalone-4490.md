@@ -36,5 +36,5 @@ it *resolved*. No TokenPress test reads an export the way its consumer does. `to
 prism3's own emission, which has no library aliases. The new first test checks resolution over the exported files
 themselves.
 
-**Left open, filed separately.** A text style or gradient stop bound to a library variable writes the style's own
+**Left open, filed as #4492.** A text style or gradient stop bound to a library variable writes the style's own
 resolved value, so it builds on its own, but it keeps no record of the binding.
