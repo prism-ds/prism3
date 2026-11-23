@@ -1,10 +1,14 @@
 /**
- * TokenPress build (port step 4). One esbuild bundle:
+ * TokenPress build (port step 4). One esbuild bundle and one stamped copy:
  *   • src/code.ts → dist/code.js   — the Figma sandbox controller (manifest.main)
+ *   • src/ui.html → dist/ui.html   — the panel (manifest.ui), its version label stamped
  *
- * There is no second bundle: manifest.ui points at `src/ui.html`, which carries its own inline
- * script and is served as-authored. That is why this is 60 lines and apps/plugin/build.mjs is 95 —
- * TokenPress's UI never needed inlining.
+ * There is no second bundle: `src/ui.html` carries its own inline script, so TokenPress's UI never
+ * needed inlining. The copy exists for one reason, the version: the label holds the placeholder
+ * `__PLUGIN_VERSION__`, replaced here from package.json, the same value esbuild's `define` puts in
+ * every export's `generator.version`. package.json is the only place the version is written; the
+ * label was a hand-typed `v2.2.2` while exports said `3.0.0`
+ * (tests/unit/version-single-source.test.ts).
  *
  * REPLACES vite.config.ts + vite.config.simple.ts. The repo runs one bundler (esbuild, as
  * apps/studio and apps/plugin do), and vite was the only thing pulling vite + vitest into the tree.
@@ -16,7 +20,7 @@
  * else (the same reasoning as apps/plugin/build.mjs's `</script>` check, #496).
  */
 import { build, context } from 'esbuild';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +32,16 @@ const watch = process.argv.includes('--watch');
 //    absent define does not warn — it ships a bundle that throws on first export. Read from
 //    package.json, the same source vite's config read, so the two cannot drift.
 const pkg = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+
+// The panel, served as authored apart from its version label. Every occurrence is replaced, and
+// `verify` asserts none survives and the stamped label is there.
+const UI_SRC = resolve(root, 'src/ui.html');
+const UI_OUT = resolve(root, 'dist/ui.html');
+const stampUi = async () => {
+  const html = await readFile(UI_SRC, 'utf8');
+  await mkdir(dirname(UI_OUT), { recursive: true });
+  await writeFile(UI_OUT, html.split('__PLUGIN_VERSION__').join(pkg.version));
+};
 
 const opts = {
   entryPoints: [resolve(root, 'src/code.ts')],
@@ -86,14 +100,26 @@ const verify = async () => {
     fail('a node: builtin reached the output; nothing exists to resolve it inside Figma.');
   }
   console.log(`  dist/code.js   (iife, es2018, v${pkg.version} stamped, setImmediate shimmed)`);
+
+  const ui = await readFile(UI_OUT, 'utf8');
+  if (ui.includes('__PLUGIN_VERSION__')) {
+    throw new Error('apps/tokenpress/dist/ui.html: __PLUGIN_VERSION__ survived unsubstituted — the panel would show it as its version.');
+  }
+  if (!ui.includes(`<span class="version">v${pkg.version}</span>`)) {
+    throw new Error(`apps/tokenpress/dist/ui.html: the panel's version label does not read v${pkg.version}.`);
+  }
+  console.log(`  dist/ui.html   (version label v${pkg.version})`);
 };
 
 if (watch) {
   const ctx = await context(opts);
   await ctx.watch();
+  // The panel is stamped once; an edit to src/ui.html under --watch needs a rerun to reach dist/.
+  await stampUi();
   console.log('watching apps/tokenpress/src …');
 } else {
   await build(opts);
+  await stampUi();
   await verify();
   console.log('tokenpress build complete → apps/tokenpress/dist/');
 }
