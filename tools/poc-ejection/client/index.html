@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ejected client</title>
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <main>
+    <h1>Ejected client</h1>
+
+    <section id="html-form" aria-label="Plain HTML and CSS">
+      <button type="button" class="p3-button" data-component="button" data-prop-appearance="filled" data-prop-size="medium">
+        <span class="p3-button__label">Save changes</span>
+      </button>
+
+      <div class="p3-text-field" data-component="text-field" data-prop-size="medium">
+        <label class="p3-field-label" data-component="field-label" for="email">
+          <span class="p3-field-label__label">Email address</span>
+        </label>
+        <div class="p3-text-field__control">
+          <div class="p3-text-field__content">
+            <input class="p3-text-field__entry" id="email" type="email" autocomplete="email">
+          </div>
+        </div>
+      </div>
+
+      <div class="p3-password-field" data-component="password-field" data-prop-size="medium">
+        <div class="p3-password-field__label-row">
+          <div class="p3-password-field__label-cell">
+            <label class="p3-field-label" data-component="field-label" for="pw"><span class="p3-field-label__label">Password</span></label>
+          </div>
+          <button type="button" class="p3-button p3-password-field__toggle" data-component="button" data-prop-appearance="text"
+                  data-prop-size="small" data-prop-inset="flush" aria-controls="pw" hidden>
+            <span class="p3-button__label"><span class="p3-password-field__toggle-text">Show</span><span class="p3-password-field__toggle-suffix"> password</span></span>
+          </button>
+        </div>
+        <div class="p3-password-field__control">
+          <div class="p3-password-field__content">
+            <input class="p3-password-field__entry" id="pw" type="password" autocomplete="current-password" spellcheck="false" autocapitalize="none">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="element-form" aria-label="Custom elements">
+      <p3-button data-prop-appearance="filled" data-prop-size="medium" data-prop-label="Save changes"></p3-button>
+      <p3-text-field data-prop-label="Email address" data-prop-type="email" data-prop-autocomplete="email"></p3-text-field>
+      <p3-password-field data-prop-label="Password" data-prop-autocomplete="current-password"></p3-password-field>
+    </section>
+  </main>
+  <script src="main.js"></script>
+</body>
+</html>

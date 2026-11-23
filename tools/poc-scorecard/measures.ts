@@ -15,6 +15,8 @@ export type Measure = {
   /** Each match's first group is summed into the row's value. A passing run that matches none is "unparsed". */
   value: RegExp[];
   unit: string;
+  /** Text the cell shows after the value, from a passing run's output: the first group of the first match. */
+  detail?: RegExp;
 };
 
 /** The brief's KPI rows in card order. `arms` names, per arm, the commands that measure each row it can measure. */
@@ -60,14 +62,20 @@ export const ARMS: Record<string, { measures: Measure[]; pending: Record<string,
       { id: 'kpi3-aria', setup: [sb], cmds: [tsx('apps/storybook/check-aria.ts')], value: harness('aria'), unit: 'checks' },
       { id: 'kpi3-keyboard', setup: [sb], cmds: [tsx('apps/storybook/check-keyboard.ts')], value: harness('keyboard'), unit: 'checks' },
       { id: 'kpi3-rtl', setup: [sb], cmds: [tsx('apps/storybook/check-rtl.ts')], value: harness('rtl'), unit: 'checks' },
+      // Ejection (plan item 3): the value is the scored count, count (a) per D1 A; the detail
+      // carries the other count, the steps, the time and the upstream channel. A scored count above 0 exits 1: FAIL.
+      ...(['package', 'source'] as const).map((mode) => ({
+        id: `eject-${mode}`, cmds: [tsx('tools/poc-ejection/eject.ts', '--mode', mode)],
+        value: [new RegExp(`^OK eject \\(${mode}\\): (\\d+) references back into prism3;`, 'm')],
+        detail: new RegExp(`^OK eject \\(${mode}\\): \\d+ references back into prism3; (.*)$`, 'm'),
+        unit: 'references back into the repo or workspace',
+      })),
     ],
     pending: {
       'kpi1-cli-scratch': 'not built yet (plan item 4, #3408)',
       'kpi1-cli-update': 'not built yet (plan item 4, #3408)',
       'kpi1-agent': 'the brief and agent setup wait on D2 (#3408); the driver is plan item 5',
       'kpi3-one-edit': 'not built yet (plan item 4, #3408)',
-      'eject-package': 'not built yet (plan item 3, #3408)',
-      'eject-source': 'not built yet (plan item 3, #3408)',
     },
   },
 };

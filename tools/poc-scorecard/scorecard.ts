@@ -32,7 +32,7 @@ const HERE = import.meta.dirname ?? '';
 const ROOT = resolve(HERE, '../..');
 export const RECORDS = resolve(HERE, 'records');
 
-export type Record_ = { id: string; arm: string; cmds: string[]; exit: number; value: number | null; unit: string; summary: string; commit: string; dirty: boolean; at: string; seconds: number };
+export type Record_ = { id: string; arm: string; cmds: string[]; exit: number; value: number | null; unit: string; summary: string; commit: string; dirty: boolean; at: string; seconds: number; detail?: string };
 
 const git = (...a: string[]) => spawnSync('git', a, { cwd: ROOT, encoding: 'utf8' }).stdout.trim();
 
@@ -58,12 +58,13 @@ export const record = (arm: string, m: Measure): Record_ => {
   }
   const lines = out.split('\n');
   const summary = exit
-    ? (lines.find((l) => /^FAIL/.test(l)) ?? lines.filter(Boolean).slice(-1)[0] ?? `exit ${exit}`).slice(0, 300)
+    ? (lines.find((l) => /^FAIL/.test(l)) ?? lines.filter(Boolean).slice(-1)[0] ?? `exit ${exit}`).slice(0, 600)
     : lines.filter((l) => /^OK (?!self-test)/.test(l)).join(' / ').slice(0, 600);
   return {
     id: m.id, arm, cmds: m.cmds.map((c) => c.join(' ')), exit, value: exit ? null : parse(m, out), unit: m.unit, summary,
     commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain') !== '', at: new Date().toISOString(),
     seconds: Math.round((Date.now() - t0) / 1000),
+    ...(!exit && m.detail ? { detail: m.detail.exec(out)?.[1]?.slice(0, 600) } : {}),
   };
 };
 
@@ -73,7 +74,7 @@ export const cell = (r: Record_ | undefined, pendingWhy: string | undefined): st
   const at = `${r.commit.slice(0, 8)}${r.dirty ? '+dirty' : ''}, ${r.at.slice(0, 16).replace('T', ' ')}Z`;
   if (r.exit !== 0) return `**FAIL**: ${r.summary.replace(/\|/g, '\\|')} (${at})`;
   if (r.value === null) return `unparsed: the run passed, but its summary matched no pattern (${at})`;
-  return `${r.value.toLocaleString('en-US')} ${r.unit} (${at})`;
+  return `${r.value.toLocaleString('en-US')} ${r.unit}${r.detail ? `; ${r.detail.replace(/\|/g, '\\|')}` : ''} (${at})`;
 };
 
 export const render = (records: Record<string, Record<string, Record_>>, arms = CARD_ARMS): string => {
@@ -117,8 +118,8 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const missing = ROWS.filter((x) => !row(card, x.label).endsWith('| not measured |'));
     return missing.length ? `rows not reading "not measured" for arm 2: ${missing.map((x) => x.id).join(', ')}` : null; } },
   { name: 'a missing record names the arm\'s reason', check: () => {
-    const r = row(render({}), 'Package mode: steps, time, references left to prism3');
-    return r.includes('| not measured: not built yet (plan item 3, #3408) |') ? null : r; } },
+    const r = row(render({}), 'One token edit reaches both forms');
+    return r.includes('| not measured: not built yet (plan item 4, #3408) |') ? null : r; } },
   { name: 'a failed measurement reads FAIL with its line, not a count', check: () => {
     const r = row(render({ 'arm-1': { 'kpi3-axe': planted({ exit: 1, value: 400, summary: 'FAIL axe: 2 of 400 | x' }) } }), 'axe, every story, light and dark');
     return /\| \*\*FAIL\*\*: FAIL axe: 2 of 400 \\\| x \(abcdef01/.test(r) && !/\| 400 checks/.test(r) ? null : r; } },
@@ -155,6 +156,19 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const m = mismatches({ field: { def: { props: [{ name: 'label' }] } } }, { modules: [{ declarations: [{ tagName: 'x-nothing', attributes: [{ name: 'label' }] }] }] });
     const why = unmeasurable(m, 'planted.json');
     return why === 'FAIL api mismatches: no element in planted.json matches a def (tags: x-nothing)' ? null : `read as a measurement: ${why ?? `${m.count} mismatches across ${m.compared.length} elements`}`; } },
+  { name: 'an ejection run is parsed to its scored count, its detail shows on the cell, and a FAIL shows neither', check: () => {
+    const m = ARMS['arm-1'].measures.find((x) => x.id === 'eject-source')!;
+    const ok = 'OK eject (source): 0 references back into prism3; scored: count (a), per D1 A; 9 steps (6 commands, 3 files written), 2.4s; upstream: x | y; count (b), @prism3 names: 5 occurrences of 1 (@prism3/tokens)';
+    const fail = 'FAIL eject (source): count (a) is 13 references back into prism3, target 0 (per D1 A): path naming a file in the repo ×13';
+    const v = parse(m, ok);
+    const detail = m.detail?.exec(ok)?.[1];
+    if (v !== 0 || parse(m, fail) !== null || !detail?.startsWith('scored: count (a)')) return `parse gave ${v} and ${parse(m, fail)}, detail ${detail}`;
+    const label = 'Source mode: the same, plus how upstream changes arrive';
+    const good = row(render({ 'arm-1': { 'eject-source': planted({ id: 'eject-source', value: v, unit: m.unit, detail }) } }), label);
+    const bad = row(render({ 'arm-1': { 'eject-source': planted({ id: 'eject-source', exit: 1, value: null, unit: m.unit, summary: fail, detail }) } }), label);
+    if (!/\| 0 references back into the repo or workspace; scored: count \(a\), per D1 A.*upstream: x \\\| y; count \(b\).* \(abcdef01/.test(good)) return good;
+    if (!/\| \*\*FAIL\*\*: FAIL eject \(source\): count \(a\) is 13 /.test(bad) || bad.includes('scored: count')) return bad;
+    return null; } },
   { name: 'every arm 1 row is measured or names why not', check: () => {
     const arm = ARMS['arm-1'];
     const gaps = ROWS.filter((x) => !arm.measures.some((m) => m.id === x.id) && !arm.pending[x.id]);
