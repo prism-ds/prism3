@@ -1818,9 +1818,13 @@ const FONT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as con
  */
 type FontRead = { fontName?: unknown; fontSize?: unknown; fontWeight?: unknown; textStyleId?: unknown; boundVariables?: unknown };
 const BOUND_FONT = { family: 'fontFamily', style: 'fontStyle', size: 'fontSize', weight: 'fontWeight' } as const;
+// A TextNode lists a bound text field as an array of aliases (`VariableAlias[]`); a styled segment's `boundVariables`
+// holds one alias. Read both: an array as every alias's id, in order.
 const boundOf = (bv: unknown, k: string): string | null => {
-  const id = (bv && typeof bv === 'object' ? (bv as Record<string, { id?: unknown } | undefined>)[k]?.id : undefined);
-  return typeof id === 'string' ? id : null;
+  const b = bv && typeof bv === 'object' ? (bv as Record<string, unknown>)[k] : undefined;
+  const idOf = (a: unknown): unknown => (a && typeof a === 'object' ? (a as { id?: unknown }).id : undefined);
+  const ids = (Array.isArray(b) ? b.map(idOf) : [idOf(b)]).filter((id): id is string => typeof id === 'string' && id !== '');
+  return ids.length ? ids.join(',') : null;
 };
 const typeByBinding = (t: FontRead): string => {
   if (typeof t.textStyleId === 'string' && t.textStyleId) return `style:${t.textStyleId}`;
