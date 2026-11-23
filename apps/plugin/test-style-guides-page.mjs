@@ -411,6 +411,29 @@ const runGuides = async (page) => {
   await page.close();
 }
 {
+  // #4480: the owner's path. Nothing saved when the panel opens; the selection is made on the page in this session (core's
+  // color tables), each save answered as the main thread answers it (`doc-settings`, the record as kept); then Update
+  // file runs with Style guides ticked. It draws those two tables, by key, and nothing else.
+  const { page, errors } = await openPage();
+  await page.evaluate(() => window.addEventListener('message', (e) => {
+    const m = e.data && e.data.pluginMessage;
+    if (m && m.type === 'doc-settings-save') window.postMessage({ pluginMessage: { type: 'doc-settings', settings: m.settings } }, '*');
+  }));
+  await post(page, { type: 'style-guide-catalog', catalog: CAT });
+  await treeDrawn(page);
+  for (const sel of ['[data-p3="sg-kind-dimension"]', '[data-p3="sg-kind-font"]', '[data-p3="sg-kind-text"]']) await hooks.click(page.locator(sel));
+  await hooks.click(page.locator(groupBox('C:color:color/pds3/color')));
+  await posted(page, 'doc-settings-save', 4);
+  let st = await read(page);
+  ok(canon(lastSave(st)?.styleGuide?.tables) === canon([ALL_KEYS[0], ALL_KEYS[1]]), `#4480 premise: the page keeps core's two color tables in the file (${JSON.stringify(lastSave(st)?.styleGuide)})`);
+  await runGuides(page);
+  st = await read(page);
+  const drawn = sentOf(st, 'style-guide')[0]?.options;
+  ok(canon(drawn?.tables) === canon([ALL_KEYS[0], ALL_KEYS[1]]), `#4480: Update file with Style guides ticked draws only the tables picked on the page this session (${JSON.stringify(drawn?.tables ?? 'every table')})`);
+  ok(errors.length === 0, `no console errors (${errors.slice(0, 2).join(' · ')})`);
+  await page.close();
+}
+{
   // CONTROL: nothing saved draws every table with the defaults, and no tables filter, so the run judges superseded tables.
   const { page, errors } = await openPage();
   await post(page, { type: 'style-guide-catalog', catalog: CAT });
