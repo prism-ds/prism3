@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used them. The check is gone with the permission.
 
 ### Fixed
+- **A color alias with an opacity keeps both in every export.** The
+  dot-notation format wrote a color variable that aliases another at an
+  opacity as `rgb(NaN, NaN, NaN)`. It now writes the reference, the opacity
+  and the color they resolve to: `"{color.brand} @ 40%" -> "rgba(255, 128, 0, 0.40)"`.
+  With Figma extensions on, a typed-in opacity is kept in
+  `$extensions.figma.aliasOf` beside the color's alias (`"opacity": 40`), as an
+  opacity alias already was, so the reference can be rebuilt either way.
 - **A tinted wash exports as a color.** A color variable whose value is an
   alias at an opacity (a tinted wash: the fill at 30%) now exports as the color
   the alias resolves to in that mode, with the opacity as its alpha:

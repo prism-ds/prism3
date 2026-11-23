@@ -364,8 +364,9 @@ carrying axis identity in the export itself is the real fix.
 A color variable can hold a color alias at an opacity: a tinted wash, such as
 a fill at 30%. DTCG cannot put an alpha on an alias, so the wash exports as the
 color the alias resolves to in that mode, with the opacity as its alpha. With
-Figma extensions on, both aliases are kept in `$extensions.figma.aliasOf`, so
-the reference can be rebuilt:
+Figma extensions on, both halves are kept in `$extensions.figma.aliasOf`, so
+the reference can be rebuilt: the color as its alias, and the opacity as its
+alias or, when it is typed in, as its percent (`"opacity": 40`):
 
 ```json
 {
@@ -381,6 +382,9 @@ the reference can be rebuilt:
 
 An alias into another collection resolves through that collection's default
 mode, as Figma resolves it when no mode is set.
+
+The dot-notation format writes a wash as its reference and its opacity, then
+the color it resolves to: `color.fill.selected: "{color.fill.rest} @ 30%" -> "rgba(61, 104, 252, 0.30)"`.
 
 ### Gradient Paint Styles → Gradient Tokens
 
