@@ -905,6 +905,51 @@ for (const [tag, change] of [
     `#4070 nested/kept still reported: kept by an update that rewrote the member, the edit is still reported (${JSON.stringify(post.handEdits)})`);
 }
 
+/* ── #4470: a theme's type family is not a hand edit on the members ─────────────────────────────────────────────── */
+// The owner's Update file run (2026-11-22) followed a theme change to the title and display family, and flagged
+// CardNumberField (control/cardMark, 84 members) and List (items/item1-3, 12 members) beside about 35 usage panels. Each
+// set is built here with the sets it nests, on the host's instance model (`figmaInstances`); then THE THEME: every text
+// style's family moves, and every text in a style, nested ones included, re-resolves to it, as the host re-resolves a
+// style whose family variable changed. Nobody touches a member, so each set must read every member current with no
+// hand edit. The counts are typed here. Mutation: `signatureOf` reads a styled text's resolved font beside its style
+// (`member-baseline.ts`) → `#4470 members/card-number-field`. The List arm is a pin that mutation cannot reach, and that
+// is the finding: a List member holds no text of its own (each is inside a List.Item instance, whose layers the record
+// does not walk), so no type family reaches List's record. Its 12 flags fit `#4070 nested/written before` instead.
+section('#4470 members — a theme that changes the type families is not a hand edit on CardNumberField or List');
+for (const [subject, nested, count] of [['list', ['list-item'], 12], ['card-number-field', ['field-label', 'field-message'], 84]] as const) {
+  const all = [...nested, subject].map(plansOf), flat = all.flat();
+  const page: Page = { children: [] };
+  const api = makeShim({
+    vars: [...new Set(flat.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]))],
+    styles: [...new Set(flat.flatMap((p) => planTextStyles(p.root)))],
+    effects: [...new Set(flat.flatMap((p) => planEffectStyles(p.root)))],
+    comps: [...new Set([SWAP_TARGET, 'focus-ring', ...flat.flatMap((p) => planComps(p.root))])].filter((c) => !(nested as readonly string[]).includes(c)),
+    page, liveRoot: true, identities: true, scaleConstrained: true, wrapNode: figmaInstances(page),
+  }) as any;
+  const misses: string[] = [];
+  for (const pl of all) misses.push(...(await applyComponentPlan(pl, api)).misses);
+  // CardNumberField's card mark is a swap to a provider logo, a catalog name here with no main to read a proportion off.
+  const real = misses.filter((m) => !/^cardMark\.aspectLock -> no main component/.test(m));
+  const file = { ...api, root: { ...api.root, findAllWithCriteria: (c: { types: string[] }) => (c.types.length === 1 && c.types[0] === 'COMPONENT_SET' ? page.children.filter((n) => n.type === 'COMPONENT_SET') : api.root.findAllWithCriteria(c)) } } as unknown as ApplyHost;
+  const targets = [{ def: subject, plans: all[all.length - 1] }];
+  const before = (await previewUpdate(file, targets)).sets[0];
+  // THE THEME: each style's family moves, and every text in a style follows it.
+  const styles = (await api.getLocalTextStylesAsync()) as { id: string; fontName: { family: string; style: string } }[];
+  for (const s of styles) s.fontName = { ...s.fontName, family: 'Display Serif' };
+  let moved = 0;
+  const walkAll = (n: Node): void => {
+    const style = styles.find((s) => s.id === n.textStyleId);
+    if (n.type === 'TEXT' && style) { n.fontName = { ...style.fontName }; moved++; }
+    for (const c of (n.children as Node[] | undefined) ?? []) walkAll(c);
+  };
+  for (const n of page.children) walkAll(n as Node);
+  ok(real.length === 0 && before.counts.current === count && before.handEdits.length === 0 && moved > count,
+    `#4470 members premise (${subject}): built clean with ${nested.join(', ')}, ${count} current before the theme, and the theme moved ${moved} styled texts (${real[0] ?? ''})`);
+  const after = (await previewUpdate(file, targets)).sets[0];
+  ok(after.handEdits.length === 0 && after.counts.handEdited === 0 && after.counts.current === count,
+    `#4470 members/${subject}: after the theme moved every type family, all ${count} members read current, no hand edit (${JSON.stringify(after.counts)}; ${JSON.stringify([...new Set(after.handEdits.map((h) => h.path))])})`);
+}
+
 /* ── choices ─────────────────────────────────────────────────────────────────────────────────────────── */
 section('choices — a hand edit overwritten, or accepted as baseline, when the confirm says so (design note §5)');
 for (const choice of ['overwrite', 'accept'] as const) {
