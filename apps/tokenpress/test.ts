@@ -116,6 +116,9 @@ const ADDED: Record<string, number> = {
   // prism3 #2365 × #4166 — a tinted wash over a team-library variable resolves, through the library collection's
   // default mode, and a wash over an id nothing resolves is a broken alias, as a bare alias is.
   'tests/unit/tinted-wash-library.test.ts': 5,
+  // prism3 #4475 — a color alias with an opacity on the referencing variable exported `null`: the DTCG file before
+  // #4299, the dot-notation format (`rgb(NaN, NaN, NaN)`) after it. The reference and the opacity are both kept.
+  'tests/unit/alias-opacity-null.test.ts': 5,
 };
 
 // ---- the harness checks itself first -------------------------------------------------------

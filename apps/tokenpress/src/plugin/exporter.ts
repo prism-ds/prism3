@@ -837,7 +837,8 @@ export class TokenExporter {
   // A TINTED WASH (prism3 #2365): a COLOR variable whose value is a color at an opacity, the color usually an alias
   // and the opacity a percent or an alias to one. DTCG 2025.10 cannot put an alpha on an alias, so (owner decision
   // on #2365, A) `$value` is the color the alias resolves to in THIS mode, its alpha multiplied by the opacity, and
-  // with Figma extensions on, both aliases are kept in `$extensions.figma.aliasOf` so the reference can be rebuilt.
+  // with Figma extensions on, both halves are kept in `$extensions.figma.aliasOf` so the reference can be rebuilt: the
+  // color as its alias, the opacity as its alias or its literal percent (prism3 #4475).
   // If either half does not resolve to a literal, the color half is written as the alias it is, and the validator
   // reports a broken target as it does for any other alias. A half that aliases a team-library variable resolves like
   // a bare library alias (prism3 #4166): the scanner reads both halves as alias targets.
@@ -871,9 +872,12 @@ export class TokenExporter {
       if (isVariableAlias(value.color)) {
         aliasOf.color = this.convertVariableValue(value.color, 'COLOR', variableMap, 'color') as string;
       }
-      if (isVariableAlias(value.opacity)) {
-        aliasOf.opacity = this.convertVariableValue(value.opacity, 'FLOAT', variableMap, 'number') as string;
-      }
+      // The opacity is kept beside the color reference whether it is an alias or a literal percent (prism3 #4475), so
+      // the reference AND its opacity can be rebuilt: with only the color alias kept, a literal 40% was left baked into
+      // `$value`'s alpha and could not be told apart from the target's own alpha.
+      aliasOf.opacity = isVariableAlias(value.opacity)
+        ? (this.convertVariableValue(value.opacity, 'FLOAT', variableMap, 'number') as string)
+        : value.opacity;
       token.$extensions = {
         figma: {
           variableId: variable.id,
