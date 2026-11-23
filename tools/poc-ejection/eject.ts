@@ -15,8 +15,8 @@
  *   - the WALL-CLOCK seconds from the first step to a built client (the browser check is timed apart);
  *   - the REFERENCES LEFT TO PRISM3, in two counts kept apart (`refs.ts`): (a) references back into the repo or
  *     workspace, and (b) `@prism3/*` package names;
- *   - HOW AN UPSTREAM CHANGE ARRIVES: for each piece, the channel the client has (a package version it can bump, or
- *     none). A measurement only, until #3411 is built.
+ *   - HOW AN UPSTREAM CHANGE ARRIVES: for each piece, the channel the client has (a package version it can bump, the
+ *     version its copies carry in their provenance line, or none). A measurement only, until #3411 is built.
  *
  * WHICH COUNT IS SCORED is owner decision D1 on #3408, answered A (2026-11-23): count (a) is scored, with a target of
  * 0. Count (b), the installed `@prism3/*` names, is the delivery, not a leak: it is reported, not scored.
