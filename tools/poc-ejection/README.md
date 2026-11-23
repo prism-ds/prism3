@@ -14,8 +14,9 @@ element. The page is `client/index.html`, and the entry is `client/main.<mode>.j
 - **It builds clean:** esbuild exits 0 and prints no warning.
 - **Its bundle reads only the client:** the build writes esbuild's metafile, and every input esbuild resolved must lie
   inside the client folder. Otherwise the run fails with "the bundle reads N files outside the client: …". This check
-  reads what the bundler resolved, so it doesn't depend on the counter's patterns. A multi-line import, a `new URL()`,
-  a `tsconfig` path or an alias into the repo all show here (#4471 M1).
+  reads what the bundler resolved, so it doesn't depend on the counter's patterns. A multi-line import, a `tsconfig`
+  path or an alias into the repo shows here (#4471 M1). A `new URL('…', import.meta.url)` doesn't: esbuild doesn't
+  read it as an input, so the counter alone catches it, on one line or with its string on the next (#4471 S1).
 - **It renders, in Chromium, from disk:**
   - no script error;
   - every element is defined and renders its markup;
@@ -36,15 +37,15 @@ published files, less the README, byte for byte, into `src/prism3/`. Then it ins
 - **How an upstream change arrives,** for each piece: by a package version, or by no channel. This is a measurement
   only, until #3411 is built.
 
-**Scored count: owner decision D1.** Until D1 is answered, the run scores count (a), the plan's option A, and its line
-says "D1 pending". The choice is `SCORED` in `eject.ts`.
+**Scored count: owner decision D1, answered A (2026-11-23).** The run scores count (a), with a target of 0. Count (b)
+is the delivery, not a leak, so it's reported and not scored. The choice is `SCORED` in `eject.ts`.
 
 **What it scans:** every file the client owns. That's everything under the client folder except `node_modules/` and
 `dist/`, so in source mode it includes the copies. References in the installed `node_modules/@prism3/` files are
 printed on their own line and never added to (a).
 
 **It exits 1 on:** a failed step, a build warning, a bundle input outside the client, a failed render check, or a
-scored count above 0. A failed npm step quotes npm's first `npm error` line. The scorecard
+scored count above 0. A failed step quotes esbuild's first `✘ [ERROR]` line, else npm's first `npm error` line. The scorecard
 then reads FAIL with this tool's line, never a count. The rows are `eject-package` and `eject-source` in
 `tools/poc-scorecard/measures.ts`. It needs the npm registry for Lit and esbuild (a warm npm cache serves them) and
 Chromium.
@@ -53,6 +54,7 @@ Chromium.
 the repo from the repo: its root, its folders and files, its workspace names and its URL. The packages each mode
 delivers are written down in `eject.ts`. The self-test plants each kind of reference into a clean fixture, and each
 must count exactly 1, by that kind. So must each specifier form the line patterns once missed: a multi-line
-`import {…} from` or `export {…} from`, into the repo or from `@prism3/engine`, and a relative `new URL(…)`. `--plant`
+`import {…} from` or `export {…} from`, into the repo or from `@prism3/engine`, and a relative `new URL(…)`, on one
+line or with its string on the next. `--plant`
 does the same to a real run, which must FAIL by kind. `--plant multiline-import` goes in before the build, so the
 metafile check fails it by name first.

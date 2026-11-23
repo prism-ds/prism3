@@ -130,10 +130,13 @@ export const scanFile = (file: string, text: string, repo: Repo, delivered: stri
     // `import` or `export` (prettier's usual form, #4471 M1). A relative `new URL('…', import.meta.url)` is a specifier
     // the bundler resolves too. These are lines; the build's metafile (`eject.ts`, `outsideInputs`) is the check that
     // does not depend on any of them.
+    // A `new URL(` whose string is on the next line (prettier breaks a long call that way, #4471 S1) is read with that
+    // line joined on, and counted on the `new URL(` line. Its build only fails on a warning, so the counter must see it.
     if (/^\s*(\/\/|\/\*|\*|<!--)/.test(ln)) return;
+    const urlLn = /\bnew\s+URL\s*\(\s*$/.test(ln) ? `${ln} ${lines[i + 1] ?? ''}` : ln;
     const specs = [
       ...ln.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g),
-      ...ln.matchAll(/\bnew\s+URL\s*\(\s*['"]([^'"]+)['"]/g),
+      ...urlLn.matchAll(/\bnew\s+URL\s*\(\s*['"]([^'"]+)['"]/g),
       ...ln.matchAll(/\bimport\s*\(?\s*['"]([^'"]+)['"]/g),
       ...ln.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]/g),
       ...ln.matchAll(/@import\s+(?:url\()?\s*['"]?([^'")\s;]+)/g),

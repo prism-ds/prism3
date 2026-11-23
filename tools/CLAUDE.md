@@ -420,7 +420,7 @@ three POC components in both forms: package mode from `npm pack` tarballs, sourc
 the tokens still a tarball. It checks that the client builds clean, that every file its bundle reads (esbuild's metafile) lies inside the client,
 and that it renders in Chromium. It measures the steps, the
 time, and two counts of references left to prism3 (`refs.ts`): (a) back into the repo or workspace, and (b) `@prism3/*`
-names. It also records how an upstream change arrives. Owner decision D1 picks the scored count; until then it's (a).
+names. It also records how an upstream change arrives. Owner decision D1 (A) scores count (a).
 **No gate sibling, and not in CI, on purpose:** it needs the npm registry and Chromium, and its target, 0 references,
 is a scorecard row, not a merge rule. It does exit 1 on a failed build or render, or a scored count above 0, so the
 card's cell reads FAIL with its line, never a count. `--self-test` plants each kind of reference, and `--plant` plants

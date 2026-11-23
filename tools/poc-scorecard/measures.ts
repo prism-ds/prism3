@@ -62,7 +62,7 @@ export const ARMS: Record<string, { measures: Measure[]; pending: Record<string,
       { id: 'kpi3-aria', setup: [sb], cmds: [tsx('apps/storybook/check-aria.ts')], value: harness('aria'), unit: 'checks' },
       { id: 'kpi3-keyboard', setup: [sb], cmds: [tsx('apps/storybook/check-keyboard.ts')], value: harness('keyboard'), unit: 'checks' },
       { id: 'kpi3-rtl', setup: [sb], cmds: [tsx('apps/storybook/check-rtl.ts')], value: harness('rtl'), unit: 'checks' },
-      // Ejection (plan item 3): the value is the scored count, which D1 picks (count (a) while it is pending); the detail
+      // Ejection (plan item 3): the value is the scored count, count (a) per D1 A; the detail
       // carries the other count, the steps, the time and the upstream channel. A scored count above 0 exits 1: FAIL.
       ...(['package', 'source'] as const).map((mode) => ({
         id: `eject-${mode}`, cmds: [tsx('tools/poc-ejection/eject.ts', '--mode', mode)],

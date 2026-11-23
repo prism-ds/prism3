@@ -158,15 +158,15 @@ export const SELF: { name: string; check: () => string | null }[] = [
     return why === 'FAIL api mismatches: no element in planted.json matches a def (tags: x-nothing)' ? null : `read as a measurement: ${why ?? `${m.count} mismatches across ${m.compared.length} elements`}`; } },
   { name: 'an ejection run is parsed to its scored count, its detail shows on the cell, and a FAIL shows neither', check: () => {
     const m = ARMS['arm-1'].measures.find((x) => x.id === 'eject-source')!;
-    const ok = 'OK eject (source): 0 references back into prism3; scored: count (a), D1 pending, scoring option A; 9 steps (6 commands, 3 files written), 2.4s; upstream: x | y; count (b), @prism3 names: 5 occurrences of 1 (@prism3/tokens)';
-    const fail = 'FAIL eject (source): count (a) is 13 references back into prism3, target 0 (D1 pending, scoring option A): path naming a file in the repo ×13';
+    const ok = 'OK eject (source): 0 references back into prism3; scored: count (a), per D1 A; 9 steps (6 commands, 3 files written), 2.4s; upstream: x | y; count (b), @prism3 names: 5 occurrences of 1 (@prism3/tokens)';
+    const fail = 'FAIL eject (source): count (a) is 13 references back into prism3, target 0 (per D1 A): path naming a file in the repo ×13';
     const v = parse(m, ok);
     const detail = m.detail?.exec(ok)?.[1];
     if (v !== 0 || parse(m, fail) !== null || !detail?.startsWith('scored: count (a)')) return `parse gave ${v} and ${parse(m, fail)}, detail ${detail}`;
     const label = 'Source mode: the same, plus how upstream changes arrive';
     const good = row(render({ 'arm-1': { 'eject-source': planted({ id: 'eject-source', value: v, unit: m.unit, detail }) } }), label);
     const bad = row(render({ 'arm-1': { 'eject-source': planted({ id: 'eject-source', exit: 1, value: null, unit: m.unit, summary: fail, detail }) } }), label);
-    if (!/\| 0 references back into the repo or workspace; scored: count \(a\), D1 pending.*upstream: x \\\| y; count \(b\).* \(abcdef01/.test(good)) return good;
+    if (!/\| 0 references back into the repo or workspace; scored: count \(a\), per D1 A.*upstream: x \\\| y; count \(b\).* \(abcdef01/.test(good)) return good;
     if (!/\| \*\*FAIL\*\*: FAIL eject \(source\): count \(a\) is 13 /.test(bad) || bad.includes('scored: count')) return bad;
     return null; } },
   { name: 'every arm 1 row is measured or names why not', check: () => {

@@ -18,8 +18,8 @@
  *   - HOW AN UPSTREAM CHANGE ARRIVES: for each piece, the channel the client has (a package version it can bump, or
  *     none). A measurement only, until #3411 is built.
  *
- * WHICH COUNT IS SCORED is owner decision D1 on #3408. Until it is answered, the plan's recommended option A is
- * scored: count (a), with a target of 0. The summary line says "D1 pending" while it is.
+ * WHICH COUNT IS SCORED is owner decision D1 on #3408, answered A (2026-11-23): count (a) is scored, with a target of
+ * 0. Count (b), the installed `@prism3/*` names, is the delivery, not a leak: it is reported, not scored.
  *
  * WHAT FAILS (exit 1, so the scorecard's cell reads FAIL with this tool's FAIL line, never a count): a step that
  * fails, a build that warns, a bundle that reads a file outside the client, a render check that fails, or a scored
@@ -28,8 +28,9 @@
  * THE BUNDLE'S INPUTS (#4471 M1). The client builds with esbuild's `--metafile`, and every input esbuild resolved must
  * lie inside the client folder ("the bundle reads N files outside the client: …"). That measures "builds outside the
  * repo" from what the bundler actually read, so it does not depend on the counter's line regexes: a multi-line import,
- * a `new URL()`, a `tsconfig` path or an alias into the repo all show here, whatever the counter matches. A measurement, not a CI gate: it
- * needs the npm registry for Lit and esbuild (the npm cache serves them when warm), and Chromium for the render check.
+ * a `tsconfig` path or an alias into the repo shows here, whatever the counter matches. A `new URL('…', import.meta.url)`
+ * does not: esbuild does not read it as an input, so the counter alone carries that form (#4471 S1). A measurement, not
+ * a CI gate: it needs the npm registry for Lit and esbuild (the npm cache serves them when warm), and Chromium for the render check.
  */
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -49,8 +50,8 @@ export const DELIVERED: Record<Mode, string[]> = {
   package: ['@prism3/tokens', '@prism3/css', '@prism3/web-components'],
   source: ['@prism3/tokens'],
 };
-/** The scored count. D1 (#3408) decides it; until then the plan's recommended option A, count (a). */
-export const SCORED: { count: 'a' | 'b'; d1: 'pending' | 'answered' } = { count: 'a', d1: 'pending' };
+/** The scored count. D1 (#3408) decided it: A, count (a) (2026-11-23). */
+export const SCORED: { count: 'a' | 'b'; d1: 'pending' | 'answered' } = { count: 'a', d1: 'answered' };
 /** The client's bundler, pinned to the version the repo's lockfile already holds, so a warm npm cache serves it. */
 const ESBUILD = '0.24.2';
 const PACKAGES: Record<string, string> = {
@@ -138,12 +139,15 @@ export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {})
 };
 
 /**
- * The first line that says what went wrong: npm's first `npm error` line (its last one is the debug-log path, #4471
- * N1), else the last line of output.
+ * The first line that says what went wrong: esbuild's first `✘ [ERROR]` line (its last ones are a hint and a tally,
+ * #4471 N3), else npm's first `npm error` line (its last one is the debug-log path, #4471 N1), else the last line of
+ * output.
  */
 export const stepError = (stderr = '', stdout = ''): string => {
   const lines = `${stderr}\n${stdout}`.split('\n').map((l) => l.trim()).filter(Boolean);
-  return lines.find((l) => /^npm (error|ERR!)/.test(l) && !/A complete log of this run can be found in/.test(l)) ?? (stderr || stdout || '').trim().split('\n').slice(-1)[0] ?? '';
+  return lines.find((l) => /^(✘|X) \[ERROR\]/.test(l))
+    ?? lines.find((l) => /^npm (error|ERR!)/.test(l) && !/A complete log of this run can be found in/.test(l))
+    ?? (stderr || stdout || '').trim().split('\n').slice(-1)[0] ?? '';
 };
 
 /**
@@ -253,7 +257,7 @@ export const summarize = (r: Pick<Result, 'mode' | 'steps' | 'seconds' | 'count'
   if (r.failure) return r.failure;
   const a = r.count.a.length;
   const commands = r.steps.filter((s) => s.kind === 'command').length;
-  const d1 = SCORED.d1 === 'pending' ? 'D1 pending, scoring option A' : 'per D1';
+  const d1 = SCORED.d1 === 'pending' ? 'D1 pending, scoring option A' : `per D1 ${SCORED.count.toUpperCase()}`;
   // Most wanted first, so a cut line keeps it: the steps and time, the upstream channel, then the other count.
   const rest = [
     `${r.steps.length} steps (${commands} commands, ${r.steps.length - commands} files written), ${r.seconds}s`,
@@ -326,6 +330,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
       ['a multi-line export {…} from a relative path into the repo', `export {\n  P3Button,\n} from '${into}';\n`, KIND.pathInto, 3],
       ['a multi-line import {…} from @prism3/engine', "import {\n  generate,\n} from '@prism3/engine';\n", KIND.undelivered, 3],
       ['a relative new URL(…, import.meta.url) into the repo', `const u = new URL('${into}', import.meta.url);\n`, KIND.pathInto, 1],
+      ['a relative new URL(…) into the repo with its string on the next line', `const u = new URL(\n  '${into}',\n  import.meta.url,\n);\n`, KIND.pathInto, 1],
     ];
     return forms.map(([what, text, kind, line]) => ({ name: `${what} counts 1 in (a), by kind`, check: () => {
       const r = scanFile('/x/src/main.js', text, readRepo(REPO), DELIVERED.package, '/x', 'src/main.js');
@@ -346,6 +351,11 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const got = stepError(err, '');
     if (got !== 'npm error code ETARGET') return `quoted "${got}"`;
     return stepError('', 'just this\n') === 'just this' ? null : 'a non-npm failure lost its last line';
+  } },
+  { name: 'a build that fails to resolve quotes esbuild\'s first [ERROR] line, not its last hint', check: () => {
+    const err = '\u2718 [ERROR] Could not resolve "@prism3/engine"\n\n    src/main.js:14:7:\n      14 \u2502 } from \'@prism3/engine\';\n         \u2575        ~~~~~~~~~~~~~~~~\n\n  You can mark the path "@prism3/engine" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle.\n\n1 error\n';
+    const got = stepError(err, '> client@0.0.0 build\n> esbuild src/main.js --bundle\n');
+    return got === '\u2718 [ERROR] Could not resolve "@prism3/engine"' ? null : `quoted "${got}"`;
   } },
   { name: 'in source mode an import of @prism3/css is a package the client was not given', check: () => {
     const repo = readRepo(REPO);
@@ -369,6 +379,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const good = summarize({ ...base, count: { a: [], b: { occurrences: 4, names: ['@prism3/css'] }, installed: [], scanned: [] } });
     if (!/^FAIL eject \(package\): count \(a\) is 1 references back into prism3, target 0 .*file: or link: into the repo ×1/.test(bad)) return `with one reference: ${bad}`;
     if (!/^OK eject \(package\): 0 references back into prism3; scored: count \(a\)/.test(good)) return `with none: ${good}`;
+    if (/D1 pending/.test(bad + good)) return `D1 is answered (A), but the line says "D1 pending": ${good}`;
     return null;
   } },
   { name: 'a failed step is the summary line itself, with no count', check: () => {
