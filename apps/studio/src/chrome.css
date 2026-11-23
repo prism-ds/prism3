@@ -2226,6 +2226,11 @@ legend.p3-sg-field-name { padding-block-end: var(--p3-space-050); }
 .p3-upd-libcall { align-items: flex-start; }
 .p3-upd-libcall > .p3-sg-warn-text { display: grid; gap: var(--p3-space-050); }
 .p3-upd-libcall .p3-sub { margin: 0; color: var(--p3-text); }
+/* #4481 (owner decision A): the callout is one line and a disclosure; the full list opens in a short box that scrolls
+   inside itself, four control heights at most, so the foot never grows past it and the steps above stay in view. */
+.p3-upd-libcall .p3-upd-disclose { margin-left: calc(-1 * var(--p3-space-100)); }
+.p3-upd-liblist { display: grid; gap: var(--p3-space-050); max-height: calc(var(--p3-ctl-h) * 4); overflow-y: auto; overscroll-behavior: contain; }
+.p3-upd-liblist[hidden] { display: none; }
 /* #2909 Q2909.8 A: a set's statuses on Components' list, after its meta. */
 .p3-cp-status { display: inline-flex; flex-wrap: wrap; gap: var(--p3-space-025); flex: none; margin-left: var(--p3-space-050); }
 
