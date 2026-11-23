@@ -12,11 +12,11 @@
  *
  * Matching values are not enough on their own: a label hard-coded to the current version matches today and
  * drifts at the next bump, which is how `v2.2.2` happened. So the source label must hold the placeholder, not
- * a number, and no version literal may appear in the panel source at all.
+ * a number, and no `N.N.N` literal, with or without a leading `v`, may appear in the panel source at all.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test, expect } from '../../test-harness';
@@ -44,6 +44,9 @@ describe('version has one source (package.json)', () => {
   const pkg = JSON.parse(read('package.json')) as { version: string };
   // The real build, once. A build that throws, or a file it did not write, fails a test by name instead of the
   // whole suite dying on the call or the read.
+  // The outputs are removed first, here and not only in build.mjs, so the reads below see only what this build
+  // wrote. A `dist/` left over from an earlier build would otherwise pass for a build that stopped writing one.
+  for (const out of ['dist/ui.html', 'dist/code.js']) rmSync(join(ROOT, out), { force: true });
   let buildError = '';
   try {
     execFileSync(process.execPath, [join(ROOT, 'build.mjs')], { cwd: ROOT, stdio: 'pipe' });
@@ -71,7 +74,7 @@ describe('version has one source (package.json)', () => {
   test('the panel source holds the placeholder, not a version literal', () => {
     const src = read('src/ui.html');
     expect(label(src)).toEqual([`v${PLACEHOLDER}`]);
-    expect(src.match(/\bv\d+\.\d+\.\d+\b/g)).toBe(null);
+    expect(src.match(/\b\d+\.\d+\.\d+\b/g)).toBe(null);
   });
 
   test('the manifest loads the built panel, not the source', () => {

@@ -20,7 +20,7 @@
  * else (the same reasoning as apps/plugin/build.mjs's `</script>` check, #496).
  */
 import { build, context } from 'esbuild';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -118,6 +118,10 @@ if (watch) {
   await stampUi();
   console.log('watching apps/tokenpress/src …');
 } else {
+  // Remove both outputs first, so `verify` reads only what this build wrote: a step that stops
+  // writing one leaves no file behind, where a leftover from an earlier build would pass.
+  await rm(opts.outfile, { force: true });
+  await rm(UI_OUT, { force: true });
   await build(opts);
   await stampUi();
   await verify();
