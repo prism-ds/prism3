@@ -37,11 +37,16 @@ case changed a font. So no test could move a styled text's resolved font while i
 case in the update suite moved bound numbers and paint colors only. Added: `styleText`, a model of a text in a style
 (it reads the style's font until a font, size or tracking is set on it, which detaches it; a code span splits it into runs),
 and the `theme font/…` section, run on a host that lists each instance's overrides and on one that lists none. Filed: #4482,
-for the style guide's tables, which print with the default reading and draw their type samples in a style.
+for the style guide's tables, which print with the default reading and draw their type samples in a style. Review (S1)
+found the font-variable case modeled a shape Figma doesn't return: a TextNode lists a bound text field as an array of
+aliases (`VariableAlias[]`), and only a styled segment's `boundVariables` holds one alias. The test bound one alias, so
+the code read `.id` and passed, while on Figma `.id` is undefined and a theme change read as an edit. `boundOf` now reads
+an array as every alias's id, in order, as well as a single alias, and the test binds the array.
 
 **Gates.** Mutations, each failing by name: `panelPrint` without `bindings` → `theme font/untouched` (both hosts); a styled
 text's key reading its font → the same; a run's key reading its font → the same; an unstyled text's font dropped →
-`theme font/unstyled hand font`; a bound family read as its value → `theme font/font variable`; the member signature
+`theme font/unstyled hand font`; a bound family read as its value → `theme font/font variable`; `boundOf` reading only a single alias's `.id`
+(the array missed) → `theme font/font variable`; the member signature
 reading a styled text's font → `#4470 members/card-number-field`.
 
 **Not measured.** Which fields the real host lists in `overrides` for a range text style on an instance's text. The model
