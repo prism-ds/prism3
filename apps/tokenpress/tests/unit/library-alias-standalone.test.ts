@@ -6,8 +6,8 @@
  * Style Dictionary fails the build on it ("tries to reference brand.primary, which is not defined"), and the CSS format
  * wrote `var(--brand-primary)`, a custom property nothing declares. The export is meant to build on its own.
  *
- * Option A (the lane's recommendation; the owner decides on the PR): `$value` is the value the library variable
- * resolves to, read through the library collection's DEFAULT mode, as Figma resolves an alias into another collection.
+ * Owner decision A (2026-11-23, on #4490): `$value` is the value the library variable resolves to, read through the
+ * library collection's DEFAULT mode, as Figma resolves an alias into another collection.
  * The reference is kept in `externalAlias.reference`, so a tool that exports the library alongside can rebuild it.
  * A library chain that does not reach a value keeps the reference, as before.
  *
