@@ -2549,3 +2549,94 @@ The two error members stay unreached because the field writes its message at err
   is laid out as 20.6875. The centered offset truncates too: the small label sits at 11.09375, not 11.1016.
 - check-build already required every field to describe a message, so the no-message stories failed it on the first
   build. It now requires the absence instead, and that the box at each no-message state equals its state's.
+
+## Ejection, both modes: a standalone client outside the repo (#3408, plan item 3)
+
+Started about 03:15 UTC on 2026-11-23, from `poc/arm-1` at `7b2825ec`. The plan asks for a client built outside the
+repo, with the brand and all three components in both forms, built clean in two delivery modes (Q32 A). It also asks for
+the steps, the time and the references left to prism3, counted two ways, since D1 is still open.
+
+### What was built
+- **`tools/poc-ejection/eject.ts`** builds the client in `$TMPDIR`.
+  - **Package mode:** `npm pack` the three packages, then install the tarballs (Q84 A).
+  - **Source mode:** `npm pack` and install only `@prism3/tokens`. `copy-source.mjs` copies the components' published
+    files in byte for byte, and the client installs Lit.
+  - **Both modes:** esbuild bundles the client's entry (`client/main.<mode>.js`) and page (`client/index.html`). Then
+    Chromium opens the built page from disk. It checks:
+    - no script error;
+    - each element is defined and renders its markup;
+    - the plain password field's script ran;
+    - the filled HTML button has a solid token fill;
+    - the two buttons agree on background, height and radius.
+- **`refs.ts`** is the counter, independent of the copy script and the install (`docs/34`). It knows the repo from the
+  repo: its root, folders and files, its workspace names from the root `package.json`, and its URL. It scans every file
+  the client owns, and it counts the installed `node_modules/@prism3/` files separately.
+  - **Count (a):** seven named kinds of reference back into the repo or workspace.
+  - **Count (b):** every `@prism3/*` name.
+- **The scorecard** (`measures.ts`) now measures `eject-package` and `eject-source`. The value is the scored count:
+  (a) while D1 is pending. A new optional `detail` puts the rest of the run on the cell. A FAIL cell is now cut at
+  600 characters, not 300, so source mode's upstream channel stays on the card.
+
+### What it measured, at `7b2825ec` plus this tool
+| | package mode | source mode |
+|---|---|---|
+| builds clean, renders | yes | yes |
+| steps | 9: 6 commands (3 packs, 2 installs, the build), 3 files | 9: 6 commands (1 pack, 3 installs, the copy, the build), 3 files |
+| wall clock, warm npm cache | 2.6–2.8s | 2.4–2.6s |
+| wall clock, empty npm cache | 3.7s | 3.5s |
+| **(a) back into the repo** | **0** | **13**: a path that names a repo file, all in the copies' comment headers |
+| (b) `@prism3` names | 19 occurrences of 3, in 4 files | 39 occurrences of 3, in 15 files |
+| in the installed packages, not in (a) | 21 repo paths | 7 repo paths (`@prism3/tokens`) |
+| upstream change arrives by | the package version, for all three | the package version for the tokens; **no channel** for the components, since none of the 11 copies carries an upstream version |
+
+Source mode's 13: each copied CSS file's first line names `packages/css/generate.ts` and its third line
+`packages/css/README.md` (5 files, 10 references). Each element's first line names `packages/web-components/generate.ts`
+(3 files). They're comments, but they send the client to files it doesn't have, and they say "Do not edit; regenerate"
+about code the client now owns. Under D1 A as written ("relative paths ... into it"), they count, so source mode reads
+FAIL at 13. Whether a repo path in a comment counts is a D1 detail I've put to the owner, not picked.
+
+### What was checked, and how
+- **`eject.ts --self-test`, 13 cases.** A clean fixture counts 0 in (a). Each of the 7 kinds, planted, counts exactly 1,
+  by that kind. Other cases cover the rest:
+  - in source mode, a `@prism3/css` import counts;
+  - a usage example in a comment is (b), not (a);
+  - the counter knows the repo;
+  - a scored count above 0 gives a FAIL line;
+  - a failed step is the line itself.
+- **The scorecard self-test, 12 cases.** It adds the ejection case: the value is parsed, the detail shows on the cell,
+  and a FAIL cell shows neither.
+- **Six code mutations,** each committed first and restored with `git show HEAD:<path>`. Each fails its own self-test
+  case by name:
+  - the link check disabled;
+  - the comment skip removed;
+  - `dist/` scanned;
+  - the undelivered-import check removed;
+  - the FAIL branch of the summary removed;
+  - the cell's detail dropped.
+- **Three planted leaks in real runs** (`--plant`). Each exits 1 with `count (a) is 1`, by kind: a `file:` link to
+  `packages/engine`, `import '@prism3/engine'`, and the repo URL.
+- **Render-check mutations,** on a kept client. With the token import removed, it fails "is unstyled". With the text
+  field's element import removed, it fails "does not define p3-text-field".
+- `tsc --strict` over the three files: clean.
+
+### Surprises and learnings
+- **The counter's own self-test caught two of its bugs on the first run.** A relative path into the repo
+  (`../../home/…/packages/…`) was counted twice, as a path into the repo and as the repo's absolute path. And my
+  expected (b) total was wrong.
+- **The first real run read usage examples in comments as imports.** That gave 4 false (a) references in source mode,
+  from the headers of `index.js` and `password-field.js`. Specifiers are now read on code lines only, and a mention
+  still counts in (b).
+- **The build-warning check first matched npm's echo of `--log-level=warning`.** It now looks for esbuild's own marker.
+- **The scorecard's rule against numbers in a unit fired on "prism3".** The unit now reads "references back into the
+  repo or workspace".
+
+### Effort
+- **Wall clock:** about 03:15 to 04:00 UTC.
+- **Commands:** about 15 real ejection runs (each 3–5s, plus 1–11s for Chromium), 4 cold or kept runs, the self-tests,
+  one mutation batch, 2 scorecard records.
+- **Hand edits:**
+  - `eject.ts` (new, about 335 lines), `refs.ts` (about 175), `copy-source.mjs` (about 40);
+  - the client page and two entries;
+  - `measures.ts` and `scorecard.ts` (the rows, `detail`, a self-test case);
+  - three READMEs or sections, this entry and the progress entry.
+- **Errors hit:** 4, all mine, listed above.

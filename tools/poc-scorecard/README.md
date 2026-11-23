@@ -12,6 +12,9 @@ npx tsx tools/poc-scorecard/scorecard.ts --self-test                            
 - **Cells.** A measured cell shows the value, the commit and the time. A row with no record reads "not measured", with
   the arm's reason where it gives one. A failed run reads FAIL, with its first failing line. A passing run whose summary
   matches none of the row's patterns reads "unparsed". None of the three ever reads 0.
+- **A row's `detail`** (optional) is text from a passing run's output, shown after the value. The ejection rows
+  (`tools/poc-ejection/`) use it for the other count, the steps, the time and the upstream channel. A FAIL cell
+  shows only the FAIL line, cut at 600 characters.
 - **Units carry no number.** A count written into a row's unit would print on every card whatever the run measured,
   and `--self-test` fails on one. A record's `dirty` counts untracked files that aren't ignored.
 - **API mismatches against Figma** (`api-mismatches.ts --manifest <custom-elements.json>`). For each def an arm ships

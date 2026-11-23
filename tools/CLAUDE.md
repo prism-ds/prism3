@@ -412,3 +412,15 @@ check in the POC packages, gated where it belongs. The exception is `api-mismatc
 (owner decision A on #4424). It is a measurement, not a check: it exits 0 whatever the count, and the self-test plants a
 mismatch to hold it. The card's job is to show both arms side by side, and arm 2 has no
 records yet.
+
+## `tools/poc-ejection/`
+
+Ejection, both modes (#3408, plan item 3). `eject.ts` builds a standalone client in `$TMPDIR` with the tokens and all
+three POC components in both forms: package mode from `npm pack` tarballs, source mode through `copy-source.mjs`, with
+the tokens still a tarball. It checks that the client builds clean and renders in Chromium. It measures the steps, the
+time, and two counts of references left to prism3 (`refs.ts`): (a) back into the repo or workspace, and (b) `@prism3/*`
+names. It also records how an upstream change arrives. Owner decision D1 picks the scored count; until then it's (a).
+**No gate sibling, and not in CI, on purpose:** it needs the npm registry and Chromium, and its target, 0 references,
+is a scorecard row, not a merge rule. It does exit 1 on a failed build or render, or a scored count above 0, so the
+card's cell reads FAIL with its line, never a count. `--self-test` plants each kind of reference, and `--plant` plants
+one into a real run.
