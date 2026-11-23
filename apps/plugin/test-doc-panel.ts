@@ -2353,7 +2353,9 @@ section('theme font/… — Update redraws a panel nobody touched in place after
   ok(g.kept.length === 1 && g.kept[0] === g.old && g.live.length === 1, `theme font/unstyled hand font: a font set by hand on a text in no style keeps the panel aside`, `panels ${g.all.map((n) => n.name).join(' | ')}`);
   const bindFamily = async (old: N) => {
     const t = numeral(old);
-    t.boundVariables = { ...((t.boundVariables ?? {}) as object), fontFamily: { type: 'VARIABLE_ALIAS', id: 'V:font/family/display' } };
+    // A TextNode lists each bound text field as an array of aliases (`VariableAlias[]`, plugin-api.d.ts); only a styled
+    // segment's `boundVariables` holds one alias. Mutation: `boundOf` reading `.id` only → `theme font/font variable`.
+    t.boundVariables = { ...((t.boundVariables ?? {}) as object), fontFamily: [{ type: 'VARIABLE_ALIAS', id: 'V:font/family/display' }] };
     old.setSharedPluginData!('prism3', 'docPanelPrint', await panelPrint(old));
   };
   const h = await run('font variable', false, { theme: false, age: bindFamily, edit: (old) => { const t = numeral(old); t.fontName = { ...(t.fontName as { style: string }), family: 'Display Serif' }; } });
