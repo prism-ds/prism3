@@ -87,6 +87,10 @@ export type Run = 'scratch' | 'update';
 type Step = { kind: 'command' | 'edit'; what: string; seconds: number };
 export type Result = { run: Run; steps: Step[]; seconds: number; installSeconds: number; probes: number; failure: string | null; copy: string };
 
+/** The headline seconds, to a tenth: the timed run's milliseconds, less the install's when K1 leaves it untimed. */
+export const headline = (totalMs: number, installMs: number, timed: boolean): number =>
+  Math.round((totalMs - (timed ? 0 : installMs)) / 100) / 10;
+
 const tsx = (f: string, ...a: string[]) => ['npx', 'tsx', f, ...a];
 const SCRATCH: { what: string; argv: string[]; install?: true; plant?: string }[] = [
   { what: 'npm ci', argv: ['npm', 'ci', '--no-audit', '--no-fund', '--prefer-offline'], install: true },
@@ -134,13 +138,38 @@ export const summary = (r: Result): string => {
     : `OK kpi1 (update): ${r.seconds} seconds; ${plural(commands, 'command')}, ${plural(edits, 'hand edit')} (the update), 0 fixes, 0 errors, first try`;
 };
 
+/**
+ * The scope KPI 3 promises, typed here and not read from `one-edit.ts`'s FORMS and THEMES, which the reader and the
+ * judge share: a reader that drops a form drops it from the judge too. `covered` holds a live read to this scope.
+ */
+export const SCOPE = { forms: ['html', 'element'], themes: ['light', 'dark'], readings: 16 } as const;
+export const covered = (r: Reading): string[] => {
+  const missing = PROBES.flatMap((p) => SCOPE.forms.flatMap((f) => SCOPE.themes.map((t) => `${p.name} (${f}, ${t})`))).filter((k) => r[k] === undefined);
+  const n = Object.keys(r).length;
+  return [...missing.map((k) => `${k}: not read`), ...(n !== SCOPE.readings ? [`${n} readings, not the ${SCOPE.readings} promised`] : [])];
+};
+
 /** KPI 3's line: the readings, each a probe in one form and one theme. */
 export const oneEditLine = (readings: number) =>
   `OK one edit: ${readings} readings reach the edited tokens, ${PROBES.length} probes in both forms and both themes, from 1 edit (${PROBES.map((p) => p.name).join(', ')})`;
 
 // ------------------------------------------------------------------------------------------------ the run
 const sh = (argv: string[], cwd: string) => spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8', maxBuffer: 1 << 28 });
-const firstError = (out: string) => (out.split('\n').find((l) => /^(FAIL|✖|npm error|Error)/.test(l.trim())) ?? out.trim().split('\n').slice(-1)[0] ?? '').trim().slice(0, 300);
+/**
+ * A failure's cause, for the FAIL line and the record: the first failure line, then up to `FAILURE_LINES` of the
+ * indented `- …` lines that follow it (how `check-build.ts` and the a11y checks list each failure), so a red first try
+ * names what failed, not just how many.
+ */
+export const FAILURE_LINES = 5;
+export const firstError = (out: string): string => {
+  const lines = out.split('\n');
+  const i = lines.findIndex((l) => /^(FAIL|✖|npm error|Error)/.test(l.trim()));
+  if (i < 0) return (out.trim().split('\n').slice(-1)[0] ?? '').trim().slice(0, 300);
+  const items: string[] = [];
+  for (let j = i + 1; j < lines.length && /^\s+- /.test(lines[j]); j++) items.push(lines[j].trim().slice(2));
+  const more = items.length > FAILURE_LINES ? ` (and ${items.length - FAILURE_LINES} more)` : '';
+  return [lines[i].trim(), ...items.slice(0, FAILURE_LINES)].join(' | ').concat(more).slice(0, 1200);
+};
 
 /** A copy of this tree in `$TMPDIR`: tracked files, plus untracked ones git doesn't ignore. */
 const copyTree = (dest: string) => {
@@ -160,6 +189,7 @@ export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): R
     const committed = Object.fromEntries(GENERATED.map((f) => [f, readFileSync(join(tmp, f), 'utf8')]));
     for (const f of [...GENERATED, ...UNCOMMITTED]) rmSync(join(tmp, f), { recursive: true, force: true });
 
+    let installMs = 0;
     // Steps are logged only for the timed run: the scratch run itself, or the update after its untimed setup.
     const go = (steps: typeof SCRATCH, timed: boolean, label: Run) => {
       for (const s of steps) {
@@ -168,7 +198,7 @@ export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): R
         const r = sh(s.argv, tmp);
         const seconds = (Date.now() - t) / 1000;
         if (timed) res.steps.push({ kind: 'command', what: s.what, seconds });
-        if (timed && s.install) res.installSeconds = Math.round(seconds * 10) / 10;
+        if (timed && s.install) { installMs = seconds * 1000; res.installSeconds = Math.round(seconds * 10) / 10; }
         if (r.status !== 0) throw new Error(`FAIL kpi1 (${label}): ${timed ? '' : 'setup '}step "${s.what}" exited ${r.status}: ${firstError(`${r.stderr}\n${r.stdout}`)}`);
       }
     };
@@ -184,7 +214,7 @@ export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): R
       const t0 = Date.now();
       go(SCRATCH, true, 'scratch');
       if (opts.plant === 'drift') writeFileSync(join(tmp, DRIFT), `${readFileSync(join(tmp, DRIFT), 'utf8')}/* drift */\n`);
-      res.seconds = Math.round((Date.now() - t0 - (K1.timed ? 0 : res.installSeconds * 1000)) / 100) / 10;
+      res.seconds = headline(Date.now() - t0, installMs, K1.timed);
       checkScratch('scratch');
       return res;
     }
@@ -208,9 +238,10 @@ export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): R
       const c = sh(tsx(gen, '--check'), tmp);
       if (c.status !== 0) throw new Error(`FAIL kpi1 (update): the edit also needs ${pkg} regenerated, which the update did not run: ${firstError(`${c.stderr}\n${c.stdout}`)}`);
     }
-    const bad = judge(before, readProbes(tmp), wantBefore, expected(outDir));
+    const after = readProbes(tmp);
+    const bad = [...covered(before).map((x) => `before the edit, ${x}`), ...covered(after).map((x) => `after the edit, ${x}`), ...judge(before, after, wantBefore, expected(outDir))];
     if (bad.length) throw new Error(`FAIL one edit: ${plural(bad.length, 'reading')} wrong: ${bad.join('; ')}`);
-    res.probes = Object.keys(wantBefore).length;
+    res.probes = Object.keys(after).length;
   } catch (e) {
     const m = (e as Error).message;
     res.failure = m.startsWith('FAIL') ? m : `FAIL kpi1 (${run}): ${m}`;
@@ -277,6 +308,19 @@ export const SELF: { name: string; check: () => string | null }[] = [
   { name: 'GENERATED names files the repo commits, each once', check: () => {
     const missing = GENERATED.filter((f) => !existsSync(resolve(REPO, f)));
     return missing.length || new Set(GENERATED).size !== GENERATED.length ? `missing or repeated: ${missing.join(', ')}` : null; } },
+  { name: 'the headline time counts the install under K1 A and leaves it out under B, from planted step times', check: () => {
+    // Typed totals: 20,000ms timed with a 6,050ms install. A gives 20.0; B gives 13.95, which rounds to 14.0.
+    const got = [headline(20_000, 6_050, true), headline(20_000, 6_050, false), headline(3_549, 0, true)];
+    return got.join() === '20,14,3.5' ? null : `headline gave ${got.join(', ')}, expected 20, 14, 3.5`; } },
+  { name: 'a failure line carries the failures listed under it, capped, not just their count', check: () => {
+    const out = 'noise\nFAIL storybook: 7 failure(s), 1066 passed\n  - a: x\n  - b: y\n  - c\n  - d\n  - e\n  - f\n  - g\nOK other';
+    const got = firstError(out);
+    return got === 'FAIL storybook: 7 failure(s), 1066 passed | a: x | b: y | c | d | e (and 2 more)' ? null : got; } },
+  { name: 'a live read missing a promised form, or short of the promised count, fails by name', check: () => {
+    if (covered(now).length) return `a full read: ${covered(now).join('; ')}`;
+    const htmlOnly = Object.fromEntries(Object.entries(now).filter(([k]) => k.includes('(html,')));
+    const bad = covered(htmlOnly);
+    return bad.length === 9 && bad[0] === 'button fill (element, light): not read' && bad[8] === '8 readings, not the 16 promised' ? null : JSON.stringify(bad); } },
   { name: 'the summary lines name the time, commands, hand edits, fixes, errors and the install with K1', check: () => {
     const base = { seconds: 21.4, installSeconds: 6.1, probes: 0, failure: null, copy: '' };
     const s = summary({ ...base, run: 'scratch', steps: SCRATCH.map((x) => ({ kind: 'command' as const, what: x.what, seconds: 1 })) });
