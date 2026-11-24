@@ -1,0 +1,4 @@
+---
+engine: patch
+---
+A style guide, a build or Update file no longer stalls for up to an hour while Figma's window is hidden (#4476). Each run now hands control back to Figma only once about 50 ms of work has run, and it times each hand-back. Two in a row that come back at least a second late mean Figma has throttled the plugin's timers, which it does while its window is hidden. The run then does more work between hand-backs, up to 15 s, and goes back to 50 ms as soon as one comes back on time. Against a timer that runs once a minute, a run now takes about four times its working time in the tests, where it waited a minute for every table or chunk. The run's progress line also says why it is slow once this is detected. A warm rebuild also stops waiting on hundreds of hand-backs around almost no work (#724). Plugin only; no committed artifact changes.

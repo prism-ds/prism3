@@ -21,11 +21,14 @@
  * its fill counted from the def reached (`done + 1`) → `agent/work`; the read after open winning over it → `order/agent`;
  * `agentHeard` not clearing on `agent-finished` (#3210 review, M-C) → `agent/cleared`.
  *
+ * #4476 mutations, each failing by name: `still` ignoring `throttled` → `still/throttled`; `withThrottleNote` adding the
+ * note whatever it is told → `note/line`.
+ *
  * Mutations, each failing by name: the silence test dropped (`still` always null) → `still/after 3 s`; the fill counted
  * from the set being written (`done + 1`) → `run/fill`; the check given a count → `run/check`; `rowState` reading every
  * seen set Updated → `rows/updating`; `stripVerdict` reading a stop the person asked for as a failure → `verdict/stopped`.
  */
-import { agentHeard, elapsed, heard, rowState, startStripRun, stepEnded, stripVerdict, stripView, withReading, type StripRun } from './src/state/status-strip';
+import { agentHeard, elapsed, heard, rowState, startStripRun, stepEnded, stripVerdict, stripView, withReading, withThrottleNote, type StripRun } from './src/state/status-strip';
 import { startUpdate, stepDone } from './src/state/update-file';
 
 let failed = 0;
@@ -74,6 +77,17 @@ r = withReading(r, { run: 'update', phase: 'work', item: 'checkbox', done: 4, to
   ok(early.kind === 'running' && early.still === null, 'still/after 3 s: not at 2.999 s');
   const back = stripView({ read: null, run: heard(r, T0 + 44_000), step, verdict: null, now: T0 + 44_500, nameOf });
   ok(back.kind === 'running' && back.still === null, 'still/heard: a message from the run clears it');
+  // #4476: a run the host reads as throttled says so in place of "Still working on…", at once and to the run's end; a
+  // reading without the flag does not take it back. Mutation: `still` ignoring `throttled` → `still/throttled` fails.
+  const NOTE = 'Figma slows plugins while its window is hidden — keep it visible to finish sooner.';
+  const slow = withReading(r, { run: 'update', phase: 'work', item: 'checkbox', done: 4, total: 12, throttled: true }, T0 + 41_000);
+  const t1 = stripView({ read: null, run: slow, step, verdict: null, now: T0 + 41_100, nameOf });
+  const t2 = stripView({ read: null, run: withReading(slow, { run: 'update', phase: 'work', item: 'tag', done: 5, total: 12 }, T0 + 42_000), step, verdict: null, now: T0 + 42_100, nameOf });
+  const t3 = stripView({ read: null, run: heard(r, T0 + 41_000, true), step, verdict: null, now: T0 + 41_100, nameOf });
+  ok(t1.kind === 'running' && t1.still === NOTE && t2.kind === 'running' && t2.still === NOTE && t3.kind === 'running' && t3.still === NOTE,
+    `still/throttled: the note at once, kept by a later reading, and from a build's or style guide's reading (${J([t1, t2, t3].map((v) => (v.kind === 'running' ? v.still : null)))})`);
+  ok(withThrottleNote('Drawing table 29 of 45…', true) === `Drawing table 29 of 45… · ${NOTE}` && withThrottleNote('Building variants…', false) === 'Building variants…' && withThrottleNote('Building variants…', undefined) === 'Building variants…',
+    `note/line: the Build set and Style guides line carries the note only when throttled (${J([withThrottleNote('Drawing table 29 of 45…', true), withThrottleNote('Building variants…', false)])})`);
   const stopping = stripView({ read: null, run: r, step: { ...step, stopping: true }, verdict: null, now: T0 + 41_500, nameOf });
   ok(stopping.kind === 'running' && stopping.stop.label === 'Stopping after Checkbox…' && stopping.stop.disabled, `stop/asked: "Stopping after Checkbox…", off (${stopping.kind === 'running' ? J(stopping.stop) : ''})`);
   ok(rowState(r, 'button') === 'updated' && rowState(r, 'checkbox') === 'updating' && rowState(r, 'tag') === null,

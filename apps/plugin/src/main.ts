@@ -78,7 +78,8 @@ import { readUpdatesOff, writeUpdatesOff, type UpdatesOff } from './updates-off'
 import { setNodeOf, showSetNode } from './show-set';
 import { planOverride, overrideVerdict, overrideData, wholeRunRefusal, confirmMoved, type OverrideChange, type OverrideRefusal } from './set-override';
 import { declaredModesOf, failedChecks, seedSummary } from './seed-modes';
-import { PACE_MS, pacer } from './pace';
+import { PACE_MS, pacer, handBack } from './pace';
+import type { HandBack } from './pace';
 import { searchComponents } from './component-search';
 import { materializeForBrand, materializerFor } from './brand-def';
 import { dueOf, entryFor, formerEntry, needsPrint, printOf, printSteps, quietOf, readLedger, recordSets, type DueReason, type Ledger, type LedgerEntry, type PlanPrint } from './as-built-ledger';
@@ -344,18 +345,7 @@ void (async (): Promise<void> => {
  * Theme post no readings, and its Capture baseline and Adopt (#3189) post theirs to the panel directly (`postProgress`),
  * a reading at each def, for the status strip.
  */
-const postProgress = (run: RunProgressKind, p: ApplyProgress): void => postToUi({ type: 'run-progress', run, ...p });
-/** An executor `yieldTo` that hands the thread back only once about `PACE_MS` of work has run since it last did, and
- *  then says `again` first. Asked after every member (`chunk: 1`); a wait the executor asks for (`ms`) is always kept. */
-const paced = (again: () => void): ((ms?: number) => Promise<void>) => {
-  let last = Date.now();
-  return async (ms?: number): Promise<void> => {
-    if (!ms && Date.now() - last < PACE_MS) return;
-    again();
-    await new Promise<void>((r) => setTimeout(r, ms ?? 0));
-    last = Date.now();
-  };
-};
+const postProgress = (run: RunProgressKind, p: ApplyProgress, throttled = false): void => postToUi({ type: 'run-progress', run, ...p, ...(throttled ? { throttled: true as const } : {}) });
 /** Apply Theme's pacing: a reading and a hand-back before each of its seven stages, and inside every stage the cadence a
  *  component write keeps (#3208): the executors offer a `tick` after each variable or style, and it hands the thread back
  *  once about `PACE_MS` of work has run since the last hand-back. The thread is handed back for an agent's apply too; only
@@ -843,6 +833,9 @@ const docBlockFixOf = async (outcomes: readonly FurnitureOutcome[]): Promise<Doc
   } catch { return null; }
 };
 const buildComponents = async (defId: string | undefined, sink: ActionSink, options: BuildOptions = {}): Promise<void> => {
+  // #4476, #724: the build's one hand-back, for its page loads and every set it builds: taken once `PACE_MS` of work has
+  // run, and spaced out while a hidden window throttles it, which its readings then say (`throttled`).
+  const hand = handBack();
   // EXACTLY ONE VERDICT PER BUILD, and this flag exists because #908's reordering is what made a second one
   // possible. The success verdict now posts BEFORE the console telemetry, so a throw in the telemetry tail
   // would reach the catch below and overwrite a correct "built" verdict with "apply failed" — reporting a
@@ -978,6 +971,8 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
         emitAsComponents: target.figmaProperties?.emitAsComponents,
         // #1623 sign-off — the def's one-line `summary` becomes the Figma description of what it builds.
         description: target.summary,
+        // #4476, #724: the run's hand-back, in place of a `setTimeout(0)` at every chunk.
+        yieldTo: hand,
         // Posted straight through, unaggregated: the executor owns the phase/fraction and this is the
         // only place that can see the timing. `chunkMs` is CALIBRATION data (see `CHUNK`) — the shim has
         // no event loop, so chunk size can only be tuned from a live run, and this is how it gets out.
@@ -995,7 +990,7 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
           // The console gets the whole reading including `elapsedMs`; the pill shows a fraction and nothing
           // more. Spreading would put every field the executor ever adds onto the bridge by default — a
           // widening the message contract in `messages.ts` never agreed to, and one that reads as intentional.
-          sink.post({ type: 'component-progress', phase: p.phase, done: p.done, total: p.total, chunkMs: p.chunkMs });
+          sink.post({ type: 'component-progress', phase: p.phase, done: p.done, total: p.total, chunkMs: p.chunkMs, ...(hand.throttled ? { throttled: true as const } : {}) });
         },
       });
       // THE AS-BUILT LEDGER (#2909 Q2909.8 A): a set this build landed whole, every member fresh or already this plan's,
@@ -1025,7 +1020,7 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
     // is built before it, deepest first (`build-deps.ts`). One that is already in the file is left alone:
     // rebuilding it would orphan its placed instances, so it keeps its STALE reading exactly as before. A
     // dependency that fails stops here, so the parent is never built against a missing nest.
-    await loadPagesYielding();
+    await loadPagesYielding(undefined, hand.every);
     // A NAMED VERSION BEFORE THE FIRST WRITE (#2828), for the def and the sets it adds first. A host that refuses
     // lands in the catch below with nothing written.
     await saveBeforeBuild(figma as unknown as Parameters<typeof saveBeforeBuild>[0], def, { defs: componentDefs, project });
@@ -1459,14 +1454,16 @@ const watchSets = (): void => {
  * no `loadAsync` (a Node shim) skips straight to it. Every read and write in this file that needs every page loads them
  * here, so none of them freezes the file while the read after open is still going.
  */
-const loadPagesYielding = async (onPage?: (done: number, total: number) => void): Promise<void> => {
+/** `hand`: how the thread is handed back after each page; a run passes its own `handBack`'s `every` (#4476): a page per
+ *  turn while the window is visible, as before, and a hand-back per stretch of work while a hidden window throttles it. */
+const loadPagesYielding = async (onPage?: (done: number, total: number) => void, hand: () => Promise<void> = breathe): Promise<void> => {
   // #3170 Q3170.1 A: the read after open says how far it has got, a page at a time (`onPage`), for the status strip.
   const pages = (figma.root.children as readonly { loadAsync?(): Promise<void> }[]).filter((p) => typeof p.loadAsync === 'function');
   if (pages.length) onPage?.(0, pages.length);
   for (const [i, p] of pages.entries()) {
     await p.loadAsync!();
     onPage?.(i + 1, pages.length);
-    await breathe();
+    await hand();
   }
   await figma.loadAllPagesAsync();
 };
@@ -1921,13 +1918,19 @@ const updateComponents = async (defId: string | readonly string[] | undefined, p
       furniture.push(...await furnishUpdate(file as FurnitureApi, { outcomes: [{ def }] }, targets, paneled ? (set, d) => panelFor(set, d, file as PanelApi) : undefined));
     };
     // #3170: the panel's own update reports each set boundary and hands the thread back after about `PACE_MS` inside a
-    // set (`chunk: 1`, `paced`), and reads its Stop at each boundary. An agent's update yields as before and posts nothing.
+    // set (`chunk: 1`, the run's `handBack`, #4476), and reads its Stop at each boundary. An agent's update posts nothing.
     const panel = sink === uiSink;
     if (panel) updateStopAsked = false;
     let last: ApplyProgress | null = null;
-    const progress = (p: ApplyProgress): void => { last = p; postProgress('update', p); };
-    const pacing = panel ? { progress, stop: () => updateStopAsked, chunk: 1, yieldTo: paced(() => { if (last) postProgress('update', last); }) } : {};
-    const r = await applyUpdate(figma as unknown as ApplyHost, figma as unknown as ComponentsApi, targets, previewHash, { descriptionOf, nameOf, breathe, furnish, ...(choices ? { choices } : {}), ...pacing });
+    // #4476: the run's one hand-back. Its reads and set boundaries hand back at every pass as before (`every`), and its
+    // members once `PACE_MS` of work has run (the panel's run asks after every member, `chunk: 1`), saying the last reading
+    // again first; all of it spaced out while a hidden window throttles it, which the readings then say. An agent's run
+    // hands back by it too, and posts nothing.
+    let hand: HandBack | null = null;
+    const progress = (p: ApplyProgress): void => { last = p; postProgress('update', p, !!hand?.throttled); };
+    hand = handBack(undefined, panel ? () => { if (last) postProgress('update', last, !!hand?.throttled); } : undefined);
+    const pacing = panel ? { progress, stop: () => updateStopAsked, chunk: 1 } : {};
+    const r = await applyUpdate(figma as unknown as ApplyHost, figma as unknown as ComponentsApi, targets, previewHash, { descriptionOf, nameOf, breathe: hand.every, yieldTo: hand, furnish, ...(choices ? { choices } : {}), ...pacing });
     r.refused.push(...refused);
     // THE AS-BUILT LEDGER (#2909 Q2909.8 A): each set the apply acted on is recorded as built from today's def, under the
     // brand its plans were laid from (the panel's, which the run's Theme step applied). A refused set, or an apply
@@ -2155,13 +2158,16 @@ const styleGuide = async (options: StyleGuideOptions, sink: ActionSink): Promise
     // the pending pill and, logged, to the console: a hung run's last line names the table it hung on, and
     // `tableMs` is the live figure `CELLS_PER_YIELD` is calibrated against. Pages first, one per turn (#3110):
     // `runStyleGuide`'s own `loadAllPagesAsync` then has nothing left to load.
-    await loadPagesYielding();
+    // #4476: the run's hand-back, taken once `PACE_MS` of work has run and spaced out while a hidden window throttles it.
+    const hand = handBack();
+    await loadPagesYielding(undefined, hand.every);
     const result = await runStyleGuide(figma, contract, options, {
+      yieldTo: hand,
       // A NAMED VERSION BEFORE THE FIRST WRITE (#2828); a host that refuses ends the run in the catch below.
       beforeWrite: (tables) => saveVersion(figma, { run: 'style-guide', tables }).then(() => undefined),
       onProgress: (p) => {
         if (p.done > 0) console.log(`[prism3 #1778] style guide: table ${p.done} of ${p.total}, ${p.title}, ${p.tableMs}ms`);
-        sink.post({ type: 'style-guide-progress', done: p.done, total: p.total, tableMs: p.tableMs });
+        sink.post({ type: 'style-guide-progress', done: p.done, total: p.total, tableMs: p.tableMs, ...(hand.throttled ? { throttled: true as const } : {}) });
       },
       onPlan: (tables) => { if (panel) sink.post({ type: 'style-guide-tables', tables: tables.map((t) => ({ key: t.key, title: t.title, page: t.page.replace(/^↳\s*/, '') })) }); },
       onTable: (e) => { if (panel) sink.post({ type: 'style-guide-table', index: e.index, status: e.status, ...(e.reason !== undefined ? { reason: e.reason } : {}) }); },
