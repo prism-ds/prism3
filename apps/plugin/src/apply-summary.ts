@@ -259,7 +259,7 @@ export const motionReplacedItem = (n: number): string =>
 export const weightFallbackNote = (fallbacks: readonly { family: string; asked: string; used: string; styles: number }[]): string => {
   if (!fallbacks.length) return '';
   const each = fallbacks.slice(0, 3).map((x) => `${x.family} ${x.asked} — ${x.styles ? `${x.styles} text style${x.styles === 1 ? '' : 's'} use` : 'uses'} ${x.used} instead`);
-  return `⚠ Not in this Figma: ${each.join('; ')}${fallbacks.length > 3 ? '; …' : ''}. To choose the weight, set Typography › Weights.`;
+  return `⚠ Not in this Figma: ${each.join('; ')}${fallbacks.length > 3 ? '; …' : ''}. To choose the weight, set Theme › Type › Weights and styles.`;
 };
 /**
  * #4474 (owner decision A): a re-apply removes the font weight variables the brand no longer uses, and like the motion

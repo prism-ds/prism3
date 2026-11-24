@@ -37,7 +37,7 @@ The variables the plugin writes match the ones the engine emits for the same bra
 | Result | Meaning |
 |---|---|
 | `✓ applied` | Everything was written. <!-- src: apps/plugin/src/apply-summary.ts:37 --> |
-| `⚠ Not in this Figma` | The brand's font family has no face at a weight the brand uses, such as Semi Bold. The text styles at that weight use the nearest weight the family has instead, and the line names both. To choose the weight yourself, open the Weights setting in Typography (one of its advanced settings) and run Update file again. <!-- src: apps/plugin/src/apply-summary.ts:254-262 --> |
+| `⚠ Not in this Figma` | The brand's font family has no face at a weight the brand uses, such as Semi Bold. The text styles at that weight use the nearest weight the family has instead, and the line names both. To choose the weight yourself, open Theme › Type › Weights and styles (an advanced setting) and run Update file again. <!-- src: apps/plugin/src/apply-summary.ts:254-262 --> |
 | `✓ applied, N skipped` | The variables were written, but N text styles were not, because Figma could not load their font. The detail names them. <!-- src: apps/plugin/src/apply-summary.ts:36 --> |
 | `⚠ N misses` | The theme named a variable this file does not have, so something did not bind. <!-- src: apps/plugin/src/apply-summary.ts:30 --> |
 | `✗ N conflicts` | Nothing was written. See below. <!-- src: apps/plugin/src/apply-summary.ts:50-51 --> |

@@ -19,6 +19,9 @@
  *   - the `retireUnusedWeights` call dropped from `runApplyTheme` → `retire/no orphan`, `retire/reported`
  *   - the alias check dropped in `retireUnusedWeights` → `retire/aliased kept`
  *   - the `<digits>` test dropped in `retireUnusedWeights` (any unplanned name under the prefix) → `retire/narrow`
+ *   - the `variableCollectionId === col.id` guard dropped in `retireUnusedWeights` → `retire/other collection`
+ *   - the `resolveFontStyle` check dropped in `fillMissingWeights` (every face reported, present ones as themselves)
+ *     → `fallback/only missing`, `fallback/none when stocked`
  */
 import type { BrandInput } from '@prism3/engine';
 import { EXAMPLE_BRANDS_JSON as exampleBrands } from '@prism3/engine';
@@ -66,8 +69,10 @@ console.log('\nfallback — a family with no Semi Bold');
   const fb = run.weightFallbacks?.find((x) => x.family === 'Inter' && x.asked === 'Semi Bold');
   ok(!!fb && fb.used === 'Bold' && fb.styles === semi.length,
     `fallback/warned: the run names Inter Semi Bold as missing, standing in Bold, for ${semi.length} text styles (got ${JSON.stringify(run.weightFallbacks)})`);
+  ok(run.weightFallbacks?.length === 1,
+    `fallback/only missing: the only face named is the missing one, Inter Semi Bold, not a face the host has (got ${JSON.stringify(run.weightFallbacks?.map((x) => `${x.family}|${x.asked}`))})`);
   const note = weightFallbackNote(run.weightFallbacks ?? []);
-  ok(note.includes('Inter Semi Bold') && note.includes('Bold instead') && note.includes('Typography › Weights'),
+  ok(note.includes('Inter Semi Bold') && note.includes('Bold instead') && note.includes('Theme › Type › Weights and styles'),
     `fallback/note: the report line names the face and points at the weight setting (${note})`);
   const ts = run.guarded.ok ? run.guarded.result.ts : null;
   ok(!!ts && ts.skipped.length === 0, `fallback/none skipped: no text style is skipped (skipped ${JSON.stringify(ts?.skipped.map((x) => x.name))})`);
@@ -89,6 +94,8 @@ console.log('\nretire — a re-apply after the weight change');
   const first = await runApplyTheme(harbor, file as any);
   const w600 = file.vars.find((v: any) => /\/core\/font\/weight\/600$/.test(v.name));
   ok(first.guarded.ok === true && !!w600, `premise: the first apply writes ${w600?.name ?? 'a weight-600 variable'}`);
+  ok(Array.isArray(first.weightFallbacks) && first.weightFallbacks.length === 0,
+    `fallback/none when stocked: a host with every face the brand asks for warns about none (got ${JSON.stringify(first.weightFallbacks)})`);
   const name600 = w600?.name ?? '';
   const prefix = name600.replace(/600$/, '');
   // A hand-made variable under the same prefix that is not a weight: the pass must leave it.
@@ -106,6 +113,23 @@ console.log('\nretire — a re-apply after the weight change');
   ok(!!w700 && !!emphasis && Object.values(emphasis.valuesByMode).every((x: any) => x?.type === 'VARIABLE_ALIAS' && x.id === w700.id),
     'retire/rebound: the emphasis role aliases the weight-700 variable');
   ok(file.vars.includes(handMade), 'retire/narrow: a non-numeric name under the weight prefix is left alone');
+}
+
+console.log('\nretire — the same name in another collection is not Prism3\'s');
+{
+  const file = new FileShim();
+  const faces = new Map<string, { family: string; style: string }>();
+  for (const b of [harbor, withEmphasis(harbor, 700)]) for (const r of themePlans(b).textPlan) faces.set(`${r.fontFamilyPrimary}|${r.fontStyle}`, { family: r.fontFamilyPrimary, style: r.fontStyle });
+  file.faces = [...faces.values()];
+  await runApplyTheme(harbor, file as any);
+  const w600 = file.vars.find((v: any) => /\/core\/font\/weight\/600$/.test(v.name));
+  const name600 = w600?.name ?? '';   // read first: a removed variable throws on every read
+  const other = file.createVariableCollection('Mine');
+  const twin = w600 ? file.createVariable(name600, other, 'FLOAT') : undefined;
+  const second = await runApplyTheme(withEmphasis(harbor, 700), file as any);
+  const rw = second.guarded.ok ? second.guarded.result.rw : null;
+  ok(!!twin && file.vars.includes(twin) && !!w600 && !file.vars.includes(w600),
+    `retire/other collection: a variable named ${name600} in another collection survives the re-apply, while Prism3's own is removed (${JSON.stringify(rw)})`);
 }
 
 console.log('\nretire — a weight variable someone aliases is kept');
