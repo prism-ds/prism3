@@ -103,8 +103,11 @@ console.log('\n#1728 — the cut variable is resolved before the variable stage 
   ok(whole.guarded.ok === true && valueOf(PLAYFAIR) === 'SemiBold Italic'
     && !whole.pf.unavailable.some((u) => u.face.startsWith('Playfair Display|')),
     `#1728 whole: a whole apply ends at "SemiBold Italic" and reports no Playfair face unavailable (${JSON.stringify(valueOf(PLAYFAIR))}; ${JSON.stringify(whole.pf.unavailable.map((u) => u.face))})`);
-  ok(valueOf(INTER) === 'Semi Bold Italic' && whole.pf.unavailable.some((u) => u.face === 'Inter|Semi Bold Italic'),
-    `#1728 missing cut left alone: a cut the family lacks under every spelling keeps the engine's "Semi Bold Italic", and the apply warns (${JSON.stringify(valueOf(INTER))}; ${JSON.stringify(whole.pf.unavailable.map((u) => u.face))})`);
+  // #4474 (owner decision A) replaced the old posture here, where a cut the family lacks kept the engine's name and the
+  // styles on it were skipped: the nearest weight of the same italic-ness stands in, named before the write. This host's
+  // Inter has one italic, `Italic`, so that is the nearest.
+  ok(valueOf(INTER) === 'Italic' && !!whole.weightFallbacks.find((x) => x.family === 'Inter' && x.asked === 'Semi Bold Italic' && x.used === 'Italic'),
+    `#1728 missing cut filled: a cut the family lacks under every spelling takes the nearest italic, "Italic", and the apply names it (${JSON.stringify(valueOf(INTER))}; ${JSON.stringify(whole.weightFallbacks)})`);
   const t2 = await stopped();
   ok(t2 === 'the plugin was closed' && valueOf(PLAYFAIR) === 'SemiBold Italic',
     `#1728 interrupted/re-apply: a re-apply stopped before the text-style stage does not put the engine's spelling back (${JSON.stringify(valueOf(PLAYFAIR))}; ${t2})`);

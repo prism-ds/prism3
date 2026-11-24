@@ -92,7 +92,8 @@ export interface Variable {
   /** Read only by the motion retype (#2412, `replacesOnRetype`). Optional so a shim that never models a type
    *  still satisfies the port; the real `Variable` always has it. */
   resolvedType?: string;
-  /** The real `Variable`'s delete. Called only by the motion retype (#2412). */
+  /** The real `Variable`'s delete. Called by the motion retype (#2412) and the retired-weight pass (#4474,
+   *  `retire-weights.ts`). */
   remove?(): void;
   scopes: string[];
   description: string;

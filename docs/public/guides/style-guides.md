@@ -16,14 +16,14 @@ Write the theme first if you want the color tables to show contrast. The contras
 ## Choose what to draw
 
 1. Open **Docs** in the rail, then the **Style guides** tab. <!-- src: apps/studio/src/shell/pages.ts@"{ id: 'documentation" --> <!-- src: apps/studio/src/shell/pages.ts@"export const DOC_TABS".."] as const;" -->
-2. Under **What to draw**, choose a **Collection** (or **Every collection**) and the **Kinds** to include, then tick the groups you want. One button works on the list in view: it reads **Select all**, or **Deselect all** once anything in view is ticked. <!-- src: apps/studio/src/shell/style-guides.ts@"const h2 = h('h2', 'p3-sg-sec-title', 'What".."btn('p3-btn p3-btn-page" -->
+2. Under **What to draw**, choose a **Collection** (or **Every collection**) and the **Kinds** to include, then tick the groups you want. One button works on the list in view: it reads **Select all**, or **Deselect all** once anything in view is ticked. <!-- src: apps/studio/src/shell/style-guides.ts@"const h2 = h('h2', 'p3-sg-sec-title', 'What".."btn('p3-btn p3-btn-page" --> What you see is what is drawn: with one collection chosen, only the tables ticked in it are drawn. <!-- src: apps/studio/src/state/style-guides.ts@"/** WHAT YOU SEE IS ".."};"#06623eb5 --> Tables ticked in another collection stay ticked, and **Every collection** draws them again. <!-- src: apps/studio/src/shell/style-guides.ts@"[['', 'Every collection" -->
 3. To draw only some tables, open **Draw by table title** and enter one title per line. Empty draws every table. <!-- src: apps/studio/src/shell/style-guides.ts@"sum.append(glyph('chevr".."const hint = h('p', " -->
 4. Set the **Options**. <!-- src: apps/studio/src/shell/style-guides.ts@"const h2 = h('h2', 'p3-sg-sec-title', 'Options" --> Docs keeps your choices in the file. <!-- src: apps/studio/src/shell/documentation.ts@"/**\n * Documentation, the plugin rail's third area (#2909 IA v2 phase 1; owner decisions Q667 A, Q2909.21 A, Q2909.23 A, and".."*     settings-only "#c1d00ceb -->
 
 ## Draw the tables
 
 1. Choose **Update file** in the top bar.
-2. Tick **Style guides**: "Drawn with the settings in Docs. A rerun updates each table in place." It is ticked by default only on a file that isn't set up yet. <!-- src: apps/studio/src/state/update-file.ts@"guides: 'Style guides".."guidesSub: 'Drawn with" -->
+2. Tick **Style guides**: "Drawn with the settings in Docs. A rerun updates each table in place." It is ticked by default only on a file that isn't set up yet. <!-- src: apps/studio/src/state/update-file.ts@"guides: 'Style guides".."guidesSub: 'Drawn with" --> Beside it, the row says how many tables the run will draw, such as "2 tables". <!-- src: apps/studio/src/state/update-file.ts@"guidesCount: (n: number" -->
 3. Choose **Update file**.
 
 The status strip says "Style guides drawn" when the run ends, and the Activity drawer lists each table. If the run went wrong, the drawer's **Update again** opens Update file again. <!-- src: apps/studio/src/state/status-strip.ts@"done: { setup: 'File".."updated: (n: number)" --> <!-- src: apps/studio/src/shell/activity.ts@"update: 'Update again" -->

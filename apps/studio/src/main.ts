@@ -39,7 +39,7 @@ import type { StatusLend } from './shell/status-strip';
 import { agentHeard, heard, startStripRun, stepEnded, stripVerdict, stripView, withReading, rowState, STRIP_COPY, type StripAgent, type StripRead, type StripRun, type StripVerdict } from './state/status-strip';
 import type { DocumentationLend } from './shell/documentation';
 import { brandFor, DUE_DEBOUNCE_MS, recheckHolds, startUpdate, statusesOf, STEP_TITLE, stepDone, stepOf, stopUpdate, type StepKey, type UpdateRun } from './state/update-file';
-import { readSaved, savedDrawOptions } from './state/style-guides';
+import { readSaved, savedDrawCount, savedDrawOptions } from './state/style-guides';
 import type { BarActions, BarView, ExportBlock, ExportView } from './shell/bar';
 import { errorStrip, type ErrorStrip } from './shell/notices';
 // The error line's one Layout fix (owner Q189 A, #2146). The write stays in the Layout domain: `main.ts` makes none.
@@ -2386,6 +2386,8 @@ const updateFileLend: UpdateFileLend = {
     handEdits: host.handEdits, updateCheck: host.updateCheck, updateProgress: host.updateProgress, queue: host.addQueue, panels: host.docSettings?.panels !== false,
     rowState: (id) => rowState(stripRun, id), stopLabel: () => { const v = statusLend.read(); return v.kind === 'running' ? v.stop.label : null; },
     panelsOff: host.docSettings?.panels === false, panelsClean: host.panelsClean, updatesOffError: host.updatesOffError,
+    // #4480 (Q2 A): counted through the step's own options (`savedDrawOptions`), so the row says what the run will draw.
+    guides: host.styleGuideCatalog && !host.styleGuideCatalog.error ? savedDrawCount(host.styleGuideCatalog.catalog, readSaved(host.docSettings?.styleGuide)) : null,
   }),
   setUpdatesOff: (def, off, theme) => { if (!commit.isFigma) return; updatesOffTheme = theme; commit.postUpdatesOff(def, off); },
   panelsClean: (confirm) => panelsClean(confirm),
@@ -2415,6 +2417,7 @@ const updateFileLend: UpdateFileLend = {
   pruneCheck: () => runPrune(),
   pruneDelete: deletePrune,
   cleanUp: (ids) => styleGuidesLend.cleanUp(ids),
+  countGuides: () => { if (commit.isFigma) commit.requestStyleGuideCatalog(); },
 };
 
 /** #3119: "Show the set in Figma" on a Build set result: the set the last build verdict was about, while the file holds it

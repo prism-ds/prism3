@@ -2,6 +2,7 @@
   "suites": [
     { "file": "test-write.ts", "floor": 100 },
     { "file": "test-apply-interrupted.ts", "floor": 7 },
+    { "file": "test-weight-fallback.ts", "floor": 24 },
     { "file": "test-readback.ts", "floor": 51 },
     { "file": "test-persist.ts", "floor": 7 },
     { "file": "test-write-float.ts", "floor": 33 },

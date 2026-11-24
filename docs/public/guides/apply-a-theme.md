@@ -8,7 +8,7 @@ It is ticked when the dialog opens only if the file's variables differ from the 
 When they already match, it is unticked and reads "Up to date"; tick it to write the brand again. <!-- src: apps/studio/src/state/update-file.ts@"themeCurrent: 'Up to" -->
 It is in the Figma plugin only: the web Studio has no file to write to. <!-- src: apps/studio/src/shell/bar.ts@"/** Update file, the"#1bd757c2 -->
 
-Each run checks the file first and writes only once nothing conflicts, or once you have chosen what happens to each conflict. It never deletes anything. <!-- src: apps/plugin/src/apply-theme.ts@"// THE COLLISION CHOICE".."async () => {"#82e91aee --> <!-- src: apps/plugin/src/preflight.ts@"export const preflightApply".."};"#328537d5 -->
+Each run checks the file first and writes only once nothing conflicts, or once you have chosen what happens to each conflict. <!-- src: apps/plugin/src/apply-theme.ts@"// THE COLLISION CHOICE".."async () => {"#68cece4a --> <!-- src: apps/plugin/src/preflight.ts@"export const preflightApply".."};"#328537d5 -->
 The rest of the checklist, and how a run works, is in [Update a Figma file](update-a-file-safely.md).
 
 ## What gets written
@@ -18,8 +18,8 @@ The rest of the checklist, and how a run works, is in [Update a Figma file](upda
 | Variable collections | `core`, holding the palette ramps, base dimensions and fonts; `color`, holding every color role; `layout`; `type-sets`; and one collection each for space, size, radius, border width, focus, opacity, blur, text spacing, motion, icon and control sizes. <!-- src: packages/engine/emit-figma.ts@"const artifacts: FigmaArtifact".."return { artifacts, summary };\n};" --> |
 | Modes | On `color`, one mode per appearance mode the brand ships, such as light, dark and the high-contrast pair. On `layout`, one mode per breakpoint. On `type-sets`, a desktop and a mobile mode. <!-- src: packages/engine/emit-figma.ts@"const artifacts: FigmaArtifact".."return { artifacts, summary };\n};" --> |
 | Text styles | One per text role, bound to the font variables, so changing a variable restyles the text. <!-- src: apps/plugin/src/apply-theme.ts@"await pace?.stage('text".."// MOTION (#2412): TIMING"#a571c20a --> |
-| Effect styles | The shadow ramp. <!-- src: apps/plugin/src/apply-theme.ts@"const guarded = await".."},\n  );"#7ecb2856 --> |
-| Paint styles | Gradients, when the brand turns them on. <!-- src: apps/plugin/src/apply-theme.ts@"const guarded = await".."},\n  );"#7ecb2856 --> |
+| Effect styles | The shadow ramp. <!-- src: apps/plugin/src/apply-theme.ts@"const guarded = await".."},\n  );"#91940a76 --> |
+| Paint styles | Gradients, when the brand turns them on. <!-- src: apps/plugin/src/apply-theme.ts@"const guarded = await".."},\n  );"#91940a76 --> |
 | Grid styles | One per breakpoint, from the same layout values as the `layout` collection. A grid style can't switch modes, so each breakpoint gets its own. <!-- src: packages/engine/emit-figma-styles.ts@"\nexport const buildFigmaGridStyles = (theme: Theme): FigmaGridStylesFile => {".."}]," --> |
 | The brand itself | The settings you applied, saved in the file, so the plugin reopens on this brand next time. <!-- src: apps/plugin/src/apply-theme.ts@"// Persist the exact".."persistInput(host.root"#ede61fb0 --> <!-- src: apps/plugin/src/persist-figma.ts@"export const NS = 'prism3".."root.setSharedPluginData"#ba150bb3 --> |
 
@@ -37,6 +37,7 @@ The variables the plugin writes match the ones the engine emits for the same bra
 | Result | Meaning |
 |---|---|
 | `✓ applied` | Everything was written. <!-- src: apps/plugin/src/apply-summary.ts@"return '✓ applied';" --> |
+| `⚠ Not in this Figma` | The brand's font family has no face at a weight the brand uses, such as Semi Bold. The text styles at that weight use the nearest weight the family has instead, and the line names both. To choose the weight yourself, open Theme › Type › Weights and styles (an advanced setting) and run Update file again. <!-- src: apps/plugin/src/apply-summary.ts@"/**\n * #4474 (owner decision A, 2026-11-24): each face the brand asks for that this Figma lacks, and the nearest weight".."return `⚠ Not in this" --> |
 | `✓ applied, N skipped` | The variables were written, but N text styles were not, because Figma could not load their font. The detail names them. <!-- src: apps/plugin/src/apply-summary.ts@"if (skippedFonts > 0" --> |
 | `⚠ N misses` | The theme named a variable this file does not have, so something did not bind. <!-- src: apps/plugin/src/apply-summary.ts@"export const applyHeadline".."if (misses > 0) return" --> |
 | `✗ N conflicts` | Nothing was written. See below. <!-- src: apps/plugin/src/apply-summary.ts@"export const conflictHeadline".."`✗ ${conflicts} conflict" --> |
@@ -70,6 +71,8 @@ Three more cases stop the theme before it starts:
 ## Writing it again
 
 Run Update file with **Theme** ticked after any change. <!-- src: apps/studio/src/state/update-file.ts@"theme: 'Theme'," -->
-Content Prism3 wrote is updated in place, and a renamed token moves to its new name rather than being written twice. <!-- src: apps/plugin/src/apply-theme.ts@"// re-resolve every ".."try { before = restoreInput"#989ee5d0 -->
+Content Prism3 wrote is updated in place, and a renamed token moves to its new name rather than being written twice. <!-- src: apps/plugin/src/apply-theme.ts@"stampEmission(host.root, '".."const mig = await beginMigration"#772526b2 -->
+
+A font weight variable the brand no longer uses is removed, and the result names each weight it removed. A weight variable that another variable points at is kept. <!-- src: apps/plugin/src/retire-weights.ts@"/**\n * A FONT WEIGHT VARIABLE THE BRAND NO LONGER WRITES IS REMOVED ON RE-APPLY (#4474).".."* and reported, since removing it would break that alias.\n *"#a940ae64 -->
 
 A token the brand no longer produces is reported, not deleted. To remove those, use the **Clean up** tab: see [Update a Figma file](update-a-file-safely.md#remove-what-the-brand-no-longer-uses). <!-- src: apps/studio/src/state/update-file.ts@"tabClean: 'Clean up'" -->

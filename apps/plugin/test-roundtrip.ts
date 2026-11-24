@@ -1716,24 +1716,22 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
   }
 }
 
-// ── #1424: THE WRAPPING LABEL, READ BACK OFF THE BUILT NODE — HOST-TRUTH ────────────────────────
+// ── #1424 → #4473: THE ROW LABEL HUGS, READ BACK OFF THE BUILT NODE — HOST-TRUTH ────────────────────────
 //
-// The row's label must FILL its main axis and WRAP (Prism 2's radio-button-row / checkbox-row), and the
-// control must stay FIXED so a wrapping label never shrinks or stretches it. The generic diff above already
-// checks each of these plan fields against the built node (plan-as-oracle: `layoutGrow`/`textAutoResize`
-// classified in `anatomy-readback.ts`), which catches an executor that fails to write them. What it CANNOT
-// catch is a def that silently STOPS wrapping — drop `wrap` and the plan no longer carries the fields, so
-// plan-vs-built still agrees on their absence. This block closes that with an oracle authored HERE and
-// nowhere else — the owner-decided fact that these two rows wrap — so a `wrap` removed from either def
-// diverges from this and fails BY NAME (docs/34). It builds through the shared shim exactly as the corpus
-// loop does, then reads each row's label and controlBox back off the host.
+// #1424 had the row's label FILL its main axis and WRAP; owner decision A on #4473 (2026-11-24) has the row hug its
+// label instead, as Switch.Row does, so a placed row is as wide as its content. The generic diff above checks the
+// plan's `layoutGrow`/`textAutoResize` against the built node, so it catches an executor that fails to write them, but
+// not a def that silently goes back to filling: the plan would carry the fields and the built node would agree. This
+// block's oracle is authored HERE, the owner's decision that these rows hug, so a `wrap` or `grow` restored to either
+// def reads back a growing column or a fixed-width label and fails BY NAME (docs/34). The control cell is unchanged:
+// it never grows and hugs its control above the label's line-box floor.
 {
-  const WRAPS = ['radio-row', 'checkbox-row'];
+  const HUGS = ['radio-row', 'checkbox-row'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recursive node walk over the shim tree
   const findByName = (n: any, name: string): any => (n?.name === name ? n : (n?.children ?? []).map((c: any) => findByName(c, name)).find(Boolean));
-  for (const id of WRAPS) {
+  for (const id of HUGS) {
     const def = componentDefs.find((d) => d.id === id);
-    ok(!!def, `#1424 host-truth: the ${id} def is registered and projects`);
+    ok(!!def, `#4473 host-truth: the ${id} def is registered and projects`);
     if (!def) continue;
     const plans = figmaAnatomySet(def, { swapTarget: SWAP_TARGET });
     const page: Page = { children: [] };
@@ -1746,16 +1744,15 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
     const controlBoxes = members.map((m) => findByName(m, 'controlCell'));
     // SCOPE FLOOR — a label was built into every member, or "they all wrap" is a statement about an empty set.
     ok(members.length > 0 && labels.every(Boolean),
-      `#1424 host-truth: ${id} builds a label into every member (${labels.filter(Boolean).length}/${members.length})`);
-    // THE LABEL FILLS AND WRAPS — read back off the built node (both facts, since either alone does not wrap). Since
-    // #3153 the label sits in the text column, which fills the row (layoutGrow 1), and the label stretches across the
-    // column (its cross axis) at a fixed width with auto height.
-    ok(labels.length > 0 && labels.every((l, i) => stacks[i]?.layoutGrow === 1 && l.layoutAlign === 'STRETCH' && l.textAutoResize === 'HEIGHT'),
-      `#1424 host-truth: every ${id} label reads back stretched across a growing text column with textAutoResize=HEIGHT — it fills the row and wraps (e.g. column layoutGrow=${String(stacks[0]?.layoutGrow)}, layoutAlign=${String(labels[0]?.layoutAlign)}, textAutoResize=${String(labels[0]?.textAutoResize)})`);
+      `#4473 host-truth: ${id} builds a label into every member (${labels.filter(Boolean).length}/${members.length})`);
+    // THE LABEL HUGS: its text column does not grow along the row, and the label neither stretches across the column
+    // nor keeps a fixed width (`WIDTH_AND_HEIGHT`, read as the absent default or written out).
+    ok(labels.length > 0 && labels.every((l, i) => stacks[i] && stacks[i].layoutGrow !== 1 && l.layoutAlign !== 'STRETCH' && (l.textAutoResize ?? 'WIDTH_AND_HEIGHT') === 'WIDTH_AND_HEIGHT'),
+      `#4473 host-truth: every ${id} label reads back hugging its text — the text column does not grow and the label is not stretched, textAutoResize=WIDTH_AND_HEIGHT (e.g. column layoutGrow=${String(stacks[0]?.layoutGrow)}, layoutAlign=${String(labels[0]?.layoutAlign)}, textAutoResize=${String(labels[0]?.textAutoResize)})`);
     // THE CONTROL CELL DOES NOT GROW along the row, so the wrapping label never shrinks or stretches it. Since #3153 it
     // hugs its control above the label's line-box floor (owner Q852), so its cross axis reads AUTO.
     ok(controlBoxes.length > 0 && controlBoxes.every((c) => c && c.layoutGrow !== 1 && c.counterAxisSizingMode === 'AUTO'),
-      `#1424 host-truth: every ${id} controlBox reads back not growing and hugging its control — layoutGrow≠1 (${String(controlBoxes[0]?.layoutGrow)}) and counterAxisSizingMode=AUTO (${String(controlBoxes[0]?.counterAxisSizingMode)})`);
+      `#4473 host-truth: every ${id} controlBox reads back not growing and hugging its control — layoutGrow≠1 (${String(controlBoxes[0]?.layoutGrow)}) and counterAxisSizingMode=AUTO (${String(controlBoxes[0]?.counterAxisSizingMode)})`);
   }
 }
 
@@ -2529,26 +2526,39 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
       ok(members.length > 0 && off.length === 0,
         `#2292 ${id} fills its column: on every member an unplaced field reads 320 (root and box), an instance set to FILL a ${COLUMN}px column has its input box, label and ${id === 'textarea' ? 'message row' : 'message'} at ${COLUMN}, in a ${NARROW}px column the box shrinks to ${NARROW} (#2266, Q99 B), and in a ${NARROWER}px column it holds its 120 floor (${members.length} members, ${off.length} off — ${off[0] ?? 'none'})`);
     }
-    // Q152.3 (Q99 B reaches the rows): checkbox-row and radio-row are built at 320 and shrink with their column to
-    // the same 120 floor. The row IS the root, so the instance's own width is the row's, and the label, which fills
-    // the row, is the row less its control box and one gap. Literals: 320, 505, 280, and 120 in a 100px column.
-    for (const id of ['checkbox-row', 'radio-row']) {
+    // #4473 (owner decision A, 2026-11-24): a placed Row HUGS ITS LABEL, and a parent can still stretch it. Found in a
+    // rebind rehearsal: a placed checkbox-row with a HUG override on its width stayed 320 wide, because the row was
+    // built FIXED at 320 so its filling label had a width to wrap in (#1424, Q152.3). Measured as a designer places one:
+    // the DEFAULT member's instance in an auto-layout column, its width set to HUG (a row's width is its primary axis:
+    // `primaryAxisSizingMode AUTO`, no stretch). The oracle is the label's own run, never a def or plan field: lengthen
+    // the label by EXTRA characters and the instance must grow by exactly EXTRA × 6px (the shim's advance), and the
+    // unplaced member must read narrower than the old 320. Then the stretch arm: the same instance set to FILL a 505px
+    // column is 505 wide (Figma's FILL on a column child, `layoutAlign STRETCH` plus a FIXED width), and 280 in a 280px
+    // one. Switch.Row already hugged; it is held to the same oracle so the three Rows stay one rule.
+    const EXTRA = 20;
+    for (const id of ['checkbox-row', 'radio-row', 'switch-row']) {
       const members = await setOf(id);
-      const off: string[] = [];
-      for (const m of members) {
-        const wide = placedAt(String(m.name), id, COLUMN);
-        const narrow = placedAt(String(m.name), id, NARROW);
-        const narrower = placedAt(String(m.name), id, NARROWER);
-        if (!wide || !narrow || !narrower) { off.push(`${m.name}: no instance`); continue; }
-        // A row's width is its MAIN axis, so FILL sets the instance's primary mode where a field's sets its counter.
-        for (const inst of [wide, narrow, narrower]) inst.primaryAxisSizingMode = 'FIXED';
-        const label = inside(wide, 'label');
-        const widths = [W(m), W(wide), W(narrow), W(narrower)];
-        if (!(widths[0] === 320 && widths[1] === COLUMN && widths[2] === NARROW && widths[3] === 120 && label > 320 && label < COLUMN))
-          off.push(`${m.name}: unplaced ${widths[0]}; in ${COLUMN}/${NARROW}/${NARROWER} columns ${widths.slice(1).join('/')}; label in ${COLUMN} ${label}`);
-      }
-      ok(members.length > 0 && off.length === 0,
-        `Q152.3 ${id} fills its column: on every member an unplaced row reads 320, an instance set to FILL a ${COLUMN}px column is ${COLUMN} wide with its label filling the rest, in a ${NARROW}px column it shrinks to ${NARROW}, and in a ${NARROWER}px column it holds its 120 floor (${members.length} members, ${off.length} off — ${off[0] ?? 'none'})`);
+      const m = members[0];
+      const label = find(m, 'label');
+      const hugged = placedAt(String(m?.name), id, COLUMN);
+      const wide = placedAt(String(m?.name), id, COLUMN);
+      const narrow = placedAt(String(m?.name), id, NARROW);
+      if (!m || !label || !hugged || !wide || !narrow) { ok(false, `#4473 ${id} hugs its label when placed: the default member, its label and three instances exist`); continue; }
+      // HUG: undo the stretch `placedAt` applies, as the properties panel's Hug does.
+      hugged.layoutAlign = 'INHERIT';
+      hugged.primaryAxisSizingMode = 'AUTO';
+      for (const inst of [wide, narrow]) inst.primaryAxisSizingMode = 'FIXED';
+      const was = String(label.characters);
+      const before = [W(m), W(hugged)];
+      label.characters = was + 'x'.repeat(EXTRA);
+      const after = [W(m), W(hugged)];
+      label.characters = was;
+      const restored = W(hugged);
+      const stretched = [W(wide), W(narrow)];
+      ok(before[0] < 320 && before[1] === before[0] && after[1] - before[1] === EXTRA * 6 && after[0] === after[1] && restored === before[1],
+        `#4473 ${id} hugs its label when placed: the default member reads ${before[0]} (under the old 320), a HUG instance is as wide as it, and ${EXTRA} more label characters widen the instance by exactly ${EXTRA * 6}px (got ${before[1]} → ${after[1]}, back to ${restored})`);
+      ok(stretched[0] === COLUMN && stretched[1] === NARROW,
+        `#4473 ${id} still stretches: an instance set to FILL a ${COLUMN}px column is ${COLUMN} wide and one in a ${NARROW}px column is ${NARROW} (got ${stretched.join('/')})`);
     }
     // Q155 A: checkbox-group and radio-group follow their rows. A group's root is a COLUMN, so FILL sets the instance's
     // counter mode (the fields' case), and every row inside spans what the group is given. Literals as above.
