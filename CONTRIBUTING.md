@@ -1412,7 +1412,9 @@ npx tsx packages/engine/lint-shadcn-contrast.ts     # the shadcn theme clears it
                                                     # list, each floor the higher of WCAG and the engine's
                                                     # own min. Needs Chromium (CI: the studio job).
 npx tsx packages/engine/lint-shadcn-roundtrip.ts    # every shadcn oklch() lands on its emitted 8-bit color
-                                                    # (#2997), parsed by Chromium, against the full tree.
+                                                    # (#2997), parsed by Chromium, against the full tree;
+                                                    # every Tailwind shadow layer on the brand's shadow
+                                                    # in that mode (#4355).
 npx tsx packages/engine/lint-spec-supplement.ts     # the spec supplement lines up with Spectacular (#2996):
                                                     # each element, prop and Figma name against a hand-
                                                     # copied fixture of Spectacular's own output, each
