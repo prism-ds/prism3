@@ -1145,7 +1145,7 @@ const within = async (page, label, work, ms = STEP_MS) => {
   const live = await rendersFrame(page);
   // On a page `watchStalls` watches, a page that renders no frame is paused and the message says where it stopped
   // (its JavaScript stack, or none): #4342's stall never reproduced off CI, so the CI log is where it gets located.
-  const at = live ? '' : await stallWhere(page);
+  const at = live ? '' : await stallWhere(page, Math.min(ms, STEP_MS));
   throw new Error(`${label} did not settle within ${ms / 1000}s; the page ${live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}${at ? `; ${at}` : ''}`);
 };
 
@@ -9058,7 +9058,7 @@ console.log(`\nQA-B9, B17, I11 — the eased reveal, the jump links, the remembe
     // to locate), so a real stall on the Type path below names the JavaScript it stopped in, or that it ran none.
     await watchStalls(page);
     // #4342: the location's own self-check. A page of its own, watched, then stuck in a JavaScript loop: a bounded wait
-    // on it fails naming the loop's function. Measured: CI's #2183 line ("waiting for element to be visible, enabled and
+    // on it fails saying its main thread is busy, it did not come back, and the loop's function. Measured: CI's #2183 line ("waiting for element to be visible, enabled and
     // stable", then nothing) is exactly what a planted loop on the Type page produces, so a page stuck in JavaScript is
     // the case to locate. Mutation this fails by name: `within` no longer asks `stallWhere`, or `watchStalls` dropped.
     {
@@ -9070,7 +9070,7 @@ console.log(`\nQA-B9, B17, I11 — the eased reveal, the jump links, the remembe
         await sp.evaluate(() => { setTimeout(function stallSelfCheck() { for (;;) { /* held until the context closes */ } }, 50); });
         const said = await within(sp, 'stall self-check', sp.evaluate(() => new Promise((r) => setTimeout(() => requestAnimationFrame(r), 200))), 3000)
           .then(() => 'returned', (e) => String(e?.message ?? e));
-        ok(said.startsWith('stall self-check did not settle within 3s; the page renders no frame; it was running JavaScript: stallSelfCheck'),
+        ok(said.startsWith('stall self-check did not settle within 3s; the page renders no frame; the main thread runs no script, so it is busy; no frame in 3s more; it was running JavaScript: stallSelfCheck'),
           `#4342: a wait on a page stuck in JavaScript names where it stopped, the function it was running (${said.slice(0, 200)})`);
       } finally { await sctx.close(); }
     }
