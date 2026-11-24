@@ -438,7 +438,10 @@ ok(J(SETS.map((id) => membersOf(id).length)) === J([14, 50, 45]), `premise: the 
 // the update at every set and page, each a minute.
 {
   const throttled = async (msg: unknown, kind: string): Promise<{ v: any; work: number; waited: number; readings: any[] }> => {
-    let t = realNow();
+    // A fixed phase, half a minute past a whole minute (#4506): the first hand-back waits out the rest of the minute the
+    // run started in, so a clock read off the real time made that first wait anything from 0 to 60 s, and the build's
+    // wait (that partial minute, a minute to read throttling, and its settle probe's minute) brushed its bound on CI.
+    let t = Math.floor(realNow() / 60_000) * 60_000 + 30_000;
     const s = { work: 0, waited: 0, frozen: false };
     Date.now = () => { t += STEP_MS; if (!s.frozen) s.work += STEP_MS; return t; };
     g.setTimeout = ((fn: () => void, ms?: number) => {
