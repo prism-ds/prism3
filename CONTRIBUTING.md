@@ -1295,15 +1295,20 @@ npx tsx packages/engine/lint-guide-claims.ts        # the designer guides still 
                                                     # span is a whole string literal or HTML text in
                                                     # apps/{studio,plugin,tokenpress}/src, comments not
                                                     # counted; an italic part is a placeholder matched to
-                                                    # a template's ${…}. CITE: every src: path:line is
-                                                    # git-tracked and in range, and the cited lines hold
-                                                    # one of the claim's quotes, code spans or labels.
+                                                    # a template's ${…}. CITE: every src: citation is
+                                                    # git-tracked, and the cited lines hold one of the
+                                                    # claim's quotes, code spans or labels. MARKER
+                                                    # (#4455): a citation names its lines by text,
+                                                    # path@"first".."last", never by line number, so a
+                                                    # PR that inserts lines above it leaves it alone; a
+                                                    # marker gone, or held twice, fails by name.
+                                                    # --convert rewrites a line-number citation.
                                                     # COUNT: "<n> component sets" equals componentDefs.
                                                     # SCOPE: every guide index.md lists is read and cites
                                                     # something; each source tree yields literals.
                                                     # FINGERPRINT (#3417): a claim that quotes nothing
-                                                    # cites path:a-b#<8 hex>, the SHA-256 of the cited
-                                                    # lines, so a shift fails by name. --stamp adds a
+                                                    # carries #<8 hex>, the SHA-256 of the cited lines,
+                                                    # so a change to them fails by name. --stamp adds a
                                                     # missing one and never rewrites one.
                                                     # ORDER (#3519): a list of **bold** labels joined by
                                                     # commas and "and" holds the order its cited lines
@@ -1387,9 +1392,11 @@ npx tsx packages/engine/lint-control-shape-reach.ts # Control shape reaches what
                                                     # no family or corner the typed claim does not hold.
 npx tsx packages/engine/lint-test-arms.ts           # a registered test arm is still in its suite (#1834):
                                                     # each (suite, #NNNN) in a test's string literals is
-                                                    # held to the authored test-arms.txt. A merge that
-                                                    # drops an arm fails ARM GONE by name; a new arm
-                                                    # fails UNREGISTERED until --accept adds it (sorted).
+                                                    # held to the authored test-arms/ registry, one file
+                                                    # per arm so concurrent PRs never conflict (#4455). A
+                                                    # merge that drops an arm fails ARM GONE by name; a
+                                                    # new arm fails UNREGISTERED until --accept adds its
+                                                    # file.
 npx tsx packages/engine/shadcn-vars.ts --check      # the shadcn map covers the pinned shadcn variable set
                                                     # (#2997): every pinned name mapped, every extra
                                                     # declared, the map version equal to the pin's; only

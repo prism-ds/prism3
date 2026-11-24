@@ -2,7 +2,7 @@
  * TEST-ARMS GATE (#1834) — a named test arm, once registered, is not deleted without a line in the diff saying so.
  *
  *   npx tsx packages/engine/lint-test-arms.ts
- *   npx tsx packages/engine/lint-test-arms.ts --accept      # add NEW arms (kept sorted); never removes one
+ *   npx tsx packages/engine/lint-test-arms.ts --accept      # add a file for each NEW arm; never removes one
  *   npx tsx packages/engine/lint-test-arms.ts --self-test
  *
  * ── THE INCIDENT ────────────────────────────────────────────────────────────────────────────────
@@ -23,11 +23,12 @@
  *
  * ── INDEPENDENCE (docs/34) ──────────────────────────────────────────────────────────────────────
  *
- *   EXPECTED = `test-arms.txt`, an authored registry beside this file, one `<suite> #NNNN` per line.
+ *   EXPECTED = `test-arms/`, an authored registry beside this file: one file per arm, named for the arm, holding
+ *              its `<suite> #NNNN` line.
  *   ACTUAL   = the tags in each suite's literals, read from the suite as it stands.
  *
  * Neither is derived from the other. A merge that drops a suite's lines does not drop the registry's: the arm
- * fails by name (`ARM GONE`). To retire an arm on purpose, delete its registry line in the same diff, where a
+ * fails by name (`ARM GONE`). To retire an arm on purpose, delete its registry file in the same diff, where a
  * reviewer sees it. `--accept` APPENDS and never removes: a gate allowed to rewrite what it reads has no memory
  * (CLAUDE.md principle 5, shape 6). A new arm in a suite fails as `UNREGISTERED` until it is accepted. Without
  * that arm, the PR that adds an arm could forget to register it, and the incident above would pass again.
@@ -36,6 +37,17 @@
  * incident's arm was added AND lost inside one branch, so the merge base never held it. The previous commit
  * holds it only at the one merge commit, and CI checks out shallow. `lint-shape-index.ts` rejects git-history
  * oracles for the same reason: "the history is not there" reads the same as "nothing changed".
+ *
+ * ── ONE FILE PER ARM (#4455) ────────────────────────────────────────────────────────────────────
+ *
+ * The registry was one sorted file, `test-arms.txt`. Almost every PR adds an arm, and arms named for issues opened
+ * the same week sort next to each other, so two PRs that each registered one inserted adjacent lines and conflicted.
+ * After each merge wave most of the queue went dirty on this one file (31 of 42 PRs on 2026-11-21). GitHub's
+ * mergeability check ignores merge drivers, so `merge=union` could not help. Now each arm is its own file:
+ * `packages/engine/test-arms/<suite, each / written __>__<NNNN>`, holding the line `<suite> #NNNN`. Two PRs that add
+ * different arms add different files, which never conflict. Two that add the same arm add the same file with the same
+ * bytes, which git merges as one. A file whose name and line disagree, or whose line is malformed, fails MALFORMED, so
+ * a hand-copied file cannot register one arm under another's name. `README.md` in the directory is not an arm.
  *
  * ── SCOPE, ASSERTED REPRESENTED ─────────────────────────────────────────────────────────────────
  *
@@ -51,13 +63,14 @@
  * job (#1066). An arm that cites no issue is not named, so it is not protected. And a suite that keeps one
  * `#1812` label while losing the other forty is not caught: the registry holds names, not counts.
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
-const REGISTRY = join(here, 'test-arms.txt');
+const REGISTRY = join(here, 'test-arms');
+const REGISTRY_REL = 'packages/engine/test-arms';
 
 /** The `#NNNN` tags inside a source's string and template literals. Comments and regex literals are skipped, and so
  *  is everything inside a `console.*(…)` call's arguments (#4196): a suite's header log names the issues it covers,
@@ -147,10 +160,32 @@ export const SURFACES: ReadonlyArray<{ readonly name: string; readonly files: ()
   { name: 'packages/engine/mcp-test.ts', files: () => ['packages/engine/mcp-test.ts'].filter((f) => existsSync(join(repo, f))) },
 ];
 
-export const parseRegistry = (text: string): string[] =>
-  text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('# '));
-
 export const key = (file: string, tag: string): string => `${file} ${tag}`;
+
+/** The registry file that holds an arm: the suite's path with each `/` written `__`, then `__` and the issue number. */
+export const fileOf = (line: string): string => {
+  const [file, tag] = line.split(' ');
+  return `${file.replace(/\//g, '__')}__${tag.slice(1)}`;
+};
+
+/** The registry's lines, read from its files. A file holds exactly one `<suite> #NNNN` line and is named for it
+ *  (`fileOf`); anything else is returned whole in `registered` so `judge` refuses it as malformed, prefixed with the
+ *  file it came from when the name is the problem. Pure over (name, text) pairs, so the self-test drives it. */
+export const parseRegistry = (entries: ReadonlyArray<{ readonly name: string; readonly text: string }>): string[] => {
+  const out: string[] = [];
+  for (const { name, text } of entries) {
+    if (name === 'README.md') continue;
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const line = lines.length === 1 ? lines[0] : `${name}: ${lines.length} lines (a registry file holds one)`;
+    out.push(/^\S+ #[1-9]\d{2,4}$/.test(line) && fileOf(line) !== name ? `${name}: holds "${line}", which belongs in ${fileOf(line)}` : line);
+  }
+  return out;
+};
+
+const readRegistry = (): string[] => {
+  if (!existsSync(REGISTRY)) return [];
+  return parseRegistry(readdirSync(REGISTRY, { withFileTypes: true }).map((d) => ({ name: d.name, text: d.isFile() ? readFileSync(join(REGISTRY, d.name), 'utf8') : '' })));
+};
 
 /** The verdict: arms registered but gone, and arms present but unregistered. Pure, so the self-test drives it. */
 export const judge = (registered: readonly string[], actual: ReadonlyMap<string, Set<string>>): { gone: string[]; unregistered: string[]; malformed: string[] } => {
@@ -195,6 +230,14 @@ const selfTest = (quiet = false): number => {
   expect(judge(['gone.ts #1812'], new Map()).gone.join() === 'gone.ts #1812', 'a registered arm in a deleted suite fails by name');
   expect(judge(['a.ts #1812'], actual).unregistered.join() === 'a.ts #2000', 'an arm nobody registered fails by name');
   expect(judge(['a.ts 1812'], actual).malformed.length === 1, 'a malformed registry line is refused, not skipped');
+  // #4455: the registry is a directory, one file per arm.
+  expect(fileOf('apps/plugin/test-x.ts #1812') === 'apps__plugin__test-x.ts__1812', '#4455: an arm\'s file is its suite path, / written __, then __ and the number');
+  const dir = parseRegistry([{ name: 'README.md', text: 'not an arm' }, { name: 'a.ts__1812', text: 'a.ts #1812\n' }, { name: 'a.ts__2000', text: 'a.ts #2000' }]);
+  expect(dir.join() === 'a.ts #1812,a.ts #2000' && !judge(dir, actual).malformed.length, '#4455: a directory of one-line files reads as the registry, README.md skipped');
+  const misnamed = judge(parseRegistry([{ name: 'a.ts__1812', text: 'a.ts #2000' }]), actual);
+  expect(misnamed.malformed.length === 1 && /belongs in a\.ts__2000/.test(misnamed.malformed[0]) && misnamed.unregistered.length === 2, '#4455: a file whose name and line disagree is refused, and registers neither arm');
+  expect(judge(parseRegistry([{ name: 'a.ts__1812', text: 'a.ts #1812\na.ts #2000' }]), actual).malformed.length === 1, '#4455: a file holding two lines is refused');
+  expect(judge(parseRegistry([{ name: 'a.ts__1812', text: '' }]), actual).malformed.length === 1, '#4455: an empty registry file is refused');
   console.log(bad ? `\n✗ lint-test-arms self-test: ${bad} failed` : '\n✓ lint-test-arms self-test: all passed');
   return bad ? 1 : 0;
 };
@@ -220,33 +263,29 @@ const main = (): void => {
     console.error(`✗ SCANNED BLIND:\n${blind.map((b) => `  - ${b}`).join('\n')}`);
     process.exit(1);
   }
-  const registered = existsSync(REGISTRY) ? parseRegistry(readFileSync(REGISTRY, 'utf8')) : [];
+  const registered = readRegistry();
   const { gone, unregistered, malformed } = judge(registered, actual);
   const suites = actual.size;
   const arms = [...actual.values()].reduce((n, t) => n + t.size, 0);
 
   if (process.argv.includes('--accept')) {
     if (malformed.length) { console.error(`✗ refusing to accept over malformed registry lines:\n${malformed.map((m) => `  - ${m}`).join('\n')}`); process.exit(1); }
-    // Written back SORTED, every existing line kept: two PRs that each register an arm then touch different lines,
-    // where appending at the end would make every pair of them conflict on the last line.
-    if (unregistered.length) {
-      const text = existsSync(REGISTRY) ? readFileSync(REGISTRY, 'utf8') : '';
-      const header = text.split('\n').filter((l) => l.startsWith('# '));
-      const lines = [...new Set([...parseRegistry(text), ...unregistered])].sort();
-      writeFileSync(REGISTRY, `${[...header, ...lines].join('\n')}\n`);
-    }
-    console.log(`added ${unregistered.length} arm(s) to test-arms.txt, kept sorted. Nothing removed${gone.length ? `; ${gone.length} registered arm(s) are still gone and still fail` : ''}.`);
+    // One new file per arm, every existing file left as it is (#4455): two PRs that each register an arm add
+    // different files, so neither conflicts with the other.
+    if (unregistered.length) mkdirSync(REGISTRY, { recursive: true });
+    for (const u of unregistered) writeFileSync(join(REGISTRY, fileOf(u)), `${u}\n`);
+    console.log(`added ${unregistered.length} arm file(s) to ${REGISTRY_REL}/. Nothing removed${gone.length ? `; ${gone.length} registered arm(s) are still gone and still fail` : ''}.`);
     process.exit(gone.length ? 1 : 0);
   }
 
-  for (const g of gone) console.error(`  ✗ ARM GONE  ${g} — registered, and no longer in the suite's code. If the arm was retired on purpose, delete this line from packages/engine/test-arms.txt in the same diff.`);
+  for (const g of gone) console.error(`  ✗ ARM GONE  ${g} — registered, and no longer in the suite's code. If the arm was retired on purpose, delete ${REGISTRY_REL}/${fileOf(g)} in the same diff.`);
   for (const u of unregistered) console.error(`  ✗ UNREGISTERED  ${u} — a named arm the registry does not hold. Run: npx tsx packages/engine/lint-test-arms.ts --accept`);
-  for (const m of malformed) console.error(`  ✗ MALFORMED  "${m}" — a registry line is "<repo-relative suite> #NNNN"`);
+  for (const m of malformed) console.error(`  ✗ MALFORMED  ${m} — each file in ${REGISTRY_REL}/ holds one "<repo-relative suite> #NNNN" line and is named for it`);
   if (gone.length || unregistered.length || malformed.length) {
     console.error(`\n✗ test arms: ${gone.length} gone, ${unregistered.length} unregistered, ${malformed.length} malformed (${suites} suites, ${arms} arms read)`);
     process.exit(1);
   }
-  console.log(`✓ test arms: every registered arm is still in its suite — ${arms} arms over ${suites} suites, ${SURFACES.length} surfaces represented`);
+  console.log(`✓ test arms: every registered arm is still in its suite — ${arms} arms over ${suites} suites, ${SURFACES.length} surfaces represented, ${registered.length} registry files in ${REGISTRY_REL}/`);
 };
 
 main();

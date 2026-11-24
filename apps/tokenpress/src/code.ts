@@ -331,6 +331,7 @@ async function handleExport(options: ExportOptions): Promise<void> {
     let zipBlob: ArrayBuffer;
     let fileCount: number;
     let skippedBlurStyles: string[] = [];
+    let skippedGradientStyles: string[] = [];
 
     if (additionalFormats.length > 0) {
       const multiFormatOptions: MultiFormatExportOptions = Object.assign({}, options, {
@@ -344,6 +345,7 @@ async function handleExport(options: ExportOptions): Promise<void> {
       zipBlob = await multiExporter.exportToZipWithFormats(sendExportProgress);
       fileCount = multiExporter.getFileCount();
       skippedBlurStyles = multiExporter.getSkippedBlurStyles();
+      skippedGradientStyles = multiExporter.getSkippedGradientStyles();
     } else {
       // Use standard exporter for DTCG only
       const exporter = new TokenExporter(options);
@@ -352,6 +354,7 @@ async function handleExport(options: ExportOptions): Promise<void> {
       zipBlob = await exporter.exportToZip(sendExportProgress);
       fileCount = exporter.getFileCount();
       skippedBlurStyles = exporter.getSkippedBlurStyles();
+      skippedGradientStyles = exporter.getSkippedGradientStyles();
     }
 
     sendExportProgress(95, 'Finalizing export...');
@@ -372,6 +375,8 @@ async function handleExport(options: ExportOptions): Promise<void> {
         fileCount: fileCount,
         zipData: Array.from(zipArray),
         skippedBlurStyles: skippedBlurStyles,
+        // prism3 #3885: a paint style that layers a gradient with other paints is skipped; the panel names it.
+        skippedGradientStyles: skippedGradientStyles,
       },
     });
   } catch (error) {

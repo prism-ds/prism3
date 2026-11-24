@@ -78,6 +78,27 @@ const stallStack = async (page) => {
   }
 };
 
+/** Where a page that stopped is (#4342, #4465), for a caller that has just seen it render no frame. Only on a page
+ *  `watchStalls` already watches, since a debugger turned on once the page is stuck never lands (this file's header);
+ *  on any other page it says nothing rather than guess. Three readings, in this order:
+ *   1. whether the main thread still runs a script: a page that runs one at once but draws no frame is idle, waiting on
+ *      frame production; one that runs none is busy;
+ *   2. whether it draws again within `backMs` (30s unless the caller's own wait was shorter): a long busy spell, or a hang;
+ *   3. still stopped: the debugger pauses it and names the JavaScript stack, or says it was running none (style,
+ *      layout, paint, GC, or a synchronous call). Last, because a pause that does not land stays pending and would
+ *      stop the next script these readings run.
+ *  #4465's first capture on CI (PR #4505) read "not running JavaScript", which (1) and (2) split. */
+export const stallWhere = async (page, backMs = 30000) => {
+  if (!watched.has(page)) return '';
+  const answers = await Promise.race([page.evaluate(() => true).catch(() => false), new Promise((r) => setTimeout(() => r(false), 3000))]);
+  const runs = answers ? 'the main thread still runs a script, so it is idle and no frame is being produced' : 'the main thread runs no script, so it is busy';
+  const t0 = Date.now();
+  while (Date.now() - t0 < backMs) {
+    if (await rendersFrame(page)) return `${runs}; it drew a frame again ${Math.round((Date.now() - t0) / 1000)}s later`;
+  }
+  return `${runs}; no frame in ${Math.round(backMs / 1000)}s more; ${await stallStack(page)}`;
+};
+
 /**
  * A suite's `bounded(page, label, act)`, which returns whether the input went through.
  *   · `ok(cond, label)` — the suite's assertion;
