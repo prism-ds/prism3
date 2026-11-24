@@ -868,15 +868,9 @@ export class TokenExporter {
     variableMap: Map<string, Variable>,
     modeId?: string
   ): DTCGToken {
-    const color = this.resolveInMode(value.color, variableMap, variable.variableCollectionId, modeId);
-    const percent = this.resolveInMode(value.opacity, variableMap, variable.variableCollectionId, modeId);
-    const isRgb =
-      typeof color === 'object' && color !== null && !isVariableAlias(color) && 'r' in color;
+    const washed = this.resolveWashInMode(value, variableMap, variable.variableCollectionId, modeId, 0);
     let dtcgValue: VariableConversionValue;
-    if (isRgb && typeof percent === 'number') {
-      const rgb = color as RGB | RGBA;
-      const alpha = (hasAlpha(rgb) ? rgb.a : 1) * (percent / 100);
-      const washed: RGBA = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
+    if (washed !== null) {
       dtcgValue =
         this.options.colorFormat === 'css' ? this.convertColorToCSS(washed) : this.convertColor(washed);
     } else {
@@ -922,18 +916,64 @@ export class TokenExporter {
     collectionId: string,
     modeId?: string
   ): unknown {
+    return this.resolveInModeAt(value, variableMap, collectionId, modeId).value;
+  }
+
+  // A tinted wash resolved to one RGBA (prism3 #2365), or null when a half does not reach a literal. The color half may
+  // alias ANOTHER wash (prism3 #4478): Figma's `VariableComposedColor` lets its alias target any COLOR variable, whose
+  // value may itself be composed. That inner wash is resolved in the collection and mode the walk ended in, as Figma
+  // resolves it, and the outer opacity multiplies its alpha. Depth-limited, as the alias walk is.
+  private resolveWashInMode(
+    wash: { color: unknown; opacity: unknown },
+    variableMap: Map<string, Variable>,
+    collectionId: string,
+    modeId: string | undefined,
+    depth: number
+  ): RGBA | null {
+    if (depth >= 10) {
+      return null;
+    }
+    const percent = this.resolveInMode(wash.opacity, variableMap, collectionId, modeId);
+    if (typeof percent !== 'number') {
+      return null;
+    }
+    const at = this.resolveInModeAt(wash.color, variableMap, collectionId, modeId);
+    const color = at.value;
+    let base: RGBA | null = null;
+    if (isComposedColor(color)) {
+      base = this.resolveWashInMode(color, variableMap, at.collectionId, at.modeId, depth + 1);
+    } else if (typeof color === 'object' && color !== null && !isVariableAlias(color) && 'r' in color) {
+      const rgb = color as RGB | RGBA;
+      base = { r: rgb.r, g: rgb.g, b: rgb.b, a: hasAlpha(rgb) ? rgb.a : 1 };
+    }
+    if (base === null) {
+      return null;
+    }
+    return { r: base.r, g: base.g, b: base.b, a: base.a * (percent / 100) };
+  }
+
+  // `resolveInMode`, also reporting the collection and mode the walk ended in (prism3 #4478), so a value that is itself
+  // composed can resolve its own aliases where it lives. The mode is the one the walk asked for: where a variable fell
+  // back to its first mode, every variable in that collection falls back the same way, so it is not rewritten.
+  private resolveInModeAt(
+    value: unknown,
+    variableMap: Map<string, Variable>,
+    collectionId: string,
+    modeId?: string
+  ): { value: unknown; collectionId: string; modeId?: string } {
+    const unresolved = { value: value, collectionId: collectionId, modeId: modeId };
     let current: unknown = value;
     let currentCollection = collectionId;
     let currentMode = modeId;
     const seen = new Set<string>();
     for (let hops = 0; hops < 10 && isVariableAlias(current); hops++) {
       if (seen.has(current.id)) {
-        return value;
+        return unresolved;
       }
       seen.add(current.id);
       const target = variableMap.get(current.id);
       if (!target) {
-        return value;
+        return unresolved;
       }
       if (target.variableCollectionId !== currentCollection) {
         currentCollection = target.variableCollectionId;
@@ -943,13 +983,16 @@ export class TokenExporter {
       }
       const modeIds = Object.keys(target.valuesByMode);
       if (modeIds.length === 0) {
-        return value;
+        return unresolved;
       }
       const pick =
         currentMode !== undefined && currentMode in target.valuesByMode ? currentMode : modeIds[0];
       current = target.valuesByMode[pick];
     }
-    return isVariableAlias(current) ? value : current;
+    if (isVariableAlias(current)) {
+      return unresolved;
+    }
+    return { value: current, collectionId: currentCollection, modeId: currentMode };
   }
 
   // Walks an alias chain to the deepest non-alias source and returns its
