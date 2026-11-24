@@ -72,6 +72,11 @@ const MEASURE = `(([component, rootSel, parts, state, dp, prefix, ring, labelSel
   const r2 = (n) => Math.round(n * dp) / dp;
   const root = document.querySelector('#storybook-root ' + rootSel);
   if (!root) return 'no ' + rootSel + ' in the story';
+  // Geometry is layout. The root's own transform is motion (the press's scale, #4375), which the motion checks hold, and
+  // Figma draws no press: so it is set aside, with its transition, before measuring. Nothing reads the page after this,
+  // and the next story opens a fresh one.
+  root.style.transition = 'none';
+  root.style.transform = 'none';
   const rb = root.getBoundingClientRect();
   const cs = getComputedStyle(root);
   const px = (v) => r2(parseFloat(v) || 0);
