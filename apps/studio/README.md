@@ -181,6 +181,8 @@ The hosted brands are the house brand and the engine's example brands, and no ot
 - `/r/aurora.json`
 - `/r/harbor.json`
 
+### The shadcn/ui theme
+
 Install a brand's theme into a shadcn/ui project:
 
 ```bash
@@ -188,14 +190,16 @@ npx shadcn add https://prism3-ds.vercel.app/r/<brand>.json
 ```
 
 The registry item carries two rules beyond the theme variables, both for focus. Stock shadcn/ui draws the focus outline
-(`outline-ring/50`) and the focus ring of Button, Input, Select, Checkbox, Switch and Badge (`focus-visible:ring-ring/50`)
-at 50%, which is 1.9–2.8:1 against the page. The rules draw both at the full `--ring`, 3.7:1 or more on every hosted
-brand. A ring on an invalid field keeps its stock `destructive` color. The plain `out/shadcn/<brand>.css` carries
-neither rule.
+(`outline-ring/50`) and every component's focus ring (`ring-ring/50`) at 50%, which is 2.0–2.8:1 against the page. The
+ring takes several forms: `focus-visible:` (Button, Input, Select, Checkbox, Switch, Badge, Tabs, Textarea and others),
+the Slider thumb, the Calendar and its focused day, the Input OTP slot, `focus-within:` (Combobox, Attachment), Input
+Group and Bubble. The rules draw all of them at the full `--ring`, 3.7:1 or more on the three hosted brands. A ring on an
+invalid field keeps its stock `destructive` color. The plain `out/shadcn/<brand>.css` carries neither rule. The item's
+`docs` field points here.
 
 Three stock classes still draw text under 4.5:1. The theme leaves them as shadcn ships them, and `lint-shadcn-contrast`
-measures each one on every run (#4387, #4388, #4411). One class edit in the component raises each, measured on the
-hosted brands:
+measures each one on every run (#4387, #4388, #4411). One class edit in the component raises each. The ratios are the
+three hosted brands' floors in that gate's `KNOWN`:
 
 | Component | Stock class | Measured | Edit | After the edit |
 |---|---|---|---|---|

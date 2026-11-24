@@ -94,5 +94,6 @@
         "--tw-ring-color": "var(--ring) !important"
       }
     }
-  }
+  },
+  "docs": "Focus rings draw at full strength. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme"
 }
