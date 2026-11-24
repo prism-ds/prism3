@@ -1813,7 +1813,10 @@ npm run check:build -w @prism3/storybook   # needs Chromium; run AFTER the Story
                                           # #3408: check-arm-contract.ts holds arm 1's input contract
                                           # complete (anatomy, tokens, built story ids);
                                           # #3408 S6: check-geometry.ts holds both forms' boxes equal
-                                          # to 0.01px, and the Figma comparison's arithmetic self-tests
+                                          # to 0.01px, and the Figma comparison's arithmetic self-tests;
+                                          # #4436: both run again on a second contract (fixtures/), so
+                                          # the geometry reads every story and selector from a contract;
+                                          # #3969: an unregistered element is named before any story
 npm run check:a11y -w @prism3/storybook    # needs Chromium; run AFTER the Storybook build. axe on
                                           # every story in light and dark; both forms' accessibility
                                           # trees equal each other and aria-snapshots.json; the

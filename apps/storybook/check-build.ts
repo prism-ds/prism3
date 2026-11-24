@@ -29,6 +29,10 @@
  *    and no field holds a live region (`aria-live`, or `role` status, alert or log). The page's one shared polite
  *    region for Show/Hide sits outside every field.
  * 4. Both forms agree on the box, input, label and message's computed styles.
+ *
+ * REGISTRATION (#3969). Before any story is opened, one page reads the built preview's registry: each element tag the
+ * element form renders (`a11y-harness.ts`'s `ELEMENT_TAGS`) must be defined, or it fails by name at once and that
+ * component's element stories are not opened. Each would otherwise wait out its 15 s render timeout first.
  */
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
@@ -36,6 +40,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EXPECTED } from './expected-stories.ts';
+import { ELEMENT_TAGS, unregistered } from './a11y-harness.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STATIC = resolve(HERE, 'storybook-static');
@@ -76,6 +81,10 @@ const port = (server.address() as { port: number }).port;
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const browser = await chromium.launch();
+// #3969: an unregistered element is named once, here, and its element stories are skipped below.
+const missing = await unregistered(browser, `http://127.0.0.1:${port}`);
+failures.push(...missing);
+const skipped = (comp: string, form: string) => form === 'element' && missing.some((m) => m.startsWith(`${ELEMENT_TAGS[comp]} `) || m.startsWith('the registry'));
 const PROPS = ['background-color', 'color', 'border-top-color', 'outline-style', 'min-block-size', 'padding-inline-start'];
 type Read = { error?: string; inElement?: boolean; attrs?: Record<string, string | null>; style?: Record<string, string> };
 const read = async (storyId: string, forced?: string): Promise<Read> => {
@@ -181,6 +190,7 @@ const checkField = async (comp: string, e: { forms: string[]; cases: string[] })
   const byForm: Record<string, Record<string, FieldRead>> = {};
   for (const form of e.forms) {
     const got: Record<string, FieldRead> = (byForm[form] = {});
+    if (skipped(comp, form)) continue;
     for (const c of e.cases) {
       const sid = id(comp, form, c);
       if (!built.has(sid)) continue;
@@ -251,6 +261,7 @@ try {
   for (const [comp, e] of Object.entries(EXPECTED)) {
     if (FIELDS.has(comp)) { await checkField(comp, e); continue; }
     for (const form of e.forms) {
+      if (skipped(comp, form)) continue;
       const got: Record<string, Read> = {};
       for (const c of e.cases) {
         const sid = id(comp, form, c);

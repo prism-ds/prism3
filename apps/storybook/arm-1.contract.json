@@ -11,7 +11,8 @@
     "container/label": ":scope > .p3-button__label",
     "container/trailingVisual": ":scope > .p3-button__trailing-visual"
    },
-   "focusRing": { "drawn": "outline" }
+   "focusRing": { "drawn": "outline" },
+   "variant": { "attributes": "data-prop-" }
   },
   "text-field": {
    "root": "[data-component=\"text-field\"]",
@@ -29,7 +30,8 @@
     "container/control/trailingVisual": ":scope > .p3-text-field__control > .p3-text-field__trailing-visual",
     "container/message": ":scope > .p3-field-message"
    },
-   "focusRing": { "drawn": "none", "why": "the field shows focus with its control's border, as its anatomy does" }
+   "focusRing": { "drawn": "none", "why": "the field shows focus with its control's border, as its anatomy does" },
+   "variant": { "attributes": "data-prop-" }
   },
   "password-field": {
    "root": "[data-component=\"password-field\"]",
@@ -49,12 +51,13 @@
     "container/control/content/entry/caretEnd": { "unboxed": "the browser's own caret" },
     "container/message": ":scope > .p3-field-message"
    },
-   "focusRing": { "drawn": "none", "why": "the field shows focus with its control's border, as its anatomy does" }
+   "focusRing": { "drawn": "none", "why": "the field shows focus with its control's border, as its anatomy does" },
+   "variant": { "attributes": "data-prop-" }
   }
  },
  "forms": {
-  "element": { "template": "components-{component}-element--{case}" },
-  "html": { "template": "components-{component}-html--{case}" }
+  "html": { "template": "components-{component}-html--{case}" },
+  "element": { "template": "components-{component}-element--{case}" }
  },
  "tokens": { "scheme": "stock" }
 }
