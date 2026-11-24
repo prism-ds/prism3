@@ -5695,10 +5695,14 @@ console.log(`\nItalic chips, through the exported DTCG (S6.3)\n${'='.repeat(78)}
   const exported = async () => {
     await hooks.click(page.locator('[data-p3="rail-export"]'));
     await hooks.need(page, '[data-p3="export-page"]');
-    const pending = page.waitForEvent('download');
+    // The export writes the base and then one overlay per mode, each its own download (`exportTokens`), and the
+    // overlays of the PREVIOUS chip's export can still be arriving when this one is asked for. So this waits for the
+    // base by name, not for the first download: a stale overlay has no `type.<text type>` leaves, and read as this
+    // export it failed the chip with an empty list (#4487, 10 of 10 failures in a local loop read an overlay).
+    const pending = page.waitForEvent('download', { predicate: (d) => d.suggestedFilename().endsWith('.base.tokens.json'), timeout: 15000 });
     await hooks.click(page.locator('[data-p3="export-page"] [data-p3="dialog-confirm"]'));
-    const dl = await pending;
     try {
+      const dl = await pending;
       const tree = JSON.parse(await readFile(await dl.path(), 'utf8'));
       const root = tree[Object.keys(tree).find((k) => !k.startsWith('$'))];
       const out = [];
@@ -5718,9 +5722,11 @@ console.log(`\nItalic chips, through the exported DTCG (S6.3)\n${'='.repeat(78)}
   for (const chip of ['both', 'only', 'upright']) {
     const sel = `[data-p3="italic-row"][data-group="${G}"] ${CHIP[chip]}`;
     await hooks.click(page.locator(sel));
-    await page.waitForFunction((x) => document.querySelector(x)?.getAttribute('aria-checked') === 'true', sel, { timeout: 5000 }).catch(() => {});
+    // The export is read only once the chip reads pressed (`aria-pressed`, `chipChoice`; this wait read `aria-checked`,
+    // which the chip never carries, and swallowed the timeout), and a chip that never does says so in the failure (#4487).
+    const pressed = await page.waitForFunction((x) => document.querySelector(x)?.getAttribute('aria-pressed') === 'true', sel, { timeout: 5000 }).then(() => true, () => false);
     const ls = await exported();
-    ok(!!ls && RULE[chip](ls), `italics chip "${WORDS[chip]}" on ${G} exports ${SAYS[chip]} (${ls ? ls.map((l) => `${l.key.split('.').slice(2).join('.')}${l.italic ? '*' : ''}`).join(' ') : 'no export'})`);
+    ok(pressed && !!ls && RULE[chip](ls), `italics chip "${WORDS[chip]}" on ${G} exports ${SAYS[chip]} (${pressed ? '' : 'the chip never read pressed; '}${ls ? ls.map((l) => `${l.key.split('.').slice(2).join('.')}${l.italic ? '*' : ''}`).join(' ') : 'no export'})`);
   }
   const errs = drain();
   ok(errs.length === 0, `${brand}: driving the italic chips raised 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
