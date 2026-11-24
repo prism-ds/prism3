@@ -905,6 +905,51 @@ for (const [tag, change] of [
     `#4070 nested/kept still reported: kept by an update that rewrote the member, the edit is still reported (${JSON.stringify(post.handEdits)})`);
 }
 
+/* ── #4470: a theme's type family is not a hand edit on the members ─────────────────────────────────────────────── */
+// The owner's Update file run (2026-11-22) followed a theme change to the title and display family, and flagged
+// CardNumberField (control/cardMark, 84 members) and List (items/item1-3, 12 members) beside about 35 usage panels. Each
+// set is built here with the sets it nests, on the host's instance model (`figmaInstances`); then THE THEME: every text
+// style's family moves, and every text in a style, nested ones included, re-resolves to it, as the host re-resolves a
+// style whose family variable changed. Nobody touches a member, so each set must read every member current with no
+// hand edit. The counts are typed here. Mutation: `signatureOf` reads a styled text's resolved font beside its style
+// (`member-baseline.ts`) → `#4470 members/card-number-field`. The List arm is a pin that mutation cannot reach, and that
+// is the finding: a List member holds no text of its own (each is inside a List.Item instance, whose layers the record
+// does not walk), so no type family reaches List's record. Its 12 flags fit `#4070 nested/written before` instead.
+section('#4470 members — a theme that changes the type families is not a hand edit on CardNumberField or List');
+for (const [subject, nested, count] of [['list', ['list-item'], 12], ['card-number-field', ['field-label', 'field-message'], 84]] as const) {
+  const all = [...nested, subject].map(plansOf), flat = all.flat();
+  const page: Page = { children: [] };
+  const api = makeShim({
+    vars: [...new Set(flat.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]))],
+    styles: [...new Set(flat.flatMap((p) => planTextStyles(p.root)))],
+    effects: [...new Set(flat.flatMap((p) => planEffectStyles(p.root)))],
+    comps: [...new Set([SWAP_TARGET, 'focus-ring', ...flat.flatMap((p) => planComps(p.root))])].filter((c) => !(nested as readonly string[]).includes(c)),
+    page, liveRoot: true, identities: true, scaleConstrained: true, wrapNode: figmaInstances(page),
+  }) as any;
+  const misses: string[] = [];
+  for (const pl of all) misses.push(...(await applyComponentPlan(pl, api)).misses);
+  // CardNumberField's card mark is a swap to a provider logo, a catalog name here with no main to read a proportion off.
+  const real = misses.filter((m) => !/^cardMark\.aspectLock -> no main component/.test(m));
+  const file = { ...api, root: { ...api.root, findAllWithCriteria: (c: { types: string[] }) => (c.types.length === 1 && c.types[0] === 'COMPONENT_SET' ? page.children.filter((n) => n.type === 'COMPONENT_SET') : api.root.findAllWithCriteria(c)) } } as unknown as ApplyHost;
+  const targets = [{ def: subject, plans: all[all.length - 1] }];
+  const before = (await previewUpdate(file, targets)).sets[0];
+  // THE THEME: each style's family moves, and every text in a style follows it.
+  const styles = (await api.getLocalTextStylesAsync()) as { id: string; fontName: { family: string; style: string } }[];
+  for (const s of styles) s.fontName = { ...s.fontName, family: 'Display Serif' };
+  let moved = 0;
+  const walkAll = (n: Node): void => {
+    const style = styles.find((s) => s.id === n.textStyleId);
+    if (n.type === 'TEXT' && style) { n.fontName = { ...style.fontName }; moved++; }
+    for (const c of (n.children as Node[] | undefined) ?? []) walkAll(c);
+  };
+  for (const n of page.children) walkAll(n as Node);
+  ok(real.length === 0 && before.counts.current === count && before.handEdits.length === 0 && moved > count,
+    `#4470 members premise (${subject}): built clean with ${nested.join(', ')}, ${count} current before the theme, and the theme moved ${moved} styled texts (${real[0] ?? ''})`);
+  const after = (await previewUpdate(file, targets)).sets[0];
+  ok(after.handEdits.length === 0 && after.counts.handEdited === 0 && after.counts.current === count,
+    `#4470 members/${subject}: after the theme moved every type family, all ${count} members read current, no hand edit (${JSON.stringify(after.counts)}; ${JSON.stringify([...new Set(after.handEdits.map((h) => h.path))])})`);
+}
+
 /* ── choices ─────────────────────────────────────────────────────────────────────────────────────────── */
 section('choices — a hand edit overwritten, or accepted as baseline, when the confirm says so (design note §5)');
 for (const choice of ['overwrite', 'accept'] as const) {
@@ -6729,8 +6774,21 @@ section('published — on a set in a team library, what breaks consumer files is
     // (11), the callout's lines the capped 8 plus the count of the rest. Literal. Mutations: `count` read off the capped
     // lines (9), or the lines left uncapped (11) → `uf2/checked set past the cap`.
     const past = checkedSetOf({ ...p, breaking: many }, TAG).changes;
-    ok(JSON.stringify(past) === JSON.stringify({ count: 11, lines: wantCap.slice(1, 10) }),
+    ok(JSON.stringify(past) === JSON.stringify({ count: 11, lines: wantCap.slice(1, 10), kinds: { breaks: 0, retired: 11, leaves: 0 } }),
       `uf2/checked set past the cap: the button counts all 11 changes, the callout lists 8 and counts the other 3 (${JSON.stringify(past && { count: past.count, lines: past.lines.length })})`);
+    // #4481 (owner decision A): THE SPLIT BY KIND, for Update file's one-line summary, counted over every change, never
+    // the capped lines. A literal mix typed here: 8 members merged and removed, 1 property removed, 1 layer replaced and
+    // 1 layer removed break consumers (11); 2 members retired; 1 rename out of the library. 14 in all, 9 of them past the
+    // cap of 8 lines. MUTATIONS: `changeKinds` counting `merge` as retired, or reading the capped lines → `#4481 split`.
+    const mix: Breaking[] = [
+      ...Array.from({ length: 8 }, (_, i) => ({ kind: 'merge' as const, member: `size=m${i}`, into: 'size=medium' })),
+      { kind: 'property', name: 'label', change: 'removed' }, { kind: 'replace', member: 'size=small', path: 'content/label', reason: 'a layer' },
+      { kind: 'layer', path: 'content/check', members: 3 }, { kind: 'drop', member: 'size=a' }, { kind: 'drop', member: 'size=b' },
+      { kind: 'private', from: TAG, to: `_${TAG}` },
+    ];
+    const split = checkedSetOf({ ...p, breaking: mix }, TAG).changes;
+    ok(split?.count === 14 && split.lines.length === 9 && JSON.stringify(split.kinds) === JSON.stringify({ breaks: 11, retired: 2, leaves: 1 }),
+      `#4481 split: a set's changes cross counted by kind, 11 that break, 2 retired, 1 leaving the library, adding up to all 14 past the cap (${JSON.stringify(split && { count: split.count, lines: split.lines.length, kinds: split.kinds })})`);
   }
 
   // A LAYER REMOVED AND RE-ADDED (#2864): Tag built while its check layer was `check`, updated to plans naming it
@@ -6763,7 +6821,7 @@ section('published — on a set in a team library, what breaks consumer files is
       `published/checklist set: the checked set posted for the checklist carries the published set's line, and the unpublished set's none (${checkedSetOf(p, TAG).breaks} | ${checkedSetOf(qp, TAG).breaks})`);
     // #3711 (Q-UF2 A): the checked set also carries each change named and the count, for the callout before the run; the
     // unpublished set carries none. Literal. Mutation: `changes` dropped from `checkedSetOf` → `uf2/checked set`.
-    ok(JSON.stringify(checkedSetOf(p, TAG).changes) === JSON.stringify({ count: 1, lines: [`${TAG} · ${CHECK} · removed from 15 variants — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`] })
+    ok(JSON.stringify(checkedSetOf(p, TAG).changes) === JSON.stringify({ count: 1, lines: [`${TAG} · ${CHECK} · removed from 15 variants — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`], kinds: { breaks: 1, retired: 0, leaves: 0 } })
       && !('changes' in checkedSetOf(qp, TAG)),
       `uf2/checked set: the published set's changes are named and counted for the callout, the unpublished set's absent (${JSON.stringify(checkedSetOf(p, TAG).changes)})`);
     const shipped = (await previewUpdate(w.host, [{ def: TAG, plans: planned }])).sets[0];

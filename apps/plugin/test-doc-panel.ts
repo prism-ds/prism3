@@ -228,7 +228,7 @@ import { componentDefs, docSections, MAINTAINER_REGISTER, NAMES_A_TOOL, type Com
 import { applyComponentPlan } from './src/write-components';
 import { SWAP_TARGET } from './src/build-deps';
 import { fixHostMethods, makeShim, type Node } from './component-shim';
-import { anatomyEntry, anatomyMarks, clearOrphanPanels, containerSides, leftColumns, panelUnedited, codeRuns, docPanelReach, docPanelReaches, drawDocPanel, docPanelDue, lastChangedKey, leadsPanel, planDocPanel, panelItems, printV2, printV3, PANEL_FORMAT, type PanelApi, type PNode } from './src/doc-panel';
+import { anatomyEntry, anatomyMarks, clearOrphanPanels, containerSides, leftColumns, panelUnedited, codeRuns, docPanelReach, docPanelReaches, drawDocPanel, docPanelDue, lastChangedKey, leadsPanel, planDocPanel, panelItems, panelPrint, printV2, printV3, printV4, PANEL_FORMAT, type PanelApi, type PNode } from './src/doc-panel';
 import { dueOf, entryFor, readLedger, recordSets, type LedgerEntry } from './src/as-built-ledger';
 import { RELEASES } from './src/library-about';
 import { EXECUTOR_REVISION } from './src/executor-revision';
@@ -539,8 +539,63 @@ const blockInstance = (type: string): N => {
     }
   };
   i.setExplicitVariableModeForCollection = (_c: unknown, modeId: string) => { i.pinned = modeId; };
-  return liveInstances ? live(i) : i;
+  const out = liveInstances ? live(i) : i;
+  if (styledTexts) for (const q of walk(i)) if (q.type === 'TEXT') styleText(q, q.name === 'heading' ? 'S:title/md/strong' : 'S:body/md/default');
+  return out;
 };
+/**
+ * A TEXT IN A TEXT STYLE, AS THE HOST KEEPS ONE (#4470). The `_Doc-block` template draws each text in a style
+ * (`doc-block.ts`, `setTextStyleIdAsync`), and the file's styles bind their family to a font variable, so a theme that
+ * changes a family re-resolves every styled text's font. Modelled from Figma's text-style behavior, never read off the
+ * print: `fontName` reads the style's font (`THEME_FONTS`, which a theme rewrites) until a font, size or letter-spacing
+ * is set on the text, which DETACHES the style (`textStyleId` reads '', and the text keeps the font it showed); a code
+ * span drawn in the code style (`setRangeTextStyleIdAsync`) splits it into runs, so `fontName` and `textStyleId` read
+ * mixed and `getStyledTextSegments` lists each run with its own style and font. On an instance the host lists (`live`), the
+ * range style is an override of the text's runs, its style and its font. On for the arms that read it.
+ */
+let styledTexts = false;
+const MIXED = Symbol('figma.mixed');
+const THEME_FONTS: Record<string, { family: string; style: string }> = {};
+const themeFont = (style: string) => THEME_FONTS[style] ?? (style === CODE_TEXT_STYLE.id ? CODE_TEXT_STYLE.fontName : { family: 'Inter', style: style.includes('strong') ? 'Semi Bold' : 'Regular' });
+function styleText(t: N, styleId: string): void {
+  let style = styleId, own: unknown;
+  const codes = () => ((t._codes ?? []) as { text: string; id: string }[]);
+  const detach = (): void => { if (style) { own = own ?? themeFont(style); style = ''; } };
+  Object.defineProperty(t, 'fontName', { configurable: true, enumerable: true, get: () => (style && codes().length ? MIXED : own ?? themeFont(style)), set: (v: unknown) => { detach(); own = v; } });
+  Object.defineProperty(t, 'textStyleId', { configurable: true, enumerable: true, get: () => (style && codes().length ? MIXED : style), set: (v: unknown) => { style = String(v); own = undefined; } });
+  // A size or tracking set on a styled text detaches its style, as Figma's does; whatever accessor `live` put there still runs.
+  for (const f of ['fontSize', 'letterSpacing']) {
+    const was = Object.getOwnPropertyDescriptor(t, f);
+    let v = was && 'value' in was ? was.value : undefined;
+    Object.defineProperty(t, f, { configurable: true, enumerable: true, get: () => (was?.get ? was.get() : v), set: (x: unknown) => { detach(); if (was?.set) was.set(x); else v = x; } });
+  }
+  const range = t.setRangeTextStyleIdAsync as (s: number, e: number, id: string) => Promise<void>;
+  t.setRangeTextStyleIdAsync = async (s0: number, e0: number, id: string) => {
+    await range(s0, e0, id);
+    const ovr = t._ovr as Set<string> | undefined;
+    if (ovr) for (const f of ['styledTextSegments', 'textStyleId', 'fontName']) ovr.add(f);
+  };
+  t.getStyledTextSegments = (fields: string[]) => {
+    const s = String(t.characters ?? '');
+    // Each code span by where its text first sits from the last cut: the runs in order, the rest in the text's own style.
+    const cuts: { start: number; end: number; id: string }[] = [];
+    let at = 0;
+    for (const c of codes()) { const i = s.indexOf(c.text, at); if (i >= 0) { cuts.push({ start: i, end: i + c.text.length, id: c.id }); at = i + c.text.length; } }
+    const runs: { start: number; end: number; id: string }[] = [];
+    let from = 0;
+    for (const c of cuts) { if (c.start > from) runs.push({ start: from, end: c.start, id: style }); runs.push(c); from = c.end; }
+    if (from < s.length || !runs.length) runs.push({ start: from, end: s.length, id: style });
+    return runs.map((r) => {
+      const seg: Record<string, unknown> = { characters: s.slice(r.start, r.end), start: r.start, end: r.end };
+      const font = r.id ? themeFont(r.id) : (own as { family: string; style: string } | undefined) ?? themeFont('');
+      if (fields.includes('fontName')) seg.fontName = font;
+      if (fields.includes('textStyleId')) seg.textStyleId = r.id;
+      if (fields.includes('fontSize')) seg.fontSize = t.fontSize ?? 14;
+      if (fields.includes('fontWeight')) seg.fontWeight = font.style === 'Semi Bold' ? 600 : 400;
+      return seg;
+    });
+  };
+}
 /**
  * THE HOST'S INSTANCES FOLLOW THEIR MAIN (#3303), as Figma's do. Each layer of a block instance (a specimen's aside, the
  * set's) holds two values per field: what it inherits from its main (`_inh`), and what was set on it (an override). A
@@ -2223,6 +2278,98 @@ section('own draw/… — Update redraws a panel nobody touched in place, the co
   ok(g.moved > 20 && g.all.length === 2 && g.kept.length === 1 && g.kept[0] === g.old, `own draw/v2 rebuilt: once a component it nests is rebuilt, it is kept, as before #3303 (the safe rule)`,
     `panels ${g.all.map((n) => n.name).join(' | ')}`);
   liveInstances = false;
+}
+
+/* ── theme font: a family the theme changes is not a hand edit (#4470) ───────────────────────────────────────────── */
+section('theme font/… — Update redraws a panel nobody touched in place after the theme changed its type families (#4470)');
+{
+  // The owner's run (2026-11-22): the template's title and display family changed through the theme, then Update file
+  // kept about 35 usage panels aside as "(edited)". Button built by the executor (its Do item carries a code span), its panel drawn on a host whose texts sit
+  // in their styles (`styleText`), the panel made due, then THE THEME: each style's family moves, and every styled text
+  // re-resolves, the code style's runs included. Nobody touches the panel. Update, as `main.ts` runs it, must replace it
+  // in place. Twice: on a host that lists each instance's overrides (`live`), and on one that lists none, where the print
+  // reads each block whole. Mutation: `panelPrint` reads without `bindings` (the resolved fonts, as the fourth form did) →
+  // `theme font/untouched`.
+  const run = async (label: string, listed: boolean, o: { edit?: (old: N) => void; age?: (old: N) => Promise<void>; theme?: boolean } = {}) => {
+    liveInstances = listed;
+    styledTexts = true;
+    for (const k of Object.keys(THEME_FONTS)) delete THEME_FONTS[k];
+    try {
+      const p = page(`↳ theme font ${label}`);
+      const { api, sets } = await buildAll(p, ['button']);
+      const set = sets[0];
+      // The components the plan nests or swaps to, which the shim holds off the page: here on the page, where the update finds them.
+      for (const [k, name] of [SWAP_TARGET, 'focus-ring', 'icon/check', 'icon/close', 'spinner/small', 'spinner/x-small', 'spinner/medium'].entries()) p.appendChild!(mk('COMPONENT', name, [], { x: -4000, y: k * 40, _w: 24, _h: 24 }));
+      for (const m of set.children) members.set(String(m.id), m);
+      const panels = host([p]);
+      // The file's styles, the brand's inline code style among them (#3552), so the Do item's code span is drawn in it.
+      const shimStyles = (api as { getLocalTextStylesAsync: () => Promise<unknown[]> }).getLocalTextStylesAsync;
+      const uh = fixHostMethods({ ...api, getLocalTextStylesAsync: async () => [...await shimStyles(), CODE_TEXT_STYLE], root: fixHostMethods({ ...(api.root as object), findAllWithCriteria: (c: never) => labelHost(panels).root.findAllWithCriteria(c) }) }) as unknown as UpdateHost & PanelApi & FurnitureApi;
+      const d = componentDefs.find((x) => x.id === 'button')!;
+      await drawDocPanel(uh, set, d, { names });
+      const old = panelsOn(p)[0];
+      await o.age?.(old);
+      const at = { x: Number(old.x), y: Number(old.y) };
+      old.setSharedPluginData!('prism3', 'docPanelPlan', `${old.getSharedPluginData!('prism3', 'docPanelPlan')}-engine-n`);
+      const styled = walk(old).filter((q) => q.type === 'TEXT' && q.textStyleId);
+      const runs = walk(old).filter((q) => q.type === 'TEXT' && typeof q.textStyleId === 'symbol');
+      const before = await panelUnedited(uh, old);
+      // THE THEME: the title, display and body families move; every text in those styles follows (`themeFont`).
+      if (o.theme !== false) for (const s of ['S:title/md/strong', 'S:body/md/default']) THEME_FONTS[s] = { family: 'Display Serif', style: s.includes('strong') ? 'Semi Bold' : 'Regular' };
+      o.edit?.(old);
+      const targets: UpdateTarget[] = [{ def: 'button', plans: plansOf('button'), doc: { def: d, names } }];
+      const pre = await previewUpdate(uh, targets);
+      const due = pre.sets.find((x) => x.set === 'button')?.furniture?.panels;
+      const furnish = async (def: string) => { await furnishUpdate(uh, { outcomes: [{ def }] }, targets, (s0, id) => drawDocPanel(uh, s0 as unknown as PNode, componentDefs.find((x) => x.id === id)!, { names })); };
+      await applyUpdate(uh as never, uh as never, targets, previewHashOf(pre), { furnish });
+      const all = panelsOn(p);
+      return { all, old, at, due, before, styled: styled.length, runs: runs.length, live: all.filter((n) => tagOf(n).state === 'live'), kept: all.filter((n) => tagOf(n).state === 'kept') };
+    } finally { styledTexts = false; liveInstances = false; }
+  };
+  const line = (old: N) => walk(old).find((c) => c.type === 'TEXT' && c.name === 'text' && String(c.characters).length > 20 && typeof c.textStyleId === 'string')!;
+  for (const listed of [true, false]) {
+    const host0 = listed ? 'overrides listed' : 'no overrides';
+    const a = await run(`untouched ${host0}`, listed);
+    ok(a.styled > 10 && a.runs > 0 && a.before, `theme font premise (${host0}): the panel holds ${a.styled} styled texts, ${a.runs} of them with a code run, and reads unedited before the theme`);
+    ok(a.due === 1 && a.all.length === 1 && a.live.length === 1 && a.live[0] !== a.old && a.old.removed === true
+      && Number(a.live[0].x) === a.at.x && Number(a.live[0].y) === a.at.y && !a.all.some((n) => String(n.name).endsWith('(edited)')),
+      `theme font/untouched (${host0}): the theme moved the families, and one Update replaces the panel in place, no "(edited)" copy`,
+      `due ${a.due}, panels ${a.all.length} [${a.all.map((n) => n.name).join(' | ')}]`);
+    // A REAL HAND EDIT IS STILL ONE, beside the theme's change: a line rewritten, and a font set by hand on a styled text.
+    const b = await run(`text edit ${host0}`, listed, { edit: (old) => { line(old).characters = 'Our team uses buttons for forms only.'; } });
+    ok(b.all.length === 2 && b.live.length === 1 && b.kept.length === 1 && b.kept[0] === b.old && String(b.old.name).endsWith(' (edited)') && texts(b.old).includes('Our team uses buttons for forms only.'),
+      `theme font/text edit (${host0}): a rewritten line still keeps the panel aside as "${b.old.name}", its edit intact`, `panels ${b.all.map((n) => n.name).join(' | ')}`);
+  }
+  // A FONT SET BY HAND detaches the text from its style: that is the designer's, theme or not. Read on the host with no
+  // overrides listed, where the text is read whole (on a listed host the font is an override the print reads the same way).
+  const c = await run('hand font', false, { theme: false, edit: (old) => { line(old).fontName = { family: 'Comic Neue', style: 'Bold' }; } });
+  ok(c.kept.length === 1 && c.kept[0] === c.old && c.live.length === 1, `theme font/hand font: a font set by hand on a styled text keeps the panel aside`, `panels ${c.all.map((n) => n.name).join(' | ')}`);
+  // A TEXT IN NO STYLE reads its font: the part marker's numeral, which the panel sets in Inter itself (`disc`). A font set
+  // on it by hand is the designer's; the same text with its family bound to a font variable reads the variable, so the
+  // theme moving that variable's value is not. Mutation: an unstyled text's font left out of `typeByBinding` →
+  // `theme font/unstyled hand font`; the binding read as its value → `theme font/font variable`.
+  const numeral = (old: N) => walk(old).find((q) => q.type === 'TEXT' && q.name === 'count' && !q.textStyleId && typeof q.fontName === 'object')!;
+  const g = await run('unstyled hand font', false, { theme: false, edit: (old) => { numeral(old).fontName = { family: 'Comic Neue', style: 'Bold' }; } });
+  ok(g.kept.length === 1 && g.kept[0] === g.old && g.live.length === 1, `theme font/unstyled hand font: a font set by hand on a text in no style keeps the panel aside`, `panels ${g.all.map((n) => n.name).join(' | ')}`);
+  const bindFamily = async (old: N) => {
+    const t = numeral(old);
+    // A TextNode lists each bound text field as an array of aliases (`VariableAlias[]`, plugin-api.d.ts); only a styled
+    // segment's `boundVariables` holds one alias. Mutation: `boundOf` reading `.id` only → `theme font/font variable`.
+    t.boundVariables = { ...((t.boundVariables ?? {}) as object), fontFamily: [{ type: 'VARIABLE_ALIAS', id: 'V:font/family/display' }] };
+    old.setSharedPluginData!('prism3', 'docPanelPrint', await panelPrint(old));
+  };
+  const h = await run('font variable', false, { theme: false, age: bindFamily, edit: (old) => { const t = numeral(old); t.fontName = { ...(t.fontName as { style: string }), family: 'Display Serif' }; } });
+  ok(h.all.length === 1 && h.live.length === 1 && h.old.removed === true && numeral(h.old).fontName && (numeral(h.old).fontName as { family: string }).family === 'Display Serif',
+    `theme font/font variable: a family bound to a font variable whose value the theme moved is not a hand edit; one Update replaces the panel`, `panels ${h.all.map((n) => n.name).join(' | ')}`);
+  // A PANEL PRINTED IN THE FOURTH FORM (before #4470) is compared in that form: untouched and no theme change, it is
+  // replaced; after the theme moves its fonts, that form cannot tell the theme from a designer, so it is kept, as before.
+  const v4 = (old: N) => printV4(old).then((pr) => old.setSharedPluginData!('prism3', 'docPanelPrint', pr));
+  const e = await run('v4 unchanged', false, { theme: false, age: v4 });
+  ok(e.all.length === 1 && e.live.length === 1 && e.old.removed === true, `theme font/v4 unchanged: a panel printed in the fourth form, untouched and its fonts as drawn, is replaced`,
+    `panels ${e.all.map((n) => n.name).join(' | ')}`);
+  const f = await run('v4 themed', false, { age: v4 });
+  ok(f.all.length === 2 && f.kept.length === 1 && f.kept[0] === f.old, `theme font/v4 themed: a fourth-form panel whose fonts the theme moved is kept, as before #4470 (the stated limit)`,
+    `panels ${f.all.map((n) => n.name).join(' | ')}`);
 }
 
 /* ── format due: a panel behind PANEL_FORMAT on a set otherwise current (#3205) ───────────────────────────── */

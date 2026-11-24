@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-23
+
+A patch release. Its headline fix is the first entry under Fixed: a color
+alias with an opacity no longer exports as `null` or `rgb(NaN, NaN, NaN)`. It also carries
+every change merged since 3.0.0, listed below.
+
+### Changed
+- **The panel shows the plugin's real version.** The version beside the name
+  read `v2.2.2` while exports said `3.0.0`. Both now read the same number,
+  written in one place, so the panel and an export's
+  `$extensions.generator.version` always agree.
+
 ### Security
 - **No `currentuser` permission.** The manifest no longer asks Figma for the
   signed-in user's name, id and photo. The plugin read them only to check that

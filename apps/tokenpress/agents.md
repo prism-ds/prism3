@@ -28,8 +28,8 @@ src/simple-code.js         # OBSOLETE - Testing file only
 
 **Build Process**:
 - Source: TypeScript files in `src/`
-- Build: `npm run build` compiles to `dist/code.js`
-- Manifest: Points to `dist/code.js` (NOT the .js files in src/)
+- Build: `npm run build` compiles to `dist/code.js` and stamps the version into `dist/ui.html`
+- Manifest: Points to `dist/code.js` and `dist/ui.html` (NOT the .js files in src/)
 
 **If you edit `.js` files in src/, your changes will NOT be included in the plugin!**
 
@@ -75,9 +75,15 @@ if (condition) { result.prop = value; }
 ```json
 {
   "main": "dist/code.js",      // ❌ NOT "src/working-code.js"
-  "ui": "src/ui.html",         // Points to HTML, not JS
+  "ui": "dist/ui.html",        // The built panel: src/ui.html with its version label stamped
 }
 ```
+
+**Version: one source.** `package.json` `version` is the only place TokenPress's version is written. The
+build puts it in the panel's label (`src/ui.html` holds `v__PLUGIN_VERSION__`, `dist/ui.html` the number) and
+in every export's `$extensions.generator.version`. Never type a version into `src/ui.html`;
+`tests/unit/version-single-source.test.ts` fails if one appears. A bump also updates the workspace entry in the
+root `package-lock.json`, or `npm ci` fails. The Figma Community listing keeps its own counter.
 
 **Why This Matters**: Previous issues occurred when manifest pointed to wrong files, causing code changes to not execute.
 
