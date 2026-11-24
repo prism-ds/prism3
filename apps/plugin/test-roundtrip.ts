@@ -578,8 +578,15 @@ ok(TINTED.length > 0 && washPaints > 0,
     `#3345 partial round-trip: the Partial-materialized Link is built and read back clean — ${JSON.stringify(PARTIAL.map((d) => d.id))}, ${shares} partial bars among its plans, ${rows[0]?.members ?? 0} members, ${rows[0]?.divergences.length ?? 'no'} divergences${rows[0]?.divergences.length ? ` (${JSON.stringify(rows[0].divergences.slice(0, 2))})` : ''}`);
 }
 // 8: button ×3 and, since #4353 (owner decision 3 A), toggle-button, each at edges and smaller.
-ok(BUTTON_LAID.length === 8 && (EXERCISED.pin ?? 0) > 0 && (EXERCISED.paddingPx ?? 0) > 0 && (EXERCISED.minWidth ?? 0) > 0,
-  `#1667 the button-lever materializations round-trip too — ${BUTTON_LAID.length} def(s); ${EXERCISED.pin ?? 0} pinned icons (ABSOLUTE + edge constraint + inset), ${EXERCISED.paddingPx ?? 0} reserved paddings, ${EXERCISED.minWidth ?? 0} floors read back off the host`);
+// WHICH DEFS, BY ID, NOT HOW MANY (#4510). This held `BUTTON_LAID.length === <n>`, raised by hand when a def joined the
+// button levers (#4353: 6 → 8). The expected ids are the authored surface baseline's `@button-edges` and
+// `@button-smaller` projections, which only `lint-component-surface.ts --accept` writes (docs/34: not derived from
+// `applyButtonLayout`, which builds BUTTON_LAID); a merge of two PRs keeps both keys.
+const LAID_RECORDED = Object.keys(JSON.parse(readFileSync(new URL('../../packages/engine/schema/component-surface.json', import.meta.url), 'utf8')).defs as Record<string, unknown>)
+  .flatMap((k) => { const m = /^(.+)@button-(edges|smaller)$/.exec(k); return m ? [`${m[1]}@${m[2]}`] : []; });
+const laidOff = [...LAID_RECORDED.filter((id) => !BUTTON_LAID.some((d) => d.id === id)), ...BUTTON_LAID.map((d) => d.id).filter((id) => !LAID_RECORDED.includes(id))];
+ok(LAID_RECORDED.length > 0 && !laidOff.length && (EXERCISED.pin ?? 0) > 0 && (EXERCISED.paddingPx ?? 0) > 0 && (EXERCISED.minWidth ?? 0) > 0,
+  `#1667 the button-lever materializations round-trip too — ${BUTTON_LAID.length} def(s), the ${LAID_RECORDED.length} the surface baseline records (off: ${JSON.stringify(laidOff)}); ${EXERCISED.pin ?? 0} pinned icons (ABSOLUTE + edge constraint + inset), ${EXERCISED.paddingPx ?? 0} reserved paddings, ${EXERCISED.minWidth ?? 0} floors read back off the host`);
 
 {
   const swapPlans = SWAP_OVERRIDE.flatMap((d) => figmaAnatomySet(d, { swapTarget: SWAP_TARGET }));
