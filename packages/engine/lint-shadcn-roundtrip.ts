@@ -27,7 +27,9 @@
  * neighbor) by name. Swap the modes in `emit-tailwind.ts` (light variables in `.dark`) and this fails
  * `prism3 tailwind light background: …` by name. Swap only the shadow variables (`shadows('dark')` in `:root`,
  * `shadows('light')` in `.dark`) and this fails `prism3 tailwind light shadow-xs-value layer 1: alpha 26 → 8` (or a
- * neighbor) by name.
+ * neighbor) by name. Write one rung from another (`shadow-md-value` from `shadow.lg`) and this fails
+ * `prism3 tailwind light shadow-md-value layer 1: lengths 0 2 4 -2 → 0 3 6 -3` by name. Skip the arm and this fails
+ * `shadow arm read 0 theme modes, expected 10`.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
