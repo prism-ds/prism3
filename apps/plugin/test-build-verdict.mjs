@@ -842,6 +842,9 @@ for (const [n, label] of [[2, 'the small regime — the ordinary client failure'
   }));
   ok(first.setup === 'true' && first.theme === 'true' && first.guides === 'true' && JSON.stringify(first.sets) === '["button"]' && first.go === 'Set up and update',
     `Q668 A, Q3129.10 A: on a file not set up the first checklist is the setup, its items ticked, the queued set under To add, its action "Set up and update" — read ${JSON.stringify(first)}`);
+  // #4480 (Q2 A): opening the checklist asks for the file's style-guide tables, to count them on the Style guides row.
+  // These arms read the run's own posts, so the log starts at Update file's action.
+  await page.evaluate(() => { window.__posts = []; });
   await hooks.click(page.locator('[data-p3="update-go"]'), { timeout: 4000 });
   await page.waitForFunction(() => window.__posts.length > 0, null, { timeout: 3000 }).catch(() => {});
   const pending = await readFs();
