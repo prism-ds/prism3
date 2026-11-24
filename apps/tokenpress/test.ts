@@ -119,6 +119,9 @@ const ADDED: Record<string, number> = {
   // prism3 #4475 — a color alias with an opacity on the referencing variable exported `null`: the DTCG file before
   // #4299, the dot-notation format (`rgb(NaN, NaN, NaN)`) after it. The reference and the opacity are both kept.
   'tests/unit/alias-opacity-null.test.ts': 5,
+  // prism3 #4490 — a library alias exported a reference to a token the export does not hold, which Style Dictionary
+  // and the CSS format cannot resolve. It now exports the library value, the reference kept in `externalAlias`.
+  'tests/unit/library-alias-standalone.test.ts': 8,
   // prism3 TokenPress versioning — package.json is the one source: the built panel's label and the built exporter's
   // `generator.version` both read it, and the panel source holds a placeholder, never a number.
   'tests/unit/version-single-source.test.ts': 6,
