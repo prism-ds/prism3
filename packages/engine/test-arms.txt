@@ -251,6 +251,7 @@ apps/plugin/test-style-guides-page.mjs #2977
 apps/plugin/test-style-guides-page.mjs #2995
 apps/plugin/test-style-guides-page.mjs #3422
 apps/plugin/test-style-guides-page.mjs #3553
+apps/plugin/test-style-guides-page.mjs #4480
 apps/plugin/test-style-renames.ts #1040
 apps/plugin/test-tabs-indicator.ts #3344
 apps/plugin/test-update-apply.ts #2296
@@ -822,6 +823,7 @@ apps/studio/test-store.ts #4209
 apps/studio/test-store.ts #4215
 apps/studio/test-store.ts #4234
 apps/studio/test-style-guides.ts #2372
+apps/studio/test-style-guides.ts #4480
 apps/studio/test-type-input.ts #1071
 apps/studio/test-type-input.ts #1727
 apps/studio/test-type-input.ts #2006

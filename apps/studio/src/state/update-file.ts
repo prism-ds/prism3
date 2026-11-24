@@ -20,7 +20,8 @@
  *     file and has no live panel (`panelSetsOf`), less the Due sets and the queue, whose own runs draw the panel. One tick
  *     for the group, on by default. The panels ride the in-place update, scoped to these sets: the step's defs are the
  *     ticked Due sets and these (`updateDefsOf`), so the scoped check reads them and the page re-spaces to make room;
- *   · Style guides: drawn with Documentation's saved settings (Q2909.23 A), ticked on a file that is not set up.
+ *   · Style guides: drawn with Documentation's saved settings (Q2909.23 A), ticked on a file that is not set up. Its chip
+ *     counts the tables the step will draw (#4480 Q2 A), once the host has listed the file's tables.
  * The cover is not an item of its own: it follows Documentation's switch, drawn by Set up file. Nor is a panel a set gains
  * by being added or updated: its build or update draws it.
  * A run that sets the file up and writes its theme ends with one more step, `cover` (#3308, Q3308.4 A): Set up file,
@@ -423,6 +424,9 @@ export const UPDATE_COPY = {
   /** #3308 (Q3308.4 A): the last step of a run that sets the file up and writes its theme. DRAFT. */
   coverStep: 'Cover and About this library',
   guidesSub: 'Drawn with the settings in Docs. A rerun updates each table in place.',
+  /** #4480 (owner decision Q2 A, 2026-11-23; DRAFT for the owner): the Style guides row's chip, the tables the step will
+   *  draw, counted before the run (`savedDrawCount`). */
+  guidesCount: (n: number): string => (n === 0 ? 'No tables' : `${n} table${n === 1 ? '' : 's'}`),
   go: 'Update file',
   /** #3713 (3 of 4, DRAFT): beside a disabled Update file, `goWhyOf`. */
   nothing: (blocked: readonly string[]): string => (blocked.length ? `Nothing to write: ${andList(blocked)} can’t be updated yet.` : 'Nothing to write: nothing above is ticked.'),
