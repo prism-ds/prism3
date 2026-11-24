@@ -22,7 +22,7 @@ import type { ActionState, SgRunTable } from '../state/host-session';
 import type { StyleGuideCatalog, StyleGuideKind, StyleGuideOptions } from '../../../plugin/src/messages';
 import {
   treesOf, defaultOpen, boxOf, countsOf, summaryText, drawLabel, kindsOf, hasLengths, byTitles, drawOptions, DEFAULT_OPTIONS,
-  keepSelection, savedOf, readSaved, selectionOf, type SgNode, type PageOptions,
+  keepSelection, savedOf, readSaved, selectionOf, drawnOf, type SgNode, type PageOptions,
 } from '../state/style-guides';
 import { glyph, h, hook, switchEl, type P3Class } from './dom';
 
@@ -480,7 +480,9 @@ export const mountStyleGuides = (root: HTMLElement, lend: StyleGuidesLend, narro
   const runbar = (cat: StyleGuideCatalog | null, setUp: boolean): HTMLElement => {
     const r = lend.read();
     const bar = hook(h('div', 'p3-sg-runbar'), 'sg-runbar');
-    const c = cat ? countsOf(cat, S.sel) : { tables: 0, variables: 0, textStyles: 0, effectStyles: 0, gradientStyles: 0, gridStyles: 0 };
+    // #4480 (Q1 A): what you see is drawn. The summary counts, and Draw sends, the selected tables in the collection in view.
+    const drawn = cat ? drawnOf(cat, S.sel, S.view) : new Set<number>();
+    const c = cat ? countsOf(cat, drawn) : { tables: 0, variables: 0, textStyles: 0, effectStyles: 0, gradientStyles: 0, gridStyles: 0 };
     const verdict = r.state && r.state !== 'pending' && r.run ? r.state : null;
     if (verdict) {
       const pill = hook(h('button', verdict.ok ? 'p3-pill' : 'p3-pill p3-pill-bad'), 'sg-verdict');
@@ -508,7 +510,7 @@ export const mountStyleGuides = (root: HTMLElement, lend: StyleGuidesLend, narro
     if (!setUp) d.setAttribute('aria-describedby', 'p3-sg-setup-note');
     d.onclick = () => {
       if (!cat || d.disabled) return;
-      start(drawOptions(cat, S.sel, S.opt), S.sel.size);
+      start(drawOptions(cat, drawn, S.opt), drawn.size);
     };
     bar.append(d);
     return bar;
@@ -565,6 +567,8 @@ export const mountStyleGuides = (root: HTMLElement, lend: StyleGuidesLend, narro
           // The mockup's retry: the title box names the table, so the tree shows what is drawn (P6).
           S.titles = cat.tables[ix].title;
           S.sel = new Set([ix]);
+          // #4480 (Q1 A): a table outside the collection in view would not be drawn, so the view opens to every collection.
+          if (drawnOf(cat, S.sel, S.view).size === 0) S.view = null;
           start(drawOptions(cat, S.sel, S.opt), 1);
         });
         again.dataset.key = `again=${t.key}`;
@@ -587,7 +591,7 @@ export const mountStyleGuides = (root: HTMLElement, lend: StyleGuidesLend, narro
     const body = h('fieldset', 'p3-sg-plain');
     body.disabled = busy;
     if (lend.read().off) body.title = lend.read().off!;
-    const k = cat ? kindsOf(cat, S.sel) : new Set<StyleGuideKind>();
+    const k = cat ? kindsOf(cat, drawnOf(cat, S.sel, S.view)) : new Set<StyleGuideKind>();
     const grp = (role: string, title: string, levers: HTMLElement[]): HTMLElement => {
       const g = hook(h('div', 'p3-sg-ogroup'), role);
       g.append(h('h3', 'p3-sg-ogroup-title', title), ...levers);
