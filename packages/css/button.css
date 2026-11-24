@@ -970,12 +970,50 @@
   .p3-button[aria-busy="true"] > .p3-button__spinner {
     animation: p3-fade-in var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-enter) both;
   }
+  /* motion (Q146 A): the state change on motion.state, the press on motion.press */
+  .p3-button {
+    transition: background-color var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default), border-color var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default), transform var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default);
+  }
+  .p3-button > .p3-button__label {
+    transition: color var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default);
+  }
+  .p3-button > .p3-button__leading-visual {
+    transition: color var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default);
+  }
+  .p3-button > .p3-button__spinner {
+    transition: color var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default);
+  }
+  .p3-button > .p3-button__trailing-visual {
+    transition: color var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-default);
+  }
+  /* the press: a subtle scale, never on an inert button (Q-PS1 A: the magnitude is a documented raw value) */
+  .p3-button:active:not(:disabled, [aria-disabled="true"]) {
+    transform: scale(0.98);
+  }
   @media (prefers-reduced-motion: reduce) {
     .p3-button > .p3-button__spinner > svg {
       animation-duration: var(--pds3-motion-duration-reduced-spin);
     }
     .p3-button[aria-busy="true"] > .p3-button__spinner {
       animation-duration: var(--pds3-motion-duration-reduced-fast);
+    }
+    .p3-button {
+      transition: background-color var(--pds3-motion-duration-reduced-fast) var(--pds3-motion-easing-role-default), border-color var(--pds3-motion-duration-reduced-fast) var(--pds3-motion-easing-role-default);
+    }
+    .p3-button > .p3-button__label {
+      transition: color var(--pds3-motion-duration-reduced-fast) var(--pds3-motion-easing-role-default);
+    }
+    .p3-button > .p3-button__leading-visual {
+      transition: color var(--pds3-motion-duration-reduced-fast) var(--pds3-motion-easing-role-default);
+    }
+    .p3-button > .p3-button__spinner {
+      transition: color var(--pds3-motion-duration-reduced-fast) var(--pds3-motion-easing-role-default);
+    }
+    .p3-button > .p3-button__trailing-visual {
+      transition: color var(--pds3-motion-duration-reduced-fast) var(--pds3-motion-easing-role-default);
+    }
+    .p3-button:active:not(:disabled, [aria-disabled="true"]) {
+      transform: none;
     }
   }
   @keyframes p3-spin {

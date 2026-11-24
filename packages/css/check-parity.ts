@@ -22,8 +22,15 @@
  * the contract's attributes (pending, disabled, inactive). `inactive` is the def's code-only state: it has no spec row,
  * and its def says its intended paint is `disabled`'s, so it is held to the disabled row.
  *
- * SELF-TEST. After the real run, five mutants must each FAIL BY NAME, or this check fails: a swapped token, a dropped
- * state, a dropped prop value in the CSS, a dropped prop value in the markup contract, and dropped tracking.
+ * MOTION (Q146 A, #4375). A duration leaf's sentinel is `<i>ms` and a cubicBezier's is `cubic-bezier(0.5, <i>, 0.5, 1)`,
+ * so each of `specs.json`'s motion bindings decodes from the transition Chromium computes for the property this file
+ * maps it to (`MOTION`, written here, not read from the generator). `motion.state-reduced` is read with the page's
+ * `prefers-reduced-motion` set to reduce. A binding the map doesn't name fails as a gap, by name. The sentinel
+ * durations are long, so a forced state is finished (`Animation.finish()`), never read mid-transition.
+ *
+ * SELF-TEST. After the real run, seven mutants must each FAIL BY NAME, or this check fails: a swapped token, a dropped
+ * state, a dropped prop value in the CSS, a dropped prop value in the markup contract, dropped tracking, the press
+ * rebound to the reduced duration, and the reduced-motion transition dropped.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -107,12 +114,44 @@ const decode = new Map<string, string>(); // computed value → token path
   };
   walk(tree[ROOT], [], undefined);
 }
+// Motion leaves (#4375): a duration's sentinel is `<i>ms`, a curve's `cubic-bezier(0.5, <i>, 0.5, 1)`, each in its own
+// decode namespace, so a transition Chromium computes names exactly one token.
+{
+  let i = 1;
+  const walk = (n: any, p: string[], type?: string) => {
+    if (!n || typeof n !== 'object') return;
+    const t = n.$type ?? type;
+    if (n.$value !== undefined) {
+      const path = p.join('.');
+      const k = i++;
+      if (t === 'duration') { sentinel.set(cssName(path), `${k}ms`); decode.set(`dur:${k}`, path); }
+      if (t === 'cubicBezier') { sentinel.set(cssName(path), `cubic-bezier(0.5, ${k}, 0.5, 1)`); decode.set(`ease:${k}`, path); }
+      return;
+    }
+    for (const [key, v] of Object.entries(n)) if (!key.startsWith('$')) walk(v, [...p, key], t);
+  };
+  walk(tree[ROOT], [], undefined);
+}
 const name = (computed: string) => decode.get(computed) ?? (computed === 'rgba(0, 0, 0, 0)' ? '(transparent)' : `(no token: ${computed})`);
 
 // ------------------------------------------------------------------------------------------------ the probes
-export type Probe = { coord: Record<string, string>; state: string; leading: boolean; trailing: boolean; checks: { part: string; prop: string; want: string; what: string }[] };
+/** A check's `prop` may be `transition-duration:<property>` or `transition-timing-function:<property>`: that property's
+ *  entry in the part's transition lists. `reduce` reads it with `prefers-reduced-motion: reduce`. */
+export type Probe = { coord: Record<string, string>; state: string; leading: boolean; trailing: boolean; checks: { part: string; prop: string; want: string; what: string; reduce?: boolean }[] };
 const where = (o: Record<string, string>) => Object.entries(o).map(([k, v]) => `${k}=${v}`).join(' ');
 const COLOR_PROP: Record<string, string> = { fill: 'background-color', stroke: 'border-top-color', ink: 'color', icon: 'color' };
+/**
+ * Each motion binding the button carries, as the transitions it sets (Q146 A; the def's `motion.reduceMotion`): the
+ * state change on the fill, the border and the label's ink; the press on the container's transform. Written here.
+ */
+const STATE_PROPS: [string, string][] = [['container', 'background-color'], ['container', 'border-color'], ['container/label', 'color']];
+const MOTION: Record<string, { read: 'transition-duration' | 'transition-timing-function'; reduce: boolean[]; on: [string, string][] }> = {
+  'motion.state': { read: 'transition-duration', reduce: [false], on: STATE_PROPS },
+  'motion.state-easing': { read: 'transition-timing-function', reduce: [false, true], on: STATE_PROPS },
+  'motion.state-reduced': { read: 'transition-duration', reduce: [true], on: STATE_PROPS },
+  'motion.press': { read: 'transition-duration', reduce: [false], on: [['container', 'transform']] },
+  'motion.press-easing': { read: 'transition-timing-function', reduce: [false], on: [['container', 'transform']] },
+};
 const SIZE_PROP: Record<string, string> = {
   paddingTop: 'padding-top', paddingBottom: 'padding-bottom', paddingLeft: 'padding-left', paddingRight: 'padding-right',
   gap: 'column-gap', width: 'width', minWidth: 'min-width',
@@ -177,6 +216,18 @@ export const buildProbes = (markup: Markup): { probes: Probe[]; gaps: string[] }
       { part: p.part, prop: 'text-decoration-line', want: `(kw ${deco})`, what: `${p.part} textDecoration` },
       { part: p.part, prop: 'letter-spacing', want: ls, what: `${p.part} letterSpacing` },
     ] });
+  }
+  // 6. Motion: every binding, on each appearance at rest.
+  const motionChecks: Probe['checks'] = [];
+  for (const [key, token] of Object.entries<string>(SPEC.motion ?? {})) {
+    const m = MOTION[key];
+    if (!m) { gaps.push(`motion binding ${key} has no CSS property in this check`); continue; }
+    for (const reduce of m.reduce) for (const [part, prop] of m.on) {
+      motionChecks.push({ part, prop: `${m.read}:${prop}`, want: token, what: `${key} (${part} ${prop} ${m.read.replace('transition-', '')}${reduce ? ', reduced motion' : ''})`, reduce });
+    }
+  }
+  if (motionChecks.length) for (const appearance of SPEC.axes.find((a: any) => a.name === 'appearance').values) {
+    probes.push({ coord: { appearance, surface: 'default', inset: 'default', size: 'medium' }, state: 'rest', leading: false, trailing: false, checks: motionChecks });
   }
   return { probes, gaps };
 };
@@ -244,17 +295,38 @@ export const runParity = async (browser: any, css: string, markup: Markup, form:
     if (!nodeId) continue; // no probe root: every check of this probe reads "(no probe root)" below
     await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [force] });
   }
-  const reads = await page.evaluate(([list, parts]: [any[], Record<string, string>]) => list.map((pr: any, i: number) => {
+  // A forced state starts its transition; the sentinel durations are long, so each finite one is finished, not waited on.
+  const finish = () => page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.getTiming().iterations !== Infinity) a.finish(); });
+  const read = (reduce: boolean) => page.evaluate(([list, parts, rd]: [any[], Record<string, string>, boolean]) => list.map((pr: any, i: number) => {
     const el = document.querySelector(`[data-probe="${i}"]`);
     if (!el) return pr.checks.map(() => '(no probe root)');
     return pr.checks.map((c: any) => {
+      if (!!c.reduce !== rd) return null;
       const node = parts[c.part] ? el.querySelector(`:scope > ${parts[c.part]}`) : el;
       if (!node) return '(no element)';
       const cs = getComputedStyle(node);
       if (c.prop === 'letter-spacing') return `ls:${Math.round((parseFloat(cs.letterSpacing) / parseFloat(cs.fontSize)) * 1000)}`;
+      if (c.prop.startsWith('transition-')) {
+        // no named helper in here: tsx's keepNames wraps it in `__name`, which the page does not define
+        const [list_, prop] = c.prop.split(':');
+        const props = cs.transitionProperty.split(', ');
+        const at = props.findIndex((x: string) => x === prop || x === 'all');
+        if (at < 0) return `(no transition on ${prop})`;
+        const xs = cs.getPropertyValue(list_).split(/,\s*(?![^()]*\))/);
+        const x = xs[at % xs.length];
+        if (list_ === 'transition-duration') return `dur:${Math.round(parseFloat(x) * (x.endsWith('ms') ? 1 : 1000))}`;
+        const m = /^cubic-bezier\(0\.5, ([\d.]+), 0\.5, 1\)$/.exec(x);
+        return m ? `ease:${Number(m[1])}` : `(curve ${x})`;
+      }
       return c.prop === 'font-size' ? `font:${cs.fontSize}` : cs.getPropertyValue(c.prop);
     });
-  }), [probes, PART]);
+  }), [probes, PART, reduce]);
+  await finish();
+  const normal = await read(false);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await finish();
+  const reduced = await read(true);
+  const reads = normal.map((row: (string | null)[], i: number) => row.map((x, j) => x ?? reduced[i][j]));
   let checked = 0;
   probes.forEach((pr, i) => pr.checks.forEach((c, j) => {
     checked++;
@@ -264,6 +336,7 @@ export const runParity = async (browser: any, css: string, markup: Markup, form:
     if (c.want === '(none)') gotName = got === 'auto' || got === '0px' ? '(none)' : `(px ${got})`;
     else if (c.want.startsWith('(px ')) gotName = `(px ${got.replace(/px$/, '')})`;
     else if (c.want.startsWith('(kw ')) gotName = `(kw ${got})`;
+    else if (/^\(no transition|^\(curve /.test(got)) gotName = got;
     else gotName = name(got);
     if (gotName !== c.want) failures.push(`${where(pr.coord)} state=${pr.state} leading=${pr.leading} trailing=${pr.trailing}: ${c.what} binds ${gotName}, the spec names ${c.want}`);
   }));
@@ -290,6 +363,12 @@ const MUTANTS: { name: string; css: string; markup: Markup; mustName: RegExp }[]
     css: dropRules(CSS, (s) => s.includes('[data-prop-size="large"]')), markup: MARKUP, mustName: /size=large .* binds/ },
   { name: 'drop a prop value in the markup contract (appearance=text)',
     css: CSS, markup: withoutValue(MARKUP, 'appearance', 'text'), mustName: /prop value appearance=text has no markup mapping/ },
+  { name: 'the press rebound to the reduced duration',
+    css: CSS.replace(/(transform var\(--pds3-motion-)duration-fast\)/, '$1duration-reduced-fast)'),
+    markup: MARKUP, mustName: /motion\.press \(container transform duration\) binds motion\.duration-reduced\.fast, the spec names motion\.duration\.fast/ },
+  { name: 'the reduced-motion transition dropped (the container keeps motion.state)',
+    css: CSS.replace(/\n +\.p3-button \{\n +transition: [^;]*duration-reduced-fast[^;]*;\n +\}/, ''),
+    markup: MARKUP, mustName: /motion\.state-reduced \(container background-color duration, reduced motion\) binds motion\.duration\.fast, the spec names motion\.duration-reduced\.fast/ },
   { name: 'drop the tracking (every letter-spacing declaration)',
     css: CSS.replace(/\n\s*letter-spacing: [^;]+;/g, ''), markup: MARKUP, mustName: /container\/label letterSpacing binds \(no token: ls:NaN\), the spec names core\.font\.letter-spacing-role\.normal/ },
 ];
