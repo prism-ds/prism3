@@ -878,8 +878,8 @@ jobs:
 
       # #3264, owner decision 3 — the designer guides (docs/public/guides/*.md) still describe the app. The guides
       # are the SUBJECT, the code the ORACLE: every **bold** UI label is a whole string literal (or HTML text) in
-      # apps/studio/src, apps/plugin/src or apps/tokenpress/src, comments not counted; every `<!-- src: path:line -->`
-      # names a git-tracked file and lines inside it, and the cited lines still hold one of the quoted strings, code
+      # apps/studio/src, apps/plugin/src or apps/tokenpress/src, comments not counted; every `<!-- src: path@"…".."…" -->`
+      # names a git-tracked file and lines in it by their text, never their numbers (#4455), and the cited lines still hold one of the quoted strings, code
       # spans or labels of the claim it backs; every "<n> component sets" equals componentDefs; and every guide the
       # index lists is read and cites something, each source tree yields literals.
       - name: The designer guides still describe the app (#3264)
@@ -968,8 +968,8 @@ jobs:
 
       # #1834 — a merge from main once dropped a suite's whole #1812 arm and every gate stayed green. Each
       # (suite, #NNNN) named in a string or template literal of a test suite is registered in the authored
-      # packages/engine/test-arms.txt; an arm gone from its suite fails by name, a new one fails until
-      # `--accept` adds it (sorted), and only a hand-deleted line retires one. Names, not execution: floors are #1066.
+      # packages/engine/test-arms/, one file per arm so concurrent PRs never conflict (#4455); an arm gone from its
+      # suite fails by name, a new one fails until `--accept` adds its file, and only a hand-deleted file retires one. Names, not execution: floors are #1066.
       - name: A registered test arm is still in its suite (#1834)
         run: npx tsx packages/engine/lint-test-arms.ts
 

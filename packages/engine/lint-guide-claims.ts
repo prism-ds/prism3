@@ -3,6 +3,7 @@
  *
  *   npx tsx packages/engine/lint-guide-claims.ts
  *   npx tsx packages/engine/lint-guide-claims.ts --stamp   # fingerprint each range-only citation that has none
+ *   npx tsx packages/engine/lint-guide-claims.ts --convert # rewrite each line-number citation as a marker (#4455)
  *
  * `docs/public/guides/*.md` are hand-written: a designer reads them to find a control and learn what it does. They
  * went stale once already, silently: drafted on 2026-10-16 (#2656), they still sent readers to the Figma menu, the top
@@ -25,8 +26,24 @@
  *             attributes a reader sees (`aria-label`, `title`, `placeholder`, `alt`), never a class or an id.
  *             LIMIT: a label is checked for existing SOMEWHERE in the three trees, so a label drawn in several places
  *             (**Set up file** is in five files) does not fail when one copy is renamed; CITE is the backstop there.
- *   CITE      Every `<!-- src: path:line -->` or `path:first-last` resolves: the path is a file git tracks, and the
- *             lines are inside it, counted as the file's lines, so a file's closing newline is not one more (#3456). Then
+ *   MARKER (#4455)  A citation names its lines by their text, never by number: `<!-- src: path@"start" -->` for the
+ *             line (or lines) a needle spans, `<!-- src: path@"start".."end" -->` for a block. Each needle is a JSON
+ *             string of the file's text, so `\n` spans lines and `\u007c` writes a `|` a table row would split on. The
+ *             start needle must occur exactly once in the file; the block runs from the line it starts on to the line
+ *             where the end needle's first occurrence at or after it ends. A needle gone from the file, one the file
+ *             holds twice, or an end with no match fails by name, and so does a citation by line number.
+ *             WHY. Line numbers moved whenever a PR inserted a line above the cited code, so every PR that touched a
+ *             cited file re-numbered the guides, and any two such PRs conflicted on the same guide lines: 31 of 42
+ *             queued PRs went dirty after one merge wave (#4455), and a refresh that kept the wrong side passed while
+ *             the stale range still overlapped a quote (#4310, #4414) or quoted nothing unfingerprinted (#4427). A
+ *             marker does not move when unrelated lines do, so neither the edit nor the conflict happens, and a stale
+ *             range cannot arise from a shift. INDEPENDENCE is unchanged (`docs/34`): the needle is written into the
+ *             guide by someone who read the code, and the gate finds it in the file as it is now. `--convert` writes a
+ *             marker for each line-number citation, resolves it again and keeps it only if it names the same lines,
+ *             and keeps the fingerprint it had, so a converted citation is checked against what was stamped. LIMIT:
+ *             a marker proves its text is still in the file once, not that the code around it means the same; that
+ *             is what the anchors and the fingerprint below hold.
+ *   CITE      Every citation resolves: the path is a file git tracks and its MARKER names lines in it. Then
  *             the cited lines must still hold what the claim quotes: the claim is the text before the citation on its
  *             line (or, for a citation on a line of its own, the block above it, stepping over one blank line, so a
  *             citation set under a table after a blank line claims the table: #3457), its
@@ -39,17 +56,16 @@
  *   FINGERPRINT (#3417)  A citation whose claim quotes nothing has no anchor to look for, so before this arm it was
  *             checked for range only: a PR that inserted lines above it left it pointing at other code, and the gate
  *             stayed green while the line number still existed (eleven such on one PR's head). So each one carries
- *             the fingerprint of the block it cites, `<!-- src: path:a-b#1a2b3c4d -->`: the first 8 hex digits of
- *             the SHA-256 of lines a..b as the file holds them, joined by `\n`. The gate hashes the cited lines and
- *             fails by name when they differ, and says where the block now sits when it finds it once elsewhere in
- *             the file. A range-only citation with no fingerprint fails. A quoting citation may carry one too, and
+ *             the fingerprint of the block it cites, `<!-- src: path@"…".."…"#1a2b3c4d -->`: the first 8 hex digits
+ *             of the SHA-256 of the cited lines as the file holds them, joined by `\n`. The gate hashes the cited
+ *             lines and fails by name when they differ: since #4455 the marker finds the block wherever it moved, so a
+ *             mismatch means the block itself changed. A range-only citation with no fingerprint fails. A quoting citation may carry one too, and
  *             it is checked the same way.
  *             WHY IT IS INDEPENDENT (`docs/34`). The fingerprint is written into the guide once, when someone reads
  *             the cited block and stamps it. The gate compares it with the file as it is now. Neither is derived from
- *             the other at check time, and the line numbers are not the oracle: a shift moves the hashed lines and
- *             changes the hash. `--stamp` writes a fingerprint only where a citation has none and NEVER rewrites one,
- *             because a gate allowed to rewrite what it reads has no memory: when the cited code changes, fix the
- *             numbers by hand, or delete the old fingerprint and stamp again once you have read the block.
+ *             the other at check time, and the marker is not the oracle: an edit inside the block changes the hash. `--stamp` writes a fingerprint only where a citation has none and NEVER rewrites one,
+ *             because a gate allowed to rewrite what it reads has no memory: when the cited code changes, read the block,
+ *             then delete the old fingerprint and stamp again.
  *             LIMIT: a fingerprint proves the cited lines have not changed since they were stamped, not that they
  *             were the right lines then. That judgment is review's, as the migration's content audit was (#3417).
  *   ORDER (#3519)  A claim that lists two or more **bold labels** joined only by commas and "and" (a page's sections,
@@ -60,12 +76,15 @@
  *             The order is read from the cited code, never from the guide. A list whose last join is "or" names
  *             alternatives and is not checked, whatever its length: the whole run is dropped, not just its last label. LIMIT: a label the lines do not hold as a whole string is not placed, so a list
  *             is held only as far as its labels are placed; the summary line counts the lists with two or more.
- *   SELF-CHECK  Each gap CITE, FINGERPRINT and ORDER once had is planted in a small in-memory tree and run through the
- *             function the guides run through: a citation one line past a file's end (#3456), a table's citation after
- *             a blank line whose cited lines hold none of its quotes (#3457), and a range-only citation whose block a
- *             PR moved down a line (#3417), and a bold list whose cited lines hold every label in another order
- *             (#3519). Each must fail by name, and a CONTROL with the same shapes cited correctly
- *             must pass, so a gate that fails everything cannot satisfy them.
+ *   SELF-CHECK  Each gap MARKER, CITE, FINGERPRINT and ORDER once had is planted in a small in-memory tree and run
+ *             through the function the guides run through: a citation by line number, a marker gone from its file, one
+ *             its file holds twice, an end marker with no match (#4455), a table's citation after a blank line whose
+ *             cited lines hold none of its quotes (#3457), a range-only citation whose block a PR changed after it was
+ *             stamped (#3417), and a bold list whose cited lines hold every label in another order (#3519). Each must
+ *             fail by name, and a CONTROL with the same shapes cited correctly must pass, so a gate that fails
+ *             everything cannot satisfy them. The control's fingerprinted block has had lines inserted above it since
+ *             it was stamped, so a marker that moved with unrelated lines would fail there. (#3456, a citation one
+ *             line past a file's end, retired with line numbers: a marker names lines the file has.)
  *   COUNT     "<n> component sets" in a guide equals `componentDefs.length`, read from the engine. At least one guide
  *             makes the claim, so the arm cannot pass by having nothing to check.
  *   COMMANDS (#3555 G11)  The agent-link guide's "What an agent can do" table has a row for every command in
@@ -316,6 +335,7 @@ const blank = (src: string, spans: readonly [number, number][]): string => {
 type Tree = { readonly tracked: (p: string) => boolean; readonly read: (p: string) => string };
 type Reader = {
   readonly tracked: (p: string) => boolean;
+  readonly read: (p: string) => string;
   readonly linesOf: (p: string) => string[];
   readonly codeLinesOf: (p: string) => string[];
   readonly litsOf: (p: string) => Lit[];
@@ -355,15 +375,82 @@ const readerOf = (tree: Tree): Reader => {
     return lines;
   };
   const litsOf = (p: string): Lit[] => { codeLinesOf(p); return citedLits.get(p) ?? []; };
-  return { tracked: tree.tracked, linesOf, codeLinesOf, litsOf };
+  return { tracked: tree.tracked, read: tree.read, linesOf, codeLinesOf, litsOf };
 };
 
-const CITE = /<!--\s*src:\s*([^\s:]+(?: [^\s:]+)*):(\d+)(?:-(\d+))?(?:#([0-9a-f]{8}))?\s*-->/g;
+/** Every `<!-- src: … -->` comment. What it holds is parsed by `parseCite`, so a malformed one fails by name instead
+ *  of being skipped as no citation at all. */
+const CITE = /<!--\s*src:\s*([\s\S]*?)\s*-->/g;
+/** A needle: a JSON string, so a quote, a newline or a `|` (which would split a table row) can be written escaped. */
+const NEEDLE = String.raw`"(?:[^"\\\n]|\\.)*"`;
+/** A citation by marker (#4455): `path@"start"`, or `path@"start".."end"`, then an optional `#fingerprint`. */
+const MARKER_CITE = new RegExp(String.raw`^([^\s:@"]+(?: [^\s:@"]+)*)@(${NEEDLE})(?:\.\.(${NEEDLE}))?(?:#([0-9a-f]{8}))?$`);
+/** The retired form: a citation by line number, `path:12` or `path:12-30`, with an optional fingerprint. */
+const LINE_CITE = /^([^\s:]+(?: [^\s:]+)*):(\d+)(?:-(\d+))?(?:#([0-9a-f]{8}))?$/;
 /** FINGERPRINT: the first 8 hex digits of the SHA-256 of the cited lines, joined by `\n`, exactly as the file holds them. */
 const fingerprint = (lines: readonly string[]): string => createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 8);
+/** A needle written as the guides hold it: JSON, with `|` and the `>` of a `-->` escaped, so neither a table row nor
+ *  the HTML comment around it can end early. */
+const writeNeedle = (needle: string): string => JSON.stringify(needle).replace(/\|/g, '\\u007c').replace(/-->/g, '--\\u003e');
+/** The 1-based line an offset of `src` sits on. */
+const lineAtOffset = (src: string, k: number): number => { let n = 1; for (let i = 0; i < k; i++) if (src.charCodeAt(i) === 10) n++; return n; };
+/** Every offset at which `needle` starts in `src`. */
+const offsetsOf = (src: string, needle: string): number[] => { const out: number[] = []; for (let k = src.indexOf(needle); k >= 0; k = src.indexOf(needle, k + 1)) out.push(k); return out; };
+/** MARKER (#4455): the lines a marker citation names. The start needle must occur exactly once in the file, and the
+ *  cited block runs from the line it starts on to the line the end needle ends on, the end needle's first occurrence
+ *  at or after the start (or, with no end needle, to the line the start needle ends on). Nothing here is a line
+ *  number, so a PR that inserts lines above the block, or anywhere outside it, leaves the citation as it is. */
+type Resolved = { readonly first: number; readonly end: number } | { readonly error: string };
+const resolveMarker = (src: string, start: string, endNeedle: string | null): Resolved => {
+  if (!start || endNeedle === '') return { error: 'has an empty needle' };
+  const at = offsetsOf(src, start);
+  if (!at.length) return { error: `has no ${JSON.stringify(start)}: the marker's text is gone from the file, so the cited code changed or moved` };
+  if (at.length > 1) return { error: `finds ${JSON.stringify(start)} ${at.length} times (lines ${at.slice(0, 4).map((k) => lineAtOffset(src, k)).join(', ')}${at.length > 4 ? ', …' : ''}), so the marker no longer names one place. Lengthen it until it is unique` };
+  const first = lineAtOffset(src, at[0]);
+  if (endNeedle === null) return { first, end: lineAtOffset(src, at[0] + start.length - 1) };
+  const e = src.indexOf(endNeedle, at[0]);
+  if (e < 0) return { error: `has no ${JSON.stringify(endNeedle)} at or after its start (line ${first}), so the cited block has no end` };
+  return { first, end: Math.max(first, lineAtOffset(src, e + endNeedle.length - 1)) };
+};
+/** `--convert`: a marker citation naming exactly lines a..b of `src`, or null when none can (a line that repeats
+ *  everywhere, such as a lone `}`, with nothing unique between it and the block's end). Each needle is the shortest
+ *  prefix of its line that ends between words, is at least NEEDLE_MIN characters long (or the whole line), and names
+ *  the right line; a start line that is not unique on its own takes the lines after it, within the block; an end line
+ *  that is not the first match takes the lines before it. The result is resolved again and must give back a..b. */
+const NEEDLE_MIN = 20;
+const markerFor = (src: string, a: number, b: number): { start: string; end: string | null } | null => {
+  const lines = src.split('\n');
+  if (a < 1 || b < a || b > linesIn(src).length) return null;
+  const offset = (line: number): number => { let k = 0; for (let i = 0; i < line - 1; i++) k += lines[i].length + 1; return k; };
+  const prefixes = (text: string): string[] => {
+    const out: string[] = [];
+    for (let n = Math.min(NEEDLE_MIN, text.length); n <= text.length; n++) if (n === text.length || !/\w/.test(text[n]) || !/\w/.test(text[n - 1])) out.push(text.slice(0, n));
+    return out;
+  };
+  const lead = (line: number): number => offset(line) + (lines[line - 1].length - lines[line - 1].trimStart().length);
+  let start: string | null = null;
+  const from = lead(a);
+  for (let last = a; last <= b && start === null; last++) {
+    const text = src.slice(from, offset(last) + lines[last - 1].trimEnd().length);
+    if (!text.trim()) continue;
+    for (const p of last === a ? prefixes(text) : [text]) if (offsetsOf(src, p).length === 1) { start = p; break; }
+  }
+  if (start === null) return null;
+  const check = (end: string | null): boolean => { const r = resolveMarker(src, start!, end); return 'first' in r && r.first === a && r.end === b; };
+  if (check(null)) return { start, end: null };
+  for (let k = b; k >= a; k--) {
+    const text = src.slice(lead(k), offset(b) + lines[b - 1].trimEnd().length);
+    if (!text.trim()) continue;
+    for (const p of k === b ? prefixes(text) : [text]) if (check(p)) return { start, end: p };
+  }
+  return null;
+};
 const STAMP = process.argv.includes('--stamp');
 /** `--stamp`'s edits, by guide: each citation's own text and the text it becomes. */
 const stamps = new Map<string, { line: number; from: string; to: string }[]>();
+/** `--convert` (#4455): each line-number citation rewritten as the marker citation that names the same lines. */
+const CONVERT = process.argv.includes('--convert');
+const converts = new Map<string, { line: number; from: string; to: string }[]>();
 const BOLD = /\*\*((?:[^*\n]|\*(?!\*)[^*\n]+\*)+?)\*\*/g;
 /** A claim's anchors: its quoted strings, code spans and bold labels. A quoted string is an example of a message the
  *  app composes at run time, so a number or an ellipsis in it stands for a value (`<n>`, a placeholder): "Built 3
@@ -452,34 +539,51 @@ type Fail = (arm: string, msg: string) => void;
 
 /** CITE and FINGERPRINT for the citations on one line of a guide. The guides and the SELF-CHECK fixtures run
  *  through this one function, so a fixture tests the arm the guides are held by, not a copy of it. */
-const citeLine = (rel: string, lines: readonly string[], k: number, r: Reader, stats: CiteStats, fail: Fail, stamp: boolean): void => {
+const citeLine = (rel: string, lines: readonly string[], k: number, r: Reader, stats: CiteStats, fail: Fail, stamp: boolean, convert = false): void => {
   const raw = lines[k];
   const at = `${rel}:${k + 1}`;
   let last = 0;
   let claim = '';
   for (const m of raw.matchAll(CITE)) {
     stats.cites++;
-    const [whole, path, a, b, hash] = m;
+    const [whole, body] = m;
     const seg = raw.slice(last, m.index).replace(/<!--[\s\S]*?-->/g, ' ');
     last = (m.index ?? 0) + whole.length;
     if (seg.trim()) claim = seg;
     if (!claim.trim()) claim = blockAbove(lines, k);
-    const first = Number(a);
-    const end = b ? Number(b) : first;
+    const old = LINE_CITE.exec(body);
+    if (old) {
+      // #4455: a line number moves whenever a PR inserts a line above it, so every PR that touched a cited file had to
+      // edit the guide, and every two such PRs conflicted on the same guide line.
+      const [, p, a, b] = old;
+      const conv = r.tracked(p) ? markerFor(r.read(p), Number(a), Number(b ?? a)) : null;
+      if (convert && conv) {
+        const to = `<!-- src: ${p}@${writeNeedle(conv.start)}${conv.end === null ? '' : `..${writeNeedle(conv.end)}`}${old[4] ? `#${old[4]}` : ''} -->`;
+        if (!converts.has(rel)) converts.set(rel, []);
+        converts.get(rel)!.push({ line: k, from: whole, to });
+      } else fail('MARKER', `${at}: ${body} cites by line number, which moves whenever a PR inserts a line above it. Cite by marker, path@"text of the first line".."text of the last line"${conv ? '; lint-guide-claims.ts --convert writes it' : ''}.`);
+      continue;
+    }
+    const mm = MARKER_CITE.exec(body);
+    if (!mm) { fail('MARKER', `${at}: "${body}" is not a citation. Write path@"start".."end", or path@"start" for one line, then an optional #fingerprint.`); continue; }
+    const [, path, startLit, endLit, hash] = mm;
+    let start: string;
+    let endNeedle: string | null;
+    try { start = JSON.parse(startLit) as string; endNeedle = endLit === undefined ? null : JSON.parse(endLit) as string; } catch { fail('MARKER', `${at}: ${body} holds a needle that is not a JSON string.`); continue; }
+    const cite = `${path}@${startLit}${endLit === undefined ? '' : `..${endLit}`}`;
     if (!r.tracked(path)) { fail('CITE', `${at}: ${path} is not a file git tracks.`); continue; }
+    const where = resolveMarker(r.read(path), start, endNeedle);
+    if ('error' in where) { fail('MARKER', `${at}: ${path} ${where.error}.`); continue; }
+    const { first, end } = where;
     const src = r.linesOf(path);
-    if (first < 1 || end < first || end > src.length) { fail('CITE', `${at}: ${path}:${a}${b ? `-${b}` : ''} is outside the file (${src.length} lines).`); continue; }
+    if (end > src.length) { fail('CITE', `${at}: ${cite} ends past the file (${src.length} lines).`); continue; }
     const anchors = anchorsOf(claim);
-    const range = `${path}:${a}${b ? `-${b}` : ''}`;
+    const range = `${cite} (lines ${first}${end > first ? `-${end}` : ''})`;
     if (hash) {
       stats.fingerprinted++;
       const now = fingerprint(src.slice(first - 1, end));
       if (now !== hash) {
-        const n = end - first + 1;
-        const at2: number[] = [];
-        for (let s = 1; s + n - 1 <= src.length && at2.length < 2; s++) if (s !== first && fingerprint(src.slice(s - 1, s - 1 + n)) === hash) at2.push(s);
-        const where = at2.length === 1 ? ` The block now sits at ${path}:${at2[0]}${n > 1 ? `-${at2[0] + n - 1}` : ''}: cite that.` : ' The cited code changed: read it, correct the claim if it no longer holds, then re-cite it and delete the fingerprint so --stamp writes a new one.';
-        fail('FINGERPRINT', `${at}: ${range}#${hash} now hashes to #${now}, so those lines are not the block this citation was stamped on.${where}`);
+        fail('FINGERPRINT', `${at}: ${range}#${hash} now hashes to #${now}, so the cited block changed since it was stamped. Read it, correct the claim if it no longer holds, then delete the fingerprint and run lint-guide-claims.ts --stamp.`);
       }
     }
     if (!anchors.length) {
@@ -495,7 +599,7 @@ const citeLine = (rel: string, lines: readonly string[], k: number, r: Reader, s
     }
     const text = norm(r.codeLinesOf(path).slice(first - 1, end).join('\n'));
     const inRange = r.litsOf(path).filter((l) => l.line >= first && l.line <= end);
-    if (!anchors.some((x) => anchorIn(x, text, inRange))) fail('CITE', `${at}: ${path}:${a}${b ? `-${b}` : ''} holds none of what the claim quotes (${anchors.map((x) => JSON.stringify(x)).join(', ')}). The code moved: cite where it is now, or correct the claim.`);
+    if (!anchors.some((x) => anchorIn(x, text, inRange))) fail('CITE', `${at}: ${range} holds none of what the claim quotes (${anchors.map((x) => JSON.stringify(x)).join(', ')}). The code changed: cite the block that holds it now, or correct the claim.`);
     for (const seq of sequencesOf(claim)) {
       const { placed, wrong } = outOfOrder(seq, text);
       if (placed > 1) stats.ordered++;
@@ -504,60 +608,81 @@ const citeLine = (rel: string, lines: readonly string[], k: number, r: Reader, s
   }
 };
 
-// ── SELF-CHECK: each gap CITE and FINGERPRINT once had, planted, and the failure that must name it ──────────────
+// ── SELF-CHECK: each gap MARKER, CITE, FINGERPRINT and ORDER once had, planted, and the failure that must name it ──
 //
 // Every fixture runs through `citeLine`, the function the guides run through, over a small in-memory tree. Each gap
-// fixture is a case the gate once passed; the CONTROL holds the same four shapes written correctly and must pass,
+// fixture is a case the gate once passed (or, for MARKER, a way a marker breaks); the CONTROL holds the shapes written correctly and must pass,
 // so a gate that fails everything cannot satisfy the gap fixtures. The cited files and their fingerprints are
 // written here by hand (the hashes by `printf '%s' <line> | sha256sum`), never computed by the gate (`docs/34`).
 const FIXTURE_FILES: Record<string, string> = {
-  // Two lines, ending in a newline: `split('\n')` reads three elements.
   'fixture/end.ts': 'const a = 1;\nconst b = 2;\n',
   'fixture/tools.ts': "export const tools = ['list_levers'];\n",
-  // `figma.on('close', done);` was line 2 when it was stamped (#8ac7ac65); a PR has since inserted line 1.
+  // `figma.on('close', done);` was the first line when it was stamped (#8ac7ac65); a PR has since inserted a line above
+  // it. A marker citation does not move with it (#4455): the control cites it with the fingerprint it was stamped with.
   'fixture/shift.ts': "// a line a PR inserted above the cited block\nconst x = 1;\nfigma.on('close', done);\n",
+  // The same block, which a PR then changed: the fingerprint stamped on it before must fail (#3417).
+  'fixture/changed.ts': "figma.on('close', stop);\n",
   // A page's sections, which a PR reordered from Breakpoints, Grid, Containers (#3517).
   'fixture/order.ts': "const sections = [\n  { title: 'Grid' },\n  { title: 'Breakpoints' },\n  { title: 'Containers' },\n];\n",
   // A lookup map of a set's statuses, whose key order means nothing: a guide that lists them joined by "or" names
-  // alternatives, so it is not held to this order (#3542 review).
-  'fixture/status.ts': "const label = {\n  due: 'Due',\n  needed: 'Needed',\n  kept: 'Kept edits',\n};\n",
+  // alternatives, so it is not held to this order (#3542 review). `due: 'Due'` is written twice, so it is no marker.
+  'fixture/status.ts': "const label = {\n  due: 'Due',\n  needed: 'Needed',\n  kept: 'Kept edits',\n};\nconst short = { due: 'Due' };\n",
+  // A line a table cell cannot carry raw: its `|` would split the row, so the needle writes it |.
+  'fixture/pipe.ts': "type Side = 'start' | 'end';\n",
 };
 const fixtureReader = readerOf({ tracked: (p) => p in FIXTURE_FILES, read: (p) => FIXTURE_FILES[p] });
 const FIXTURES: readonly { readonly name: string; readonly gap: string; readonly guide: readonly string[]; readonly want: RegExp | null }[] = [
   {
-    name: '3456', gap: 'a citation naming the line after the last one, in a file that ends in a newline',
-    guide: ['`const b` is the second line. <!-- src: fixture/end.ts:1-3 -->'],
-    want: /^CITE: fixture\/3456\.md:1: fixture\/end\.ts:1-3 is outside the file \(2 lines\)\.$/,
+    name: '4455', gap: 'a citation by line number, which moves whenever a PR inserts a line above it',
+    guide: ['`const b` is the second line. <!-- src: fixture/end.ts:2 -->'],
+    want: /^MARKER: fixture\/4455\.md:1: fixture\/end\.ts:2 cites by line number, .*--convert writes it\.$/,
+  },
+  {
+    name: '4455-gone', gap: 'a marker whose text is gone from the file',
+    guide: ['`const c` is the third line. <!-- src: fixture/end.ts@"const c = 3;" -->'],
+    want: /^MARKER: fixture\/4455-gone\.md:1: fixture\/end\.ts has no "const c = 3;": the marker's text is gone from the file/,
+  },
+  {
+    name: '4455-twice', gap: 'a marker the file holds twice, so it names no one place',
+    guide: ['A set reads **Due**. <!-- src: fixture/status.ts@"due: \'Due\'" -->'],
+    want: /^MARKER: fixture\/4455-twice\.md:1: fixture\/status\.ts finds "due: 'Due'" 2 times \(lines 2, 6\)/,
+  },
+  {
+    name: '4455-end', gap: 'an end marker that no line at or after the start holds',
+    guide: ['`tools` lists the tools. <!-- src: fixture/tools.ts@"export const tools".."];\\n}" -->'],
+    want: /^MARKER: fixture\/4455-end\.md:1: fixture\/tools\.ts has no "\];\\n}" at or after its start \(line 1\)/,
   },
   {
     name: '3457', gap: 'a citation under a table after a blank line, whose cited lines hold none of the table\'s quotes',
-    guide: ['| Tool |', '|---|', '| `theme_from_brief` |', '', '<!-- src: fixture/tools.ts:1#4eedf20f -->'],
-    want: /^CITE: fixture\/3457\.md:5: fixture\/tools\.ts:1 holds none of what the claim quotes \("theme_from_brief"\)\./,
+    guide: ['| Tool |', '|---|', '| `theme_from_brief` |', '', '<!-- src: fixture/tools.ts@"export const tools"#4eedf20f -->'],
+    want: /^CITE: fixture\/3457\.md:5: fixture\/tools\.ts@"export const tools" \(lines 1\) holds none of what the claim quotes \("theme_from_brief"\)\./,
   },
   {
-    name: '3417', gap: 'a range-only citation whose block a PR moved down a line',
-    guide: ['The plugin stops when its window closes. <!-- src: fixture/shift.ts:2#8ac7ac65 -->'],
-    want: /^FINGERPRINT: fixture\/3417\.md:1: fixture\/shift\.ts:2#8ac7ac65 now hashes to #[0-9a-f]{8}, .* The block now sits at fixture\/shift\.ts:3: cite that\.$/,
+    name: '3417', gap: 'a range-only citation whose block a PR changed after it was stamped',
+    guide: ['The plugin stops when its window closes. <!-- src: fixture/changed.ts@"figma.on(\'close\'"#8ac7ac65 -->'],
+    want: /^FINGERPRINT: fixture\/3417\.md:1: fixture\/changed\.ts@"figma\.on\('close'" \(lines 1\)#8ac7ac65 now hashes to #[0-9a-f]{8}, so the cited block changed since it was stamped\./,
   },
   {
     name: '3519', gap: 'a bold list whose cited lines hold every label, in another order',
-    guide: ['| **Layout** | **Breakpoints**, **Grid** and **Containers**. <!-- src: fixture/order.ts:2-4 -->'],
-    want: /^ORDER: fixture\/3519\.md:1: fixture\/order\.ts:2-4 lists \*\*Breakpoints\*\*, \*\*Grid\*\*, \*\*Containers\*\*, but the cited lines hold \*\*Grid\*\* before \*\*Breakpoints\*\*\./,
+    guide: ['| **Layout** | **Breakpoints**, **Grid** and **Containers**. <!-- src: fixture/order.ts@"{ title: \'Grid\'".."{ title: \'Containers\'" -->'],
+    want: /^ORDER: fixture\/3519\.md:1: fixture\/order\.ts@.* \(lines 2-4\) lists \*\*Breakpoints\*\*, \*\*Grid\*\*, \*\*Containers\*\*, but the cited lines hold \*\*Grid\*\* before \*\*Breakpoints\*\*\./,
   },
   {
-    name: 'control', gap: 'the same four shapes, cited correctly, and an "or" list of three in an order its lines do not hold',
+    name: 'control', gap: 'the same shapes cited correctly, a block a PR moved down two lines, an "or" list in an order its lines do not hold, and a needle with an escaped |',
     guide: [
-      '`const b` is the second line. <!-- src: fixture/end.ts:1-2 -->',
+      '`const b` is the second line. <!-- src: fixture/end.ts@"const b" -->',
       '',
       '| Tool |', '|---|', '| `list_levers` |',
       '',
-      '<!-- src: fixture/tools.ts:1#4eedf20f -->',
+      '<!-- src: fixture/tools.ts@"export const tools"#4eedf20f -->',
       '',
-      'The plugin stops when its window closes. <!-- src: fixture/shift.ts:3#8ac7ac65 -->',
+      'The plugin stops when its window closes. <!-- src: fixture/shift.ts@"figma.on(\'close\'"#8ac7ac65 -->',
       '',
-      '| **Layout** | **Grid**, **Breakpoints** and **Containers**. <!-- src: fixture/order.ts:2-4 -->',
+      '| **Layout** | **Grid**, **Breakpoints** and **Containers**. <!-- src: fixture/order.ts@"{ title: \'Grid\'".."{ title: \'Containers\'" -->',
       '',
-      'A set reads **Needed**, **Due** or **Kept edits**. <!-- src: fixture/status.ts:2-4 -->',
+      'A set reads **Needed**, **Due** or **Kept edits**. <!-- src: fixture/status.ts@"const label = {\\n  due: \'Due\'".."kept: \'Kept edits\'" -->',
+      '',
+      '| `Side` | Where a part sits. <!-- src: fixture/pipe.ts@"type Side = \'start\' \\u007c \'end\'" --> |',
     ],
     want: null,
   },
@@ -571,7 +696,7 @@ for (const f of FIXTURES) {
   // The control's table citation must count as quoting (`list_levers`): read as quoting nothing, it is #3457 again.
   // Its list must be placed and checked (`ordered`): a list the arm never placed would pass in any order. Its "or"
   // list must not be (#3542 review): checked, it fails ORDER, as its head did when only its last label was dropped.
-  if (!f.want && (got.length || st.cites !== 5 || st.unanchored !== 1 || st.ordered !== 1)) fail('SELF-CHECK', `the control (${f.gap}) must pass with 5 citations, 1 of them quoting nothing and 1 list checked for order; got ${seen}, ${st.cites} citations, ${st.unanchored} quoting nothing, ${st.ordered} lists checked.`);
+  if (!f.want && (got.length || st.cites !== 6 || st.unanchored !== 1 || st.ordered !== 1)) fail('SELF-CHECK', `the control (${f.gap}) must pass with 6 citations, 1 of them quoting nothing and 1 list checked for order; got ${seen}, ${st.cites} citations, ${st.unanchored} quoting nothing, ${st.ordered} lists checked.`);
 }
 
 // ── THE GUIDES, through the same arms ───────────────────────────────────────────────────────────────
@@ -604,27 +729,29 @@ for (const g of guideFiles) {
     for (const m of prose.matchAll(/\b(\d+) component sets\b/g)) counts.push({ file: at, n: Number(m[1]) });
 
     // CITE, FINGERPRINT
-    citeLine(rel, lines, k, repo, stats, fail, STAMP);
+    citeLine(rel, lines, k, repo, stats, fail, STAMP, CONVERT);
   });
   if (listed.includes(g) && stats.cites === before) fail('SCOPE', `${rel} carries no src citation, so nothing in it is checked against the code.`);
 }
 
-// --stamp: each citation's text replaced on its own line, in order, so two identical citations on one line each get
-// their own. Nothing else in the guide moves.
-if (STAMP) {
+// --stamp and --convert: each citation's text replaced on its own line, in order, so two identical citations on one
+// line each get their own. Nothing else in the guide moves.
+const rewrite = (edits: Map<string, { line: number; from: string; to: string }[]>, what: string): number => {
   let n = 0;
-  for (const [rel, edits] of stamps) {
+  for (const [rel, list] of edits) {
     const lines = readFileSync(join(ROOT, rel), 'utf8').split('\n');
-    for (const e of edits) {
+    for (const e of list) {
       const i = lines[e.line].indexOf(e.from);
-      if (i < 0 || !e.to.includes('#')) throw new Error(`${TAG} --stamp: ${rel}:${e.line + 1} lost its citation mid-run`);
+      if (i < 0) throw new Error(`${TAG} ${what}: ${rel}:${e.line + 1} lost its citation mid-run`);
       lines[e.line] = lines[e.line].slice(0, i) + e.to + lines[e.line].slice(i + e.from.length);
       n++;
     }
     writeFileSync(join(ROOT, rel), lines.join('\n'));
   }
-  console.log(`${TAG} --stamp: fingerprinted ${n} range-only citation(s) in ${stamps.size} guide(s). Each fingerprint is a claim that you have read its block: review the diff.`);
-}
+  return n;
+};
+if (STAMP) console.log(`${TAG} --stamp: fingerprinted ${rewrite(stamps, '--stamp')} range-only citation(s) in ${stamps.size} guide(s). Each fingerprint is a claim that you have read its block: review the diff.`);
+if (CONVERT) console.log(`${TAG} --convert: rewrote ${rewrite(converts, '--convert')} line-number citation(s) in ${converts.size} guide(s) as markers naming the same lines, each fingerprint kept. Run the gate again; any left fail MARKER and need a marker by hand.`);
 
 // COUNT
 const defs = componentDefs.length;
