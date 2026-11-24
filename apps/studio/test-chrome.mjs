@@ -509,7 +509,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { launchWithoutWebFonts } from './test-web-fonts-stub.mjs';
 import { hookGuard } from './test-hooks.mjs';
-import { INPUT_MS, makeBounded, rendersFrame, watchStalls } from './test-bounded.mjs';
+import { INPUT_MS, makeBounded, rendersFrame, stallWhere, watchStalls } from './test-bounded.mjs';
 import { P, loadModes, resolve as resolveToken } from './chrome/tokens.mjs';
 import { assertBundleFresh, PLUGIN_UI_SOURCE_ROOTS, STUDIO_SOURCE_ROOTS } from './test-bundle-freshness.mjs';
 import { SHARDS } from './chrome-shards.mjs';
@@ -1143,7 +1143,10 @@ const within = async (page, label, work, ms = STEP_MS) => {
   if (out && 'e' in out) throw out.e;
   if (out) return out.v;
   const live = await rendersFrame(page);
-  throw new Error(`${label} did not settle within ${ms / 1000}s; the page ${live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}`);
+  // On a page `watchStalls` watches, a page that renders no frame is paused and the message says where it stopped
+  // (its JavaScript stack, or none): #4342's stall never reproduced off CI, so the CI log is where it gets located.
+  const at = live ? '' : await stallWhere(page, Math.min(ms, STEP_MS));
+  throw new Error(`${label} did not settle within ${ms / 1000}s; the page ${live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}${at ? `; ${at}` : ''}`);
 };
 
 /** Reach a place through the tab row (the select, when narrow), and wait for the frame to show it. */
@@ -9105,6 +9108,26 @@ console.log(`\nQA-B9, B17, I11 — the eased reveal, the jump links, the remembe
       ok(stall.startsWith("#4127 self-check: the preview pane's frames did not settle within 3s; the page renders no frame") && took < 15000,
         `#4127: a frame wait that never settles fails by name within its bound, not at the 600s watchdog (${took}ms: ${stall.slice(0, 160)})`);
     }
+    // #4342: watched from here, after the self-check above (its frames are held by a stub, not stuck, so there is nothing
+    // to locate), so a real stall on the Type path below names the JavaScript it stopped in, or that it ran none.
+    await watchStalls(page);
+    // #4342: the location's own self-check. A page of its own, watched, then stuck in a JavaScript loop: a bounded wait
+    // on it fails saying its main thread is busy, it did not come back, and the loop's function. Measured: CI's #2183 line ("waiting for element to be visible, enabled and
+    // stable", then nothing) is exactly what a planted loop on the Type page produces, so a page stuck in JavaScript is
+    // the case to locate. Mutation this fails by name: `within` no longer asks `stallWhere`, or `watchStalls` dropped.
+    {
+      const sctx = await browser.newContext();
+      try {
+        const sp = await sctx.newPage();
+        await sp.setContent('<p>stall</p>');
+        await watchStalls(sp);
+        await sp.evaluate(() => { setTimeout(function stallSelfCheck() { for (;;) { /* held until the context closes */ } }, 50); });
+        const said = await within(sp, 'stall self-check', sp.evaluate(() => new Promise((r) => setTimeout(() => requestAnimationFrame(r), 200))), 3000)
+          .then(() => 'returned', (e) => String(e?.message ?? e));
+        ok(said.startsWith('stall self-check did not settle within 3s; the page renders no frame; the main thread runs no script, so it is busy; no frame in 3s more; it was running JavaScript: stallSelfCheck'),
+          `#4342: a wait on a page stuck in JavaScript names where it stopped, the function it was running (${said.slice(0, 200)})`);
+      } finally { await sctx.close(); }
+    }
 
     await installGlideLog(page);
     await goPlace(page, 'color-fills');
@@ -16192,10 +16215,16 @@ const SWITCH_DISABLED = (scheme) => {
   const d = PRISM3_DISABLED[scheme];
   return d ? { track: d.fill, edge: d.edge, knob: d.ink, button: d.icon } : null;
 };
-/** What a switch is and draws: its parts, its name and state, the track's fill and four edges and the knob's fill. */
-const READ_SWITCH = (sel) => {
+/** What a switch is and draws: its parts, its name and state, the track's fill and four edges and the knob's fill.
+ *  `[sel, true]` (#4466) first sets `disabled` on the switch it then reads, in this one task. Set in one `evaluate` and
+ *  read in the next, the read could meet a different node: on the web, a Google Fonts reply landing between the two
+ *  repaints the Type levers on `fonts` (`domains/type.ts`), and the fresh, enabled `type-fluid` switch it draws was read
+ *  as "a disabled switch drawn enabled". `getComputedStyle` restyles at once, so the skin read is the disabled one. */
+const READ_SWITCH = (arg) => {
+  const [sel, disable] = typeof arg === 'string' ? [arg, false] : arg;
   const b = document.querySelector(sel);
   if (!b) return null;
+  if (disable) b.disabled = true;
   const tr = b.querySelector(':scope > .p3-switch-track'), kn = tr?.querySelector(':scope > .p3-switch-knob');
   const t = tr ? getComputedStyle(tr) : null, k = kn ? getComputedStyle(kn) : null;
   return {
@@ -16219,12 +16248,15 @@ for (const host of ['web', 'figma']) {
   for (const theme of ['light', 'dark']) {
     const where = `#2183 ${host} ${theme}`;
     const { ctx, page, errors } = await open({ host, theme, w: 1280, h: 900 });
+    // #4465: watched from the start, so a page that stops on the Type path is located in the catch below.
+    await watchStalls(page);
     try {
       const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
       const kindOf = (r, label) => ok(!!r && r.kind && !r.dot && r.words === '',
         `${where}: ${label} is the track-and-knob kind: one track holding one knob, no dot and no state words (${JSON.stringify(r && { kind: r.kind, dot: r.dot, words: r.words })})`);
-      const disabledLook = async (sel, label, how) => {
-        const r = await page.evaluate(READ_SWITCH, sel);
+      // `disable` (#4466): disabled and read in one task, never across two `evaluate`s a repaint can fall between.
+      const disabledLook = async (sel, label, how, disable = false) => {
+        const r = await page.evaluate(READ_SWITCH, [sel, disable]);
         const v = r ? switchSkin(r, scheme) : null;
         ok(!!r && r.off && !!v?.pass,
           `${where}: a disabled ${label} switch (${how}, ${r?.checked === 'true' ? 'on' : 'off'}) draws Prism3's disabled switch: track color.disabled.fill ${v?.want?.track}, edge color.disabled.border ${v?.want?.edge}, knob color.disabled.on-fill ${v?.want?.knob} (drew ${JSON.stringify(v?.drew)}${v?.button ? ', the outline button\'s disabled.icon' : ''})`);
@@ -16232,7 +16264,8 @@ for (const host of ['web', 'figma']) {
       };
       for (const [place, hk, reveal] of SWITCH_HOOKS) {
         await goPlace(page, place);
-        if (reveal) await reveal(page).catch(() => {});
+        // #4465: not swallowed. A reveal that stopped surfaced 30s later as an anonymous click timeout on its switch.
+        if (reveal) await reveal(page);
         const sel = `[data-p3="${hk}"]`;
         const r0 = await page.evaluate(READ_SWITCH, sel);
         ok(!!r0, `${where}: the ${hk} switch is drawn on ${place}`);
@@ -16247,8 +16280,7 @@ for (const host of ['web', 'figma']) {
         ok(!!r1 && r1.checked !== r0.checked && r1.knobX !== r0.knobX, `${where}: a click turns the ${hk} switch and moves its knob (${r0.checked} → ${r1?.checked}, knob ${r0.knobX} → ${r1?.knobX})`);
         // Disabled the way the app disables a switch (`disabled`), in this state and then the other.
         for (const _ of [0, 1]) {
-          await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = true; }, sel);
-          await disabledLook(sel, hk, 'disabled');
+          await disabledLook(sel, hk, 'disabled', true);
           await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = false; }, sel);
           await hooks.click(page.locator(sel));
           await settle(page);
@@ -16281,14 +16313,16 @@ for (const host of ['web', 'figma']) {
         for (const hk of sg) kindOf(await page.evaluate(READ_SWITCH, `[data-p3="${hk}"]`), `the Build style guides ${hk} switch`);
         if (sg[0]) {
           const sel = `[data-p3="${sg[0]}"]`;
-          await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = true; }, sel);
-          await disabledLook(sel, `Build style guides ${sg[0]}`, 'disabled');
+          await disabledLook(sel, `Build style guides ${sg[0]}`, 'disabled', true);
           await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = false; }, sel);
         }
       }
       ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
     } catch (e) {
-      ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}`);
+      // #4465: whether the page still rendered frames when the step gave up, and, when it rendered none, where it stopped.
+      const live = await rendersFrame(page);
+      const at = live ? '' : await stallWhere(page);
+      ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}; the page ${live ? 'still renders frames' : 'renders no frame'}${at ? `; ${at}` : ''}`);
     } finally { await ctx.close(); }
   }
 }
