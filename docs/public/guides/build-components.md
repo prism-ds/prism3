@@ -25,7 +25,7 @@ On a file that isn't set up yet, the same run sets it up first. See [Set up a fi
 
 ## What a build does
 
-For each set, the plugin: <!-- src: apps/plugin/src/main.ts@"try { headers.push(await".."const alsoBuilt = await"#34f3a25b -->
+For each set, the plugin: <!-- src: apps/plugin/src/main.ts@"try { headers.push(await".."const alsoBuilt = await"#bc047daf -->
 
 - builds any set the chosen one contains first, such as the icon and focus ring inside a button;
 - creates the set's page if the file does not have it, and switches Figma to that page;
