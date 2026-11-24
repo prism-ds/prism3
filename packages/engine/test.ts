@@ -20679,51 +20679,41 @@ arm: {
         `#2418 grow on a nest: grow on a text part is still refused BY NAME (${onText.find((e) => /'note'/.test(e)) ?? 'no error'})`);
     }
 
-    // ---- #1424: the labelled ROW wraps a long label instead of overflowing ----
-    // Prism 2's radio-button-row / checkbox-row let a long label WRAP to a second line with the control
-    // top-anchored (the description text is `layoutSizingHorizontal: FILL`). The engine expresses that as
-    // `PartDef.wrap` on the label → the plan carries `layoutGrow: 1` (fill the row's main axis, fixing the
-    // width) + `textAutoResize: 'HEIGHT'` (auto height, so the fixed-width box reflows), and the row carries
-    // a `minWidth` floor so the fill has something to resolve against. EXPECTED is the owner's decision
-    // (label fills + wraps, control fixed); ACTUAL is read off the emitted plan (host-facing), so a value
-    // move fails HERE. The round-trip host-truth block in `test-roundtrip.ts` reads the same two facts back
-    // off the built shim; this is the projection-side pin with its own by-name mutation (docs/34).
+    // ---- #1424 → #4473: the labelled ROW hugs its label (owner decision A, 2026-11-24) ----
+    // #1424 had the label FILL the row and wrap, which needed a row built FIXED at 320 (Q152.3); a placed row then stayed
+    // 320 wide under a HUG override. Owner decision A on #4473: the row hugs its content, as Switch.Row does, and a
+    // parent can still stretch it. EXPECTED is that decision, typed here; ACTUAL is read off the emitted plan
+    // (host-facing), so a def that goes back to filling fails HERE. `test-roundtrip.ts` measures the placed instance.
     {
-      const wrapFind = (n: FigmaNodePlan, name: string): FigmaNodePlan | undefined =>
-        n.name === name ? n : (n.children ?? []).map((c) => wrapFind(c, name)).find(Boolean);
+      const hugFind = (n: FigmaNodePlan, name: string): FigmaNodePlan | undefined =>
+        n.name === name ? n : (n.children ?? []).map((c) => hugFind(c, name)).find(Boolean);
       for (const def of [radioRow, checkboxRow] as ComponentDef[]) {
         const p = figmaAnatomySet(def, {})[0];
-        const row = wrapFind(p.root, 'row');
-        const label = wrapFind(p.root, 'label');
-        const stack = wrapFind(p.root, 'textStack');
-        const controlBox = wrapFind(p.root, 'controlCell');
-        // (a) THE LABEL FILLS AND WRAPS — the two facts together, since either alone does not wrap. Since #3153 the
-        //     label sits in the text column (`textStack`), which FILLS the row beside the cell, and the label fills
-        //     that column's width (its cross axis: `layoutAlign STRETCH`) and wraps at it.
-        ok(stack?.layoutGrow === 1 && label?.layoutAlign === 'STRETCH' && label?.textAutoResize === 'HEIGHT',
-          `#1424 ${def.id}: the row label FILLS the main axis and WRAPS — the text column grows (layoutGrow ${String(stack?.layoutGrow)}) and the label stretches across it with textAutoResize=HEIGHT (got layoutAlign=${String(label?.layoutAlign)}, textAutoResize=${String(label?.textAutoResize)})`);
-        // (b) THE CONTROL CELL DOES NOT GROW along the row, so a wrapping label never shrinks or stretches the control.
-        //     Its height hugs the control above the label's line-box floor (#3153), so its cross axis is AUTO.
+        const label = hugFind(p.root, 'label');
+        const stack = hugFind(p.root, 'textStack');
+        const controlBox = hugFind(p.root, 'controlCell');
+        // (a) THE LABEL HUGS: its column does not grow, and it neither stretches nor freezes its width.
+        ok(stack?.layoutGrow === undefined && label?.layoutAlign === undefined && label?.textAutoResize === undefined && label?.maxWidth === undefined,
+          `#4473 ${def.id}: the row label HUGS its text — the text column does not grow (layoutGrow ${String(stack?.layoutGrow)}) and the label is neither stretched nor fixed-width (layoutAlign=${String(label?.layoutAlign)}, textAutoResize=${String(label?.textAutoResize)}, maxWidth=${String(label?.maxWidth)})`);
+        // (b) THE CONTROL CELL DOES NOT GROW and hugs its control above a bound floor (#3153), as before.
         ok(controlBox?.layoutGrow === undefined && controlBox?.counterAxisSizingMode === 'AUTO' && controlBox?.bound?.minHeight !== undefined,
           `#1424 ${def.id}: the controlBox does not grow (layoutGrow ${String(controlBox?.layoutGrow)}) and hugs its control above a bound floor (${String(controlBox?.counterAxisSizingMode)}, minHeight ${String(controlBox?.bound?.minHeight)})`);
-        // (c) THE WIDTH THAT MAKES THE FILL RESOLVE, on every member (owner decision Q152.3: Q99 B reaches the
-        //     rows). The row is BUILT at Prism 2's root width 320 (`placementWidth`, FIXED along its horizontal
-        //     main axis) and floors at the fields' 120 (Q152.2), so it shrinks with a narrower column instead of
-        //     holding at 320 and overflowing it. Expected values are literals typed here, never read off a def.
+        // (c) THE ROW HUGS on every member: no build width, no literal floor, its width (the primary axis) AUTO.
         const rowOff = figmaAnatomySet(def, {}).flatMap((m) => {
           const r = m.root;
-          return r.name === 'row' && r.placementWidth === 320 && r.primaryAxisSizingMode === 'FIXED' && r.minWidth === 120 ? []
+          return r.name === 'row' && r.placementWidth === undefined && r.primaryAxisSizingMode === 'AUTO' && r.minWidth === undefined ? []
             : [`${planComponentName(m)}: ${r.name} placementWidth ${String(r.placementWidth)}, primary ${String(r.primaryAxisSizingMode)}, minWidth ${String(r.minWidth)}`];
         });
-        ok(row?.minWidth === 120 && rowOff.length === 0,
-          `#1424/Q152.3 ${def.id}: on every member the row is built at 320 and floors at 120, so it shrinks with its column (${rowOff.length} off — ${rowOff[0] ?? 'none'})`);
-        //   MUTATION #1424 — revert the label to fixed/hug-no-wrap. Dropping `wrap` returns the label to a
-        //   hugging text node that overflows: the plan drops layoutGrow AND textAutoResize, flipping (a) BY NAME.
-        const noWrapLabel = { ...def.anatomy.parts.label, wrap: undefined };
-        const noWrap = { ...def, anatomy: { ...def.anatomy, parts: { ...def.anatomy.parts, label: noWrapLabel } } };
-        const mlabel = wrapFind(figmaAnatomySet(noWrap as ComponentDef, {})[0].root, 'label');
-        ok(mlabel?.layoutAlign === undefined && mlabel?.textAutoResize === undefined,
-          `#1424 ${def.id} MUTATION: removing 'wrap' drops layoutAlign (${String(mlabel?.layoutAlign)}) and textAutoResize (${String(mlabel?.textAutoResize)}) from the plan, flipping '#1424 ${def.id}: the row label FILLS the main axis and WRAPS' to failing`);
+        ok(rowOff.length === 0,
+          `#4473 ${def.id}: on every member the row hugs its width — no 320 build width, no 120 floor, primary axis AUTO (${rowOff.length} off — ${rowOff[0] ?? 'none'})`);
+        //   MUTATION #4473 — put the old fill back on the label. `wrap: true` makes the plan carry layoutAlign and
+        //   textAutoResize again, flipping (a) BY NAME. (Under the hugging row the validator refuses it, which is the
+        //   other half of why the fill is gone; the projection still runs, so the plan fields can be read.)
+        const wrapLabel = { ...def.anatomy.parts.label, wrap: true };
+        const wrapped = { ...def, anatomy: { ...def.anatomy, parts: { ...def.anatomy.parts, label: wrapLabel } } };
+        const mlabel = hugFind(figmaAnatomySet(wrapped as ComponentDef, {})[0].root, 'label');
+        ok(mlabel?.layoutAlign === 'STRETCH' && mlabel?.textAutoResize === 'HEIGHT',
+          `#4473 ${def.id} MUTATION: restoring 'wrap' puts layoutAlign (${String(mlabel?.layoutAlign)}) and textAutoResize (${String(mlabel?.textAutoResize)}) back on the plan, flipping '#4473 ${def.id}: the row label HUGS its text' to failing`);
       }
       // ---- #1424: the two REFUSAL arms `PartDef.wrap` adds, each pinned BY NAME (docs/34) ----
       // A PR's own new refusal owes its own by-name mutation, or an arm could be deleted from `anatomyErrors`
@@ -20734,13 +20724,10 @@ arm: {
       ok(validateComponentDef(wrapOnBox as ComponentDef).errors.some((e) => /declares 'wrap'/.test(e) && /only a 'text' part/.test(e)),
         "#1424 'wrap' on a NON-text part is refused BY NAME — only a text part fills its row and reflows; on any other kind it would validate clean and reach the wrong branch");
       // (b) wrap under a FLOORLESS parent — the #989 silent no-op: `layoutGrow` fills REMAINING space and a
-      //     hugging row has none, so the label hugs its glyphs and overflows though it validated. Returning the
-      //     row to a HUGGING root with neither its build width nor its floor (keeping the label's `wrap`) fires
-      //     this on exactly the row that carries them, which is what makes them LOAD-BEARING rather than
-      //     decorative. Both go: since Q152.3 the root's `placementWidth` alone already bounds the label.
-      const rp = radioRow.anatomy.parts.row;
-      const floorlessRow = { ...rp, minWidth: undefined, placementWidth: undefined, layout: { ...rp.layout!, sizing: { ...rp.layout!.sizing, x: 'hug' as const } } };
-      const floorless = { ...radioRow, anatomy: { ...radioRow.anatomy, parts: { ...radioRow.anatomy.parts, row: floorlessRow } } };
+      //     hugging row has none, so the label hugs its glyphs and overflows though it validated. Since #4473 the
+      //     shipped row hugs and its label does not wrap, so the mutation puts `wrap` back on the label under the
+      //     hugging row, with no build width and no floor: exactly the shape that refusal exists for.
+      const floorless = { ...radioRow, anatomy: { ...radioRow.anatomy, parts: { ...radioRow.anatomy.parts, label: { ...radioRow.anatomy.parts.label, wrap: true } } } };
       ok(validateComponentDef(floorless as ComponentDef).errors.some((e) => /declares 'wrap'/.test(e) && /does not bound its main-axis width/.test(e)),
         "#1424 a 'wrap' label under a floorless row is refused BY NAME — layoutGrow fills remaining space and a hugging parent has none, the #989 silent no-op; a hugging row with no build width and no floor fires this, so they are load-bearing");
     }

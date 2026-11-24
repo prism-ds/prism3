@@ -92,15 +92,15 @@
  *                   per name, the names whose set is in the file linked to it by node and underlined, every other plain;
  *                   a set built after the draw makes the panel due, and the redraw links it. Mutations: the links key
  *                   dropped from `docPanelDue` → `qa/links due`; the hyperlink call dropped → `qa/related links`.
- *   width/…         #2970 items 1 and 4 (Q1 A, Q2 A): Banner and Checkbox.Row, each specimen at its member's width (480,
+ *   width/…         #2970 items 1 and 4 (Q1 A, Q2 A): Banner and Text field, each specimen at its member's width (480,
  *                   320, typed here), inside its stage, no text narrower than its longest word; Theming stacked for
- *                   Banner, side by side for the Row; a member built wider makes the panel due, the redraw is wider by
+ *                   Banner, side by side for Text field; a member built wider makes the panel due, the redraw is wider by
  *                   as much and a live spec panel moves to stay 40 past it; the dry run moves the next set 160 past the
  *                   spec column beside the panel as drawn, and nothing after the draw; `markers/widths`: every lead's
  *                   panel is drawn as wide as Update spaces it for. `width/hug` shows the host squeezing a hugging
- *                   instance, the failure the fix guards. Mutations: the width forced to 560 → `width/checkbox-row`,
+ *                   instance, the failure the fix guards. Mutations: the width forced to 560 → `width/text-field`,
  *                   `width/room`, `width/seat`, `markers/widths`; the specimen not sized to its member →
- *                   `width/banner`, `width/checkbox-row`.
+ *                   `width/banner`, `width/text-field`.
  *   collapse/…      (#3205) every lead's examples, in this host: none narrower than the width its member is built at
  *                   (`placementWidth`) or its literal floor (`minWidth`), read off the projection's root kept on each member,
  *                   and no wrapping text box under 4em that does not hold its text on one line. `collapse/hug read`: Dialog's
@@ -117,7 +117,7 @@
  *                   showed Dialog's specimen after #3211 (FIXED, 62px). Mutation: the specimens not sized again once
  *                   the panel is on the page → `collapse/dialog` and every `collapse/<def>` built at a width,
  *                   `collapse/hug read`, `collapse/after reset`, `update/redraw in place`, `width/banner`,
- *                   `width/checkbox-row`.
+ *                   `width/text-field`.
  *   owner/…         (#3205, the owner's review of 2026-11-13) THE MEASURED RULE (`insideInstance`): Figma drops a width
  *                   written to a layer inside an instance (`resize`, `minWidth`) and keeps its sizing mode and padding,
  *                   so 4–6's FIXED + `resize` + `minWidth` froze each specimen at what it hugged. `owner/accordion`: the
@@ -134,7 +134,7 @@
  *                   specimen FILLs its stage and the stage's padding sets its width (`fitSpecimens`). Mutations: the
  *                   FIXED + `resize` + `minWidth` sizing restored → 25 arms, among them `owner/accordion` (120 against
  *                   320), every `collapse/<def>` built at a width, `width/banner`, `format due/redrawn`; the padding fit
- *                   removed → `owner/accordion` (579), `width/banner`, `width/checkbox-row`, `collapse/hug read`,
+ *                   removed → `owner/accordion` (579), `width/banner`, `width/text-field`, `collapse/hug read`,
  *                   `format due/redrawn`; `PANEL_FORMAT` left at 6 → `format due/offered`, `update/redraw in place`.
  *                   `collapse/after reset` is retired: it held the floor a hug reset could not take, and Figma never
  *                   keeps that floor on a nested layer.
@@ -1454,11 +1454,11 @@ section('parts list/… — each anatomy entry draws its marker\'s disc, and its
 /* ── width: each specimen at its member's own width, the panel widening to fit ─────────────────────────── */
 section('width/… — each specimen at its member\'s width, the panel as wide as that needs, the spec column past it (#2970 Q1 A, Q2 A)');
 {
-  // THE BUILT WIDTHS, read by hand off each def's root (`placementWidth`, #1757): Banner 480, Checkbox.Row 320 (the
-  // Checkbox family's lead, so its default is the family panel's specimen). The panel's least width, its padding and the stage's, from the owner's decision and the template:
+  // THE BUILT WIDTHS, read by hand off each def's root (`placementWidth`, #1757): Banner 480, Text field 320 (the
+  // Text field family's lead, so its default is the family panel's specimen; Checkbox.Row hugs its label since #4473). The panel's least width, its padding and the stage's, from the owner's decision and the template:
   // 560, 24 and 24. Theming side by side is 2 × (member + 48) + 16 + 48; at 960 or more the modes stack.
-  const BUILT: Record<string, number> = { banner: 480, 'checkbox-row': 320 };
-  const STACKS: Record<string, boolean> = { banner: true, 'checkbox-row': false };
+  const BUILT: Record<string, number> = { banner: 480, 'text-field': 320 };
+  const STACKS: Record<string, boolean> = { banner: true, 'text-field': false };
   const longestWord = (t: string): number => Math.max(0, ...t.split(/\s+/).filter(Boolean).map((w) => runWidth(w)));
   for (const id of Object.keys(BUILT)) {
     const d = componentDefs.find((x) => x.id === id)!;
