@@ -104,7 +104,7 @@ The field writes the `<p class="p3-field-message">` and names its id in the inpu
   <div class="p3-text-field__control">
     <div class="p3-text-field__content">
       <span class="p3-text-field__leading-visual" aria-hidden="true"><svg …></svg></span>
-      <input class="p3-text-field__entry" id="email" type="email" autocomplete="email" required
+      <input class="p3-text-field__entry" id="email" type="email" autocomplete="email" dir="auto" required
              aria-describedby="email-message" aria-invalid="true">
     </div>
     <span class="p3-text-field__spinner" aria-hidden="true"><svg …></svg></span>
@@ -285,6 +285,7 @@ fields' 120px minimum width as a documented raw px.
 | The Show/Hide button (`implementation`, Q301.4 A, Q301.5 A) | `password-field.js`: type switch, "Show"/"Hide" + hidden " password", focus and caret kept, a polite announcement, no `aria-pressed`. | The element (S4). |
 | Back to hidden on submit (Q301.7 A) | `password-field.js`, on the form's `submit`. | — |
 | One toggle only (`platform-owned`) | `::-ms-reveal` hidden. | — |
+| Content direction (the text field's `accessibility.aria`, #4051) | The text field's input carries `dir="auto"`, so a value's direction can differ from the page's: a Latin email address stays left to right on a right-to-left page. The password field's input has none: its def doesn't ask for it, and whether it should is an open owner decision on #4051. | — |
 | The input's attributes (`semantics`) | In the contract and the demo: `autocomplete`, `spellcheck="false"`, `autocapitalize="none"`. | `passwordrules`. |
 | The label row and the button's hit area (`hit-target`, Q380 A) | The button sets `min-block-size: 0` and the def's zero block padding. Its `::before` reads the button def's `size.<field size>.hit-target`: centered at small, anchored to the row's bottom at medium and large. | — |
 | The trailing affix as a control (`semantics`) | — (decorative glyph only) | A Clear or reveal button (S4). |
