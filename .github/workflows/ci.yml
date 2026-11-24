@@ -973,6 +973,13 @@ jobs:
       - name: A registered test arm is still in its suite (#1834)
         run: npx tsx packages/engine/lint-test-arms.ts
 
+      # #4458, #4330 — two PRs that each raise a published format from N to N+1 merge with no conflict, and the merged
+      # tree publishes the union of both shapes as N+1. schema/format-history.json records one row per version with a
+      # hash of the schema's shape, appended by `--accept` only; a version recorded twice (DUPLICATE) or a shape that is
+      # not its version's (SHAPE) fails by name, so the two-PR merge conflicts on the record or fails here.
+      - name: One version of a published format names one shape (#4458)
+        run: npx tsx packages/engine/lint-format-history.ts
+
       # #2997 gate 3 — shadcn/ui's theme variable names are an external contract. The role map's keys are held to the
       # pinned set in schema/shadcn-vars.json both ways (UNMAPPED / UNPINNED by name), and the pin to SHADCN_MAP_VERSION;
       # only `--accept` rewrites the pin, after a version raise.

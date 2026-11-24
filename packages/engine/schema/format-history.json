@@ -1,0 +1,17 @@
+{
+  "note": "AUTHORED RECORD, never a regen artifact (see lint-format-history.ts). Per published format, one row per version, oldest first: the branch that took it, a hash of the format's JSON schema with its prose removed, and what the version adds. Written by `npx tsx packages/engine/lint-format-history.ts --accept --note \"...\"`, which appends a row for a version not yet recorded and never rewrites a row another branch wrote. Two PRs that take the same version each append a row here, so they conflict; a merge that keeps both rows fails DUPLICATE, and one that keeps one fails SHAPE (#4458, #4330).",
+  "formats": {
+    "prism3-ai-metadata": [
+      {"version":"0.7","by":"seed (#4458)","shape":"ef60d4ff13b61f8e","note":"The version on main when this record began (#4458). Earlier versions predate it."}
+    ],
+    "prism3-component-defs": [
+      {"version":"1.7","by":"seed (#4458)","shape":"4c5c4075a65ea73b","note":"The version on main when this record began (#4458). Earlier versions predate it."}
+    ],
+    "prism3-component-docs": [
+      {"version":"1.2","by":"seed (#4458)","shape":"33cbbe7f03d8507d","note":"The version on main when this record began (#4458). Earlier versions predate it."}
+    ],
+    "prism3-file-facts": [
+      {"version":"0.1","by":"seed (#4458)","shape":"aa02b334382757c4","note":"The version on main when this record began (#4458). Earlier versions predate it."}
+    ]
+  }
+}
