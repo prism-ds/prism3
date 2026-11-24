@@ -29,15 +29,29 @@
  *     to left.
  *  4. GLYPHS (the button's `WithVisuals`, add then a right arrow). Neither slot is transformed (no blanket flip), and
  *     the add glyph, which points nowhere, is never flipped.
+ *  5. CONTENT DIRECTION (#4051). The text field's input carries `dir="auto"`, its def's `accessibility.aria` line
+ *     ("so content direction can differ from UI direction"), and a left-to-right value in it computes `direction:
+ *     ltr` on a right-to-left page. The password field's input is not held either way: its def doesn't repeat the
+ *     line, and whether it should is an open owner decision on #4051.
+ *  6. NO REWRITTEN SELECTOR (#4098, once per run). Vite 8 minifies CSS with lightningcss at its default target
+ *     (`baseline-widely-available`, Chrome 111), which predates `:dir()` (Chrome 120), so the build lowers
+ *     `x:dir(rtl)` to `x:is(:lang(ar),…)`. That never matches a `dir="rtl"` frame without a `lang`, and every check
+ *     here then passes the rule silently. So `@prism3/css`'s shipped CSS may not use `:dir()` (a client's Vite at its
+ *     default target lowers it the same way; write `[dir="rtl"] …` or a logical property), and the built CSS may hold
+ *     no `:lang()` its source doesn't. Each fails by name, with the file.
  * KNOWN, each a named exception that fails once it no longer holds, so fixing it means deleting it:
- *  - #4052: the right arrow is a directional glyph and should flip right to left; per-icon mirroring is unbuilt.
- *  - #4051: the text field's input should carry `dir="auto"` (its def's aria line); neither form writes it.
+ *  - #4052: the right arrow is a directional glyph and should flip right to left; per-icon mirroring is unbuilt,
+ *    and how a glyph is marked to mirror is an open owner decision on #4052.
  *
- * SELF-TEST: twelve mutants, each must fail by name, plus the three represented-story mutants every check carries.
+ * SELF-TEST: fifteen mutants, each must fail by name, plus the three represented-story mutants every check carries.
  */
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { at, context, dirsFor, DROPPED, main, open, result, stateOf, stories, type Dir, type Plant, type Story, type Result } from './a11y-harness.ts';
+import { at, context, dirsFor, DROPPED, main, open, result, stateOf, STATIC, stories, type Dir, type Plant, type Story, type Result } from './a11y-harness.ts';
+
+/** A mutant here may also plant CSS text as if the build (`built`) or `@prism3/css` (`source`) had written it. */
+type RtlPlant = Plant & { built?: string; source?: string };
 
 type Box = { left: number; right: number; width: number };
 const STATUS = ['error', 'warning', 'success', 'shown-error'];
@@ -78,14 +92,48 @@ const flips = (t: string | null) => !!t && t !== 'none' && Number(/matrix\(([^,]
 const px = (b: Box) => `${Math.round(b.left)}–${Math.round(b.right)}px`;
 const SIDE: Record<Dir, string> = { ltr: 'left', rtl: 'right' };
 
-/** #4052 and #4051: today's state where it differs from the prose. Each must still hold, or the check fails. */
+/** #4052: today's state where it differs from the prose. It must still hold, or the check fails. */
 const KNOWN = {
   arrow: { issue: '#4052', applies: (s: Story) => s.component === 'button' && s.case === 'with-visuals' },
-  dirAuto: { issue: '#4051', applies: (s: Story) => s.component === 'text-field' },
 };
 
-export const run = async (browser: unknown, origin: string, plant: Plant = {}, only: (s: Story) => boolean = () => true): Promise<Result> => {
+/** The CSS a client loads from `@prism3/css` (the files `.storybook/preview.js` imports), and the CSS the build wrote. */
+const CSS_SOURCE = resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/css');
+const cssIn = (dir: string, prefix: string): { file: string; text: string }[] => {
+  const out: { file: string; text: string }[] = [];
+  const walk = (d: string): void => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(resolve(d, e.name));
+      else if (e.name.endsWith('.css')) out.push({ file: `${prefix}${resolve(d, e.name).slice(dir.length + 1)}`, text: readFileSync(resolve(d, e.name), 'utf8') });
+    }
+  };
+  walk(dir);
+  return out;
+};
+/** The selector a match sits in: back to the previous rule's end, forward to the brace. */
+const selectorAt = (text: string, i: number) => text.slice(Math.max(text.lastIndexOf('}', i), text.lastIndexOf(';', i)) + 1, text.indexOf('{', i)).trim().slice(0, 160);
+
+/** 6. No `:dir()` in the shipped CSS, and no `:lang()` the build wrote that the source doesn't hold (#4098). */
+const rewritten = (r: Result, plant: RtlPlant): void => {
+  const source = [...cssIn(CSS_SOURCE, 'packages/css/'), ...(plant.source ? [{ file: 'packages/css/(planted).css', text: plant.source }] : [])];
+  const built = [...cssIn(STATIC, 'storybook-static/'), ...(plant.built ? [{ file: 'storybook-static/(planted).css', text: plant.built }] : [])];
+  for (const { file, text } of source) {
+    const i = text.search(/:dir\(/);
+    r.ok(i < 0, `${file}: a :dir() selector (${i < 0 ? '' : selectorAt(text, i)}): Vite's default CSS target lowers :dir() to a :lang() list, which a dir="rtl" page without a lang never matches (#4098); write [dir="rtl"] … or a logical property`);
+  }
+  const sourceLangs = source.some(({ text }) => text.includes(':lang('));
+  for (const { file, text } of built) {
+    const i = text.indexOf(':lang(');
+    r.ok(sourceLangs || i < 0, `${file}: the build rewrote a selector into a :lang() list (${i < 0 ? '' : selectorAt(text, i)}) that @prism3/css doesn't write, and dir="rtl" never matches it (#4098)`);
+  }
+};
+
+/** A left-to-right value, typed into a text field's input on a right-to-left page. */
+const LATIN = 'name@example.com';
+
+export const run = async (browser: unknown, origin: string, plant: RtlPlant = {}, only: (s: Story) => boolean = () => true): Promise<Result> => {
   const r = result();
+  rewritten(r, plant);
   const ctx = await context(browser, plant);
   const page = await ctx.newPage();
   try {
@@ -129,10 +177,18 @@ export const run = async (browser: unknown, origin: string, plant: Plant = {}, o
           else { r.passed++; r.notes.push(`${where}: the trailing arrow does not flip (known exception ${KNOWN.arrow.issue})`); }
         }
       }
-      if (KNOWN.dirAuto.applies(s) && dir === 'rtl') {
+      // 5. content direction (last: it writes a value into the input)
+      if (s.component === 'text-field') {
         const d: string | null = await page.evaluate(() => document.querySelector('#storybook-root input')?.getAttribute('dir') ?? null);
-        if (d === 'auto') r.failures.push(`${where}: the input now carries dir="auto", so the known exception ${KNOWN.dirAuto.issue} no longer holds: remove KNOWN.dirAuto`);
-        else r.ok(d === null, `${where}: the input carries dir="${d}"; the def asks for dir="auto" (known exception ${KNOWN.dirAuto.issue}: none)`);
+        r.ok(d === 'auto', `${where}: the input carries ${d === null ? 'no dir' : `dir="${d}"`}, not dir="auto"; the text field's def asks for dir="auto" so content direction can differ from UI direction (#4051)`);
+        if (dir === 'rtl') {
+          const computed: string = await page.evaluate((v: string) => {
+            const i = document.querySelector('#storybook-root input') as HTMLInputElement;
+            i.value = v;
+            return getComputedStyle(i).direction;
+          }, LATIN);
+          r.ok(computed === 'ltr', `${where}: a left-to-right value (${LATIN}) in the input computes direction ${computed}, not ltr`);
+        }
       }
     }
   } finally {
@@ -206,19 +262,37 @@ const MUTANTS = [
     mustName: /components-text-field-(element|html)--with-icons: the leading visual is not at the inline start of the input: \.p3-text-field__leading-visual is not drawn/,
   },
   {
-    name: 'the input given dir="auto" (as if #4051 were fixed)',
-    plant: { after: 'document.querySelectorAll("#storybook-root input").forEach((i) => i.setAttribute("dir", "auto"))' },
+    name: 'the input without dir (as before #4051)',
+    plant: { after: 'document.querySelectorAll("#storybook-root input").forEach((i) => i.removeAttribute("dir"))' },
     only: is('text-field', 'rest'),
-    mustName: /components-text-field-(element|html)--rest \(rtl\): the input now carries dir="auto", so the known exception #4051 no longer holds/,
+    mustName: /components-text-field-(element|html)--rest \(rtl\): the input carries no dir, not dir="auto"/,
   },
   {
-    name: 'the input pinned to dir="ltr"',
-    plant: { after: 'document.querySelectorAll("#storybook-root input").forEach((i) => i.setAttribute("dir", "ltr"))' },
+    name: 'the input pinned to dir="rtl"',
+    plant: { after: 'document.querySelectorAll("#storybook-root input").forEach((i) => i.setAttribute("dir", "rtl"))' },
+    only: is('text-field', 'filled'),
+    mustName: /components-text-field-(element|html)--filled \(rtl\): a left-to-right value \(name@example\.com\) in the input computes direction rtl, not ltr/,
+  },
+  {
+    name: 'dir="auto" kept, but its resolution overridden by CSS',
+    plant: { css: '#storybook-root input { direction: rtl !important; }' },
     only: is('text-field', 'rest'),
-    mustName: /components-text-field-(element|html)--rest \(rtl\): the input carries dir="ltr"; the def asks for dir="auto"/,
+    mustName: /components-text-field-(element|html)--rest \(rtl\): a left-to-right value \(name@example\.com\) in the input computes direction rtl/,
+  },
+  {
+    name: 'a :dir(rtl) rule in @prism3/css (#4098)',
+    plant: { source: '.p3-field-label__indicator:dir(rtl) { order: -1; }' } as RtlPlant,
+    only: is('button', 'rest'),
+    mustName: /^packages\/css\/\(planted\)\.css: a :dir\(\) selector \(\.p3-field-label__indicator:dir\(rtl\)\): Vite's default CSS target lowers/,
+  },
+  {
+    name: "the build's :lang() lowering of a :dir(rtl) rule (#4098)",
+    plant: { built: '.p3-field-label__indicator:is(:lang(ae),:lang(ar),:lang(he)){order:-1}' } as RtlPlant,
+    only: is('button', 'rest'),
+    mustName: /^storybook-static\/\(planted\)\.css: the build rewrote a selector into a :lang\(\) list \(\.p3-field-label__indicator:is\(:lang\(ae\)/,
   },
 ];
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await main('rtl', 'Every story, both forms, left to right and right to left: the computed direction, each start/end pair in order, the Show/Hide button at the row\'s end, and no blanket glyph flip.', run as never, [...MUTANTS, ...DROPPED('rtl')]);
+  await main('rtl', 'Every story, both forms, left to right and right to left: the computed direction, each start/end pair in order, the Show/Hide button at the row\'s end, no blanket glyph flip, the text field\'s dir="auto", and no :dir() the build rewrites.', run as never, [...MUTANTS, ...DROPPED('rtl')]);
 }
