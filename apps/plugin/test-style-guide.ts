@@ -409,8 +409,19 @@ const padOf = (n: N, side: 'paddingLeft' | 'paddingRight' | 'paddingTop' | 'padd
   return v ? Number(valueAt(active!, n, v)) : Number(n[side] ?? 0);
 };
 const padX = (n: N): number => padOf(n, 'paddingLeft') + padOf(n, 'paddingRight');
+/**
+ * THE HOST RE-MEASURES A TEXT BY ITS FONT (#4482, review B1 of #4568). Off by default, so every other section keeps 7px a
+ * character and 20px a line; section 44 switches it on. A hugging text is as wide as its characters times its family's
+ * `width` factor (1 for a family not listed), and a text whose line height is AUTO (its style's, when it has one) is its
+ * lines times its font size times its family's `autoLine` factor (1.2 when not listed). A family change then moves a
+ * hugging text's width and an AUTO text's height, and every size that follows from them, as it does in Figma. Its own
+ * figures, not the plugin's.
+ */
+let familyMetrics: { width: Record<string, number>; autoLine: Record<string, number> } | null = null;
+const familyOf = (t: N): string => String((t.fontName as { family?: unknown } | undefined)?.family ?? '');
 /** A text node's width set on one line. */
-const naturalOf = (t: N): number => Math.max(0, ...String(t.characters ?? '').split('\n').map((l) => l.length)) * CHAR_W;
+const naturalOf = (t: N): number => Math.max(0, ...String(t.characters ?? '').split('\n').map((l) => l.length)) * CHAR_W
+  * (familyMetrics?.width[familyOf(t)] ?? 1);
 /** The lines a text sets in: one per "\n" while it hugs; a HEIGHT text breaks at spaces to its box, and a word
  *  wider than the box breaks inside it, as the host does ("Default" in 30px is two lines). 20px a line. */
 const linesOf = (t: N): number => String(t.characters ?? '').split('\n').reduce((n, para) => {
@@ -426,6 +437,14 @@ const linesOf = (t: N): number => String(t.characters ?? '').split('\n').reduce(
   return n + lines;
 }, 0);
 const LINE_H = 20;
+/** A text's line: 20px, or, with `familyMetrics` on and an AUTO line height, its font size by its family's factor. */
+const lineOf = (t: N): number => {
+  if (!familyMetrics) return LINE_H;
+  const st = t.textStyleId ? active?.styles.find((x) => x.id === t.textStyleId) : undefined;
+  const lh = (st ? st.lineHeight : (t as { lineHeight?: unknown }).lineHeight) as { unit?: string } | undefined;
+  if (lh?.unit !== 'AUTO') return LINE_H;
+  return Math.round(Number(st?.fontSize ?? (t as { fontSize?: unknown }).fontSize ?? 16) * (familyMetrics.autoLine[familyOf(t)] ?? 1.2));
+};
 const padY = (n: N): number => padOf(n, 'paddingTop') + padOf(n, 'paddingBottom');
 /** Out of an auto-layout frame's flow: an ABSOLUTE child takes no part in what the frame hugs. */
 const inFlow = (k: N): boolean => k.layoutPositioning !== 'ABSOLUTE';
@@ -560,7 +579,7 @@ class N {
   // auto-layout frame that hugs vertically is its padding plus its children (summed down a column, the tallest
   // across a row).
   get height(): number {
-    if (this.type === 'TEXT') return linesOf(this) * LINE_H;
+    if (this.type === 'TEXT') return linesOf(this) * lineOf(this);
     const lsv = this.layoutSizingVertical as string | undefined;
     const p = this.parent;
     if (lsv === 'FILL' && p?.layoutMode === 'GRID' && this.gridRow !== undefined) return Math.max(trackH(p, this.gridRow), Number(this.minHeight ?? 0));
@@ -783,7 +802,7 @@ const contentW = (n: N): number => {
   return padX(n) + inner;
 };
 const contentH = (n: N): number => {
-  if (n.type === 'TEXT') return linesOf(n) * LINE_H;
+  if (n.type === 'TEXT') return linesOf(n) * lineOf(n);
   if (n.layoutMode === 'GRID') return hugGridH(n);
   if (!isAuto(n)) return n.layoutSizingVertical === 'FILL' ? Number(n.minHeight ?? 0) : n.h;
   if (n.layoutMode === 'HORIZONTAL' && n.layoutWrap === 'WRAP') {
@@ -4959,18 +4978,30 @@ const main = async (): Promise<void> => {
     const FONT_VAR = 'pds3/core/font/family/body';
     const editedOf = (r: StyleGuideResult): string[] => r.kept.filter((k) => k.reason === 'edited').map((k) => k.name);
     const editedNames = (sh: Shim): string[] => sh.pages.flatMap((p) => p.findAll((k) => / \(edited\)$/.test(k.name)).map((k) => k.name));
+    // THE HOST'S RE-MEASURE, on for this section (review B1 of #4568): a hugging text in Proof Sans is 1.15 times as wide
+    // as in Inter, so a family change moves every specimen's width, its cell's, its column's and the grid's, as Figma does.
+    // Without it the shim's text width ignored the font, and the print's widths could not see the family move.
+    const specimen = (t: N): N => t.findAll((k) => k.type === 'TEXT' && !!k.textStyleId && k.characters === 'Abc 123')[0];
+    const WIDER = { width: { 'Proof Sans': 1.15 }, autoLine: {} };
+    familyMetrics = WIDER;
+    // The table's own size: it hugs its grid, which hugs its tracks, so it moves when any re-measured text does.
+    const sizeOf = (t: N): string => `${Math.round(t.width)}x${Math.round(t.height)}`;
     /** A file with every table drawn, `edit` applied to the Text styles table by hand, the theme's body family moved to
      *  Proof Sans, and, when `stale`, the styles regrouped so that table is superseded; then Update file's style-guide run. */
-    const scenario = async (o: { stale: boolean; font: boolean; edit?: (t: N, sh: Shim) => void; age?: boolean }): Promise<{ r: StyleGuideResult; t: N; sh: Shim; moved: number }> => {
+    const scenario = async (o: { stale: boolean; font: boolean; edit?: (t: N, sh: Shim) => void; age?: boolean; autoLine?: boolean }): Promise<{ r: StyleGuideResult; t: N; sh: Shim; moved: number; size: [string, string] }> => {
       const sh = await phase2File();
+      // AUTO LINE HEIGHT: every style whose family follows the body family takes the font's own line height.
+      if (o.autoLine) for (const st of sh.styles) if (sh.vars.find((v) => v.id === st.boundVariables.fontFamily?.id)?.name === FONT_VAR) st.lineHeight = { unit: 'AUTO' };
       await draw(sh.api, contract);
       const t = tableFrame(sh.sem, 'Text styles')!;
       // AGED: the table's print rewritten as a run before #4482 recorded it, the default reading (no form prefix).
       if (o.age) t.pluginData['prism3-style-guide-print'] = await fingerprintOf(t as unknown as SgNode);
       o.edit?.(t, sh);
+      const was = sizeOf(t);
       const moved = o.font ? themeFamily(sh, FONT_VAR, 'Proof Sans') : 0;
+      const size: [string, string] = [was, sizeOf(t)];
       if (o.stale) regroupStyles(sh);
-      return { r: await draw(sh.api, contract), t, sh, moved };
+      return { r: await draw(sh.api, contract), t, sh, moved, size };
     };
 
     // UPDATE FILE AFTER A THEME FONT CHANGE, NOTHING ELSE: every table is drawn again under its own key, none is judged by
@@ -4987,12 +5018,11 @@ const main = async (): Promise<void> => {
     // #4482: the same table, superseded in the Update that follows a theme font change. Its specimens re-resolved to the new
     // family under the same style: no one edited it, so it is deleted, never kept aside as edited.
     const font = await scenario({ stale: true, font: true });
-    ok(font.moved > 0 && JSON.stringify(font.r.deleted) === JSON.stringify([TS]) && editedOf(font.r).length === 0 && editedNames(font.sh).length === 0 && font.t.removed,
-      `44: theme font/superseded: a theme family change is not a hand edit; the superseded Text styles table is deleted, not kept as edited (${font.moved} texts re-resolved; deleted ${JSON.stringify(font.r.deleted)}, kept ${JSON.stringify(font.r.kept)})`);
+    ok(font.moved > 0 && font.size[0].split('x')[0] !== font.size[1].split('x')[0] && JSON.stringify(font.r.deleted) === JSON.stringify([TS]) && editedOf(font.r).length === 0 && editedNames(font.sh).length === 0 && font.t.removed,
+      `44: theme font/superseded: a theme family change is not a hand edit; the superseded Text styles table is deleted, not kept as edited (${font.moved} texts re-resolved; table ${font.size[0]} → ${font.size[1]}; deleted ${JSON.stringify(font.r.deleted)}, kept ${JSON.stringify(font.r.kept)})`);
 
     // A REAL HAND EDIT IS STILL ONE, after the same font change. Each edit made on a specimen, the text drawn "Abc 123" in
     // the body style.
-    const specimen = (t: N): N => t.findAll((k) => k.type === 'TEXT' && !!k.textStyleId && k.characters === 'Abc 123')[0];
     const edits: [string, (t: N, sh: Shim) => void][] = [
       // A font picked by hand detaches the style: the text reads by its values.
       ['font picked', (t) => { const x = specimen(t); x.textStyleId = ''; x.fontName = { family: 'Inter', style: 'Bold' }; }],
@@ -5015,6 +5045,16 @@ const main = async (): Promise<void> => {
     const agedFont = await scenario({ stale: true, font: true, age: true });
     ok(JSON.stringify(editedOf(agedFont.r)) === JSON.stringify([TS]) && !agedFont.t.removed,
       `44: theme font/aged print, font moved: a print taken before #4482 reads the resolved font, so it is kept as edited, the safe direction (kept ${JSON.stringify(agedFont.r.kept)})`);
+
+    // HEIGHTS (review B1 of #4568): the body styles' line height AUTO, the font's own, which is taller in Proof Sans than in
+    // Inter; the two families set a line at the same width. A family change moves every specimen's height, its row's and
+    // the grid's and the table's, and no width. The superseded table nobody touched is still deleted.
+    familyMetrics = { width: {}, autoLine: { Inter: 1.2, 'Proof Sans': 1.45 } };
+    const tall = await scenario({ stale: true, font: true, autoLine: true });
+    const [w0, h0] = tall.size[0].split('x'), [w1, h1] = tall.size[1].split('x');
+    ok(tall.moved > 0 && h0 !== h1 && w0 === w1 && JSON.stringify(tall.r.deleted) === JSON.stringify([TS]) && editedOf(tall.r).length === 0 && tall.t.removed,
+      `44: theme font/auto line height: a family change that moves an AUTO line height is not a hand edit; the superseded Text styles table is deleted (table ${tall.size[0]} → ${tall.size[1]}; deleted ${JSON.stringify(tall.r.deleted)}, kept ${JSON.stringify(tall.r.kept)})`);
+    familyMetrics = null;
   }
 
   if (failures) { console.error(`\n${failures} style-guide check(s) failed`); process.exit(1); }
