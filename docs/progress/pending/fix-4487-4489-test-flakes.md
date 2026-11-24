@@ -6,11 +6,25 @@ using loop harnesses that copy each suite's setup plus the one block under test,
 
 ### #4487 — studio smoke, italics chip "Upright" exports `()`
 
-- **The race.** One export writes several downloads: the base, then one overlay per mode (`exportTokens`). The test
-  took the first `download` event it saw. The overlays from the *previous* chip's export were sometimes still
-  arriving, and an overlay has no `type.caption` leaves, so the list was empty. Before the fix, 14 of 360 chip
-  checks failed with exactly CI's `()`, and every one of the 10 failures traced read `prism3.brand-b.overlay.tokens.json`.
-- **The fix.** Wait for the export's base file by name (`*.base.tokens.json`).
+One export writes five downloads: the base, then one overlay per mode (`exportTokens`). The test exported three
+times on one page and read the first `download` event it saw. That failed in two separate ways.
+
+- **Order.** Within one export, the base sometimes lands after the overlays (22 of 174 exports in a local loop). An
+  overlay has no `type.caption` leaves, so the list was empty: CI's `()`. Before the fix, 14 of 360 chip checks failed
+  this way, and all 10 failures traced had read `prism3.brand-b.overlay.tokens.json`. The first version of this PR
+  put that down to a late overlay from the previous export. The order data shows it can be this export's own overlay.
+  - **Fix:** wait for the base by name (`*.base.tokens.json`).
+- **Drop.** Headless Chromium drops a page's downloads beyond ten in quick succession. On one studio page, three
+  exports under a second apart delivered 10 files and only 2 bases: the third export was dropped whole. A bare page
+  showed the same thing, every third burst of five, with or without a user gesture, and whatever the blob-revoke
+  delay. Fresh pages never dropped a burst.
+  - **How it surfaced:** the first version of this PR failed the merge queue on it: "Upright", the third export, got
+    no base file within 15 s.
+  - **Fix:** each chip gets its own page. It replays the chips before it in the same order (both; both → only;
+    both → only → upright), so every write is the same transition as before, and then exports once.
+  - **Stability:** 180 of 180 after, on top of the 360 of 360 after the order fix alone.
+  - **Not a studio bug:** a designer doesn't export three times in under a second, and a normal desktop Chrome asks
+    before allowing that many downloads.
 - **A second, silent defect.** The wait for the chip to read pressed checked `aria-checked`, which the chip never
   carries (`chipChoice` sets `aria-pressed`), and swallowed the timeout. So it always waited the full 5 s and then
   carried on. It now reads `aria-pressed`, and a chip that never reads pressed is named in the failure.
