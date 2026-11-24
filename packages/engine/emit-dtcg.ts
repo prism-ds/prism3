@@ -43,17 +43,40 @@ const outDir = resolve(here, 'out');
 // is the generator; these persist its output and check the input contract, so
 // the CLI is a thin new entry point over the same core, not a second pipeline.
 
+// #4214 (owner decision, 2026-11-20): a brand id that names no file Windows can write is refused WHERE A FILE IS
+// WRITTEN, not by the published input schema, which stays as it is. Windows refuses the characters `< > : " | ? *` and
+// the control characters in any file name, and reserves the device names CON, PRN, AUX, NUL, COM0–9 and LPT0–9 (with
+// the superscript digits ¹ ² ³) as the part before the first dot, whatever the extension and the case. Every platform
+// refuses them, so a brand that writes on one machine writes on all of them. Returns why, or undefined. DRAFT wording.
+const WINDOWS_RESERVED = /^(CON|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³])$/i;
+export const windowsInvalidName = (name: string): string | undefined => {
+  const bad = [...name].find((c) => '<>:"|?*'.includes(c) || c.charCodeAt(0) < 32);
+  if (bad !== undefined)
+    return `'${name}' is not a file name Windows can write: it contains ${JSON.stringify(bad)}. Use a brand id without < > : " | ? * or a control character`;
+  const stem = name.split('.')[0].replace(/ +$/, '');
+  if (WINDOWS_RESERVED.test(stem))
+    return `'${name}' is not a file name Windows can write: '${stem}' is a reserved device name. Use a brand id that isn't CON, PRN, AUX, NUL, COM0–9 or LPT0–9`;
+  return undefined;
+};
+
+/** The one write guard for a brand's files (#3875, #4214): the path `name` takes inside `dir`, or a thrown error that
+ *  names why it can't be written, raised before the caller writes anything. `brandTheme` refuses an id with a path
+ *  separator; this is the backstop for one that reached a write another way, and the only place a Windows-invalid id
+ *  is refused. `emitTheme` and every other write `cli.ts` makes go through it. */
+export const fileInDir = (dir: string, name: string): string => {
+  const at = resolve(dir, name);
+  if (dirname(at) !== resolve(dir)) throw new Error(`'${name}' would be written outside ${resolve(dir)}, so nothing was written.`);
+  const windows = windowsInvalidName(name);
+  if (windows) throw new Error(`${windows}; nothing was written.`);
+  return at;
+};
+
 // Persist a theme's DTCG tree + AI-metadata sidecar to `outDir`; return the built
 // tree/modes/stats so the caller can print a summary and gate on the contracts.
 export const emitTheme = (theme: Theme, outDir: string, opts: { build?: string } = {}): { tree: any; modes: ModeResult[]; stats: Stats } => {
-  // #3875: every file lands directly in `outDir`. `brandTheme` refuses an id that would leave it; this is the
-  // backstop for a theme that reached here another way, checked before anything is written.
+  // #3875: every file lands directly in `outDir`, through `fileInDir`, checked before anything is written.
   const dir = resolve(outDir);
-  const fileIn = (name: string): string => {
-    const at = resolve(dir, name);
-    if (dirname(at) !== dir) throw new Error(`'${name}' would be written outside ${dir}, so nothing was written.`);
-    return at;
-  };
+  const fileIn = (name: string): string => fileInDir(dir, name);
   const files = { tokens: fileIn(`${theme.id}.tokens.json`), ai: fileIn(`${theme.id}.ai.json`), base: fileIn(`${theme.id}.base.tokens.json`) };
   mkdirSync(outDir, { recursive: true });
   const built = buildTree(theme);
