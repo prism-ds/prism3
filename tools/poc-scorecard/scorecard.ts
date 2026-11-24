@@ -125,10 +125,10 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const [scratch, update, edit] = [m('kpi1-cli-scratch'), m('kpi1-cli-update'), m('kpi3-one-edit')];
     if (!scratch || !update || !edit) return `not measured: ${([['kpi1-cli-scratch', scratch], ['kpi1-cli-update', update], ['kpi3-one-edit', edit]] as const).filter(([, x]) => !x).map(([id]) => id).join(', ')}`;
     const s = 'OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed)';
-    const u = 'OK kpi1 (update): 6.2 seconds; 2 commands, 1 hand edit (the update), 0 fixes, 0 errors, first try\nOK one edit: 12 probes reach the edited tokens in both forms, from 1 edit';
+    const u = 'OK kpi1 (update): 6.2 seconds; 2 commands, 1 hand edit (the update), 0 fixes, 0 errors, first try\nOK one edit: 16 readings reach the edited tokens, 4 probes in both forms and both themes, from 1 edit (x)';
     const fail = 'FAIL kpi1 (update): step "npx tsx packages/engine/cli.ts" exited 1: x';
     const got = [parse(scratch, s), parse(update, u), parse(edit, u), parse(scratch, fail), parse(update, fail)];
-    if (got.join() !== '21.4,6.2,12,,') return `parsed ${JSON.stringify(got)}, expected 21.4, 6.2, 12, null, null`;
+    if (got.join() !== '21.4,6.2,16,,') return `parsed ${JSON.stringify(got)}, expected 21.4, 6.2, 16, null, null`;
     const d = update.detail?.exec(u)?.[1];
     const r = row(render({ 'arm-1': { 'kpi1-cli-update': planted({ id: 'kpi1-cli-update', value: 6.2, unit: update.unit, detail: d }) } }), 'Developer + CLI, update (primary color and radius): the same');
     return /\| 6\.2 seconds, wall clock; 2 commands, 1 hand edit \(the update\), 0 fixes, 0 errors, first try \(abcdef01/.test(r) ? null : r; } },

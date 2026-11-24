@@ -70,12 +70,21 @@ export const ARMS: Record<string, { measures: Measure[]; pending: Record<string,
         detail: new RegExp(`^OK eject \\(${mode}\\): \\d+ references back into prism3; (.*)$`, 'm'),
         unit: 'references back into the repo or workspace',
       })),
+      // KPI 1, developer + CLI, the scripted floor (plan item 4, `tools/poc-kpi1/`): the value is the wall-clock
+      // seconds; the detail carries the commands, hand edits, fixes, errors and, from scratch, the install (K1).
+      // The update run also prints KPI 3's one-edit line, so `kpi3-one-edit` reads the same command's other line.
+      ...(['scratch', 'update'] as const).map((run) => ({
+        id: `kpi1-cli-${run}`, cmds: [tsx('tools/poc-kpi1/kpi1.ts', '--run', run)],
+        value: [new RegExp(`^OK kpi1 \\(${run}\\): ([\\d.]+) seconds;`, 'm')],
+        detail: new RegExp(`^OK kpi1 \\(${run}\\): [\\d.]+ seconds; (.*)$`, 'm'),
+        unit: 'seconds, wall clock',
+      })),
+      { id: 'kpi3-one-edit', cmds: [tsx('tools/poc-kpi1/kpi1.ts', '--run', 'update')],
+        value: [/^OK one edit: (\d+) readings/m], detail: /^OK one edit: \d+ readings reach the edited tokens, (.*)$/m,
+        unit: 'readings reach the edited tokens' },
     ],
     pending: {
-      'kpi1-cli-scratch': 'not built yet (plan item 4, #3408)',
-      'kpi1-cli-update': 'not built yet (plan item 4, #3408)',
       'kpi1-agent': 'the brief and agent setup wait on D2 (#3408); the driver is plan item 5',
-      'kpi3-one-edit': 'not built yet (plan item 4, #3408)',
     },
   },
 };
