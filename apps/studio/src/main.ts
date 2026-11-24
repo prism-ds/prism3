@@ -36,7 +36,7 @@ import type { CollisionsLend } from './shell/collisions';
 import { withEarlier } from './state/collisions';
 import { migratedLine, migrateStoredInput } from './state/legacy-input';
 import type { StatusLend } from './shell/status-strip';
-import { agentHeard, heard, startStripRun, stepEnded, stripVerdict, stripView, withReading, rowState, STRIP_COPY, type StripAgent, type StripRead, type StripRun, type StripVerdict } from './state/status-strip';
+import { agentHeard, heard, startStripRun, stepEnded, stripVerdict, stripView, withReading, withThrottleNote, rowState, STRIP_COPY, type StripAgent, type StripRead, type StripRun, type StripVerdict } from './state/status-strip';
 import type { DocumentationLend } from './shell/documentation';
 import { brandFor, DUE_DEBOUNCE_MS, recheckHolds, startUpdate, statusesOf, STEP_TITLE, stepDone, stepOf, stopUpdate, type StepKey, type UpdateRun } from './state/update-file';
 import { readSaved, savedDrawCount, savedDrawOptions } from './state/style-guides';
@@ -1712,7 +1712,7 @@ const PENDING_TEXT = { apply: 'Writing to Figma…', filesetup: 'Setting up file
  *  run's, or else an agent's (owner decision Q19 b): one text for both. */
 const styleGuidePendingText = (): string => {
   const p = host.styleGuideState === 'pending' ? host.styleGuideProgress : agentReading('styleguide');
-  return p ? `Drawing table ${Math.min(p.done + 1, p.total)} of ${p.total}…` : PENDING_TEXT.styleguide;
+  return p ? withThrottleNote(`Drawing table ${Math.min(p.done + 1, p.total)} of ${p.total}…`, host.styleGuideState === 'pending' && !!host.styleGuideProgress?.throttled) : PENDING_TEXT.styleguide;
 };
 /** The phase line while an agent's update check, update, baseline capture or Adopt runs (#2265, #2283). None of
  *  them is a build, so none may read as one. Approved words (Q114 A). */
@@ -1731,7 +1731,7 @@ const firstPhase = (): string => {
 const componentPhase = (p: HostSession['componentProgress']): Pick<OpReading, 'phase' | 'progress'> =>
   !p ? { phase: firstPhase(), progress: null }
     : p.phase === 'retry' ? { phase: 'Linking properties again…', progress: null }
-      : { phase: p.phase === 'build' ? 'Building variants…' : 'Linking nested sets…', progress: { done: p.done, total: p.total } };
+      : { phase: withThrottleNote(p.phase === 'build' ? 'Building variants…' : 'Linking nested sets…', p.throttled), progress: { done: p.done, total: p.total } };
 const IDLE: OpReading = { state: 'idle', ref: null, verdict: null, summary: null, phase: null, progress: null, agent: false };
 /** True while the agent's command for `k` runs and its verdict has not landed. */
 const agentRunning = (k: OpKey): boolean => !!host.agentRun && host.agentRun.op === k && !host.agentRun.settled;
@@ -2334,14 +2334,14 @@ const stripHears = (m: Parameters<typeof reduce>[1]): void => {
   if (m.kind === 'run-progress') {
     if (m.run === 'read') stripRead = { done: m.done, total: m.total };
     else if (stripRun && ((m.run === 'update' && step === 'update' && updatePhase === 'apply') || (m.run === 'apply-theme' && step === 'theme')))
-      stripRun = withReading(stripRun, { run: m.run, phase: m.phase, item: m.item, done: m.done, total: m.total }, Date.now());
+      stripRun = withReading(stripRun, { run: m.run, phase: m.phase, item: m.item, done: m.done, total: m.total, throttled: m.throttled }, Date.now());
     // #3308: the cover step's update is heard, so the strip does not read it as silent; its count is not the update's.
-    else if (stripRun && m.run === 'update' && step === 'cover' && updatePhase === 'apply') stripRun = heard(stripRun, Date.now());
+    else if (stripRun && m.run === 'update' && step === 'cover' && updatePhase === 'apply') stripRun = heard(stripRun, Date.now(), m.throttled);
     invalidate('host:run');
     return;
   }
   if (m.kind === 'file-sets' && m.atOpen && !m.partial && stripRead) { stripRead = null; invalidate('host:run'); return; }
-  if (stripRun && (m.kind === 'component-progress' || m.kind === 'style-guide-progress' || m.kind === 'update-check' || m.kind === 'update-check-progress')) { stripRun = heard(stripRun, Date.now()); invalidate('host:run'); }
+  if (stripRun && (m.kind === 'component-progress' || m.kind === 'style-guide-progress' || m.kind === 'update-check' || m.kind === 'update-check-progress')) { stripRun = heard(stripRun, Date.now(), (m.kind === 'component-progress' || m.kind === 'style-guide-progress') && m.throttled); invalidate('host:run'); }
 };
 /** The next action the panel starts ends the verdict line (Q3170.6 A). */
 const clearStripLine = (): void => { if (stripLine) { stripLine = null; invalidate('host:run'); } };
