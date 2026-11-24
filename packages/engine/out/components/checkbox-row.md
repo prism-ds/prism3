@@ -23,7 +23,7 @@ Shown on the default member: size `medium`, status `default`.
 1. **Content** — The control and the label, side by side and top-aligned. The row centers this box in its minimum height, and the control stays beside the label's first line.
 2. **Control** — The checkbox, centered on the label's first line; it follows the row's size, status and selection.
 3. **Text stack** — The label and the description under it, starting at the label's edge. Its top inset keeps the label's first line centered on the control.
-4. **Label** — The accessible name, and part of what a person clicks; a long label wraps to a second line.
+4. **Label** — The accessible name, and part of what a person clicks; the row is as wide as its label.
 5. **Description** (optional) — The optional description under the label, in the muted text color, one type step smaller and starting at the label's edge. Hidden by default.
 
 ## Styles
@@ -145,7 +145,7 @@ Keyed by `size`.
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
-| `row` | `space.100` / `space.0` / `space.100` / `space.0` | — | — | — | 120px (literal) | min height `size.md.height`; build width 320px (literal) |
+| `row` | `space.100` / `space.0` / `space.100` / `space.0` | — | — | — | — | min height `size.md.height` |
 | `row/content` | — | `space.150` | — | — | — | — |
 | `row/content/controlCell` | — | — | — | — | — | min height `type.body.sm.line-box` |
 | `row/content/controlCell/control` | — | — | `control.size.md.height` | `control.size.md.height` | — | — |
@@ -155,7 +155,7 @@ Keyed by `size`.
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
-| `row` | `space.075` / `space.0` / `space.075` / `space.0` | — | — | — | 120px (literal) | min height `size.sm.height`; build width 320px (literal) |
+| `row` | `space.075` / `space.0` / `space.075` / `space.0` | — | — | — | — | min height `size.sm.height` |
 | `row/content` | — | `space.100` | — | — | — | — |
 | `row/content/controlCell` | — | — | — | — | — | min height `type.body.xs.line-box` |
 | `row/content/controlCell/control` | — | — | `control.size.sm.height` | `control.size.sm.height` | — | — |
@@ -165,7 +165,7 @@ Keyed by `size`.
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
-| `row` | `space.150` / `space.0` / `space.150` / `space.0` | — | — | — | 120px (literal) | min height `size.lg.height`; build width 320px (literal) |
+| `row` | `space.150` / `space.0` / `space.150` / `space.0` | — | — | — | — | min height `size.lg.height` |
 | `row/content` | — | `space.150` | — | — | — | — |
 | `row/content/controlCell` | — | — | — | — | — | min height `type.body.md.line-box` |
 | `row/content/controlCell/control` | — | — | `control.size.lg.height` | `control.size.lg.height` | — | — |

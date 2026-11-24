@@ -475,7 +475,7 @@
     },
     "checkbox-row": {
       "members": 6,
-      "sha256": "37908b01225746775f27e8636e931ead9ba7bf78edd2d84cb69a4c1aad5961a5",
+      "sha256": "bb36ff30a50831a6851e2d899279993fb4f9e7528bb670bd38a71a8952884a10",
       "properties": [
         "description text:TEXT",
         "description:BOOLEAN",
@@ -496,7 +496,7 @@
     },
     "radio-row": {
       "members": 6,
-      "sha256": "28d3f1f1ceddff805b31968fca969bbe1dd3a01e1c286d85e4296392b932c230",
+      "sha256": "cbdfd4552742aea5fddcb9ad009294a4e29c02be2742cff0920969f82cb47c75",
       "properties": [
         "description text:TEXT",
         "description:BOOLEAN",

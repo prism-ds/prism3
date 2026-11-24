@@ -52,9 +52,9 @@ If the update writes every set and some still differ from the plan, the run goes
 
 ## The rules every write follows
 
-- **Check first, write second.** The theme step reads everything it will touch before its first write, and writes nothing if anything conflicts, unless you choose Skip or Rename for each conflict. <!-- src: apps/plugin/src/apply-theme.ts:79-124#82e91aee --> <!-- src: apps/plugin/src/preflight.ts:171-230#328537d5 -->
+- **Check first, write second.** The theme step reads everything it will touch before its first write, and writes nothing if anything conflicts, unless you choose Skip or Rename for each conflict. <!-- src: apps/plugin/src/apply-theme.ts:80-132#68cece4a --> <!-- src: apps/plugin/src/preflight.ts:171-230#328537d5 -->
 - **Prism3 changes only what Prism3 made.** Each collection, style and component Prism3 creates carries a mark saying so, and later runs read that mark before changing anything. <!-- src: apps/plugin/src/provenance.ts:1-57#dce1a9a1 --> <!-- src: apps/plugin/src/preflight.ts:21#f83b8069 -->
-- **Nothing is deleted unless you ask.** The **Update** tab never deletes. Removing what the brand no longer uses is the **Clean up** tab, and it shows what it will delete before it deletes. <!-- src: apps/studio/src/state/update-file.ts:334-335 -->
+- **Nothing is deleted unless you ask.** The **Update** tab deletes only a font weight variable the brand no longer uses, and the result names it (see [Write the theme to a Figma file](apply-a-theme.md#writing-it-again)). Removing anything else the brand no longer uses is the **Clean up** tab, and it shows what it will delete before it deletes. <!-- src: apps/studio/src/state/update-file.ts:334-335 -->
 - **One write at a time.** While any write runs, every other write is refused, whether the panel or an agent asked. <!-- src: apps/plugin/src/run-guard.ts:1-20#802b70d3 -->
 
 ## Update sets in place
@@ -104,7 +104,7 @@ An ordinary hand edit, such as a recolor, stays a hand edit, and the set keeps u
 
 To turn a set's updates off yourself, choose **Turn off updates** on its row under **Due**. <!-- src: apps/studio/src/state/update-file.ts:398 -->
 A set whose updates are off is listed under **Updates off** in the dialog. <!-- src: apps/studio/src/state/update-file.ts:396 --> When the update turned it off, its row adds "Turned off when an update couldn’t apply around your edits." <!-- src: apps/studio/src/state/update-file.ts:397 -->
-Choose **Turn updates back on** to hand it back. <!-- src: apps/studio/src/state/update-file.ts:399 --> That writes nothing to the set but the setting: the next Update file checks it as it checks any other set, and Keep still holds your edits until you choose otherwise. <!-- src: apps/plugin/src/main.ts:2481#c00ec9d7 -->
+Choose **Turn updates back on** to hand it back. <!-- src: apps/studio/src/state/update-file.ts:399 --> That writes nothing to the set but the setting: the next Update file checks it as it checks any other set, and Keep still holds your edits until you choose otherwise. <!-- src: apps/plugin/src/main.ts:2486#c00ec9d7 -->
 
 The setting is kept in the file, on the set, so it holds when the file is opened again. <!-- src: apps/plugin/src/updates-off.ts:30#eb506b52 -->
 
@@ -128,8 +128,8 @@ What Clean up can delete: <!-- src: apps/plugin/src/prune-figma.ts:18-32#6e2fac9
 
 A variable or style Prism3 wrote under **Rename**, whose name ends in "(Prism3)", is never on the list while the brand still writes the name before that suffix. <!-- src: apps/plugin/src/prune-figma.ts:325-345 -->
 
-The delete works out the list again from a fresh read of the file before it deletes anything. <!-- src: apps/plugin/src/main.ts:604-605#88108fd2 -->
-If the list is not the one the tab showed, or the file does not hold the brand in the panel yet, it deletes nothing. Otherwise it saves a named version, then deletes. <!-- src: apps/plugin/src/main.ts:723-726#40ecfc79 -->
+The delete works out the list again from a fresh read of the file before it deletes anything. <!-- src: apps/plugin/src/main.ts:609-610#88108fd2 -->
+If the list is not the one the tab showed, or the file does not hold the brand in the panel yet, it deletes nothing. Otherwise it saves a named version, then deletes. <!-- src: apps/plugin/src/main.ts:728-731#40ecfc79 -->
 
 After a style-guide run that found tables Prism3 no longer draws, **Clean up** lists them too: "2 style-guide tables the generator no longer draws." Choose **Remove *N* tables** to delete them. <!-- src: apps/studio/src/state/update-file.ts:444-445 -->
 
@@ -141,7 +141,7 @@ The card says so: "Panels edited by hand stay. Turning panels on again draws the
 ### When a mode is renamed
 
 Prism3 never renames a mode in a file, and that includes a custom mode renamed in **Custom mode name**. <!-- src: apps/studio/src/domains/brand.ts:210 -->
-The renamed mode arrives as a new mode beside the old one. The old mode keeps the values it last had, and frames set to it still show them. <!-- src: apps/plugin/src/write-figma.ts:364-379#ffc2b3a2 -->
+The renamed mode arrives as a new mode beside the old one. The old mode keeps the values it last had, and frames set to it still show them. <!-- src: apps/plugin/src/write-figma.ts:365-380#ffc2b3a2 -->
 Removing a mode removes its values from every variable in the collection, so move the frames first: <!-- src: apps/plugin/src/prune-figma.ts:45-53#979f9c19 -->
 
 1. Choose **Update file**, with **Theme** ticked, and run it. The file gets the new mode.
@@ -157,4 +157,4 @@ Removing a mode removes its values from every variable in the collection, so mov
 | "Off until a brand loads. This file's saved brand didn't open, and writing now would put the demo brand over it." | The brand saved in this file didn't open. The dialog's **Update file** button, Clean up's delete and every other write stay off. <!-- src: apps/studio/src/main.ts:1973 --> | Close the plugin and open it again: it reads the saved brand again as it opens. If the brand still doesn't open, import its `design.md` (brand menu › **Import design.md…**). |
 | `✗ update refused`, "the file changed since the check" | Something in the file moved between the check and the update. <!-- src: apps/plugin/src/update-apply.ts:1125 --> | Open Update file again and read the new check. |
 | "the named version could not be saved" | Figma refused to save the safety version, so the update wrote nothing. <!-- src: apps/plugin/src/update-apply.ts:1227 --> | Try again. Nothing in the file changed. If it fails again, the detail in Activity holds Figma's reason. |
-| `nothing built — set '…' on this page varies by different axes and was left as it is` | A set with that name already exists on the page, built with different options. <!-- src: apps/plugin/src/main.ts:1078 --> | Rename or move the existing set. |
+| `nothing built — set '…' on this page varies by different axes and was left as it is` | A set with that name already exists on the page, built with different options. <!-- src: apps/plugin/src/main.ts:1083 --> | Rename or move the existing set. |

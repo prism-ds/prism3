@@ -2127,7 +2127,7 @@
         {
           "class": "localization",
           "disposition": "LOWERED",
-          "description": "text expansion — labels run 150-200% longer in German or Russian (brief §9). The label wraps freely and the control stays on the first line (#1201), so a long label does not break the row. The Figma members carry the English placeholder only."
+          "description": "text expansion — labels run 150-200% longer in German or Russian (brief §9). In code the label wraps at its container's width and the control stays on the first line (#1201), so a long label does not break the row. In Figma the row hugs its label (#4473) and a label does not wrap; the Figma members carry the English placeholder only."
         }
       ],
       "notes": {
@@ -2391,7 +2391,7 @@
         {
           "class": "localization",
           "disposition": "LOWERED",
-          "description": "text expansion — option labels wrap rather than truncate, and the control stays on the first line (#1201). Horizontal option rows are fragile under expansion (German up to about 300%), which is part of why the group is vertical (brief §9). The Figma members carry the English placeholder only."
+          "description": "text expansion — in code option labels wrap rather than truncate, and the control stays on the first line (#1201); in Figma the row hugs its label (#4473) and a label does not wrap. Horizontal option rows are fragile under expansion (German up to about 300%), which is part of why the group is vertical (brief §9). The Figma members carry the English placeholder only."
         }
       ],
       "notes": {
