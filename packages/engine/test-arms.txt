@@ -241,6 +241,7 @@ apps/plugin/test-style-guide.ts #3135
 apps/plugin/test-style-guide.ts #3171
 apps/plugin/test-style-guide.ts #3346
 apps/plugin/test-style-guide.ts #4110
+apps/plugin/test-style-guide.ts #4482
 apps/plugin/test-style-guides-page.mjs #2155
 apps/plugin/test-style-guides-page.mjs #2366
 apps/plugin/test-style-guides-page.mjs #2372
