@@ -269,8 +269,9 @@ export const SELF: { name: string; check: () => string | null }[] = [
   { name: 'the update edits both lines of the real brand input once, and names a line it can\'t find', check: () => {
     const ok = applyEdit(BRAND);
     if (ok.error) return ok.error;
-    const changed = BRAND.split('\n').filter((l, i) => l !== ok.text.split('\n')[i]);
-    if (changed.join('|') !== EDIT.map((e) => e.from).join('|')) return `changed ${JSON.stringify(changed)}`;
+    // The brief's two changes, written here by hand, never read from EDIT: the primary anchor and the radius scale.
+    const keys = ok.text.split('\n').filter((l, i) => l !== BRAND.split('\n')[i]).map((l) => l.split(':')[0]);
+    if (keys.join() !== 'primary,radiusScale') return `the update changes ${JSON.stringify(keys)}, not the primary color and the radius scale`;
     const miss = applyEdit(BRAND.replace(EDIT[1].from, 'radiusScale: soft'));
     return miss.error === `${BRAND_INPUT} has 0 lines reading "radiusScale: 1" (the radius scale), not 1` ? null : `read as edited: ${miss.error}`; } },
   { name: 'GENERATED names files the repo commits, each once', check: () => {

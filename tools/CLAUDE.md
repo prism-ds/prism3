@@ -425,3 +425,15 @@ names. It also records how an upstream change arrives. Owner decision D1 (A) sco
 is a scorecard row, not a merge rule. It does exit 1 on a failed build or render, or a scored count above 0, so the
 card's cell reads FAIL with its line, never a count. `--self-test` plants each kind of reference, and `--plant` plants
 one into a real run.
+
+## `tools/poc-kpi1/`
+
+KPI 1, developer + CLI: the scripted floor (#3408, plan item 4), with KPI 3's one-edit check. `kpi1.ts` works in a copy
+of the tree in `$TMPDIR`. **From scratch**, it removes every generated output (listed by hand), then times `npm ci`, the
+engine CLI, both component generators and the Storybook build. Every removed file must come back equal to the committed
+one, and `check-build.ts` must pass. **The update** makes one edit to the brand input (the primary color and the radius
+scale), then times the CLI and the Storybook build. `one-edit.ts` then reads four hand-written probes in Chromium, in
+both forms and both themes, before and after the edit, against the emitted DTCG. The time's install question is owner
+decision K1. **No gate sibling, and not in CI, on purpose:** it needs the npm registry and Chromium, and what it
+measures is a scorecard row, not a merge rule. It exits 1 with a FAIL line on any failure, so the card reads FAIL, never
+a time. `--self-test` plants each judge's failure, and `--plant` plants a miss into a real run.
