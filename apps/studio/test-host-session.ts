@@ -104,6 +104,12 @@ for (const c of verdictCases) {
   const prog = step(pending, { kind: 'component-progress', phase: 'build', done: 24, total: 648, chunkMs: 90 });
   ok(same(prog.next.componentProgress, { phase: 'build', done: 24, total: 648 }), 'component-progress: records phase, done and total while pending');
   ok(same(prog.topics, ['host:progress']), 'component-progress: invalidates host:progress only (a text swap, no re-render)');
+  // #4476: a throttled reading is kept on the slot the progress line reads; the style guide's the same. Mutation: the
+  // reducer dropping `throttled` → `component-progress/throttled` and `style-guide-progress/throttled` fail.
+  const slow = step(pending, { kind: 'component-progress', phase: 'build', done: 24, total: 648, chunkMs: 90, throttled: true });
+  ok(slow.next.componentProgress?.throttled === true, `component-progress/throttled: a throttled reading is kept for the progress line (${JSON.stringify(slow.next.componentProgress)})`);
+  const sg = step({ ...init, styleGuideState: 'pending' }, { kind: 'style-guide-progress', done: 28, total: 45, throttled: true });
+  ok(sg.next.styleGuideProgress?.throttled === true, `style-guide-progress/throttled: a throttled reading is kept for the progress line (${JSON.stringify(sg.next.styleGuideProgress)})`);
   const verdict = step(prog.next, { kind: 'component-result', ok: true, completed: true, headline: '✓ built 648', summary: 'all good' });
   ok(same(verdict.next.componentState, { ok: true, headline: '✓ built 648', summary: 'all good' }),
     '#870 replay: the verdict lands in componentState, the slot the Components page reads');
