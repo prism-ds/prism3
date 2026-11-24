@@ -4194,7 +4194,7 @@ for (const host of ['web', 'figma']) {
           await postMsg(page, { type: 'file-sets', present: [], setUp: false, queued: ['tag'] });
           await openComps(page, WAIT);
           await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
           await postMsg(page, { type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: 'pages: 9 created' });
           await settle(page);
@@ -4215,7 +4215,7 @@ for (const host of ['web', 'figma']) {
           await settle(page);
           await postMsg(page, { type: 'style-guide-catalog', catalog: SG_RING_CATALOG });
           await settle(page);
-          const sgW = await takeWrites(page);
+          const sgW = await takeWrites(page, 1, 'style-guide');
           await postMsg(page, { type: 'style-guide-progress', done: 28, total: 45, tableMs: 5 });
           await settle(page);
           const g0 = await phases();
