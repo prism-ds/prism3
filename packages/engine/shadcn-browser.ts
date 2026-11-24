@@ -11,11 +11,19 @@
 export type Rgba = [number, number, number, number];
 /** One `box-shadow` layer as Chromium computes it: lengths in px, the color painted like `read` (opaque rgb + raw alpha). */
 export type ShadowLayer = { inset: boolean; lengths: number[]; rgba: Rgba };
+/** A focus-ring probe: markup carrying stock classes, the element to focus (none for a ring set by a data attribute),
+ *  and the element whose ring is read. */
+export type RingProbe = { html: string; focus?: string; read: string };
 export type ShadcnPage = {
   /** Each expression's color, drawn alone on a cleared canvas: [r, g, b, alpha byte]. */
   read: (mode: 'light' | 'dark', exprs: readonly string[]) => Promise<Rgba[]>;
-  /** Each [ink, ground] pair, the ground drawn opaque and the ink composited over it: the opaque [r, g, b] pair. */
-  over: (mode: 'light' | 'dark', pairs: ReadonlyArray<readonly [string, string]>) => Promise<Array<{ ink: Rgba; ground: Rgba }>>;
+  /** Each [ink, ground] pair, the ground drawn opaque and the ink composited over it: the opaque [r, g, b] pair. With a
+   *  third entry, `under`, that is drawn opaque first and the ground composited over it at its own alpha (a faded fill,
+   *  such as `bg-input/30`, over the page). */
+  over: (mode: 'light' | 'dark', pairs: ReadonlyArray<readonly [string, string, string?]>) => Promise<Array<{ ink: Rgba; ground: Rgba }>>;
+  /** `css` added to the page and `probe.html` drawn, then `probe.focus` (when given) focused by script: the computed
+   *  `--tw-ring-color` on `probe.read`, `var()` resolved (empty when no rule sets it). */
+  ringColor: (mode: 'light' | 'dark', css: string, probe: RingProbe) => Promise<{ value: string }>;
   /** Each expression set as an element's `box-shadow`, read back from the computed style, split into layers;
    *  `null` when Chromium computed `none` (an unset or unparsed value). */
   shadows: (mode: 'light' | 'dark', exprs: readonly string[]) => Promise<Array<ShadowLayer[] | null>>;
@@ -61,20 +69,37 @@ export const openShadcnPage = async (css: string): Promise<ShadcnPage> => {
         });
       }),
       read: (exprs) => exprs.map((e) => { g.clearRect(0, 0, 1, 1); g.fillStyle = resolve(e); g.fillRect(0, 0, 1, 1); return px(); }),
-      over: (pairs) => pairs.map(([ink, ground]) => {
+      over: (pairs) => pairs.map(([ink, ground, under]) => {
         g.clearRect(0, 0, 1, 1);
-        g.fillStyle = resolve('oklch(from ' + ground + ' l c h / 1)'); g.fillRect(0, 0, 1, 1);
+        if (under) {
+          g.fillStyle = resolve('oklch(from ' + under + ' l c h / 1)'); g.fillRect(0, 0, 1, 1);
+          g.fillStyle = resolve(ground); g.fillRect(0, 0, 1, 1);
+        } else {
+          g.fillStyle = resolve('oklch(from ' + ground + ' l c h / 1)'); g.fillRect(0, 0, 1, 1);
+        }
         const gp = px();
         g.fillStyle = resolve(ink); g.fillRect(0, 0, 1, 1);
         return { ink: px(), ground: gp };
       }),
+      ringColor: ([css, probe]) => {
+        let st = document.getElementById('extra-css');
+        if (!st) { st = document.createElement('style'); st.id = 'extra-css'; document.head.appendChild(st); }
+        st.textContent = css;
+        let host = document.getElementById('ring-probe');
+        if (!host) { host = document.createElement('div'); host.id = 'ring-probe'; document.body.appendChild(host); }
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        host.innerHTML = probe.html;
+        if (probe.focus) host.querySelector(probe.focus).focus();
+        return { value: getComputedStyle(host.querySelector(probe.read)).getPropertyValue('--tw-ring-color').trim() };
+      },
     };
   })()`);
-  const call = (fn: 'read' | 'over' | 'shadows', mode: 'light' | 'dark', arg: unknown) =>
+  const call = (fn: 'read' | 'over' | 'ringColor' | 'shadows', mode: 'light' | 'dark', arg: unknown) =>
     page.evaluate(`(() => { document.documentElement.className = ${JSON.stringify(mode === 'dark' ? 'dark' : '')}; return window.__shadcn.${fn}(${JSON.stringify(arg)}); })()`);
   return {
     read: (mode, exprs) => call('read', mode, exprs),
     over: (mode, pairs) => call('over', mode, pairs),
+    ringColor: (mode, css, probe) => call('ringColor', mode, [css, probe]),
     shadows: (mode, exprs) => call('shadows', mode, exprs),
     close: () => browser.close(),
   };
