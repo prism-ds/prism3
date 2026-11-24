@@ -158,7 +158,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (shadowFiles !== brands.length * 2) failures.push(`shadow arm read ${shadowFiles} theme modes, expected ${brands.length * 2}`);
   if (!shadowVars.length || shadowLayers === 0) failures.push('shadow arm compared no layers');
   if (failures.length) {
-    console.error(`✗ shadcn round trip: ${failures.length} of ${checked} values do not land on their emitted color`);
+    console.error(`✗ shadcn round trip: ${failures.length} failures over ${checked} color values and ${shadowLayers} shadow layers`);
     for (const f of failures) console.error(`    ${f}`);
     console.error('\n  Fix: a `<brand>` line is emit-shadcn.ts losing a channel (raise toOklchCss precision); a `<brand> tailwind` line is\n' +
       '  emit-tailwind.ts writing a value that is not the brand\'s color in that mode (check which mode block it writes);\n' +
