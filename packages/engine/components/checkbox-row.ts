@@ -350,19 +350,15 @@ export const checkboxRow: ComponentDef = {
         // CENTER on the cross axis, over ONE child (#2894, owner Q539 Q?3 A). The row centers `content`, which
         // keeps the control and label top-aligned, so the floor's slack splits evenly and a wrapping consent
         // label still holds the control on its first line (#1009 half-1, #1201).
-        layout: { direction: 'row', align: 'center', justify: 'start', sizing: { x: 'fill', y: 'hug' } },
+        layout: { direction: 'row', align: 'center', justify: 'start', sizing: { x: 'hug', y: 'hug' } },
         minHeight: 'size.{size}.min-height',
         // TOP/BOTTOM PADDING, the per-size minimum (#2894); inline sides zero (`space.0`). See the
         // `pad-y`/`pad-x` tokens above for the values and why inline is a literal zero.
         padding: { block: 'size.{size}.pad-y', inlineLabel: 'pad-x' },
-        // BUILT AT 320, SHRINKS TO ITS COLUMN (#1424, then owner decision Q152.3: Q99 B reaches the rows). The label
-        // FILLS the row and WRAPS, so the row's width must be bounded or a `layoutGrow` label has no remaining space
-        // to fill. The root is BUILT at Prism 2's checkbox-row `root width 320` (`placementWidth`, the fields' #2292
-        // mechanism), so an unplaced row still reads at 320, and a row set to fill its column stretches with it.
-        // The floor is the fields' 120 (owner Q152.2): it used to be 320, which held a row in a narrower column
-        // at 320 and overflowed it. Both are literal projection defaults, not bound tokens, so CONTRACT holds.
-        placementWidth: 320,
-        minWidth: 120,
+        // HUGS ITS CONTENT (#4473, owner decision A, 2026-11-24). A placed row is as wide as its control, gap and label,
+        // and a parent that stretches it (a group's `crossAxisFill`, a designer's FILL) still widens it; the content
+        // then sits at the start. It was BUILT AT 320 with a 120 floor (#1424, Q152.3) so a filling, wrapping label had a
+        // width to resolve against, which held a placed row at 320 even under a HUG override. Switch.Row already hugs.
         children: ['content'],
       },
       // THE ROW'S ONE FLOW CHILD (#2894, owner Q539 Q?3 A — named `content`). The row centers this box; the box
@@ -373,8 +369,7 @@ export const checkboxRow: ComponentDef = {
       content: {
         kind: 'box',
         role: 'presentation',
-        layout: { direction: 'row', align: 'start', justify: 'start', sizing: { x: 'fill', y: 'hug' } },
-        grow: true,
+        layout: { direction: 'row', align: 'start', justify: 'start', sizing: { x: 'hug', y: 'hug' } },
         gap: 'size.{size}.gap',
         children: ['controlCell', 'textStack'],
         note: 'The control and the label, side by side and top-aligned. The row centers this box in its minimum height, and the control stays beside the label\'s first line.',
@@ -435,8 +430,7 @@ export const checkboxRow: ComponentDef = {
       textStack: {
         kind: 'box',
         role: 'presentation',
-        layout: { direction: 'column', align: 'start', justify: 'start', sizing: { x: 'fill', y: 'hug' } },
-        grow: true,
+        layout: { direction: 'column', align: 'start', justify: 'start', sizing: { x: 'hug', y: 'hug' } },
         paddingTop: 'size.{size}.label-inset',
         gap: 'description-gap',
         children: ['label', 'description'],
@@ -448,16 +442,14 @@ export const checkboxRow: ComponentDef = {
       label: {
         kind: 'text',
         type: 'size.{size}.text',
-        // WRAPS rather than overflows (#1424). A consent line is often long and must wrap, not truncate
-        // (`docs.dont` forbids centering it for that reason), so the label FILLS the row's main axis and
-        // reflows while the top-aligned row holds the control on the first line (#1201). The row's `minWidth`
-        // floor is what gives the fill something to resolve against — `anatomyErrors` requires it.
-        wrap: true,
+        // HUGS ITS TEXT (#4473, owner decision A), as Switch.Row's label does, so the row is as wide as the label. It
+        // used to FILL the row and wrap (#1424), which needed the row's 320 build width and held a placed row at 320.
+        // In code a long label still wraps at its container's width (`codeOnly`).
         // Maintainer detail, out of the reader caption (#3610): The accessible name AND the second half of the hit
         // target. Rich content in code (a consent line carries a link); a plain text node in Figma, where a nested
-        // link cannot exist. It WRAPS to a second line rather than overflowing (#1424) — it fills the row's main axis
-        // and reflows.
-        note: 'The accessible name, and part of what a person clicks; a long label wraps to a second line.',
+        // link cannot exist. It hugs its text in Figma (#4473); in code it wraps at its
+        // container's width.
+        note: 'The accessible name, and part of what a person clicks; the row is as wide as its label.',
       },
       // THE DESCRIPTION (#3153, owner Q853 A). Helper text under the label: one type step below it, in the muted
       // ink, starting at the label's edge (it is the text column's second child), a small fixed gap above it. Hidden
@@ -466,7 +458,6 @@ export const checkboxRow: ComponentDef = {
         kind: 'text',
         type: 'description.{size}.text',
         paintSlot: 'indicator',
-        wrap: true,
         optional: true,
         note: 'The optional description under the label, in the muted text color, one type step smaller and starting at the label\'s edge. Hidden by default.',
       },
@@ -514,7 +505,7 @@ export const checkboxRow: ComponentDef = {
         class: 'localization',
         disposition: 'lowered',
         description:
-          'text expansion — labels run 150-200% longer in German or Russian (brief §9). The label wraps freely and the control stays on the first line (#1201), so a long label does not break the row. The Figma members carry the English placeholder only.',
+          'text expansion — labels run 150-200% longer in German or Russian (brief §9). In code the label wraps at its container\'s width and the control stays on the first line (#1201), so a long label does not break the row. In Figma the row hugs its label (#4473) and a label does not wrap; the Figma members carry the English placeholder only.',
       },
     ],
   },

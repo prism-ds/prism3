@@ -247,6 +247,24 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     const bar = document.querySelector('[data-p3="error-bar"]');
     return { shown: !!bar && !bar.hidden, text: bar?.querySelector('.p3-errstrip-text')?.textContent ?? '', action: document.querySelector('[data-p3="error-fix"]')?.textContent ?? null };
   });
+  // One edit on the Shape page's first slider, waited on as the state the checks read (#4489). ONE press (down from the
+  // top, up from anywhere else), then a wait
+  // until the slider as redrawn reads a new value: each step redraws the panel whole (`domains/shape.ts`, "HOW IT
+  // REPAINTS"), and five presses with no wait between them sent the next press into that redraw. The three past the
+  // slider's top changed nothing, and the press right after the one that reached it twice froze the page in a local
+  // loop, which is CI's 30 s "waiting for locator" (the freeze itself is filed on its own). Never throws: a slider that
+  // does not move returns `moved: false` and the old value, so the check that reads it fails by name.
+  const SHAPE_SLIDER = '[data-p3="shape-levers"] input[type="range"]:not([disabled])';
+  const nudge = async (page) => {
+    const range = page.locator(SHAPE_SLIDER).first();
+    try {
+      const v0 = await range.inputValue({ timeout: 5000 });
+      const atTop = await range.evaluate((el) => Number(el.value) >= Number(el.max), undefined, { timeout: 5000 });
+      await range.press(atTop ? 'ArrowLeft' : 'ArrowRight', { timeout: 5000 });
+      const moved = await page.waitForFunction(([sel, was]) => document.querySelector(sel)?.value !== was, [SHAPE_SLIDER, v0], { timeout: 5000 }).then(() => true, () => false);
+      return { v0, v1: await range.inputValue({ timeout: 5000 }), moved };
+    } catch (e) { return { v0: null, v1: null, moved: false, err: String(e?.message ?? e).split('\n')[0] }; }
+  };
   // Early: nothing done yet, so the file's brand loads and nothing is offered.
   {
     const { page, errors } = await openPanel();
@@ -292,17 +310,12 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     const { page, errors } = await openPanel();
     const before = (await readStart(page)).brandSel ?? '';
     await hooks.click(page.locator('[data-p3="tab-shape"]'));
-    const range = page.locator('[data-p3="shape-levers"] input[type="range"]:not([disabled])').first();
-    const v0 = await range.inputValue();
-    await range.focus();
-    for (let i = 0; i < 5; i++) await range.press('ArrowRight');
-    await page.waitForTimeout(150);
-    const v1 = await range.inputValue();
+    const { v0, v1, moved } = await nudge(page);
     await post(page, { type: 'restore-input', input: NB_BRAND });
     await page.waitForTimeout(150);
     const s = await readStart(page);
     const bar = await strip(page);
-    ok(v1 !== v0 && !(s.brandSel ?? '').includes('restored-brand') && s.brandSel === before && bar.shown && bar.text === OFFER && bar.action === ACTION,
+    ok(moved && v1 !== v0 && !(s.brandSel ?? '').includes('restored-brand') && s.brandSel === before && bar.shown && bar.text === OFFER && bar.action === ACTION,
       `#3697 R9 edit-only: a restore after the designer only edited a lever does not replace the edit, and the strip offers the file's brand — lever ${v0} → ${v1}, brand "${s.brandSel}" (was "${before}"), ${JSON.stringify(bar)}`);
     ok(errors.length === 0, `no console errors (${errors.slice(0, 1).join('') || 'none'})`);
     await page.close();
@@ -314,17 +327,23 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
   // bypass the review reproduced) fails `#3697 R9 confirm-edits` by name.
   {
     const { page, errors } = await openPanel();
+    const switcherReads = (want) => page.waitForFunction((w) => (document.querySelector('[data-p3="brand-switcher"]')?.textContent ?? '').toLowerCase().includes(w.toLowerCase()), want, { timeout: 4000 }).then(() => true, () => false);
     await hooks.click(page.locator('[data-p3="brand-switcher"]').first());
-    await hooks.click(page.locator('[data-p3="brand-menu-example"]').first());
-    await page.waitForTimeout(150);
+    // The example is waited on by name (#4489): the Shape page is opened only once the switcher names it, not after a
+    // fixed 150 ms, so a load that lands late cannot redraw the panel under the edit. It is the first example the
+    // switcher does not already name (the boot brand is the first example), so the wait cannot pass before the load.
+    const bootName = ((await readStart(page)).brandSel ?? '').toLowerCase();
+    await hooks.need(page, '[data-p3="brand-menu-example"]');
+    const labels = await page.locator('[data-p3="brand-menu-example"] .p3-menu-label').allTextContents();
+    const pickAt = labels.findIndex((l) => l.trim() !== '' && !bootName.includes(l.trim().toLowerCase()));
+    const example = page.locator('[data-p3="brand-menu-example"]').nth(Math.max(pickAt, 0));
+    const exampleName = pickAt < 0 ? '' : labels[pickAt].trim();
+    await hooks.click(example);
+    const exampleLoaded = exampleName !== '' && await switcherReads(exampleName);
     const chosen = (await readStart(page)).brandSel ?? '';
     await hooks.click(page.locator('[data-p3="tab-shape"]'));
-    const range = page.locator('[data-p3="shape-levers"] input[type="range"]:not([disabled])').first();
-    const v0 = await range.inputValue();
-    await range.focus();
-    for (let i = 0; i < 5; i++) await range.press('ArrowRight');
-    await page.waitForTimeout(150);
-    const v1 = await range.inputValue();
+    const range = page.locator(SHAPE_SLIDER).first();
+    const { v0, v1, moved } = await nudge(page);
     await post(page, { type: 'restore-input', input: NB_BRAND });
     await page.waitForTimeout(150);
     const held = await strip(page);
@@ -333,8 +352,8 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     const asked = await strip(page);
     const buttons = await page.evaluate(() => ['overwrite-replace', 'overwrite-cancel'].map((k) => document.querySelector(`[data-p3="error-bar"] [data-p3="${k}"]`)?.textContent ?? null));
     const mid = await readStart(page);
-    ok(held.action === ACTION && asked.shown && CONFIRM.test(asked.text) && buttons[0] === 'Replace brand' && buttons[1] === 'Cancel' && mid.brandSel === chosen,
-      `#3697 R9 confirm-edits: taking the offer over unsaved edits asks first, in the strip, and replaces nothing yet — ${JSON.stringify(asked)}, buttons ${JSON.stringify(buttons)}, brand "${mid.brandSel}" (chosen "${chosen}")`);
+    ok(exampleLoaded && moved && held.action === ACTION && asked.shown && CONFIRM.test(asked.text) && buttons[0] === 'Replace brand' && buttons[1] === 'Cancel' && mid.brandSel === chosen,
+      `#3697 R9 confirm-edits: taking the offer over unsaved edits asks first, in the strip, and replaces nothing yet — ${JSON.stringify(asked)}, buttons ${JSON.stringify(buttons)}, brand "${mid.brandSel}" (chosen "${chosen}"; example "${exampleName}" named by the switcher: ${exampleLoaded}; lever ${v0} → ${v1}, moved: ${moved})`);
     await hooks.click(page.locator('[data-p3="error-bar"] [data-p3="overwrite-cancel"]'));
     await page.waitForTimeout(150);
     const kept = await readStart(page);
@@ -357,14 +376,11 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     // a designer-chosen load over edits, read the same way, must draw the offer. Without that control a renamed hook or
     // a late draw read as "no offer". Mutations (#4245, each fails by name): the hook renamed in `bar.ts` · the offer
     // never drawn (`v.undo ? undo : null` → `null`).
-    const switcherReads = (want) => page.waitForFunction((w) => (document.querySelector('[data-p3="brand-switcher"]')?.textContent ?? '').toLowerCase().includes(w.toLowerCase()), want, { timeout: 4000 }).then(() => true, () => false);
     const undoDrawn = () => page.evaluate(() => document.querySelectorAll('[data-p3="undo-load"]').length);
     const settled = await switcherReads('restored-brand');
     const u = await undoDrawn();
     await hooks.click(page.locator('[data-p3="tab-shape"]'));
-    const lever = page.locator('[data-p3="shape-levers"] input[type="range"]:not([disabled])').first();
-    await lever.focus();
-    for (let i = 0; i < 5; i++) await lever.press('ArrowRight');
+    const edited = await nudge(page);
     await hooks.click(page.locator('[data-p3="brand-switcher"]').first());
     const pick = page.locator('[data-p3="brand-menu-example"]').first();
     const pickName = ((await pick.locator('.p3-menu-label').textContent()) ?? '').trim();
@@ -372,7 +388,7 @@ console.log('\n3b. a late restore-input after the designer acted is offered, not
     await hooks.click(page.locator('[data-p3="overwrite-replace"]').first());
     const chosenLoaded = pickName !== '' && await switcherReads(pickName);
     const control = await undoDrawn();
-    ok(chosenLoaded && control === 1, `#4245 control: a load the designer chooses over edits draws Undo load once the switcher names it ("${pickName}" loaded: ${chosenLoaded}, undo-load drawn: ${control})`);
+    ok(edited.moved && chosenLoaded && control === 1, `#4245 control: a load the designer chooses over edits draws Undo load once the switcher names it ("${pickName}" loaded: ${chosenLoaded}, undo-load drawn: ${control}, lever ${edited.v0} → ${edited.v1}, moved: ${edited.moved})`);
     hooks.absent(ok, { seen: settled && chosenLoaded && control === 1, state: 'Undo load drawn after a chosen load, in this same panel' },
       u === 0, `#1037 the file's own brand arriving offers no Undo load (undo-load drawn: ${u})`);
     ok(errors.length === 0, `no console errors (${errors.slice(0, 1).join('') || 'none'})`);

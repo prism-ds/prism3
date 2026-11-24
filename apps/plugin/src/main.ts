@@ -18,7 +18,7 @@
  * Compiled under `tsconfig.main.json` (plugin-typings, `lib` WITHOUT `dom`), so any accidental
  * `document`/`window` reference is a COMPILE error — the two-context split is enforced by types.
  */
-import { applyHeadline, APPLY_FAILED_HEADLINE, failureDetail, conflictHeadline, componentHeadline, staleNote, missesLine, refsItems, partialWriteHeadline, partialWriteItem, fromClauses, motionReplacedItem } from './apply-summary';
+import { applyHeadline, APPLY_FAILED_HEADLINE, failureDetail, conflictHeadline, componentHeadline, staleNote, missesLine, refsItems, partialWriteHeadline, partialWriteItem, fromClauses, motionReplacedItem, weightFallbackNote, retiredWeightsItem } from './apply-summary';
 import { ENGINE_VERSION, formerDefIds, serializeBrandInput, resolveAllModes, brandTheme, UnrecognizedPersistedInputError, type BrandInput } from '@prism3/engine';
 import { appendBuildNote, buildNote, parseBuildId } from '../../studio/src/build-identity';
 import { isIssueUrl } from '../../studio/src/state/report';
@@ -78,7 +78,8 @@ import { readUpdatesOff, writeUpdatesOff, type UpdatesOff } from './updates-off'
 import { setNodeOf, showSetNode } from './show-set';
 import { planOverride, overrideVerdict, overrideData, wholeRunRefusal, confirmMoved, type OverrideChange, type OverrideRefusal } from './set-override';
 import { declaredModesOf, failedChecks, seedSummary } from './seed-modes';
-import { PACE_MS, pacer } from './pace';
+import { PACE_MS, pacer, handBack } from './pace';
+import type { HandBack } from './pace';
 import { searchComponents } from './component-search';
 import { materializeForBrand, materializerFor } from './brand-def';
 import { dueOf, entryFor, formerEntry, needsPrint, printOf, printSteps, quietOf, readLedger, recordSets, type DueReason, type Ledger, type LedgerEntry, type PlanPrint } from './as-built-ledger';
@@ -344,18 +345,7 @@ void (async (): Promise<void> => {
  * Theme post no readings, and its Capture baseline and Adopt (#3189) post theirs to the panel directly (`postProgress`),
  * a reading at each def, for the status strip.
  */
-const postProgress = (run: RunProgressKind, p: ApplyProgress): void => postToUi({ type: 'run-progress', run, ...p });
-/** An executor `yieldTo` that hands the thread back only once about `PACE_MS` of work has run since it last did, and
- *  then says `again` first. Asked after every member (`chunk: 1`); a wait the executor asks for (`ms`) is always kept. */
-const paced = (again: () => void): ((ms?: number) => Promise<void>) => {
-  let last = Date.now();
-  return async (ms?: number): Promise<void> => {
-    if (!ms && Date.now() - last < PACE_MS) return;
-    again();
-    await new Promise<void>((r) => setTimeout(r, ms ?? 0));
-    last = Date.now();
-  };
-};
+const postProgress = (run: RunProgressKind, p: ApplyProgress, throttled = false): void => postToUi({ type: 'run-progress', run, ...p, ...(throttled ? { throttled: true as const } : {}) });
 /** Apply Theme's pacing: a reading and a hand-back before each of its seven stages, and inside every stage the cadence a
  *  component write keeps (#3208): the executors offer a `tick` after each variable or style, and it hands the thread back
  *  once about `PACE_MS` of work has run since the last hand-back. The thread is handed back for an agent's apply too; only
@@ -402,7 +392,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
     // The write sequence — fonts first, pre-flight, then the guarded executor calls — lives in
     // `apply-theme.ts` since #111, so the MCP paste harness can prove parity against this exact path. The
     // global `figma` is the host; everything below this line (the report) is unchanged.
-    const { plans, pf, guarded, before, chose, exec, names, applied } = await runApplyTheme(input, figma, () => saveVersion(figma, { run: 'apply-theme' }).then(() => undefined), themePace(sink), choices);
+    const { plans, pf, guarded, before, chose, exec, names, applied, weightFallbacks } = await runApplyTheme(input, figma, () => saveVersion(figma, { run: 'apply-theme' }).then(() => undefined), themePace(sink), choices);
     const { colorFiles, floatPlan, fontPlan, motionPlan } = plans;
     // #4157 (owner A): the file's plan allows fewer modes than the apply adds. Refused whole, before any write, in one line.
     if (!guarded.ok && guarded.limit) { sink.data({ modeLimit: guarded.limit }); const line = modeLimitLine(guarded.limit); postVerdict({ type: 'apply-result', ok: false, headline: '✗ not applied', summary: line, lines: [line] }, sink); return; }
@@ -418,7 +408,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       postVerdict({ type: 'apply-result', ok: false, headline: conflictHeadline(guarded.conflicts.length), summary: conflicts, lines: [conflicts], ...collisions }, sink);
       return;
     }
-    const { mig, r, f, s, gs, tv, ts, mv, uc, styleRenames } = guarded.result;
+    const { mig, r, f, s, gs, tv, ts, mv, uc, rw, styleRenames } = guarded.result;
     // `motion` (#2412) — TIMING + EASING through the mixed-type executor; its refusals count with the font ones.
     const motionTotal = mv.collections.reduce((n, c) => n + c.total, 0);
     const motionCreated = mv.collections.reduce((n, c) => n + c.created, 0);
@@ -458,7 +448,8 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       ...f.collections.map((c) => ({ name: c.name, names: c.orphans })),
       ...tv.collections.map((c) => ({ name: c.name, names: c.orphans })),
       ...mv.collections.map((c) => ({ name: c.name, names: c.orphans })), { name: `${names.core ?? 'core'}/other`, names: uc }, // #1109, DRAFT label
-    ].map((o) => ({ ...o, names: unlessRenamedPlanned(o.names, plannedVariables) })).filter((o) => o.names.length);
+    // #4474: a weight variable this run removed (`rw.removed`) was counted as an orphan before it went; it is not drift.
+    ].map((o) => ({ ...o, names: unlessRenamedPlanned(o.names, plannedVariables).filter((n) => !rw.removed.includes(n)) })).filter((o) => o.names.length);
     const orphanCount = allOrphans.reduce((n, o) => n + o.names.length, 0);
     const orphanNote = orphanCount
       ? `⚠ ${orphanCount} variables the brand no longer writes (${allOrphans.map((o) => `${o.name}: ${o.names.length}`).join(', ')}). Nothing was deleted — Update file › Clean up lists them`
@@ -544,6 +535,8 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       : '';
     // One item per axis and per note, each joined by `, ` (#2177: one line each in the Activity drawer).
     const { summary, lines } = fromClauses([
+      // #4474 (owner decision A): a missing weight was found before the first write, so it is said first.
+      weightFallbackNote(weightFallbacks),
       `Palette: ${r.paletteTotal} (+${r.paletteCreated})`, `Color: ${r.colorTotal} (+${r.colorCreated})`,   // #4185 B row 3: labels (owner, 2026-11-20)
       `Layout: ${f.collections.length} collections (+${floatCreated})`,   // #4185 B row 3 (DRAFT): words, not abbreviations
       `Styles: ${s.effects.total} effects (+${s.effects.created}, ${s.effects.bound} bound) / ${s.paints.total} gradients (+${s.paints.created}, ${s.paints.bound} stops bound) / ${gs.total} grid styles (+${gs.created})`,
@@ -551,6 +544,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       `Motion: ${motionTotal} variables (+${motionCreated})`,
       // #2412 (Q293 A): the one deletion Apply makes, so it is always said (wording: Q302).
       motionReplacedItem(mv.replaced.length),
+      retiredWeightsItem(rw.removed),   // #4474: the other deletion Apply makes, so it is always said
       `${r.bound + f.bound + tv.bound + mv.bound + ts.bound} bindings`, misses ? `${misses} misses` : '',
       ...renameNotes, orphanNote, orphanStylesNote, strandedNote, resolvedNote, skippedNote, gridSkippedNote(gs.skipped), fontNote, refusedNote,
       // #1909: what the person chose for the collisions this apply met, when it met any (copy DRAFT, `choiceNote`).
@@ -586,6 +580,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
         orphans: allOrphans, orphanStyles: orphanStyleGroups, stranded,
         renames: { migrated, refused: migRefused, mapRefusals: mig.refusals },
         textStylesSkipped: ts.skipped, fontsUnavailable: pf.unavailable, resolvedStyles: ts.resolvedStyles,
+        weightFallbacks, retiredWeights: rw,
       },
     });
     postVerdict({ type: 'apply-result', ok: misses === 0, headline: applyHeadline(misses, ts.skipped.length), summary, lines }, sink);
@@ -843,6 +838,9 @@ const docBlockFixOf = async (outcomes: readonly FurnitureOutcome[]): Promise<Doc
   } catch { return null; }
 };
 const buildComponents = async (defId: string | undefined, sink: ActionSink, options: BuildOptions = {}): Promise<void> => {
+  // #4476, #724: the build's one hand-back, for its page loads and every set it builds: taken once `PACE_MS` of work has
+  // run, and spaced out while a hidden window throttles it, which its readings then say (`throttled`).
+  const hand = handBack();
   // EXACTLY ONE VERDICT PER BUILD, and this flag exists because #908's reordering is what made a second one
   // possible. The success verdict now posts BEFORE the console telemetry, so a throw in the telemetry tail
   // would reach the catch below and overwrite a correct "built" verdict with "apply failed" — reporting a
@@ -978,6 +976,8 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
         emitAsComponents: target.figmaProperties?.emitAsComponents,
         // #1623 sign-off — the def's one-line `summary` becomes the Figma description of what it builds.
         description: target.summary,
+        // #4476, #724: the run's hand-back, in place of a `setTimeout(0)` at every chunk.
+        yieldTo: hand,
         // Posted straight through, unaggregated: the executor owns the phase/fraction and this is the
         // only place that can see the timing. `chunkMs` is CALIBRATION data (see `CHUNK`) — the shim has
         // no event loop, so chunk size can only be tuned from a live run, and this is how it gets out.
@@ -995,7 +995,7 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
           // The console gets the whole reading including `elapsedMs`; the pill shows a fraction and nothing
           // more. Spreading would put every field the executor ever adds onto the bridge by default — a
           // widening the message contract in `messages.ts` never agreed to, and one that reads as intentional.
-          sink.post({ type: 'component-progress', phase: p.phase, done: p.done, total: p.total, chunkMs: p.chunkMs });
+          sink.post({ type: 'component-progress', phase: p.phase, done: p.done, total: p.total, chunkMs: p.chunkMs, ...(hand.throttled ? { throttled: true as const } : {}) });
         },
       });
       // THE AS-BUILT LEDGER (#2909 Q2909.8 A): a set this build landed whole, every member fresh or already this plan's,
@@ -1025,7 +1025,7 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
     // is built before it, deepest first (`build-deps.ts`). One that is already in the file is left alone:
     // rebuilding it would orphan its placed instances, so it keeps its STALE reading exactly as before. A
     // dependency that fails stops here, so the parent is never built against a missing nest.
-    await loadPagesYielding();
+    await loadPagesYielding(undefined, hand.every);
     // A NAMED VERSION BEFORE THE FIRST WRITE (#2828), for the def and the sets it adds first. A host that refuses
     // lands in the catch below with nothing written.
     await saveBeforeBuild(figma as unknown as Parameters<typeof saveBeforeBuild>[0], def, { defs: componentDefs, project });
@@ -1459,14 +1459,16 @@ const watchSets = (): void => {
  * no `loadAsync` (a Node shim) skips straight to it. Every read and write in this file that needs every page loads them
  * here, so none of them freezes the file while the read after open is still going.
  */
-const loadPagesYielding = async (onPage?: (done: number, total: number) => void): Promise<void> => {
+/** `hand`: how the thread is handed back after each page; a run passes its own `handBack`'s `every` (#4476): a page per
+ *  turn while the window is visible, as before, and a hand-back per stretch of work while a hidden window throttles it. */
+const loadPagesYielding = async (onPage?: (done: number, total: number) => void, hand: () => Promise<void> = breathe): Promise<void> => {
   // #3170 Q3170.1 A: the read after open says how far it has got, a page at a time (`onPage`), for the status strip.
   const pages = (figma.root.children as readonly { loadAsync?(): Promise<void> }[]).filter((p) => typeof p.loadAsync === 'function');
   if (pages.length) onPage?.(0, pages.length);
   for (const [i, p] of pages.entries()) {
     await p.loadAsync!();
     onPage?.(i + 1, pages.length);
-    await breathe();
+    await hand();
   }
   await figma.loadAllPagesAsync();
 };
@@ -1921,13 +1923,19 @@ const updateComponents = async (defId: string | readonly string[] | undefined, p
       furniture.push(...await furnishUpdate(file as FurnitureApi, { outcomes: [{ def }] }, targets, paneled ? (set, d) => panelFor(set, d, file as PanelApi) : undefined));
     };
     // #3170: the panel's own update reports each set boundary and hands the thread back after about `PACE_MS` inside a
-    // set (`chunk: 1`, `paced`), and reads its Stop at each boundary. An agent's update yields as before and posts nothing.
+    // set (`chunk: 1`, the run's `handBack`, #4476), and reads its Stop at each boundary. An agent's update posts nothing.
     const panel = sink === uiSink;
     if (panel) updateStopAsked = false;
     let last: ApplyProgress | null = null;
-    const progress = (p: ApplyProgress): void => { last = p; postProgress('update', p); };
-    const pacing = panel ? { progress, stop: () => updateStopAsked, chunk: 1, yieldTo: paced(() => { if (last) postProgress('update', last); }) } : {};
-    const r = await applyUpdate(figma as unknown as ApplyHost, figma as unknown as ComponentsApi, targets, previewHash, { descriptionOf, nameOf, breathe, furnish, ...(choices ? { choices } : {}), ...pacing });
+    // #4476: the run's one hand-back. Its reads and set boundaries hand back at every pass as before (`every`), and its
+    // members once `PACE_MS` of work has run (the panel's run asks after every member, `chunk: 1`), saying the last reading
+    // again first; all of it spaced out while a hidden window throttles it, which the readings then say. An agent's run
+    // hands back by it too, and posts nothing.
+    let hand: HandBack | null = null;
+    const progress = (p: ApplyProgress): void => { last = p; postProgress('update', p, !!hand?.throttled); };
+    hand = handBack(undefined, panel ? () => { if (last) postProgress('update', last, !!hand?.throttled); } : undefined);
+    const pacing = panel ? { progress, stop: () => updateStopAsked, chunk: 1 } : {};
+    const r = await applyUpdate(figma as unknown as ApplyHost, figma as unknown as ComponentsApi, targets, previewHash, { descriptionOf, nameOf, breathe: hand.every, yieldTo: hand, furnish, ...(choices ? { choices } : {}), ...pacing });
     r.refused.push(...refused);
     // THE AS-BUILT LEDGER (#2909 Q2909.8 A): each set the apply acted on is recorded as built from today's def, under the
     // brand its plans were laid from (the panel's, which the run's Theme step applied). A refused set, or an apply
@@ -2155,13 +2163,16 @@ const styleGuide = async (options: StyleGuideOptions, sink: ActionSink): Promise
     // the pending pill and, logged, to the console: a hung run's last line names the table it hung on, and
     // `tableMs` is the live figure `CELLS_PER_YIELD` is calibrated against. Pages first, one per turn (#3110):
     // `runStyleGuide`'s own `loadAllPagesAsync` then has nothing left to load.
-    await loadPagesYielding();
+    // #4476: the run's hand-back, taken once `PACE_MS` of work has run and spaced out while a hidden window throttles it.
+    const hand = handBack();
+    await loadPagesYielding(undefined, hand.every);
     const result = await runStyleGuide(figma, contract, options, {
+      yieldTo: hand,
       // A NAMED VERSION BEFORE THE FIRST WRITE (#2828); a host that refuses ends the run in the catch below.
       beforeWrite: (tables) => saveVersion(figma, { run: 'style-guide', tables }).then(() => undefined),
       onProgress: (p) => {
         if (p.done > 0) console.log(`[prism3 #1778] style guide: table ${p.done} of ${p.total}, ${p.title}, ${p.tableMs}ms`);
-        sink.post({ type: 'style-guide-progress', done: p.done, total: p.total, tableMs: p.tableMs });
+        sink.post({ type: 'style-guide-progress', done: p.done, total: p.total, tableMs: p.tableMs, ...(hand.throttled ? { throttled: true as const } : {}) });
       },
       onPlan: (tables) => { if (panel) sink.post({ type: 'style-guide-tables', tables: tables.map((t) => ({ key: t.key, title: t.title, page: t.page.replace(/^↳\s*/, '') })) }); },
       onTable: (e) => { if (panel) sink.post({ type: 'style-guide-table', index: e.index, status: e.status, ...(e.reason !== undefined ? { reason: e.reason } : {}) }); },

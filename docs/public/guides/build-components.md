@@ -25,7 +25,7 @@ On a file that isn't set up yet, the same run sets it up first. See [Set up a fi
 
 ## What a build does
 
-For each set, the plugin: <!-- src: apps/plugin/src/main.ts:925-1048#34f3a25b -->
+For each set, the plugin: <!-- src: apps/plugin/src/main.ts:923-1048#bc047daf -->
 
 - builds any set the chosen one contains first, such as the icon and focus ring inside a button;
 - creates the set's page if the file does not have it, and switches Figma to that page;
@@ -39,7 +39,7 @@ A new set's description in Figma is its one-line summary from the engine. When t
 
 ## Read the result
 
-The status strip says how the run went, such as "Sets added" or "File updated". <!-- src: apps/studio/src/state/status-strip.ts:143-145 --> Each set's result is in the Activity drawer: <!-- src: apps/plugin/src/apply-summary.ts:85-95#5f523e92 -->
+The status strip says how the run went, such as "Sets added" or "File updated". <!-- src: apps/studio/src/state/status-strip.ts:155-157 --> Each set's result is in the Activity drawer: <!-- src: apps/plugin/src/apply-summary.ts:85-95#5f523e92 -->
 
 | Result | Meaning |
 |---|---|

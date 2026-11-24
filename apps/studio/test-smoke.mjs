@@ -5687,25 +5687,31 @@ console.log(`\nfacePin — Pin a cut control (#1467)\n${'='.repeat(78)}`);
 // an `-italic` twin for each upright style, italic, and keeps the upright ones upright; "Italic only" ships no
 // `-italic` twin and every leaf italic. A chip mapped to the wrong write fails by name.
 console.log(`\nItalic chips, through the exported DTCG (S6.3)\n${'='.repeat(78)}`);
+// ONE EXPORT PER PAGE (#4487). An export is five downloads (the base, then an overlay per mode, `exportTokens`), and
+// headless Chromium drops a page's downloads past ten in quick succession: three exports on one page under a second
+// apart delivered 10 files and 2 bases, the third export dropped whole, which is the merge queue's "no export" on
+// "Upright". So each chip gets its own page, where it replays the chips before it in the same order (each write is the
+// same transition as before: both, both → only, both → only → upright) and exports once. And the read waits for the
+// base by name, not the first download: within one export the base sometimes lands after the overlays (22 of 174
+// exports in a local loop), and an overlay read as the export has no `type.<text type>` leaves (CI's `()`).
 {
   const brand = BRANDS[0];
   const G = 'caption';
-  const { ctx, page, drain } = await openBrand(brand);
-  await gotoType(page);
-  const exported = async () => {
+  const errs = [];
+  const exported = async (page) => {
     await hooks.click(page.locator('[data-p3="rail-export"]'));
     await hooks.need(page, '[data-p3="export-page"]');
-    const pending = page.waitForEvent('download');
+    const pending = page.waitForEvent('download', { predicate: (d) => d.suggestedFilename().endsWith('.base.tokens.json'), timeout: 15000 });
     await hooks.click(page.locator('[data-p3="export-page"] [data-p3="dialog-confirm"]'));
-    const dl = await pending;
     try {
+      const dl = await pending;
       const tree = JSON.parse(await readFile(await dl.path(), 'utf8'));
       const root = tree[Object.keys(tree).find((k) => !k.startsWith('$'))];
       const out = [];
       const walk = (n, path) => { for (const [k, v] of Object.entries(n ?? {})) { if (k.startsWith('$') || !v || typeof v !== 'object') continue; if (v.$type === 'typography') out.push({ key: `${path}.${k}`, italic: v.$value?.fontStyle === 'italic' }); else walk(v, `${path}.${k}`); } };
       walk(root?.type?.[G], `type.${G}`);
       return out;
-    } catch { return null; } finally { await gotoType(page); }
+    } catch { return null; }
   };
   const RULE = {
     upright: (ls) => ls.length > 0 && ls.every((l) => !l.italic && !/-italic/.test(l.key)),
@@ -5715,16 +5721,24 @@ console.log(`\nItalic chips, through the exported DTCG (S6.3)\n${'='.repeat(78)}
   const WORDS = { upright: 'Upright', both: 'Upright + italic', only: 'Italic only' };
   const SAYS = { upright: 'no italic style', both: 'an italic twin for each upright style', only: 'fontStyle italic with no upright style' };
   const CHIP = { both: '[data-p3="italic-choice-both"]', only: '[data-p3="italic-choice-only"]', upright: '[data-p3="italic-choice-upright"]' };
-  for (const chip of ['both', 'only', 'upright']) {
-    const sel = `[data-p3="italic-row"][data-group="${G}"] ${CHIP[chip]}`;
-    await hooks.click(page.locator(sel));
-    await page.waitForFunction((x) => document.querySelector(x)?.getAttribute('aria-checked') === 'true', sel, { timeout: 5000 }).catch(() => {});
-    const ls = await exported();
-    ok(!!ls && RULE[chip](ls), `italics chip "${WORDS[chip]}" on ${G} exports ${SAYS[chip]} (${ls ? ls.map((l) => `${l.key.split('.').slice(2).join('.')}${l.italic ? '*' : ''}`).join(' ') : 'no export'})`);
+  const ORDER = ['both', 'only', 'upright'];
+  for (const [k, chip] of ORDER.entries()) {
+    const { ctx, page, drain } = await openBrand(brand);
+    await gotoType(page);
+    // Each click is read as pressed before the next (`aria-pressed`, `chipChoice`; the old wait read `aria-checked`,
+    // which the chip never carries, and swallowed the timeout), and a chip that never reads pressed says so (#4487).
+    let pressed = true;
+    for (const c of ORDER.slice(0, k + 1)) {
+      const sel = `[data-p3="italic-row"][data-group="${G}"] ${CHIP[c]}`;
+      await hooks.click(page.locator(sel));
+      pressed = pressed && await page.waitForFunction((x) => document.querySelector(x)?.getAttribute('aria-pressed') === 'true', sel, { timeout: 5000 }).then(() => true, () => false);
+    }
+    const ls = await exported(page);
+    ok(pressed && !!ls && RULE[chip](ls), `italics chip "${WORDS[chip]}" on ${G} exports ${SAYS[chip]} (${pressed ? '' : 'a chip never read pressed; '}${ls ? ls.map((l) => `${l.key.split('.').slice(2).join('.')}${l.italic ? '*' : ''}`).join(' ') : 'no export: the base file never arrived'})`);
+    errs.push(...drain());
+    await ctx.close();
   }
-  const errs = drain();
   ok(errs.length === 0, `${brand}: driving the italic chips raised 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
-  await ctx.close();
 }
 
 // =============================================================================================
