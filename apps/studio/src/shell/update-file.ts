@@ -78,9 +78,6 @@ export type UpdateFileLend = {
     /** The style guide's retired tables (Q412 A), and whether their removal is out. */
     readonly retired: readonly { readonly id: string; readonly name: string }[];
     readonly cleanupBusy: boolean;
-    /** #4480 (Q2 A): how many tables the Style guides step will draw, from Documentation's saved settings over the file's
-     *  tables as the host last listed them; null until the host has listed them. */
-    readonly guides: number | null;
     /** Q2909.8 A: the background pass's hand edits by set, and the scoped check's last answer (`pending` while out). */
     readonly handEdits: ReadonlyMap<string, { readonly members: number; readonly edited: number }>;
     readonly updateCheck: { readonly previewHash: string; readonly sets: readonly CheckedSetView[]; readonly error: string | null } | 'pending' | null;
@@ -122,9 +119,6 @@ export type UpdateFileLend = {
   readonly pruneCheck: () => void;
   readonly pruneDelete: () => void;
   readonly cleanUp: (ids: readonly string[]) => void;
-  /** #4480 (Q2 A): ask the host to list the file's style-guide tables (`style-guide-catalog-request`), so the Style guides
-   *  row can count them. */
-  readonly countGuides: () => void;
 };
 
 /** Mount the button and the overlay. The bar places `button`; the frame places `layer` last, over everything. */
@@ -202,7 +196,6 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
       liveAtOpen = r.liveDue;
       // #3422 Q44 A: the brand Theme's default tick picks (#3023 Q701 B); a file not set up ticks Theme always.
       lend.check(themeDueOf(liveAtOpen) || r.fileSets?.setUp === false);
-      lend.countGuides();
     }
     paint();
     const d = layer.querySelector<HTMLElement>('[data-p3="update-dialog"]');
@@ -640,10 +633,7 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
       if (!open) comps.replaceChildren(compsHead);
       body.push(comps);
     }
-    // #4480 (Q2 A): the chip says how many tables the step will draw, before the run.
-    const guides = r.guides;
-    body.push(item('guides', t.guides, UPDATE_COPY.guides, UPDATE_COPY.guidesSub, () => { ticks = { ...t, guides: !t.guides }; },
-      guides === null ? null : hook(h('span', 'p3-sg-tag', UPDATE_COPY.guidesCount(guides)), 'update-guides-count')));
+    body.push(item('guides', t.guides, UPDATE_COPY.guides, UPDATE_COPY.guidesSub, () => { ticks = { ...t, guides: !t.guides }; }));
     const t2 = ticks ?? t;
     // The update waits on the check's answer: its counts are what the person reviews, and its hash what the update echoes.
     const updatable = answered ? updateDefsOf(t2, answered, panelSets, keptSets) : [];

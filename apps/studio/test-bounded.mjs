@@ -78,6 +78,11 @@ const stallStack = async (page) => {
   }
 };
 
+/** Where a page that stopped is (#4342, #4465): its JavaScript stack, or that it was running none. Only on a page
+ *  `watchStalls` already watches, since a debugger turned on once the page is stuck never lands (this file's header);
+ *  on any other page it says nothing rather than guess. */
+export const stallWhere = async (page) => (watched.has(page) ? stallStack(page) : '');
+
 /**
  * A suite's `bounded(page, label, act)`, which returns whether the input went through.
  *   · `ok(cond, label)` — the suite's assertion;

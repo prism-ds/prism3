@@ -13,7 +13,7 @@
  * `tree: below the table level nothing carries a box`; REM on by default → `draw: the defaults (H4–H9) …`; the
  * selection always sent as keys → `draw: every table selected sends no tables filter …`.
  */
-import { savedOf, readSaved, selectionOf, savedDrawOptions, savedDrawCount, drawnOf, treesOf, defaultOpen, boxOf, countsOf, summaryText, drawLabel, kindsOf, hasLengths, byTitles, drawOptions, DEFAULT_OPTIONS, keepSelection, tablesInView, type SgNode } from './src/state/style-guides';
+import { savedOf, readSaved, selectionOf, savedDrawOptions, treesOf, defaultOpen, boxOf, countsOf, summaryText, drawLabel, kindsOf, hasLengths, byTitles, drawOptions, DEFAULT_OPTIONS, keepSelection, tablesInView, type SgNode } from './src/state/style-guides';
 import type { StyleGuideCatalog } from '../plugin/src/messages';
 
 let failed = 0;
@@ -140,22 +140,6 @@ ok(same([...keepSelection(CAT, new Set([0, 3]), newer)], [0]), 'selection: a new
   ok(same(savedDrawOptions(CAT, null), drawOptions(CAT, every, DEFAULT_OPTIONS)) && savedDrawOptions(CAT, null).rem === false && !('tables' in savedDrawOptions(CAT, null)),
     'saved: with nothing saved, Update file draws every table with the defaults, REM off and no tables filter');
   ok(same(savedDrawOptions(CAT, back).tables, [CAT.tables[0].key, CAT.tables[3].key]), 'saved: with a part selection saved, Update file draws those tables by key');
-}
-
-// #4480 (owner decisions Q1 A, Q2 A, 2026-11-23): what you see is drawn. A collection in view narrows the selection to its
-// own tables; the tables selected elsewhere stay selected but are not drawn. Expected tables typed here by index.
-{
-  const sel = new Set([0, 1, 3, 4, 5]);
-  ok(same([...drawnOf(CAT, sel, 'C:core')], [0, 1]), '#4480 Q1 A: with core in view, only the selected tables in core are drawn (0, 1), not color\'s or the text styles\'');
-  ok(same([...drawnOf(CAT, sel, null)], [0, 1, 3, 4, 5]), '#4480 Q1 A: with every collection in view, the whole selection is drawn');
-  ok(same([...drawnOf(CAT, sel, 'C:gone')], [0, 1, 3, 4, 5]), '#4480 Q1 A: a view the file no longer holds narrows nothing, as the page reads it');
-  const rec = readSaved(JSON.parse(JSON.stringify(savedOf(CAT, sel, 'C:core', '', DEFAULT_OPTIONS))));
-  ok(same(savedDrawOptions(CAT, rec).tables, [CAT.tables[0].key, CAT.tables[1].key]), '#4480 Q1 A: a record saved with core in view draws core\'s selected tables by key, and no other');
-  ok(savedDrawCount(CAT, rec) === 2, `#4480 Q2 A: the Style guides row counts 2 tables for that record (${savedDrawCount(CAT, rec)})`);
-  ok(savedDrawCount(CAT, null) === 6, `#4480 Q2 A: with nothing saved, the row counts every table in the file, 6 (${savedDrawCount(CAT, null)})`);
-  const allCore = readSaved({ tables: null, view: 'C:core', titles: '', opt: {} });
-  ok(same(savedDrawOptions(CAT, allCore).tables, [CAT.tables[0].key, CAT.tables[1].key, CAT.tables[2].key]) && savedDrawCount(CAT, allCore) === 3,
-    '#4480 Q1 A: every table selected with core in view draws core\'s three tables, and the row counts 3');
 }
 
 console.log(`\n${executed - failed}/${executed} passed`);

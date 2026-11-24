@@ -3,7 +3,7 @@
 <!-- DRAFT for owner review (#2637, lane 4; corrected to Documentation and Update file for #3264). -->
 
 Style guides are tables, one for each group of tokens in the file, drawn from the file's own variables, text styles, effect styles, gradient styles and grid styles. A rerun updates each table in place. <!-- src: apps/studio/src/shell/style-guides.ts:75#46a11854 --> <!-- src: apps/studio/src/shell/style-guides.ts:79#3d2941b6 -->
-They are in the Figma plugin only. You choose what to draw in the **Docs** area, and **Update file** draws it. <!-- src: apps/studio/src/state/update-file.ts:423-430 --> <!-- src: apps/studio/src/shell/pages.ts:521 -->
+They are in the Figma plugin only. You choose what to draw in the **Docs** area, and **Update file** draws it. <!-- src: apps/studio/src/state/update-file.ts:422-426 --> <!-- src: apps/studio/src/shell/pages.ts:521 -->
 
 Because the tables read the file rather than Studio, they show what the file holds right now, including anything you changed by hand. <!-- src: apps/plugin/src/style-guide.ts:1-40#0c86094b -->
 
@@ -16,14 +16,14 @@ Write the theme first if you want the color tables to show contrast. The contras
 ## Choose what to draw
 
 1. Open **Docs** in the rail, then the **Style guides** tab. <!-- src: apps/studio/src/shell/pages.ts:521 --> <!-- src: apps/studio/src/shell/pages.ts:536-541 -->
-2. Under **What to draw**, choose a **Collection** (or **Every collection**) and the **Kinds** to include, then tick the groups you want. One button works on the list in view: it reads **Select all**, or **Deselect all** once anything in view is ticked. <!-- src: apps/studio/src/shell/style-guides.ts:318-363 --> What you see is what is drawn: with one collection chosen, only the tables ticked in it are drawn. <!-- src: apps/studio/src/state/style-guides.ts:217-227#06623eb5 --> Tables ticked in another collection stay ticked, and **Every collection** draws them again. <!-- src: apps/studio/src/shell/style-guides.ts:332 -->
+2. Under **What to draw**, choose a **Collection** (or **Every collection**) and the **Kinds** to include, then tick the groups you want. One button works on the list in view: it reads **Select all**, or **Deselect all** once anything in view is ticked. <!-- src: apps/studio/src/shell/style-guides.ts:318-363 -->
 3. To draw only some tables, open **Draw by table title** and enter one title per line. Empty draws every table. <!-- src: apps/studio/src/shell/style-guides.ts:382-399 -->
-4. Set the **Options**. <!-- src: apps/studio/src/shell/style-guides.ts:589 --> Docs keeps your choices in the file. <!-- src: apps/studio/src/shell/documentation.ts:1-10#c1d00ceb -->
+4. Set the **Options**. <!-- src: apps/studio/src/shell/style-guides.ts:585 --> Docs keeps your choices in the file. <!-- src: apps/studio/src/shell/documentation.ts:1-10#c1d00ceb -->
 
 ## Draw the tables
 
 1. Choose **Update file** in the top bar.
-2. Tick **Style guides**: "Drawn with the settings in Docs. A rerun updates each table in place." It is ticked by default only on a file that isn't set up yet. <!-- src: apps/studio/src/state/update-file.ts:423-426 --> Beside it, the row says how many tables the run will draw, such as "2 tables". <!-- src: apps/studio/src/state/update-file.ts:429 -->
+2. Tick **Style guides**: "Drawn with the settings in Docs. A rerun updates each table in place." It is ticked by default only on a file that isn't set up yet. <!-- src: apps/studio/src/state/update-file.ts:422-425 -->
 3. Choose **Update file**.
 
 The status strip says "Style guides drawn" when the run ends, and the Activity drawer lists each table. If the run went wrong, the drawer's **Update again** opens Update file again. <!-- src: apps/studio/src/state/status-strip.ts:143-144 --> <!-- src: apps/studio/src/shell/activity.ts:252 -->
@@ -46,7 +46,7 @@ The status strip says "Style guides drawn" when the run ends, and the Activity d
 | **Font sample** | What each font variable's sample shows: family, size, weight, letter spacing or line height. |
 | **Paragraph spacing**, **Text decoration** | Extra columns for text styles. |
 
-<!-- src: apps/studio/src/shell/style-guides.ts:600-624#2d85d92a -->
+<!-- src: apps/studio/src/shell/style-guides.ts:596-620#2d85d92a -->
 Options appear only for the kinds you picked. <!-- src: apps/studio/src/state/style-guides.ts:134-137#865e16a3 -->
 
 ## Where the tables go
@@ -61,4 +61,4 @@ A rerun finds each table it drew before and updates it in place, reporting token
 A table whose group is gone is deleted only if the plugin drew it and nobody has changed it since. A table someone edited, moved or copied is left in place and reported. <!-- src: apps/plugin/src/style-guide.ts:32-33#bc3b7afd -->
 A run filtered by table title never deletes another table. <!-- src: tools/figma-mcp/README.md:196-197#f9dbf31e -->
 
-Tables for groups Prism3 no longer draws are offered for removal in Update file's **Clean up** tab. <!-- src: apps/studio/src/state/update-file.ts:335 --> See [Update a Figma file](update-a-file-safely.md#remove-what-the-brand-no-longer-uses).
+Tables for groups Prism3 no longer draws are offered for removal in Update file's **Clean up** tab. <!-- src: apps/studio/src/state/update-file.ts:334 --> See [Update a Figma file](update-a-file-safely.md#remove-what-the-brand-no-longer-uses).
