@@ -35,12 +35,19 @@
  * Theme is heard from inside its stages once about `PACE_MS` of work has run (`apply/inside`), and not with a clock that
  * stands still (`apply/paced`).
  *
+ * #4476, THROTTLED (`throttle/…`): with `Date.now` stepping as work and every timer run at the next whole minute (a hidden
+ * window), rebuilding Tag and updating the three sets each wait within four times their work plus three minutes
+ * (`throttle/build`, `throttle/update`), and their last readings say `throttled` (`…-note`); a prompt host's update says
+ * nothing of it (`throttle/update-foreground`). Mutations: `main.ts`'s build given no `yieldTo` → `throttle/build`; the
+ * update's `breathe` back to a bare `setTimeout(0)` → `throttle/update`; `throttled` never posted → the `…-note` arms.
+ *
  * INDEPENDENCE (docs/34): the sets, the stage order, the 32 and the 50 ms are literals typed here; the written state is
  * read off the shims' own nodes and variables, never off the run's report.
  *
  * MUTATIONS, each failing by name: the work reading not posted (`opts.progress?.(work)` dropped in `update-apply.ts`)
  * → `progress/boundaries`; the finish reading dropped → `progress/finish`; `paced` handing back at every call (the
- * budget test dropped) → `progress/paced`; `paced` never saying `again` → `progress/inside`; the reading posted for an
+ * budget test dropped; since #4476 `handBack` in `pace.ts`) → `progress/paced`; `paced` never saying `again` (`handBack`'s
+ * `before`) → `progress/inside`; the reading posted for an
  * agent's run (`panel` true) → `progress/agent`; the boundary stop read dropped → `stop/boundary`; the stop before the
  * version dropped → `stop/before`; `update-stop` setting the flag with nothing running → `stop/idle`; a stage not
  * announced → `apply/stages`; the check reading moved after `runHost` → `progress/check-first`; #3208: a stage's
@@ -422,6 +429,52 @@ ok(J(SETS.map((id) => membersOf(id).length)) === J([14, 50, 45]), `premise: the 
   await (main.ACTIONS.applyTheme as (...a: unknown[]) => Promise<void>)(BRAND, undefined, { post: (m: unknown) => { sunk.push(m); }, data: () => undefined });
   ok(sunk.some((m) => m?.type === 'apply-result') && !posted.some((m) => m?.type === 'run-progress') && !sunk.some((m) => m?.type === 'run-progress'),
     'apply/agent: an agent\'s Apply Theme posts no reading');
+}
+
+// ── #4476: a build and an update stay bounded while a hidden window throttles every timer to the next whole minute ──
+// `Date.now` steps `STEP_MS` a call (the work) and the global `setTimeout` runs at the next whole minute (the hidden
+// window). What each run waited and worked is read off the test's own clock, frozen at its verdict (the build's settle
+// probe runs after it, on the same timer, and is not the run's). Before #4476 the build handed back at every chunk and
+// the update at every set and page, each a minute.
+{
+  const throttled = async (msg: unknown, kind: string): Promise<{ v: any; work: number; waited: number; readings: any[] }> => {
+    // A fixed phase, half a minute past a whole minute (#4506): the first hand-back waits out the rest of the minute the
+    // run started in, so a clock read off the real time made that first wait anything from 0 to 60 s, and the build's
+    // wait (that partial minute, a minute to read throttling, and its settle probe's minute) brushed its bound on CI.
+    let t = Math.floor(realNow() / 60_000) * 60_000 + 30_000;
+    const s = { work: 0, waited: 0, frozen: false };
+    Date.now = () => { t += STEP_MS; if (!s.frozen) s.work += STEP_MS; return t; };
+    g.setTimeout = ((fn: () => void, ms?: number) => {
+      const from = t;
+      t = Math.floor((t + (ms ?? 0)) / 60_000) * 60_000 + 60_000;
+      if (!s.frozen) s.waited += t - from;
+      return realTimeout(fn, 0);
+    }) as unknown as typeof setTimeout;
+    onPost = (m) => { if (m?.type === kind) s.frozen = true; };
+    try {
+      const v = await send(msg, [kind]);
+      return { v, work: s.work, waited: s.waited, readings: [...posted] };
+    } finally { Date.now = realNow; g.setTimeout = realTimeout; onPost = null; }
+  };
+  const b = await throttled({ type: 'build-components', def: 'tag' }, 'component-result');
+  const bLast = b.readings.filter((m) => m?.type === 'component-progress').pop();
+  ok(b.v?.type === 'component-result' && b.waited <= 4 * b.work + 3 * 60_000,
+    `throttle/build: rebuilding Tag waits within four times its work plus three minutes (waited ${Math.round(b.waited / 1000)} s for ${(b.work / 1000).toFixed(1)} s of work; ${b.v?.headline})`);
+  ok(bLast?.throttled === true, `throttle/build-note: the build's last reading says throttled (${J(bLast)})`);
+  outOfDate();
+  const hash = await hashFor();
+  const u = await throttled({ type: 'update-sets', defs: SETS, previewHash: hash, handEdits: 'keep' }, 'component-update-result');
+  const uLast = readings(u.readings).pop();
+  ok(wroteAll(u.v) && u.waited <= 4 * u.work + 3 * 60_000,
+    `throttle/update: the update waits within four times its work plus three minutes (waited ${Math.round(u.waited / 1000)} s for ${(u.work / 1000).toFixed(1)} s of work; ${u.v?.headline})`);
+  ok(uLast?.throttled === true, `throttle/update-note: the update's last reading says throttled (${J(uLast)})`);
+  outOfDate();
+  const h = await hashFor();
+  clockOn(STEP_MS);
+  const f = await send({ type: 'update-sets', defs: SETS, previewHash: h, handEdits: 'keep' }, ['component-update-result']);
+  clockOff();
+  const fr = readings(posted);
+  ok(wroteAll(f) && fr.length > 0 && !fr.some((m) => 'throttled' in m), `throttle/update-foreground: on a prompt host no update reading says throttled (${fr.filter((m) => 'throttled' in m).length} of ${fr.length})`);
 }
 
 console.log(`${failed ? `\n${failed} failed` : '\nall passed'} — ${executed} assertions executed`);

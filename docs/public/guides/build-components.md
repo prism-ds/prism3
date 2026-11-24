@@ -2,44 +2,44 @@
 
 <!-- DRAFT for owner review (#2637, lane 4; corrected to the Components area and Update file for #3264). -->
 
-Prism3 defines its components once, and the plugin builds each one as a Figma component set bound to the brand's variables. <!-- src: packages/engine/components/index.ts:117-314#f06bfa02 -->
-The engine currently defines 74 component sets, from Button and Checkbox to Tabs, Accordion and List. <!-- src: packages/engine/components/index.ts:117-314#f06bfa02 -->
+Prism3 defines its components once, and the plugin builds each one as a Figma component set bound to the brand's variables. <!-- src: packages/engine/components/index.ts@"/** Every component ".."];"#f06bfa02 -->
+The engine currently defines 74 component sets, from Button and Checkbox to Tabs, Accordion and List. <!-- src: packages/engine/components/index.ts@"/** Every component ".."];"#f06bfa02 -->
 
-You choose sets in the **Components** area of the rail, and **Update file** builds them. <!-- src: apps/studio/src/state/update-file.ts:331 -->
-Building needs the Figma plugin. On the web, the Components area lists the same sets and says "Building sets needs the Figma plugin." <!-- src: apps/studio/src/preview/sections/component-sets.ts:29 -->
+You choose sets in the **Components** area of the rail, and **Update file** builds them. <!-- src: apps/studio/src/state/update-file.ts@"button: 'Update file" -->
+Building needs the Figma plugin. On the web, the Components area lists the same sets and says "Building sets needs the Figma plugin." <!-- src: apps/studio/src/preview/sections/component-sets.ts@"web: 'Building sets " -->
 
 ## Choose the sets to add
 
-1. Open **Components** in the rail. The list reads "Tick a set or a family to add it to this file; sets it needs come with it. Update file adds them." <!-- src: apps/studio/src/state/component-groups.ts:138 -->
-2. Tick each family or set you want. A tier's caption has **Select all**, or **Deselect all** once anything in it is ticked. <!-- src: apps/studio/src/state/component-groups.ts:141-142 -->
-3. Choose **Update file** in the top bar. The ticked sets are listed under **Components** › **To add**. <!-- src: apps/studio/src/state/update-file.ts:350-351 -->
-4. Choose **Update file** in the dialog to build them. <!-- src: apps/studio/src/state/update-file.ts:430 -->
+1. Open **Components** in the rail. The list reads "Tick a set or a family to add it to this file; sets it needs come with it. Update file adds them." <!-- src: apps/studio/src/state/component-groups.ts@"introPlugin: (n: number" -->
+2. Tick each family or set you want. A tier's caption has **Select all**, or **Deselect all** once anything in it is ticked. <!-- src: apps/studio/src/state/component-groups.ts@"/** #3129 R1: a tier's two text".."selectAll: 'Select all" -->
+3. Choose **Update file** in the top bar. The ticked sets are listed under **Components** › **To add**. <!-- src: apps/studio/src/state/update-file.ts@"components: 'Components".."toAdd: 'To add'," -->
+4. Choose **Update file** in the dialog to build them. <!-- src: apps/studio/src/state/update-file.ts@"go: 'Update file'," -->
 
-Each set in the list carries its state in this file: **To add**, **Needed**, **Not in file**, **Due**, **Kept edits**, **Updates off**, **Hand-edited**, **Not checked yet** or **Up to date**. <!-- src: apps/studio/src/state/update-file.ts:410 -->
-A set already in the file has a checked box you can't change, and **In file** comes first among its states. A family partly in the file can still be ticked, to add the sets it lacks. <!-- src: apps/studio/src/state/component-groups.ts:150 -->
+Each set in the list carries its state in this file: **To add**, **Needed**, **Not in file**, **Due**, **Kept edits**, **Updates off**, **Hand-edited**, **Not checked yet** or **Up to date**. <!-- src: apps/studio/src/state/update-file.ts@"status: { queued: 'To" -->
+A set already in the file has a checked box you can't change, and **In file** comes first among its states. A family partly in the file can still be ticked, to add the sets it lacks. <!-- src: apps/studio/src/state/component-groups.ts@"inFile: 'In file'," -->
 
-The sets you tick are kept in the file, not in the panel, so a teammate who opens Update file sees the same list. A set leaves the list once it is built whole; one that fails or is stopped stays on it. <!-- src: apps/plugin/src/add-queue.ts:1-11#32cbe7e4 -->
+The sets you tick are kept in the file, not in the panel, so a teammate who opens Update file sees the same list. A set leaves the list once it is built whole; one that fails or is stopped stays on it. <!-- src: apps/plugin/src/add-queue.ts@"/**\n * THE ADD QUEUE (#3129, owner decisions Q832 A, Q833 A, Q3129.1–13 all A): the sets a person chose on Components to add".."* HOW IT IS CLEARED."#32cbe7e4 -->
 
-Keep **Theme** ticked in the same run: the theme is written before any set, so the new sets can use your variables. <!-- src: apps/studio/src/state/update-file.ts:344 --> The run order is fixed. <!-- src: apps/studio/src/state/update-file.ts:48#d0a2a83c -->
+Keep **Theme** ticked in the same run: the theme is written before any set, so the new sets can use your variables. <!-- src: apps/studio/src/state/update-file.ts@"theme: 'Theme'," --> The run order is fixed. <!-- src: apps/studio/src/state/update-file.ts@"export const STEP_ORDER"#d0a2a83c -->
 On a file that isn't set up yet, the same run sets it up first. See [Set up a file](file-setup.md).
 
 ## What a build does
 
-For each set, the plugin: <!-- src: apps/plugin/src/main.ts:930-1053#34f3a25b -->
+For each set, the plugin: <!-- src: apps/plugin/src/main.ts@"try { headers.push(await".."const alsoBuilt = await"#bc047daf -->
 
 - builds any set the chosen one contains first, such as the icon and focus ring inside a button;
 - creates the set's page if the file does not have it, and switches Figma to that page;
 - builds the set, its properties and its prototype interactions;
 - adds the page header and the labels beside the set;
-- draws the family's usage panel beside its lead, while Docs has usage panels on. <!-- src: apps/plugin/src/main.ts:1018-1019#03cbfa05 --> A family has one panel, beside its lead set: the Buttons page has one, beside Button, and the other sets on the page have none of their own. An icon, the spinner and a provider logo are single components, with no set and no panel. <!-- src: apps/plugin/src/doc-panel.ts:232-233#b6f87a5f -->
+- draws the family's usage panel beside its lead, while Docs has usage panels on. <!-- src: apps/plugin/src/main.ts@"// #846: its usage panel".."// #2909: unless Documentation"#03cbfa05 --> A family has one panel, beside its lead set: the Buttons page has one, beside Button, and the other sets on the page have none of their own. An icon, the spinner and a provider logo are single components, with no set and no panel. <!-- src: apps/plugin/src/doc-panel.ts@"/** Whether `defId`'".."export const leadsPanel"#b6f87a5f -->
 
-A new set's description in Figma is its one-line summary from the engine. When the summary changes, Update file rewrites a description Prism3 wrote, and keeps one you changed. On a set Prism3 built before it recorded its descriptions, Update file can't tell the two apart and rewrites it. <!-- src: apps/plugin/src/write-components.ts:151-152#b707248a -->
+A new set's description in Figma is its one-line summary from the engine. When the summary changes, Update file rewrites a description Prism3 wrote, and keeps one you changed. On a set Prism3 built before it recorded its descriptions, Update file can't tell the two apart and rewrites it. <!-- src: apps/plugin/src/write-components.ts@"/** A COMPONENT / COMPONENT_SET".."*  on an existing set"#b707248a -->
 
 *[Screenshot placeholder: the Components area with a family ticked, and Update file's To add list.]*
 
 ## Read the result
 
-The status strip says how the run went, such as "Sets added" or "File updated". <!-- src: apps/studio/src/state/status-strip.ts:143-145 --> Each set's result is in the Activity drawer: <!-- src: apps/plugin/src/apply-summary.ts:85-95#5f523e92 -->
+The status strip says how the run went, such as "Sets added" or "File updated". <!-- src: apps/studio/src/state/status-strip.ts@"done: { setup: 'File".."fileUpdated: 'File updated" --> Each set's result is in the Activity drawer: <!-- src: apps/plugin/src/apply-summary.ts@"export const componentHeadline".."return `✓ built ${added"#5f523e92 -->
 
 | Result | Meaning |
 |---|---|
@@ -50,23 +50,23 @@ The status strip says how the run went, such as "Sets added" or "File updated". 
 | `⚠ N misses` | Something did not resolve or bind, such as a variable the file is missing. |
 | `✗ nothing built` | Nothing was in the file and nothing could be built. |
 
-A run of several sets is summed up in one line, such as "Built 3 sets" or "Built 2 of 3 sets". <!-- src: apps/studio/src/state/build-queue.ts:126-131 -->
+A run of several sets is summed up in one line, such as "Built 3 sets" or "Built 2 of 3 sets". <!-- src: apps/studio/src/state/build-queue.ts@"also: (names: readonly".."builtWithProblems: (" -->
 
-A result that isn't clean offers **Show the set in Figma** while the file holds the set. It opens the set's page and zooms to the set. <!-- src: apps/studio/src/shell/activity.ts:258 -->
+A result that isn't clean offers **Show the set in Figma** while the file holds the set. It opens the set's page and zooms to the set. <!-- src: apps/studio/src/shell/activity.ts@"export const SHOW_SET" -->
 
-A set that can't be built for this brand is listed with the reason: "Can't be built yet: …". <!-- src: apps/studio/src/preview/sections/component-sets.ts:26 -->
+A set that can't be built for this brand is listed with the reason: "Can't be built yet: …". <!-- src: apps/studio/src/preview/sections/component-sets.ts@"cannot: (reason: string" -->
 
 ## Adding and updating
 
-Adding a set never replaces one the file already holds. The plugin finds the set by name and adds only what is missing. <!-- src: apps/plugin/src/apply-summary.ts:57-61#68cb2d2d -->
-A set already in the file is brought up to date in place instead, under **Due**, with your hand edits kept unless you choose otherwise. See [Update sets in place](update-a-file-safely.md#update-sets-in-place). <!-- src: apps/studio/src/state/update-file.ts:359 -->
+Adding a set never replaces one the file already holds. The plugin finds the set by name and adds only what is missing. <!-- src: apps/plugin/src/apply-summary.ts@"* same outcomes. The".."* (`applyComponentPlan"#68cb2d2d -->
+A set already in the file is brought up to date in place instead, under **Due**, with your hand edits kept unless you choose otherwise. See [Update sets in place](update-a-file-safely.md#update-sets-in-place). <!-- src: apps/studio/src/state/update-file.ts@"due: 'Due',\n  dueSub: (n: number): string => `${plural(n)} to update in place. Ticked by default.`," -->
 
-Only one write runs at a time, from the panel or an agent: a build asked for while another write runs reads "is already running. Try again when it finishes." <!-- src: apps/plugin/src/run-guard.ts:49-52 -->
+Only one write runs at a time, from the panel or an agent: a build asked for while another write runs reads "is already running. Try again when it finishes." <!-- src: apps/plugin/src/run-guard.ts@"/** The refusal's words".."export const busyMessage" -->
 
 ## Where each set goes
 
-Sets build onto pages under Components (such as `↳ Buttons`, `↳ Checkbox`, `↳ Tabs`) and Subcomponents (such as `↳ Focus Ring`, `↳ Field Label`, `↳ Spinner`). <!-- src: apps/plugin/src/file-taxonomy.ts:92-190 -->
-Icons and provider logos build onto `↳ Icons & assets` under Foundations. <!-- src: apps/plugin/src/file-taxonomy.ts:87 -->
+Sets build onto pages under Components (such as `↳ Buttons`, `↳ Checkbox`, `↳ Tabs`) and Subcomponents (such as `↳ Focus Ring`, `↳ Field Label`, `↳ Spinner`). <!-- src: apps/plugin/src/file-taxonomy.ts@"header: 'Components'".."{ page: 'Progress', " -->
+Icons and provider logos build onto `↳ Icons & assets` under Foundations. <!-- src: apps/plugin/src/file-taxonomy.ts@"{ page: 'Icons & assets" -->
 
 ## Specs for your components
 
@@ -74,6 +74,6 @@ Icons and provider logos build onto `↳ Icons & assets` under Foundations. <!--
 
 Use Spectacular for any component's spec. It reads a component set in your Figma file and writes its anatomy, props and styles.
 
-Prism3's own components also come with a supplement, starting with Button. It adds what a Figma file can't hold: accessibility, the props and states that exist only in code, motion, right-to-left rules, and the CSS and DTCG name of each token the component uses. It uses the element and prop names Spectacular writes, so you can read the two side by side. Everything it adds sits under `com.prism3`. <!-- src: packages/engine/spec-supplement.ts:64 -->
+Prism3's own components also come with a supplement, starting with Button. It adds what a Figma file can't hold: accessibility, the props and states that exist only in code, motion, right-to-left rules, and the CSS and DTCG name of each token the component uses. It uses the element and prop names Spectacular writes, so you can read the two side by side. Everything it adds sits under `com.prism3`. <!-- src: packages/engine/spec-supplement.ts@"export const EXT = '" -->
 
 For a component your team builds itself, Spectacular Pro adds token references to its spec. Prism3 has no supplement for those.

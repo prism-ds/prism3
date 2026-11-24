@@ -26,6 +26,9 @@
  *   · cancel: `style-guide-cancel` mid-run stops after the table being drawn, and the verdict says how far it got
  *     (mutation: the `style-guide-cancel` case does not set the stop → cancel fails)
  *   · cancel/idle: a cancel with nothing running does not stop the next run
+ *
+ * #4476: a run hands the thread back only once 50 ms of work has run (`handBack`, `pace.ts`), so `cancel` steps the clock
+ * 60 ms a call: each table is then past the budget and the run holds after it, as it would over a real file.
  */
 let failed = 0;
 let executed = 0;
@@ -202,12 +205,18 @@ section('cancel — stop after the table being drawn (owner decision P7)');
 {
   file.sets = true; file.pages = ['Cover'];
   posted.length = 0;
+  // #4476: the run hands the thread back only once `PACE_MS` (50 ms) of work has run since it last did, and this shim's
+  // tables cost nothing. So the clock steps 60 ms a call for the run, and every table is past the budget, as a real one is.
+  const realNow = Date.now;
+  let t = realNow();
+  Date.now = () => (t += 60);
   await toMain({ type: 'style-guide', options: {} });
   // The run holds at the yield after each table: once after the first, and after one step, after the second.
   await step();
   const before = ofType('style-guide-table').map((m) => `${m.index}:${m.status}`);
   await toMain({ type: 'style-guide-cancel' });
   await release();
+  Date.now = realNow;
   const after = ofType('style-guide-table').map((m) => `${m.index}:${m.status}`);
   const res = ofType('style-guide-result');
   ok(JSON.stringify(after) === JSON.stringify(['0:drawing', '0:failed', '1:drawing', '1:failed']) && res.length === 1
