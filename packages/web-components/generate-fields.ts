@@ -334,7 +334,7 @@ ${password ? `
       : '${label}'}<div class="${P}__control"><div class="${P}__content">\${this.leadingIcon !== undefined && this.leadingIcon !== null
       ? html\`<span class="${P}__leading-visual" aria-hidden="true">\${this.leadingIcon}</span>\`
       : nothing}<input class="${P}__entry" id=\${inputId} type=\${${password ? "this.#shown ? 'text' : 'password'" : 'this.type'}} name=\${this.name ?? nothing}
-        placeholder=\${this.placeholder ?? nothing} value=\${this.defaultValue ?? nothing} autocomplete=\${this.autoComplete ?? nothing}${password ? ' spellcheck="false" autocapitalize="none"' : ' inputmode=${this.inputMode ?? nothing}'}
+        placeholder=\${this.placeholder ?? nothing} value=\${this.defaultValue ?? nothing} autocomplete=\${this.autoComplete ?? nothing}${password ? ' spellcheck="false" autocapitalize="none"' : ' inputmode=${this.inputMode ?? nothing} dir="auto"'}
         ?required=\${this.required} ?disabled=\${this.disabled} ?readonly=\${this.readOnly}
         aria-busy=\${this.isPending ? 'true' : nothing} aria-invalid=\${status === 'error' ? 'true' : nothing}
         aria-describedby=\${writeMessage ? messageId : nothing} @input=\${this.#onInput}></div><span class="${P}__spinner" aria-hidden="true">${SPINNER}</span>${trailing ? `\${this.trailingIcon !== undefined && this.trailingIcon !== null
