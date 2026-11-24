@@ -140,7 +140,7 @@ Type: color. Bound by 3 component(s).
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | banner | `neutral.fill` | container | tone: neutral (2 of 10) |
-| image-placeholder | `fill` | frame | every member (7 of 7) |
+| image | `fill` | frame | every member (28 of 28) |
 | segmented-control | `fill` | track | every member (3 of 3) |
 
 ### `color.background.tertiary`
@@ -720,7 +720,8 @@ Type: color. Bound by 2 component(s).
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | icon | `tone.tertiary` | (not drawn) | — |
-| image-placeholder | `icon` | markerGlyph | every member (7 of 7) |
+| image | `icon` | errorGlyph | status: error (7 of 28) |
+|  |  | markerGlyph | status: empty (7 of 28) |
 
 ### `color.icon.warning`
 
@@ -2284,7 +2285,7 @@ Type: dimension. Bound by 3 component(s).
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | divider | `horizontal.false.width`, `horizontal.true.width` | container | orientation: horizontal (8 of 14) |
-| image-placeholder | `nominal-side` | frame | every member (7 of 7) |
+| image | `nominal-side` | frame | every member (28 of 28) |
 | veil | `nominal-side` | wash | every member (30 of 30) |
 
 ### `control.size.lg.dot`
@@ -2864,13 +2865,14 @@ Type: dimension. Bound by 21 component(s).
 
 ### `motion.duration-reduced.fast`
 
-Type: duration. Bound by 7 component(s).
+Type: duration. Bound by 8 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | button | `motion.state-reduced` | (not drawn) | — |
 | button-destructive | `motion.state-reduced` | (not drawn) | — |
 | button-neutral | `motion.state-reduced` | (not drawn) | — |
+| image | `motion.reveal-reduced` | (not drawn) | — |
 | skeleton | `motion.swap-reduced` | (not drawn) | — |
 | spinner | `motion.enter-reduced` | (not drawn) | — |
 | toggle-button | `motion.state-reduced` | (not drawn) | — |
@@ -2886,13 +2888,14 @@ Type: duration. Bound by 1 component(s).
 
 ### `motion.duration.fast`
 
-Type: duration. Bound by 7 component(s).
+Type: duration. Bound by 8 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | button | `motion.press`, `motion.state` | (not drawn) | — |
 | button-destructive | `motion.press`, `motion.state` | (not drawn) | — |
 | button-neutral | `motion.press`, `motion.state` | (not drawn) | — |
+| image | `motion.reveal` | (not drawn) | — |
 | skeleton | `motion.swap` | (not drawn) | — |
 | spinner | `motion.enter` | (not drawn) | — |
 | toggle-button | `motion.press`, `motion.state` | (not drawn) | — |
@@ -2929,10 +2932,11 @@ Type: cubicBezier. Bound by 6 component(s).
 
 ### `motion.easing-role.enter`
 
-Type: cubicBezier. Bound by 2 component(s).
+Type: cubicBezier. Bound by 3 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
+| image | `motion.reveal-easing` | (not drawn) | — |
 | skeleton | `motion.swap-easing` | (not drawn) | — |
 | spinner | `motion.enter-easing` | (not drawn) | — |
 
@@ -2989,7 +2993,7 @@ Type: dimension. Bound by 17 component(s).
 
 ### `radius.none`
 
-Type: dimension. Bound by 6 component(s).
+Type: dimension. Bound by 7 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2999,6 +3003,7 @@ Type: dimension. Bound by 6 component(s).
 | flush-icon-button | `radius.flush` | container | shape: flush (30 of 60) |
 | flush-icon-button-destructive | `radius.flush` | container | shape: flush (30 of 60) |
 | flush-icon-button-neutral | `radius.flush` | container | shape: flush (30 of 60) |
+| image | `frame-radius` | frame | every member (28 of 28) |
 
 ### `radius.round`
 
@@ -4273,11 +4278,13 @@ Declared, not drawn: `color.border.focus`
 
 Drawn, not declared: `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.interactive.neutral.border.hover`, `color.inverse.interactive.neutral.border.pressed`, `color.inverse.interactive.neutral.border.rest`, `color.inverse.interactive.neutral.fill.hover`, `color.inverse.interactive.neutral.fill.pressed`, `color.inverse.interactive.neutral.fill.rest`, `color.inverse.interactive.neutral.icon.hover`, `color.inverse.interactive.neutral.icon.pressed`, `color.inverse.interactive.neutral.icon.rest`, `color.inverse.interactive.neutral.on-fill`, `color.inverse.interactive.neutral.overlay.hover`, `color.inverse.interactive.neutral.overlay.pressed`
 
-### image-placeholder
+### image
 
-3 token(s); 7 design-file member(s).
+7 token(s); 28 design-file member(s).
 
-`color.background.secondary`, `color.icon.tertiary`, `container.narrow`
+`color.background.secondary`, `color.icon.tertiary`, `container.narrow`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.enter`, `radius.none`
+
+Declared, not drawn: `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.enter`
 
 ### link
 

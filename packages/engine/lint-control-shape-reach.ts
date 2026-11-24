@@ -102,6 +102,8 @@ const DENSITIES = ['compact', 'comfortable', 'spacious'] as const;
 const OUTSIDE_REASON: Record<string, string> = {
   // #4109, held for the owner: a host passes the radius of the content the skeleton stands for.
   'skeleton': 'a loading placeholder, not a control: its corners match the content it stands for, which a host sets',
+  // #4113 (OD-I9 A): Image binds `radius.none`, a token a host or a brand rebinds; no control shape reaches media.
+  'image': 'a media frame, not a control: its square corners bind radius.none, which a host or a brand rebinds (a card clips its media to its own radius)',
   'provider-logo': 'a mark, not a control',
   'flush-icon-button': 'no box at rest: its square shape is radius.none and its circle intrinsic',
   'flush-icon-button-destructive': 'no box at rest: its square shape is radius.none and its circle intrinsic',

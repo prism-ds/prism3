@@ -132,7 +132,7 @@ const WIRE_SUBS: [string, string[]][] = [
   // #2989 (Q656 A): Breadcrumb item and Code cell left for their consumers' pages. #3148: Provider logo joins Icon on the
   // Icons & assets page, so the two share its row, as every page's family does (DRAFT row label, Q3148.2 on #3148).
   ['Field label', ['FieldLabel']], ['Field message', ['FieldMessage']], ['Flush icon button', ['FlushIconButton', 'FlushIconButton.Destructive', 'FlushIconButton.Neutral']],
-  ['Focus ring', ['FocusRing']], ['Icons & assets', ['Icon', 'ProviderLogo']], ['Image placeholder', ['ImagePlaceholder']],
+  ['Focus ring', ['FocusRing']], ['Icons & assets', ['Icon', 'ProviderLogo']], ['Image', ['Image']],
   // #4109: Skeleton's page, provisional and held for the owner.
   ['Skeleton', ['Skeleton']], ['Spinner', ['Spinner']],
 ];
@@ -407,8 +407,8 @@ const ci = costOf(catalog, ['icon', 'badge']);
 ok(ci.variants === 50 && ci.components === 48, `a set built as separate components counts as components, not variants (Icon: ${ci.components}, with person and organization since #4110; Badge's 50 members, its contained status label at two sizes and three emphases since #2983 and its inline style since #3199: ${ci.variants})`);
 ok(JSON.stringify(alsoBuilds(catalog, four)) === JSON.stringify(['Icon', 'Spinner', 'Focus ring', 'Flush icon button Neutral', 'Divider', 'Button Group', 'Field label', 'Field message']),
   `idea 7: the sets a build makes first, transitively, minus the selection, named as the list names them (Q392 on #2812) (${alsoBuilds(catalog, four).join(', ')})`);
-ok(displayNameOf(catalog, 'button-destructive') === 'Button Destructive' && displayNameOf(catalog, 'tab-item') === 'Tab Item' && displayNameOf(catalog, 'image-placeholder') === 'Image placeholder',
-  `a part set reads as its base and its part, a set alone on its row as the row (${displayNameOf(catalog, 'button-destructive')}, ${displayNameOf(catalog, 'tab-item')}, ${displayNameOf(catalog, 'image-placeholder')})`);
+ok(displayNameOf(catalog, 'button-destructive') === 'Button Destructive' && displayNameOf(catalog, 'tab-item') === 'Tab Item' && displayNameOf(catalog, 'image') === 'Image',
+  `a part set reads as its base and its part, a set alone on its row as the row (${displayNameOf(catalog, 'button-destructive')}, ${displayNameOf(catalog, 'tab-item')}, ${displayNameOf(catalog, 'image')})`);
 ok(JSON.stringify(inListOrder(catalog, ['tag', 'badge', 'spinner', 'button-neutral', 'button'])) === JSON.stringify(['button', 'button-neutral', 'tag', 'badge', 'spinner']),
   `review N1 on #2812: a selection runs in the list's order, not the order it was ticked in (${JSON.stringify(inListOrder(catalog, ['tag', 'badge', 'spinner', 'button-neutral', 'button']))})`);
 ok(alsoBuilds(catalog, ['focus-ring']).length === 0, 'a set that nests nothing builds nothing first');

@@ -13,7 +13,7 @@ The picture of a specific person or organization. It shows a photo when there is
 
 - **Purpose:** Show which person or organization something belongs to, as a photo, initials or a generic glyph.
 - **Use when:** A specific person or organization needs a picture: a comment author, a list row, a card owner, the signed-in user in a header, a team or app in a switcher. Add presence when the task depends on whether the person is available.
-- **Avoid when:** The picture stands for an action or a concept rather than a specific person, such as a profile link or a settings icon (use Icon), the picture is content media with no identity (use ImagePlaceholder), or the avatar is a control that opens something (put it in a Button or an IconButton).
+- **Avoid when:** The picture stands for an action or a concept rather than a specific person, such as a profile link or a settings icon (use Icon), the picture is content media with no identity (use Image), or the avatar is a control that opens something (put it in a Button or an IconButton).
 
 ## Anatomy
 
@@ -88,7 +88,7 @@ Write the name the way the interface writes it next to the avatar, with the same
 ## Related components
 
 - **Built from:** `badge`
-- **Instead, consider:** `icon`, `image-placeholder`
+- **Instead, consider:** `icon`, `image`
 - **Often used with:** `button`, `icon-button`, `list-item`, `tag`, `skeleton`
 - **Replaces:**
   - a circular image with no fallback, which shows a broken image when the photo fails to load

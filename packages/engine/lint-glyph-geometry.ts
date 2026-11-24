@@ -117,7 +117,7 @@
 
 import { componentDefs } from './components/index';
 import { figmaAnatomySet, type AnatomyPlan, type FigmaNodePlan } from './anatomy-figma';
-import { ICON_NAMES, ICON_PATHS, ICON_VIEWBOX } from './icon-glyphs';
+import { ICON_NAMES, ICON_PATHS, ICON_VIEWBOX, type IconName } from './icon-glyphs';
 import { canonicalShape, GlyphPathError } from './glyph-shape';
 import type { ComponentDef } from './component-schema';
 import { readFileSync } from 'node:fs';
@@ -138,7 +138,9 @@ const MUST_COVER = [
   'field-message.errorGlyph', 'field-message.warningGlyph', 'field-message.successGlyph',
   // #4007: the menu item's check and submenu arrow.
   'menu-item.checkGlyph', 'menu-item.chevronGlyph',
-  'switch-control.onGlyph', 'switch-control.offGlyph', 'select.chevronGlyph', 'image-placeholder.markerGlyph',
+  'switch-control.onGlyph', 'switch-control.offGlyph', 'select.chevronGlyph', 'image.markerGlyph',
+  // Image's "image unavailable" mark (#4113, OD-I3 A), measured by the SLASHED_GLYPH arm.
+  'image.errorGlyph',
   '_accordion-indicator.chevronDownGlyph', '_accordion-indicator.chevronUpGlyph', '_accordion-indicator.plusGlyph', '_accordion-indicator.minusGlyph',
   // Progress's own glyphs (#2670), measured by the RING_GLYPH arm.
   'progress.ringGlyph', 'progress.arcGlyph', 'progress.fullRingGlyph', 'progress.dotGlyph',
@@ -255,6 +257,27 @@ const ARROW_PX = 8;
 /** How far the tip sits in from the bubble's edge, in 24-unit artboard units: half the base (OD-TB2 A). */
 const ARROW_DEPTH = 12;
 
+/**
+ * IMAGE'S "IMAGE UNAVAILABLE" MARK (#4113, owner decision OD-I3 A: "an image with a slash") — a component-owned glyph of
+ * TWO filled layers, measured here against numbers typed in this file and never read from `component-glyphs.ts`, which is
+ * the subject:
+ *
+ *   · the first layer is the icon set's `image` picture, whole (the empty marker's own picture, so the two states read
+ *     as one frame with a different mark), compared with `ICON_PATHS.image`, the icon set's source, not the subject;
+ *   · the second is the slash: a band 2 units wide on the diagonal from top left to bottom right, its centerline running
+ *     from (3.5, 3.5) to (20.5, 20.5), its ends on the picture's frame, so its four corners are the ones typed in `SLASH_CORNERS`;
+ *   · both layers take the part's one ink at full strength, and the mark is built at the empty marker's literal 180px,
+ *     centered and scaling with the frame, bound to no variable;
+ *   · it draws at `status=error` and nowhere else (`at`), compared with the def's `presentWhen` by value.
+ */
+const SLASHED_GLYPH: Record<string, { glyph: string; picture: IconName; at: Record<string, readonly string[]>; why: string }> = {
+  'image.errorGlyph': { glyph: 'image-unavailable', picture: 'image', at: { status: ['error'] }, why: 'the failed-load mark: the "no image" picture with a slash across it, and no text in the frame' },
+};
+/** The slash's four corners on the 24-unit artboard: the centerline (3.5, 3.5)–(20.5, 20.5) offset by ±1/√2 across it. */
+const SLASH_CORNERS = ['4.207,2.793', '21.207,19.793', '19.793,21.207', '2.793,4.207'];
+/** The mark's square in px: the empty marker's literal (#1340), so the two states share a size. */
+const SLASHED_PX = 180;
+
 /** The icon ladder in px, per rung variable — the owner's 16 / 20 / 24 / 32. */
 const RUNG_PX: Record<string, number> = { 'icon/size/xs': 16, 'icon/size/sm': 20, 'icon/size/md': 24, 'icon/size/lg': 32 };
 
@@ -346,14 +369,14 @@ const FIXED_GLYPH: Record<string, { glyph: string; at: Record<string, readonly s
   // fixed and gated on its own shape at the icon member. `glyph: '{shape}'` would look for glyphs named circular and square.
   'avatar.personGlyph': { glyph: 'person', at: { type: ['icon'], shape: ['circular'] }, why: 'a generic person, in the circle a person takes' },
   'avatar.organizationGlyph': { glyph: 'organization', at: { type: ['icon'], shape: ['square'] }, why: 'a generic building, in the square a team, an organization or an app takes' },
-  'image-placeholder.markerGlyph': {
+  'image.markerGlyph': {
     glyph: 'image',
-    // `at: {}` — present at EVERY coordinate, not gated by a variant. The marker is the "no image"
-    // placeholder shown on every ratio member (#1316); it is a FIXED glyph because the `ratio` axis
-    // changes the frame's PROPORTION, not its mark, so `glyph: '{ratio}'` would look for glyphs named
+    // `at: { status: ['empty'] }` (#4113, OD-I2 A) — the "no image" marker draws on the EMPTY member of every ratio and
+    // nowhere else: loading shows a skeleton, loaded the photo, error its own mark. It is a FIXED glyph because the
+    // `ratio` axis changes the frame's PROPORTION, not its mark, so `glyph: '{ratio}'` would look for glyphs named
     // `1:1`/`4:3`/`16:9` that do not exist. Recorded here so a future edit that swaps the marker for a
     // different glyph, or templates it on an axis, fails as a stale record rather than passing silently.
-    at: {},
+    at: { status: ['empty'] },
     why: "the empty-state \"no image\" marker (#1316's `image` glyph — a mountain-and-sun placeholder). One fixed shape on every ratio member, because the ratio axis varies the frame's proportion and not its content; a designer replaces the whole frame's fill with a photograph rather than swapping this marker.",
   },
   'select.chevronGlyph': {
@@ -928,6 +951,42 @@ for (const def of componentDefs as ComponentDef[]) {
       notes.push(`${key}: arrow '${arrowRec.glyph}' measured at ${seen} member(s)`);
       continue;
     }
+    // IMAGE'S "IMAGE UNAVAILABLE" MARK (#4113), measured by its own arm against `SLASHED_GLYPH` above.
+    const slashRec = SLASHED_GLYPH[key];
+    if (slashRec) {
+      covered.add(key);
+      if (part.glyph !== slashRec.glyph) { failures.push(`${def.id}.${partName}: the def draws glyph '${part.glyph ?? '(none)'}' and SLASHED_GLYPH records '${slashRec.glyph}'. One of the two moved.`); continue; }
+      if (!sameGate(slashRec.at, (part.presentWhen ?? {}) as Record<string, readonly string[]>)) { failures.push(`${def.id}.${partName}: the def draws at ${JSON.stringify(part.presentWhen ?? {})} and SLASHED_GLYPH records ${JSON.stringify(slashRec.at)}. One of the two moved.`); continue; }
+      let seen = 0;
+      for (const plan of set) {
+        const coord = plan.coord as Record<string, string | undefined>;
+        const at = JSON.stringify(coord);
+        const on = Object.entries(slashRec.at).every(([a, vs]) => coord[a] !== undefined && vs.includes(coord[a]!)) ? 1 : 0;
+        const nodes = glyphNodes(plan).filter((g) => g.part === partName);
+        if (nodes.length !== on) { failures.push(`${def.id}.${partName} @ ${at}: ${nodes.length} GLYPH node(s), expected ${on} (gate ${JSON.stringify(slashRec.at)}).`); continue; }
+        if (!on) continue;
+        seen++;
+        const node = nodes[0].node;
+        const els = [...(node.glyphSvg ?? '').matchAll(/<path\b[^>]*>/g)].map((m) => m[0]);
+        const attr = (e: string, a: string) => new RegExp(`\\s${a}="([^"]*)"`).exec(e)?.[1];
+        if (els.length !== 2) { failures.push(`${def.id}.${partName} @ ${at}: the document carries ${els.length} <path> element(s), expected two layers, the picture and the slash.`); continue; }
+        for (const e of els) if (attr(e, 'fill') !== 'currentColor' || attr(e, 'opacity') !== undefined)
+          failures.push(`${def.id}.${partName} @ ${at}: a layer has fill="${attr(e, 'fill') ?? 'absent'}"${attr(e, 'opacity') !== undefined ? ` and opacity="${attr(e, 'opacity')}"` : ''}; both layers take the part's one ink at full strength.`);
+        if (attr(els[0], 'd') !== ICON_PATHS[slashRec.picture])
+          failures.push(`${def.id}.${partName} @ ${at}: PICTURE — the first layer is not the icon set's '${slashRec.picture}' outline, so the error mark no longer reads as the empty marker's picture.`);
+        let corners: string[] = [];
+        try { corners = [...new Set(lineVertices(attr(els[1], 'd') ?? '').map(([x, y]) => `${+x.toFixed(3)},${+y.toFixed(3)}`))]; }
+        catch (err) { failures.push(`${def.id}.${partName} @ ${at}: the slash could not be measured — ${(err as Error).message}`); continue; }
+        if (corners.length !== SLASH_CORNERS.length || !SLASH_CORNERS.every((c) => corners.includes(c)))
+          failures.push(`${def.id}.${partName} @ ${at}: SLASH SHAPE — the second layer's corners are [${corners.join(' ')}], expected the 2-unit band [${SLASH_CORNERS.join(' ')}] from top left to bottom right.`);
+        if (node.glyphPx !== SLASHED_PX || node.bound?.width !== undefined || node.absoluteScale !== true || node.absoluteCenter !== true)
+          failures.push(`${def.id}.${partName} @ ${at}: SLASHED SIZE — built at ${node.glyphPx ?? '(no literal)'}px${node.bound?.width ? `, binding ${node.bound.width}` : ''} (centered ${String(node.absoluteCenter)}, scaling ${String(node.absoluteScale)}), expected the marker's literal ${SLASHED_PX}px, centered and scaling with the frame, bound to no variable.`);
+        glyphChecks++;
+      }
+      if (!seen) failures.push(`${def.id}.${partName}: appeared at none of the set's ${set.length} members, so nothing was measured.`);
+      notes.push(`${key}: slashed '${slashRec.glyph}' measured at ${seen} member(s)`);
+      continue;
+    }
     const ringRec = RING_GLYPH[key];
     if (ringRec) {
       covered.add(key);
@@ -1441,6 +1500,9 @@ for (const key of Object.keys(FIXED_GLYPH))
 for (const key of Object.keys(RING_GLYPH))
   if (!covered.has(key))
     failures.push(`STALE RING_GLYPH: '${key}' records a progress glyph '${RING_GLYPH[key].glyph}', and no def declares a vector part by that name.`);
+for (const key of Object.keys(SLASHED_GLYPH))
+  if (!covered.has(key))
+    failures.push(`STALE SLASHED_GLYPH: '${key}' records a slashed '${SLASHED_GLYPH[key].glyph}', and no def declares a vector part by that name.`);
 for (const key of Object.keys(ARROW_GLYPH))
   if (!covered.has(key))
     failures.push(`STALE ARROW_GLYPH: '${key}' records a tooltip arrow '${ARROW_GLYPH[key].glyph}', and no def declares a vector part by that name.`);

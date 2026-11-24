@@ -868,7 +868,7 @@
       "swap icon": "INSTANCE_SWAP"
     }
   },
-  "image-placeholder": {
+  "image": {
     "axes": {
       "ratio": [
         "16:9",
@@ -878,12 +878,16 @@
         "3:4",
         "4:3",
         "4:5"
+      ],
+      "status": [
+        "empty",
+        "error",
+        "loaded",
+        "loading"
       ]
     },
-    "members": 7,
-    "properties": {
-      "marker": "BOOLEAN"
-    }
+    "members": 28,
+    "properties": {}
   },
   "link": {
     "axes": {

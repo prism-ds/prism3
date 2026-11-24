@@ -31,6 +31,7 @@
  * the track stays at 20% of whatever ink arrives. The SVG `opacity` attribute imports as the vector's layer
  * opacity, and both executors write each imported layer's opacity from the document (`glyphLayerOpacities`).
  */
+import { ICON_FILL_RULES, ICON_PATHS } from './icon-glyphs';
 
 /** THE OWNER'S NUMBERS (2026-09-26, picked on a live comparison page). The artboard and radius are the
  *  comparison page's own geometry: a 24-unit viewBox with the ring's centerline at radius 10 (a 2-unit inset). */
@@ -145,6 +146,25 @@ export const tooltipArrowLayers = (points: 'down' | 'up' | 'start' | 'end', g: {
   return [{ id: 'arrow', d }];
 };
 
+/** IMAGE'S "IMAGE UNAVAILABLE" GLYPH (#4113, owner decision OD-I3 A: "an image with a slash"). The icon set's `image`
+ *  outline, kept whole as the first layer so the error glyph reads as the empty marker's own picture, and a slash
+ *  across it as the second: a band `stroke` units wide, on the diagonal from top left to bottom right, its ends
+ *  `inset` in from the artboard's corners. The two layers paint in one ink, so where they overlap they read as one
+ *  shape. Drawn on the 24-unit artboard every glyph uses. */
+export const IMAGE_UNAVAILABLE_GEOMETRY = { viewBox: 24, stroke: 2, inset: 3.5 } as const;
+
+export const imageUnavailableLayers = (g: { viewBox: number; stroke: number; inset: number } = IMAGE_UNAVAILABLE_GEOMETRY): GlyphLayer[] => {
+  // The band's half-width, split across the two axes of the 45° diagonal.
+  const h = g.stroke / 2 / Math.SQRT2;
+  const a = g.inset;
+  const b = g.viewBox - g.inset;
+  const slash = `M${r3(a + h)} ${r3(a - h)}L${r3(b + h)} ${r3(b - h)}L${r3(b - h)} ${r3(b + h)}L${r3(a - h)} ${r3(a + h)}Z`;
+  return [
+    { id: 'picture', d: ICON_PATHS.image, ...(ICON_FILL_RULES.image ? { fillRule: ICON_FILL_RULES.image } : {}) },
+    { id: 'slash', d: slash },
+  ];
+};
+
 /** The registry `anatomy-figma.ts` resolves a `vector` part's `glyph` against before the icon set. */
 export const COMPONENT_GLYPHS: Record<string, readonly GlyphLayer[]> = {
   spinner: spinnerLayers(),
@@ -155,6 +175,7 @@ export const COMPONENT_GLYPHS: Record<string, readonly GlyphLayer[]> = {
   'progress-ring-small': progressLayers(PROGRESS_GEOMETRY.band.small, true),
   'progress-ring-medium': progressLayers(PROGRESS_GEOMETRY.band.medium, true),
   'progress-stop': progressStopLayers(),
+  'image-unavailable': imageUnavailableLayers(),
   'tooltip-arrow-down': tooltipArrowLayers('down'),
   'tooltip-arrow-up': tooltipArrowLayers('up'),
   'tooltip-arrow-start': tooltipArrowLayers('start'),

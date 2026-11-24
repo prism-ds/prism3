@@ -2621,7 +2621,7 @@ ok(fmRun.properties.filter((p) => p.indexOf('TEXT') >= 0).length === 1,
     { def: 'tag', part: 'closeGlyph', icon: 'icon/close', size: 'icon/size/{size-1}' },
     { def: 'select', part: 'chevronGlyph', icon: 'icon/chevron-down', size: 'icon/size/sm' },
     { def: 'textarea', part: 'gripGlyph', icon: 'icon/resize-grip', size: 'icon/size/xs' },
-    { def: 'image-placeholder', part: 'markerGlyph', icon: 'icon/image', px: 180 },
+    { def: 'image', part: 'markerGlyph', icon: 'icon/image', px: 180 },
   ];
   const RUNG: Record<string, string> = { small: 'sm', medium: 'md', large: 'lg' };
   const RUNG_BELOW: Record<string, string> = { small: 'xs', medium: 'sm', large: 'md' };
