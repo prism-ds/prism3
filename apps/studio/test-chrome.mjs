@@ -4107,6 +4107,60 @@ for (const host of ['web', 'figma']) {
         });
         ok(!pfU.busy && pfS.what === 'Stopped at To add' && pfS.tone === 'bad' && pfC?.kind === 'bad',
           `${where}: #3308: a queue with a failed set ends the run at To add: Update file is free, the strip reads "Stopped at To add", and Activity reads a failure (Update file ${JSON.stringify(pfU)}, strip ${JSON.stringify(pfS)}, row ${JSON.stringify(pfC ?? null)})`);
+        // #4476 (#4506 review, should-fix 3): THE THROTTLE NOTE AT ITS THREE CALL SITES, read as drawn. One Update file run on a
+        // fresh file, one set queued, Style guides ticked: its build and its style guide each get a reading with
+        // `throttled`, as `main.ts` posts one once its hand-backs read as throttled. Read through the reducer into what is
+        // drawn: Activity's phase line for the build ("Building variants… · <note>", `componentPhase`), the status strip's
+        // line (`stripHears`' `heard`), and Activity's phase line for the style guide ("Drawing table 29 of 45… · <note>",
+        // `styleGuidePendingText`). Before the throttled readings, neither line carries the note. The words are a literal
+        // typed here, never read from `STRIP_COPY` (docs/34).
+        // MUTATIONS, each failing by name: `withThrottleNote` dropped from `componentPhase` → `#4476 … the build's phase`;
+        // the `throttled` argument dropped from `stripHears`' `heard` → `#4476 … the strip's line`; `withThrottleNote`
+        // dropped from `styleGuidePendingText` → `#4476 … the style guide's phase`.
+        {
+          const NOTE = 'Figma slows plugins while its window is hidden — keep it visible to finish sooner.';
+          const phases = async () => Object.fromEntries(Object.entries((await drawerState(page)).ops).filter(([, o]) => o.phase).map(([k, o]) => [k, o.phase]));
+          const stripLine = () => page.evaluate(() => { const n = document.querySelector('[data-p3="status-strip"] [data-p3="status-line"]'); return n && !n.hidden && n.checkVisibility() ? n.textContent : null; });
+          if ((await drawerState(page)).open) await hooks.click(page.locator(narrow ? '[data-p3="activity-close"]' : '[data-p3="activity-toggle"]'), WAIT);
+          await openUpdate({ present: [], setUp: false, queued: ['tag'] });
+          await hooks.click(page.locator('[data-p3="update-check-theme"]'), WAIT);
+          await postMsg(page, { type: 'file-sets', present: [], setUp: false, queued: ['tag'] });
+          await openComps(page, WAIT);
+          await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
+          await takeWrites(page);
+          await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
+          await postMsg(page, { type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: 'pages: 9 created' });
+          await settle(page);
+          await postMsg(page, { type: 'component-progress', phase: 'build', done: 3, total: 45, chunkMs: 7 });
+          await settle(page);
+          const b0 = await phases();
+          const s0 = await stripLine();
+          ok(Object.values(b0).some((x) => /^Building variants…( \d+ of \d+)?$/.test(x)) && s0 !== NOTE,
+            `${where}: #4476 premise: a build reading without throttled reads "Building variants…" and its count alone, and the strip carries no note (phases ${JSON.stringify(b0)}, strip ${JSON.stringify(s0)})`);
+          await postMsg(page, { type: 'component-progress', phase: 'build', done: 4, total: 45, chunkMs: 7, throttled: true });
+          await settle(page);
+          const b1 = await phases();
+          ok(Object.values(b1).some((x) => x === `Building variants… · ${NOTE}` || x === `Building variants… · ${NOTE} 4 of 45`),
+            `${where}: #4476 the build's phase line carries the note once a reading says throttled (phases ${JSON.stringify(b1)})`);
+          const s1 = await stripLine();
+          ok(s1 === NOTE, `${where}: #4476 the strip's line is the note once a build reading says throttled (${JSON.stringify(s1)})`);
+          await postMsg(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built Tag', summary: 'built', lines: ['built'] });
+          await settle(page);
+          await postMsg(page, { type: 'style-guide-catalog', catalog: SG_RING_CATALOG });
+          await settle(page);
+          const sgW = await takeWrites(page);
+          await postMsg(page, { type: 'style-guide-progress', done: 28, total: 45, tableMs: 5 });
+          await settle(page);
+          const g0 = await phases();
+          await postMsg(page, { type: 'style-guide-progress', done: 28, total: 45, tableMs: 5, throttled: true });
+          await settle(page);
+          const g1 = await phases();
+          ok(sgW.some((m) => m.type === 'style-guide') && Object.values(g0).includes('Drawing table 29 of 45…') && Object.values(g1).includes(`Drawing table 29 of 45… · ${NOTE}`),
+            `${where}: #4476 the style guide's phase line reads "Drawing table 29 of 45…", then carries the note once a reading says throttled (posted ${JSON.stringify(sgW.map((m) => m.type))}, before ${JSON.stringify(g0)}, after ${JSON.stringify(g1)})`);
+          await postMsg(page, { type: 'style-guide-result', ok: true, headline: '✓ style guide drawn', lines: [] });
+          await settle(page);
+          ok(!(await updBtn()).busy, `${where}: #4476 premise: the run ends on the style guide's verdict, and Update file is free again`);
+        }
         if ((await drawerState(page)).open) await hooks.click(page.locator(narrow ? '[data-p3="activity-close"]' : '[data-p3="activity-toggle"]'), WAIT);
         await hooks.click(page.locator('[data-p3="rail-documentation"]'), WAIT);
         // #2830 Q2830.3 A: Documentation › Specs is a real control. Draw specs posts the panel's `draw-specs` (for the
