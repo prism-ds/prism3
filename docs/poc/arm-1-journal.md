@@ -2640,3 +2640,78 @@ FAIL at 13. Whether a repo path in a comment counts is a D1 detail I've put to t
   - `measures.ts` and `scorecard.ts` (the rows, `detail`, a self-test case);
   - three READMEs or sections, this entry and the progress entry.
 - **Errors hit:** 4, all mine, listed above.
+
+## KPI 1, developer + CLI, with KPI 3's one-edit check (#3408, plan item 4)
+
+Started about 15:05 UTC on 2026-11-24, from `poc/arm-1` at `39ecae4`. The brief's KPI 1 asks for wall-clock time,
+commands and steps, hand edits, errors and first-try success, from scratch and again for an update that changes the
+primary color and the radius. KPI 3 asks whether one token change reaches both forms from one edit. This is the
+scripted floor. A person's run is B2.
+
+### What was built
+- **`tools/poc-kpi1/kpi1.ts`** works in a copy of the tree in `$TMPDIR`: the tracked files plus untracked ones git
+  doesn't ignore.
+  - **From scratch:** it removes the 16 generated outputs (`GENERATED`, listed by hand), then times `npm ci`, the
+    engine CLI on `examples/prism3.design.md`, `@prism3/css`'s and `@prism3/web-components`' generators, and the
+    Storybook build. It passes when every removed file is back and equal to the committed one, and `check-build.ts`
+    passes on the copy.
+  - **The update:** the scratch run is untimed setup. It then edits two lines of the brand input (the primary from
+    `{ l: 0.4709, c: 0.3001, h: 266.75 }` to `{ l: 0.52, c: 0.14, h: 160 }`, and `radiusScale` from 1 to 2), and times
+    the CLI and the Storybook build. Both generators' `--check` must pass afterward.
+- **`tools/poc-kpi1/one-edit.ts`** reads four hand-written probes in Chromium: the button's fill and corner, and each
+  field's corner. Each is read in both forms and both themes, before and after the edit, against the emitted DTCG
+  resolved through its aliases.
+- **The scorecard** measures `kpi1-cli-scratch`, `kpi1-cli-update` and `kpi3-one-edit`. Only `kpi1-agent` is still
+  pending (D2, plan item 5).
+
+### What it measured, at `ffd4d6ed`
+| | from scratch | update |
+|---|---|---|
+| wall clock, warm npm cache | 17.3s and 19.9s (two runs) | 3.6s and 3.9s |
+| of which `npm ci` | 5.7s and 6.6s (K1 pending: timed under A) | not run |
+| commands | 5 | 2 |
+| hand edits | 0 | 1, the update itself; 0 fixes |
+| errors, first try | 0, yes | 0, yes |
+| outputs | 16 of 16 equal to the committed files (the CLI's build stamp aside) | no component file needed regenerating |
+| one edit reaches both forms | | 16 of 16 readings |
+
+Each untimed check takes longer than the timed run: about 50s for the scratch check and about 70s for the update's
+two browser reads.
+
+### What was checked, and how
+- **`kpi1.ts --self-test`, 10 cases.** They cover the judge's four failure kinds (not read, wrong before, not reached,
+  token not moved), the dark-overlay alias walk, the build-stamp exception, the edit against the real brand input,
+  `GENERATED` against the repo, and both summary lines.
+- **The scorecard self-test, 13 cases.** The new KPI 1 case failed before the rows existed, naming all three ids
+  (wip commit `d18f090`), and passes after.
+- **Five code mutations,** each run on a committed tree and then restored. Each fails its own case by name:
+  - the judge reading the HTML form only;
+  - `sameOutput` accepting anything;
+  - the oracle ignoring the dark overlay;
+  - the unmoved-token guard removed;
+  - the radius dropped from the edit.
+- **Three plants in real runs:**
+  - `--plant drift` gives "packages/css/button.css is not the committed file";
+  - `--plant skip-cli` gives "the edit did not move pds3.color.interactive.primary.fill.rest … so this probe measures
+    nothing";
+  - `--plant skip-build` gives "button fill (html, light): computes rgb(30, 30, 255) after the edit, but … is now
+    rgb(0, 128, 76) (unchanged: the edit did not reach it)".
+- `tsc --strict` over the tool and the scorecard: clean.
+
+### Surprises and learnings
+- **The whole pipeline is fast.** Most of the from-scratch time is `npm ci` and the two generators, which each run the
+  engine's component export in a temp folder. The Storybook build takes about 3 seconds.
+- **The update needs no component regeneration.** The component CSS binds token names, so only the CLI and the token
+  CSS move. The run now proves this every time, through the generators' `--check`.
+- **One self-test compared the edit against itself.** Dropping the radius from `EDIT` still passed it. It now checks
+  the brief's two keys, `primary` and `radiusScale`, written by hand.
+- **A plant first reached the untimed setup,** so `skip-cli` failed in the scratch run's CSS generator instead of in
+  the update. Plants now apply to timed steps only.
+
+### Effort
+- **Wall clock:** about 15:05 to 16:00 UTC.
+- **Commands:** one manual run of the pipeline in a copy, about 8 tool runs, 3 planted runs, one mutation batch, the
+  self-tests and a full scorecard record of every arm 1 row.
+- **Hand edits:** `kpi1.ts` (new, about 270 lines), `one-edit.ts` (about 150), `measures.ts` and `scorecard.ts`, three
+  READMEs or sections, this entry and the progress entry.
+- **Errors hit:** 3, all mine, listed above, plus 2 type errors in the self-test's helper, caught by `tsc`.

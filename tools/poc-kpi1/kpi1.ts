@@ -43,7 +43,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { asComputed, expected, judge, key, resolveToken, PROBES, FORMS, THEMES, type Reading } from './one-edit';
+import { asComputed, expected, judge, key, resolveToken, PROBES, FORMS, THEMES, type Form, type Reading, type Theme } from './one-edit';
 
 const HERE = import.meta.dirname ?? '';
 const REPO = resolve(HERE, '../..');
@@ -227,7 +227,7 @@ const readProbes = (copy: string): Reading => {
 };
 
 // ------------------------------------------------------------------------------------------------ self-test
-const readings = (f: (p: (typeof PROBES)[number], form: string, theme: string) => string): Reading =>
+const readings = (f: (p: (typeof PROBES)[number], form: Form, theme: Theme) => string): Reading =>
   Object.fromEntries(PROBES.flatMap((p) => FORMS.flatMap((form) => THEMES.map((theme) => [key(p, form, theme), f(p, form, theme)]))));
 const old = readings((p, _f, t) => `${p.name}/${t}/0`);
 const now = readings((p, _f, t) => `${p.name}/${t}/1`);
