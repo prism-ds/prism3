@@ -264,6 +264,9 @@ const fieldCss = (id: 'text-field' | 'password-field'): { css: string; rules: nu
     ['background-color', 'transparent'], ['outline', 'none'],
   ], 'the entry: one native <input>; its placeholder and its value are one element (codeOnly `empty`). The box draws its focus edge, so the input draws none');
   const visuals = spec.anatomy.filter((a: any) => a.kind === 'swap').map((a: any) => a.part);
+  // #4052 A: a glyph its author marks `<svg data-mirror>` flips right to left; the slot never does (see generate.ts).
+  if (visuals.length) add(visuals.map((part: string) => `[dir="rtl"] ${partSel(ROOT, part)} > svg[data-mirror]`).join(', '),
+    [['transform', 'scaleX(-1)']], 'a marked glyph mirrors right to left (#4052 A)');
   for (const part of visuals) {
     add(partSel(ROOT, part), [['display', 'inline-flex'], ['flex', 'none']]);
     add(`${partSel(ROOT, part)} > svg`, [['inline-size', '100%'], ['block-size', '100%']]);

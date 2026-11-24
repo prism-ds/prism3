@@ -137,6 +137,11 @@ for (const part of ['container/leadingVisual', 'container/trailingVisual']) {
   add(partSel(ROOT_CLASS, part), [['display', 'inline-flex'], ['flex', 'none']]);
   add(`${partSel(ROOT_CLASS, part)} > svg`, [['inline-size', '100%'], ['block-size', '100%']]);
 }
+// #4052 A (owner, 2026-11-24): a glyph that points (an arrow, a chevron) is marked by its author on the glyph itself,
+// `<svg data-mirror>`, and flips right to left. The slot is never flipped, and an unmarked glyph stays as drawn.
+// `[dir="rtl"]`, never `:dir()`, which the default Vite target rewrites into a `:lang()` list (#4098).
+add(['container/leadingVisual', 'container/trailingVisual'].map((part) => `[dir="rtl"] ${partSel(ROOT_CLASS, part)} > svg[data-mirror]`).join(', '),
+  [['transform', 'scaleX(-1)']], 'a marked glyph mirrors right to left (#4052 A)');
 add(`${ROOT_CLASS}[data-prop-fullwidth="true"]`, [['inline-size', '100%']], 'fullWidth');
 
 // ------------------------------------------------------------------------------------------------ sizes (redlines)

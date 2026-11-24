@@ -28,7 +28,8 @@ export const ROWS: { id: string; kpi: string; label: string }[] = [
   { id: 'kpi2-token-parity-element', kpi: 'KPI 2', label: 'Token parity, component form' },
   { id: 'kpi2-api-parity', kpi: 'KPI 2', label: 'API parity: props and variants against the defs' },
   { id: 'kpi2-api-mismatches', kpi: 'KPI 2', label: 'API parity against Figma: mismatches' },
-  { id: 'kpi2-geometry-figma', kpi: 'KPI 2', label: 'Geometry against Figma, to 0.01px' },
+  // KPI 2 press A (owner, 2026-11-24): the press is motion, not layout, so both arms' geometry sets transforms aside.
+  { id: 'kpi2-geometry-figma', kpi: 'KPI 2', label: 'Geometry against Figma, to 0.01px; layout only, transforms set aside (the press is motion)' },
   { id: 'kpi3-geometry-forms', kpi: 'KPI 3', label: 'Geometry, the two forms against each other, to 0.01px' },
   { id: 'kpi3-axe', kpi: 'KPI 3', label: 'axe, every story, light and dark' },
   { id: 'kpi3-aria', kpi: 'KPI 3', label: 'Accessibility tree, the two forms against each other' },

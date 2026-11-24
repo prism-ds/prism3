@@ -36,6 +36,10 @@
     inline-size: 100%;
     block-size: 100%;
   }
+  /* a marked glyph mirrors right to left (#4052 A) */
+  [dir="rtl"] .p3-button > .p3-button__leading-visual > svg[data-mirror], [dir="rtl"] .p3-button > .p3-button__trailing-visual > svg[data-mirror] {
+    transform: scaleX(-1);
+  }
   /* fullWidth */
   .p3-button[data-prop-fullwidth="true"] {
     inline-size: 100%;

@@ -33,6 +33,10 @@
     background-color: transparent;
     outline: none;
   }
+  /* a marked glyph mirrors right to left (#4052 A) */
+  [dir="rtl"] .p3-text-field > .p3-text-field__control > .p3-text-field__content > .p3-text-field__leading-visual > svg[data-mirror], [dir="rtl"] .p3-text-field > .p3-text-field__control > .p3-text-field__trailing-visual > svg[data-mirror] {
+    transform: scaleX(-1);
+  }
   .p3-text-field > .p3-text-field__control > .p3-text-field__content > .p3-text-field__leading-visual {
     display: inline-flex;
     flex: none;

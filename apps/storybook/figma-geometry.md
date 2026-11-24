@@ -64,6 +64,14 @@ name unless the record comes back. So dropping either `return`, the outer one or
   focus-visible, disabled and error), since Figma's members record `message` at its default, false. At error the code
   writes the message anyway (Q-POC2 A), so Figma's error member stays unreached: a finding, not a missing story.
 
+## Settled by the owner on the press (#4581, 2026-11-24)
+
+- **Geometry is layout, with transforms set aside.** The button's press (`:active`, `scale(0.98)`, Q-PS1 A) is motion,
+  not layout, and Figma's pressed member draws no scale. `check-geometry.ts` sets the root's transform (and its
+  transition) aside before it measures, so the press isn't a geometry difference. Another arm's press is measured the
+  same way: the KPI 2 row on the scorecard says so. A glyph flipped right to left (`data-mirror`, #4052 A) keeps its
+  box, so it doesn't move a measurement either.
+
 ## Not yet verified live
 
 Still unconfirmed: that `loadAllPagesAsync` and `findAllWithCriteria` are allowed from the Desktop Bridge; that the
