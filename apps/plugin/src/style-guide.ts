@@ -1680,7 +1680,7 @@ const PRINT_KEY = 'prism3-style-guide-print';
  * as it did, since nothing recorded the old font. A table carries the second form from its next draw.
  */
 const TABLE_PRINT_V2 = '2:';
-const tablePrint = async (wrap: SgNode): Promise<string> => `${TABLE_PRINT_V2}${await fingerprintOf(wrap, { bindings: true, overrides: true })}`;
+const tablePrint = async (wrap: SgNode): Promise<string> => `${TABLE_PRINT_V2}${await fingerprintOf(wrap, { bindings: true, overrides: true, measured: true })}`;
 const tablePrintMatches = async (wrap: SgNode, print: string): Promise<boolean> =>
   !!print && (print.startsWith(TABLE_PRINT_V2) ? (await tablePrint(wrap)) === print : (await fingerprintOf(wrap)) === print);
 /** `<page id>|<frame id>`: where the generator wrote the table, and the frame it wrote. Plugin data travels with a
@@ -1885,6 +1885,79 @@ const boundTypeKey = (n: SgNode, overrides = false): string => {
 };
 
 /**
+ * A SIZE MEASURED FROM A FONT (#4482, review B1 of #4568), read when a print asks for `measured`. A text whose font
+ * follows a text style or a bound font field is re-measured when the theme moves that font: Figma sets a hugging text's
+ * width, and an AUTO line height's height, from the font it resolves to. Every size measured from it moves with it: a
+ * frame that hugs it, a grid cell that fills the track it sits in (the track takes its widest cell), the grid that hugs
+ * its tracks, the table that hugs its grid. Those sizes are the host's to measure, not a designer's, so they are left
+ * out. Any other size stays, a hugging one too: a spacing bar hugs its bound padding, and a moved value still moves it
+ * (section 21). A text in no style and with no bound font field keeps its size: nothing a theme moves re-measures it.
+ */
+const FONT_BINDINGS = ['fontFamily', 'fontStyle', 'fontWeight', 'fontSize', 'lineHeight', 'letterSpacing'] as const;
+const followsFont = (n: SgNode): boolean => {
+  const style = read(n, 'textStyleId');
+  if (typeof style === 'symbol' || (typeof style === 'string' && !!style)) return true;
+  return FONT_BINDINGS.some((k) => !!boundOf(read(n, 'boundVariables'), k));
+};
+type Axis = 'w' | 'h';
+/** Whether a node's size on an axis is measured from what it holds (hugs) or from its track or parent (fills). */
+const sizingOf = (n: SgNode, axis: Axis): 'HUG' | 'FILL' | 'FIXED' => {
+  const v = read(n, axis === 'w' ? 'layoutSizingHorizontal' : 'layoutSizingVertical');
+  if (v === 'HUG' || v === 'FILL') return v;
+  if (v !== undefined) return 'FIXED';
+  // A host or frame that leaves the sizing unset hugs by its auto layout's axis modes.
+  const mode = read(n, 'layoutMode');
+  const along = (axis === 'w') === (mode === 'HORIZONTAL');
+  const auto = read(n, along ? 'primaryAxisSizingMode' : 'counterAxisSizingMode') === 'AUTO';
+  return (mode === 'HORIZONTAL' || mode === 'VERTICAL') && auto ? 'HUG' : 'FIXED';
+};
+/** The print's reading of which sizes are measured from a font, one node and axis at a time, each worked out once. */
+const fontMeasure = (): ((n: SgNode, axis: Axis) => boolean) => {
+  const memo = new Map<SgNode, { w?: boolean; h?: boolean }>();
+  const kids = (n: SgNode): SgNode[] => ((n.children ?? []) as SgNode[]).filter((k) => k.visible !== false && read(k, 'layoutPositioning') !== 'ABSOLUTE');
+  // What a node offers its parent on an axis: a text its font-set size; a frame what it holds, unless FIXED.
+  const content = (n: SgNode, axis: Axis): boolean => {
+    if (n.type === 'TEXT') {
+      const fit = read(n, 'textAutoResize');
+      return followsFont(n) && (fit === 'WIDTH_AND_HEIGHT' || (axis === 'h' && fit === 'HEIGHT'));
+    }
+    return sizingOf(n, axis) !== 'FIXED' && kids(n).some((k) => content(k, axis));
+  };
+  const measured = (n: SgNode, axis: Axis): boolean => {
+    const m = memo.get(n) ?? {};
+    if (m[axis] !== undefined) return m[axis]!;
+    memo.set(n, m);
+    m[axis] = false; // a cycle reads as not measured: the size stays, the safe direction
+    let out: boolean;
+    if (n.type === 'TEXT') out = content(n, axis);
+    else {
+      const sz = sizingOf(n, axis), p = n.parent as SgNode | null | undefined;
+      if (sz === 'HUG') out = kids(n).some((k) => content(k, axis));
+      else if (sz === 'FILL' && p && read(p, 'layoutMode') === 'GRID') {
+        const at = axis === 'w' ? gridColOf : gridRowOf;
+        out = kids(p).some((k) => at(k) === at(n) && content(k, axis));
+      } else if (sz === 'FILL' && p) out = measured(p, axis);
+      else out = false;
+    }
+    m[axis] = out;
+    return out;
+  };
+  return measured;
+};
+/**
+ * WHAT A MEASURED SIZE IS MEASURED FROM, read in its place. A size left out still moved with a hand edit to what it is
+ * measured from, so those inputs are read instead: the sizing modes (a frame dragged to a width reads FIXED), a text's
+ * resize, the grid's gaps and its tracks (a FIXED track by its value, a HUG one by its type alone, since the host
+ * measures it), the wrap and its spacing, and the bounds.
+ */
+const MEASURED_FROM = ['layoutSizingHorizontal', 'layoutSizingVertical', 'textAutoResize', 'gridRowGap', 'gridColumnGap',
+  'layoutWrap', 'counterAxisSpacing', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const;
+const tracksOf = (v: unknown): string => (Array.isArray(v)
+  ? v.map((t) => { const q = (t ?? {}) as { type?: unknown; value?: unknown }; return q.type === 'HUG' ? 'HUG' : `${String(q.type)}:${String(q.value)}`; }).join(',') : '');
+const measuredFrom = (n: SgNode): string =>
+  [...MEASURED_FROM.map((k) => stable(read(n, k))), tracksOf(read(n, 'gridColumnSizes')), tracksOf(read(n, 'gridRowSizes'))].join('|');
+
+/**
  * THE FINGERPRINT of a table: what a designer would change, read off the frame. Every node in it, in order (its
  * children and their order), each with its type, name, visibility, size, text, fills and strokes (a bound paint by
  * its variable's id), pinned modes, `FINGERPRINT_FIELDS`, its text font, and for an instance its main component and
@@ -1900,19 +1973,24 @@ const boundTypeKey = (n: SgNode, overrides = false): string => {
  * to. Off by default: every print recorded before it (the style guide's tables, the About frame, a usage panel's fourth
  * form) was taken over the resolved values, and is still compared the way it was taken. `overrides` (#4482) also reads,
  * with `bindings`, the overrides a styled text lists over its style (`overrideKey`); a table's print asks for it.
+ * `measured` (#4482, review B1 of #4568) leaves out each size the host measures from a font (`fontMeasure`) and reads
+ * what it is measured from instead (`measuredFrom`); a table's print asks for it, a usage panel's does not.
  */
-export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean; overrides?: boolean } = {}): Promise<string> => {
+export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean; overrides?: boolean; measured?: boolean } = {}): Promise<string> => {
   const parts: string[] = [];
   // A TITLE CELL IS NOT AN EDIT (owner decision 15): a designer renames rows there, so a table with a title column
   // leaves the title column out (its cells and its "Name" header, which fills the column), and with it the widths that follow the title column's width: the table's own, its
   // grid's and its header's (all hug or fill to the grid). A table without a title column reads exactly as before,
   // so a fingerprint recorded before the title cell still matches.
   const titled = !!wrap.findOne?.((n) => !!(n as SgNode).getPluginData?.(NAME_CELL_KEY));
+  const fromFont = opts.measured ? fontMeasure() : null;
   const walk = async (n: SgNode, depth: number, inHeader = false): Promise<void> => {
     if (titled && n.getPluginData?.(NAME_CELL_KEY)) return;
     const part = n.getPluginData?.(PART_KEY);
     const header = inHeader || part === 'header';
-    const w = titled && (depth === 0 || part === 'table' || header) ? '' : Math.round(n.width ?? 0);
+    const axes = { w: !!fromFont?.(n, 'w'), h: !!fromFont?.(n, 'h') };
+    const w = axes.w || (titled && (depth === 0 || part === 'table' || header)) ? '' : Math.round(n.width ?? 0);
+    const h = axes.h ? '' : Math.round(n.height ?? 0);
     const modes = n.explicitVariableModes && typeof n.explicitVariableModes === 'object'
       ? Object.entries(n.explicitVariableModes as Record<string, unknown>).map(([k, v]) => `${k}=${String(v)}`).sort().join(',') : '';
     const fields = FINGERPRINT_FIELDS.map((k) => stable(read(n, k)));
@@ -1925,8 +2003,9 @@ export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean; ov
       const m = (n.getMainComponentAsync ? await n.getMainComponentAsync().catch(() => null) : read(n, 'mainComponent')) as { id?: unknown } | null | undefined;
       main = `${String(m?.id ?? '')}:${stable(read(n, 'componentProperties'))}`;
     }
-    parts.push([depth, n.type, n.name, n.visible === false ? 'hidden' : '', w, Math.round(n.height ?? 0),
-      typeof n.characters === 'string' ? n.characters : '', paintsKey(n.fills), paintsKey(n.strokes), modes, ...fields, fontKey, main].join('\u241f'));
+    parts.push([depth, n.type, n.name, n.visible === false ? 'hidden' : '', w, h,
+      typeof n.characters === 'string' ? n.characters : '', paintsKey(n.fills), paintsKey(n.strokes), modes, ...fields, fontKey, main,
+      ...(opts.measured ? [measuredFrom(n)] : [])].join('\u241f'));
     for (const c of (n.children ?? []) as SgNode[]) await walk(c, depth + 1, header);
   };
   await walk(wrap, 0);

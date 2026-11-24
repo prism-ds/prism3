@@ -5030,6 +5030,9 @@ const main = async (): Promise<void> => {
       // Cmd+B over the whole line keeps the style and lists the override (review B1 of #4486).
       ['semantic bold', (t) => { const x = specimen(t); x.fontName = { family: 'Inter', style: 'Bold' }; x.segments = [{ fontName: x.fontName, start: 0, end: 7, textStyleOverrides: [{ type: 'SEMANTIC_WEIGHT' }] }]; }],
       ['text retyped', (t) => { specimen(t).characters = 'Abc 124'; }],
+      // The grid's column gap widened by hand: the grid's width is left out of the print (it is measured from the
+      // specimens' fonts), so what it is measured from is read instead (review B1 of #4568).
+      ['column gap', (t) => { const g = gridOf(t); g.gridColumnGap = Number(g.gridColumnGap ?? 0) + 8; }],
     ];
     for (const [what, edit] of edits) {
       const e = await scenario({ stale: true, font: true, edit });
