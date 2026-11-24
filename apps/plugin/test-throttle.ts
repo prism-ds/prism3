@@ -7,8 +7,9 @@
  * once the window was visible. While Figma's window is hidden, Chromium runs a timer at the next whole second, and after
  * about five minutes at the next whole minute, so every `setTimeout(0)` hand-back can cost a minute. The fix
  * (`handBack`, `src/pace.ts`, owner decision A on #4476): hand back only once 50 ms of work has run, time each
- * hand-back, and while two in a row come back at least 1 s late, do more work between them (up to the last one's delay,
- * capped at 15 s). The progress readings say `throttled` from then on, for the progress line's note.
+ * hand-back, and once a sustained run of them comes back late (four in a row at least 250 ms late, a 5 s one counting
+ * twice), do more work between them (from the last one's delay, doubling, capped at 15 s). The progress readings say
+ * `throttled` from then on, for the progress line's note.
  *
  * THE FAKE CLOCK. `work(ms)` moves time forward by work; `wait(0)` moves it to when the fake host runs a 0 ms timer:
  * `prompt` (4 ms on), `second` (the next whole second), `minute` (the next whole minute). Nothing here reads a real clock.
@@ -17,12 +18,19 @@
  *   · `pace/warm` (#724): 162 offers around no work take no hand-back at all;
  *   · `pace/foreground`: on a prompt host, 30 ms units of work: every stretch between two hand-backs is at least 50 ms
  *     and at most 80 ms (50 plus one unit), so the visible window answers as often as before; never throttled;
- *   · `bound/minute`: 400 units of 700 ms (280 s of work) on a minute-aligned host finish within five times the work
+ *   · `bound/minute`: 5,600 units of 50 ms (280 s of work) on a minute-aligned host finish within five times the work
  *     plus three minutes. A hand-back at every offer, the code before #4476, takes about 400 minutes;
- *   · `bound/second`: the same work on a second-aligned host finishes within 2.5 times the work;
- *   · `throttle/detect`: a minute-aligned host reads as throttled; a prompt one never does;
+ *   · `bound/second`, `bound/second-fine`, `bound/second-uneven` (#4506 review): through the five-minute second-aligned
+ *     stage, in 50 ms, 1 ms and 1–200 ms units, at least three quarters of the time is work. With a 1 s threshold, no
+ *     delay of that stage counted and about 5% of it was work;
+ *   · `throttle/detect`: a minute-aligned host and a second-aligned one read as throttled; a prompt one never does;
+ *   · `throttle/long`: a minute-aligned host reads as throttled at its second hand-back (a long one counts twice);
+ *   · `throttle/cap`: no stretch of work between hand-backs passes 15 s plus one unit;
  *   · `throttle/one-slow`: one hand-back 1.5 s late among prompt ones (a long reconcile in the foreground) is not
  *     throttling;
+ *   · `throttle/apart`: late hand-backs (1.5 s and 6 s) each separated by a prompt one are not throttling;
+ *   · `foreground/slow-ticks`: a prompt host with every seventh hand-back 900 ms late, two in a row once and one 6 s
+ *     hitch never reads as throttled, and every stretch stays at the 50 ms pace;
  *   · `throttle/recover`: once the host turns prompt again, the next stretch of work is back to at most 80 ms;
  *   · `wait/kept`: a wait the executor asks for (500 ms, the reference back-off) is always waited, and a long one is
  *     never read as throttling;
@@ -36,14 +44,19 @@
  *     back after every table, so it waited about 60 minutes;
  *   · `main/note`: its last progress reading says `throttled`;
  *   · `main/foreground`: the same run on a prompt host, `Date.now` stepping 60 ms a call: no reading says `throttled`,
- *     and the run hands back at least once a table, so the window answers as often as before.
+ *     and the run hands back at least once a table, so the window answers as often as before;
+ *   · `main/slow-ticks`: the same run on a visible window with occasional slow ticks (every seventh hand-back 900 ms
+ *     late, one 6 s hitch): no reading says `throttled`, so no note shows.
  *
- * INDEPENDENCE (docs/34): every bound is a literal typed here (50, 80, five times plus three minutes, 2.5 times, 60
- * tables), and every elapsed time is read off the test's own clock, never off a figure the run reports.
+ * INDEPENDENCE (docs/34): every bound is a literal typed here (50, 80, five times plus three minutes, three quarters,
+ * 15 s, 60 tables), and every elapsed time is read off the test's own clock, never off a figure the run reports.
  *
  * MUTATIONS, each failing by name: the budget test in `handBack` dropped (a hand-back at every offer) → `pace/warm`,
- * `bound/minute`, `main/bound`; the throttled pace never raised (`pace` kept at `PACE_MS`) → `bound/minute`, `main/bound`;
- * `THROTTLE_RUN` read as 1 → `throttle/one-slow`; `seen` never set → `throttle/detect`, `main/note`; the throttled
+ * `bound/minute`, `main/bound`; the throttled stretch never raised → `bound/minute`, `main/bound`; `THROTTLE_MS` back to
+ * 1000 → the three `bound/second` arms, `throttle/detect`; the late count never reset by a prompt hand-back →
+ * `throttle/apart`, `foreground/slow-ticks`, `main/slow-ticks`; `THROTTLE_RUN` 2 → the same and `throttle/long`; a long
+ * hand-back counted once → `throttle/long`, `main/bound`; `THROTTLE_CLEAR` 1, or the stretch never doubled → the three
+ * `bound/second` arms; the cap dropped → `throttle/cap`; `seen` never set → `throttle/detect`, `main/note`; the throttled
  * pace not dropped on a prompt hand-back → `throttle/recover`; a long asked-for wait counted → `wait/kept`; `every`
  * skipping by the 50 ms budget like an offer → `every` (and `test-open-large-file.ts`); `main.ts`'s
  * style guide given no `yieldTo` (the executor's `realYield`) → `main/bound`, `main/note`.
@@ -101,24 +114,74 @@ section('handBack — how often a run hands the thread back, and what it reads a
   ok(PACE_MS === 50 && gaps.length > 0 && Math.min(...gaps) >= 50 && Math.max(...gaps) <= 80 && !hand.throttled,
     `pace/foreground: on a prompt host every stretch of work between hand-backs is 50–80 ms (${Math.min(...gaps)}–${Math.max(...gaps)} ms over ${gaps.length} hand-backs), never throttled (${hand.throttled})`);
 }
-for (const [host, factor, plus, name] of [['minute', 5, 3 * MIN, 'bound/minute'], ['second', 2.5, 0, 'bound/second']] as const) {
-  const c = fakeClock(host);
+{
+  const c = fakeClock('minute');
   const hand = handBack(c);
   const start = c.t;
-  const W = 400 * 700;
-  for (let i = 0; i < 400; i++) { c.work(700); await hand(); }
+  const W = 5600 * 50;
+  for (let i = 0; i < 5600; i++) { c.work(50); await hand(); }
   const total = c.t - start;
-  ok(total <= factor * W + plus,
-    `${name}: 280 s of work on a ${host}-aligned host finishes within ${factor} times the work${plus ? ' plus three minutes' : ''} (${(total / SEC).toFixed(0)} s, ${c.waits.length} hand-backs; bound ${((factor * W + plus) / SEC).toFixed(0)} s)`);
+  ok(total <= 5 * W + 3 * MIN,
+    `bound/minute: 280 s of work in 50 ms units on a minute-aligned host finishes within 5 times the work plus three minutes (${(total / SEC).toFixed(0)} s, ${c.waits.length} hand-backs; bound ${((5 * W + 3 * MIN) / SEC).toFixed(0)} s)`);
+}
+for (const [unit, name] of [[50, 'bound/second'], [1, 'bound/second-fine']] as const) {
+  // The first five minutes hidden: a second-aligned host, small units of work (a warm member is under 1 ms, a cell a few).
+  // Before the #4506 review, no delay under a second counted, so every 50 ms of work waited most of a second (about 5%).
+  const c = fakeClock('second');
+  const hand = handBack(c);
+  const start = c.t;
+  let work = 0;
+  while (c.t - start < 5 * MIN) { c.work(unit); work += unit; await hand(); }
+  const total = c.t - start;
+  ok(work >= 0.75 * total && hand.throttled,
+    `${name}: through the five-minute second-aligned stage in ${unit} ms units, at least three quarters of the time is work (${(work / SEC).toFixed(0)} s of ${(total / SEC).toFixed(0)} s, ${c.waits.length} hand-backs), and it reads as throttled (${hand.throttled})`);
+}
+{
+  // The same stage with units of uneven size, so a long stretch can end just before a whole second and its hand-back
+  // comes back prompt: the stretch is remembered, and the next late hand-back resumes it.
+  const c = fakeClock('second');
+  const hand = handBack(c);
+  const start = c.t;
+  let work = 0;
+  let seed = 17;
+  while (c.t - start < 5 * MIN) { seed = (seed * 16807) % 2147483647; const u = 1 + (seed % 200); c.work(u); work += u; await hand(); }
+  const total = c.t - start;
+  ok(work >= 0.75 * total, `bound/second-uneven: the same stage in units of 1–200 ms, at least three quarters of the time is work (${(work / SEC).toFixed(0)} s of ${(total / SEC).toFixed(0)} s, ${c.waits.length} hand-backs)`);
 }
 {
   const hidden = fakeClock('minute');
   const h1 = handBack(hidden);
   for (let i = 0; i < 20; i++) { hidden.work(60); await h1(); }
+  const second = fakeClock('second');
+  const h3 = handBack(second);
+  for (let i = 0; i < 20; i++) { second.work(60); await h3(); }
   const shown = fakeClock('prompt');
   const h2 = handBack(shown);
   for (let i = 0; i < 20; i++) { shown.work(60); await h2(); }
-  ok(h1.throttled && !h2.throttled, `throttle/detect: a minute-aligned host reads as throttled (${h1.throttled}), a prompt one does not (${h2.throttled})`);
+  ok(h1.throttled && h3.throttled && !h2.throttled, `throttle/detect: a minute-aligned host reads as throttled (${h1.throttled}), a second-aligned one too (${h3.throttled}), a prompt one does not (${h2.throttled})`);
+}
+{
+  // A run started after five minutes hidden: two minute-aligned hand-backs read as throttled, not four.
+  const c = fakeClock('minute');
+  const hand = handBack(c);
+  let at = 0;
+  for (let i = 0; i < 40 && !at; i++) { c.work(60); await hand(); if (hand.throttled) at = c.waits.length; }
+  ok(at === 2, `throttle/long: on a minute-aligned host the second hand-back reads as throttled (at hand-back ${at})`);
+}
+{
+  // The cap: no stretch of work between two hand-backs is longer than 15 s plus one unit, however late they come back.
+  const c = fakeClock('minute');
+  const hand = handBack(c);
+  const gaps: number[] = [];
+  let since = c.t;
+  for (let i = 0; i < 6000; i++) {
+    c.work(100);
+    const n = c.waits.length;
+    await hand();
+    if (c.waits.length > n) { gaps.push(c.t - c.waits[c.waits.length - 1].took - since); since = c.t; }
+  }
+  ok(hand.throttled && Math.max(...gaps) <= 15_100 && Math.max(...gaps) >= 15_000,
+    `throttle/cap: on a minute-aligned host the longest stretch of work is 15 s plus at most one 100 ms unit (${Math.max(...gaps)} ms over ${gaps.length} hand-backs)`);
 }
 {
   const c = fakeClock('prompt');
@@ -128,6 +191,37 @@ for (const [host, factor, plus, name] of [['minute', 5, 3 * MIN, 'bound/minute']
   c.wait = async (ms) => { n++; if (n === 3) { c.t += 1500; c.waits.push({ ms, took: 1500 }); return; } await real(ms); };
   for (let i = 0; i < 20; i++) { c.work(60); await hand(); }
   ok(!hand.throttled, `throttle/one-slow: one hand-back 1.5 s late among prompt ones is not throttling (${hand.throttled})`);
+}
+{
+  // Late hand-backs, long ones among them, each separated by a prompt one: never a run, so never throttling.
+  const c = fakeClock('prompt');
+  const hand = handBack(c);
+  const real = c.wait;
+  let n = 0;
+  c.wait = async (ms) => { n++; if (n % 2 === 0) { const d = n % 4 === 0 ? 6000 : 1500; c.t += d; c.waits.push({ ms, took: d }); return; } await real(ms); };
+  for (let i = 0; i < 40; i++) { c.work(60); await hand(); }
+  ok(n >= 20 && !hand.throttled, `throttle/apart: ${n} hand-backs, every other one 1.5 s or 6 s late, are not throttling (${hand.throttled})`);
+}
+{
+  // A visible window with occasional slow ticks (#724's average is 77–118 ms; a heavy reconcile can take longer): every
+  // seventh hand-back 900 ms late, once two of them in a row, once a 6 s hitch. None is a sustained run, so the run never
+  // reads as throttled and every stretch of work stays at the 50 ms pace.
+  const c = fakeClock('prompt');
+  const hand = handBack(c);
+  const real = c.wait;
+  let n = 0;
+  const slow = (k: number) => (k % 7 === 0 || k === 50 ? 900 : k === 80 ? 6000 : 0);
+  c.wait = async (ms) => { n++; const d = slow(n); if (d) { c.t += d; c.waits.push({ ms, took: d }); return; } await real(ms); };
+  const gaps: number[] = [];
+  let since = c.t;
+  for (let i = 0; i < 300; i++) {
+    c.work(30);
+    const k = c.waits.length;
+    await hand();
+    if (c.waits.length > k) { gaps.push(c.t - c.waits[c.waits.length - 1].took - since); since = c.t; }
+  }
+  ok(n >= 100 && !hand.throttled && Math.max(...gaps) <= 80,
+    `foreground/slow-ticks: ${n} hand-backs on a prompt host, every seventh 900 ms late, two in a row once and one 6 s hitch, never read as throttled (${hand.throttled}), and every stretch stays 50–80 ms (longest ${Math.max(...gaps)} ms)`);
 }
 {
   const c = fakeClock('minute');
@@ -217,7 +311,7 @@ const realNow = Date.now;
 const realSetTimeout = globalThis.setTimeout;
 /** One style-guide run under the fake clock: `Date.now` steps `step` ms a call (work), and a 0 ms timer runs at the next
  *  whole minute (`minute`) or 4 ms on (`prompt`). Returns the time spent working and waiting, and what was posted. */
-const runUnder = async (hostKind: 'minute' | 'prompt', step: number): Promise<{ work: number; waited: number; handBacks: number; readings: any[]; result: any }> => {
+const runUnder = async (hostKind: 'minute' | 'prompt' | 'slow-ticks', step: number): Promise<{ work: number; waited: number; handBacks: number; readings: any[]; result: any }> => {
   let t = 1_000_000 * SEC + 17;
   let work = 0;
   let waited = 0;
@@ -226,9 +320,11 @@ const runUnder = async (hostKind: 'minute' | 'prompt', step: number): Promise<{ 
   g.setTimeout = ((fn: () => void, ms?: number) => {
     const from = t;
     const due = t + (ms ?? 0);
-    t = hostKind === 'prompt' ? due + 4 : Math.floor(due / MIN) * MIN + MIN;
-    waited += t - from;
     if (!ms) handBacks++;
+    // `slow-ticks`: a visible window whose every seventh hand-back is 900 ms late, and one 6 s hitch (the 30th).
+    const tick = hostKind === 'slow-ticks' && !ms ? (handBacks === 30 ? 6000 : handBacks % 7 === 0 ? 900 : 0) : 0;
+    t = hostKind === 'minute' ? Math.floor(due / MIN) * MIN + MIN : due + 4 + tick;
+    waited += t - from;
     return realSetTimeout(fn, 0);
   }) as unknown as typeof setTimeout;
   posted.length = 0;
@@ -255,6 +351,12 @@ const runUnder = async (hostKind: 'minute' | 'prompt', step: number): Promise<{ 
   const r = await runUnder('prompt', 60);
   ok(!!r.result && !r.readings.some((m) => 'throttled' in m) && r.handBacks >= TABLES,
     `main/foreground: on a prompt host no reading says throttled (${r.readings.filter((m) => 'throttled' in m).length} do), and the run hands back at least once a table (${r.handBacks} for ${TABLES})`);
+}
+
+{
+  const r = await runUnder('slow-ticks', 60);
+  ok(!!r.result && r.handBacks >= TABLES && !r.readings.some((m) => 'throttled' in m),
+    `main/slow-ticks: a visible window with an occasional slow tick (every seventh hand-back 900 ms late, one 6 s hitch, ${r.handBacks} hand-backs) shows no note: no reading says throttled (${r.readings.filter((m) => 'throttled' in m).length} do)`);
 }
 
 console.log = log;
