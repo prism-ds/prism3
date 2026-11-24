@@ -51,16 +51,32 @@
  * The record is an authored baseline. `regen.ts` never writes it, and `--accept` APPENDS a row for a version the
  * record does not hold. It never rewrites a row another branch wrote (shape 6: a gate allowed to rewrite what it
  * reads has no memory). The one rewrite it makes is this branch's own newest row, while `origin/main` does not hold
- * it yet, so a PR that changes its schema twice keeps one version.
+ * it yet, so a PR that changes its schema twice keeps one version. That rewrite needs `origin/main` read: where the
+ * ref cannot be read, `--accept` refuses the rewrite by name and says to fetch (review S1 of #4515); an append still
+ * works. It reads `origin/main` as last fetched, so a row merged since then reads as not merged: fetch first.
  *
  * The shape is hashed by this file's own walk, not by `component-contract.ts`'s `schemaShape`. Sharing it would tie
  * every recorded hash to another gate's fact list. A change there would fail every format here at once, and no
  * version raise could fix it. The duplication is deliberate.
  *
- * THE SHAPE. The schema's JSON with `description`, `title`, `$comment` and `examples` removed at every depth, object
- * keys sorted, and the schema's own `$id` string read as `<$id>`, so a raise does not move its own shape. Any other
- * edit moves it: a property, a `required` member, an `enum` value, a bound, `additionalProperties`. Reordering an
- * array (`required`, `enum`, `anyOf`) moves it too: over-sensitive, accepted, because a raise costs one command.
+ * THE SHAPE. A walk that knows what each position of the schema holds (review B1 of #4515):
+ *   · a SCHEMA: its annotation keywords `description`, `title`, `$comment` and `examples` are removed, and every other
+ *     keyword is kept, its value read by kind;
+ *   · a NAME MAP, the value of `properties`, `patternProperties`, `$defs`, `definitions` or `dependentSchemas`: every
+ *     name is kept, whatever it is called, so a property or a `$defs` member named `description` or `title` is part
+ *     of the shape, and each value is a schema;
+ *   · a schema under `items`, `additionalProperties`, `not`, `if`/`then`/`else`, `contains`, `propertyNames`, the
+ *     `unevaluated*`/`additionalItems` keywords, or in the lists `allOf`, `anyOf`, `oneOf`, `prefixItems`;
+ *   · DATA, every other keyword's value (`required`, `enum`, `const`, `default`, a bound, `type`): kept whole.
+ * Object keys are sorted, and the schema's own `$id` string is read as `<$id>`, so a raise does not move its own shape.
+ *
+ * COUNTED: a property, a `$defs` member or any other named member added, removed or retyped, whatever its name; a
+ * `required` member; an `enum` or `const` value; a bound; `additionalProperties`; any keyword other than the four
+ * annotations, at any depth. Reordering an array (`required`, `enum`, `anyOf`) moves it too: over-sensitive,
+ * accepted, because a raise costs one command. A schema under a keyword the walk does not list (an older draft's
+ * `dependencies`, a vendor keyword) is read as data, its annotations included: over-sensitive, the safe direction.
+ * NOT COUNTED: an annotation keyword's text where it annotates a schema, object key order, the file's formatting, and
+ * the version in the schema's own `$id`.
  *
  * ── ITS LIMITS ──────────────────────────────────────────────────────────────────────────────────────────────────
  *
@@ -107,20 +123,40 @@ export type Failure = { kind: 'DUPLICATE' | 'ORDER' | 'UNRECORDED' | 'AHEAD' | '
 
 // ---- the shape --------------------------------------------------------------------------------------------------
 
+/** The annotation keywords removed from a SCHEMA. Removed only where the key is a keyword: a member of a name map
+ *  (below) with the same name, a property called `description`, is part of the shape (review B1 of #4515). */
 const PROSE = new Set(['description', 'title', '$comment', 'examples']);
+/** Keywords whose value maps NAMES to schemas: every name is kept, whatever it is called, and each value is a schema. */
+const NAME_MAPS = new Set(['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas']);
+/** Keywords whose value is one schema, or (`items`, in its older array form) a list of them. */
+const SUBSCHEMA = new Set(['items', 'additionalProperties', 'unevaluatedProperties', 'unevaluatedItems', 'additionalItems',
+  'not', 'if', 'then', 'else', 'contains', 'propertyNames']);
+/** Keywords whose value is a list of schemas. */
+const SUBSCHEMAS = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems']);
 
-/** The schema with its prose removed, keys sorted, and its own `$id` read as `<$id>`. Deliberately not
- *  `component-contract.ts`'s `schemaShape` (see the header). */
+/** The schema with its annotations removed, keys sorted, and its own `$id` read as `<$id>`. The walk knows what each
+ *  position holds: a schema (annotations removed), a name map (every name kept), or data (`required`, `enum`,
+ *  `const`, `default`: kept whole). Deliberately not `component-contract.ts`'s `schemaShape` (see the header). */
 export const shapeOf = (schema: unknown): string => {
   const id = (schema as { $id?: unknown })?.$id;
-  const canon = (v: unknown): unknown => {
+  const sorted = (o: object, f: (k: string, v: unknown) => unknown, keep: (k: string) => boolean = () => true): Record<string, unknown> =>
+    Object.fromEntries(Object.keys(o).filter(keep).sort().map((k) => [k, f(k, (o as Record<string, unknown>)[k])]));
+  const data = (v: unknown): unknown => {
     if (typeof v === 'string') return v === id ? '<$id>' : v;
-    if (Array.isArray(v)) return v.map(canon);
-    if (v && typeof v === 'object')
-      return Object.fromEntries(Object.keys(v).filter((k) => !PROSE.has(k)).sort().map((k) => [k, canon((v as Record<string, unknown>)[k])]));
+    if (Array.isArray(v)) return v.map(data);
+    if (v && typeof v === 'object') return sorted(v, (_k, x) => data(x));
     return v;
   };
-  return createHash('sha256').update(JSON.stringify(canon(schema))).digest('hex').slice(0, 16);
+  const schemaAt = (v: unknown): unknown => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return data(v); // `true` / `false` schemas, and anything else
+    return sorted(v, (k, x) => {
+      if (NAME_MAPS.has(k) && x && typeof x === 'object' && !Array.isArray(x)) return sorted(x, (_n, sub) => schemaAt(sub));
+      if (SUBSCHEMA.has(k)) return Array.isArray(x) ? x.map(schemaAt) : schemaAt(x);
+      if (SUBSCHEMAS.has(k) && Array.isArray(x)) return x.map(schemaAt);
+      return data(x);
+    }, (k) => !PROSE.has(k));
+  };
+  return createHash('sha256').update(JSON.stringify(schemaAt(schema))).digest('hex').slice(0, 16);
 };
 
 const versionOf = (stamp: string, family: string): string =>
@@ -204,16 +240,28 @@ const selfCheck = (): string[] => {
   }
   // The shape walk: prose and key order do not move it; a property, an enum value and the $id-as-version do or don't.
   const s = { $id: 'prism3-x/0.7', type: 'object', description: 'a', properties: { a: { type: 'string', title: 't' } }, required: ['a'] };
-  const probes: [string, unknown, boolean][] = [
+  const d = { ...s, properties: { ...s.properties, description: { type: 'string' } }, $defs: { title: { type: 'string' } } };
+  const n = { ...s, properties: { properties: { type: 'object', description: 'a' } } };
+  const probes: [string, unknown, boolean, unknown?][] = [
     ['a description edit', { ...s, description: 'b' }, false],
     ['keys reordered', { required: ['a'], properties: s.properties, type: 'object', description: 'a', $id: s.$id }, false],
     ['the $id raised', { ...s, $id: 'prism3-x/0.8' }, false],
     ['a property added', { ...s, properties: { ...s.properties, b: { type: 'number' } } }, true],
     ['a required member added', { ...s, required: ['a', 'b'] }, true],
     ['an enum value added', { ...s, properties: { a: { type: 'string', enum: ['x'] } } }, true],
+    // Review B1 of #4515: a PROPERTY named like an annotation is part of the shape; the annotation itself is not.
+    ['a property named description added', { ...s, properties: { ...s.properties, description: { type: 'string' } } }, true],
+    ['a property named description retyped', { ...d, properties: { ...d.properties, description: { type: 'number' } } }, true, d],
+    ['a property named description removed', { ...d, properties: { a: d.properties.a } }, true, d],
+    ['a $defs member named title retyped', { ...d, $defs: { title: { type: 'number' } } }, true, d],
+    // The trap the parent-key rule falls into: a property NAMED properties holds a schema whose description is prose.
+    ['the description of a property named properties edited', { ...n, properties: { properties: { type: 'object', description: 'b' } } }, false, n],
   ];
-  for (const [name, v, moves] of probes)
-    if ((shapeOf(v) !== shapeOf(s)) !== moves) bad.push(`self-check shape: ${name} ${moves ? 'did not move' : 'moved'} the shape`);
+  // Hand-counted, as EXPECTED_CASES is.
+  const EXPECTED_PROBES = 11;
+  if (probes.length !== EXPECTED_PROBES) bad.push(`the self-check holds ${probes.length} shape probes, not ${EXPECTED_PROBES}`);
+  for (const [name, v, moves, base = s] of probes)
+    if ((shapeOf(v) !== shapeOf(base)) !== moves) bad.push(`self-check shape: ${name} ${moves ? 'did not move' : 'moved'} the shape`);
   return bad;
 };
 
@@ -275,8 +323,12 @@ if (process.argv.includes('--accept')) {
   const by = arg('--by') ?? g('branch', '--show-current').stdout.trim();
   if (!by) fail(['--accept needs a name for the row: run it on a branch, or pass --by <name>.']);
   const note = arg('--note');
-  const main = g('show', `origin/main:${relative(repo, RECORD)}`);
-  const onMain: Record_ | null = main.status === 0 ? JSON.parse(main.stdout) : null;
+  // What origin/main holds (review S1 of #4515). A ref that cannot be read leaves `onMain` null, and a rewrite then
+  // refuses: it cannot tell a row on main from one that is not. A readable ref without the file holds no rows.
+  const mainOk = g('rev-parse', '--verify', '--quiet', 'origin/main^{commit}').status === 0;
+  const recordOnMain = `origin/main:${relative(repo, RECORD)}`;
+  const onMain: Record_ | null = !mainOk ? null
+    : g('cat-file', '-e', recordOnMain).status === 0 ? JSON.parse(g('show', recordOnMain).stdout) : { note: '', formats: {} };
   let changed = 0;
   for (const l of live) {
     const rows = (record.formats[l.family] ??= []);
@@ -287,7 +339,9 @@ if (process.argv.includes('--accept')) {
       console.log(`  + ${l.family} ${l.version}  ${l.shape}  by ${by}`);
       changed++;
     } else if (rows[at].shape !== l.shape) {
-      const merged = onMain?.formats[l.family]?.some((r) => r.version === l.version);
+      if (!onMain) fail([`${l.family} ${l.version} would be rewritten, and origin/main cannot be read, so whether that row is already merged is unknown.`,
+        '  A rewrite needs to know it. Run: git fetch origin main, then --accept again. (Appending a new version needs no origin/main.)']);
+      const merged = onMain!.formats[l.family]?.some((r) => r.version === l.version);
       if (rows[at].by !== by || at !== rows.length - 1 || merged)
         fail([`${l.family} ${l.version} is recorded by "${rows[at].by}"${merged ? ' and is on origin/main' : ''}, and the schema's shape moved since.`,
           `  A recorded version never takes a second shape. Raise ${l.constName} and the schema's $id above ${rows.at(-1)!.version}, then --accept.`]);
@@ -304,4 +358,4 @@ if (process.argv.includes('--accept')) {
 const failures = judge(record, live, registered, published);
 if (failures.length) fail([`${failures.length} failure(s):`, ...failures.map((f) => `  ✗ ${f.kind}  ${f.family}: ${f.text}`)]);
 const rows = Object.values(record.formats).reduce((n, r) => n + r.length, 0);
-console.log(`✅ ${TAG}: ${live.length} formats, each at its recorded version and shape (${live.map((l) => `${l.family}/${l.version} ${l.shape}`).join(', ')}); ${rows} rows, no version recorded twice; ${published.length} published schemas, each registered; self-check: 10 planted records and 6 shape probes answered as expected.`);
+console.log(`✅ ${TAG}: ${live.length} formats, each at its recorded version and shape (${live.map((l) => `${l.family}/${l.version} ${l.shape}`).join(', ')}); ${rows} rows, no version recorded twice; ${published.length} published schemas, each registered; self-check: 10 planted records and 11 shape probes answered as expected.`);
