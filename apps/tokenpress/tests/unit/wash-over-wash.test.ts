@@ -14,7 +14,13 @@
  * THE EXPECTED SHAPE is #2365's decision A, unchanged: `$value` is the inner wash's resolved color with its alpha
  * multiplied by the outer opacity. Each half resolves in its own collection and mode, as Figma resolves it.
  *
- * Every assertion runs the REAL export (`exportToZip`) over a stubbed `figma`.
+ * Every assertion runs the REAL export (`exportToZip`, or `exportToZipWithFormats` for the dot-notation format) over a
+ * stubbed `figma`.
+ *
+ * THE DOT-NOTATION FORMAT has its own composed-color path (`DotNotationExporter.resolveComposedColor`, #4475), and it
+ * had the same bug: the inner wash is not RGB, so the line read `-> null`. Its alias walk carries the file's mode and
+ * falls back to a variable's first mode when that mode is not one of its own, so an inner wash in another collection is
+ * read in its own first mode, and its halves must resolve in THAT mode, not the outer file's.
  *
  * THE EXPECTED VALUES ARE NOT DERIVED FROM THE CODE UNDER TEST (docs/34). The base is `#ff8000` (1, 128/255 ≈ 0.502, 0).
  * The inner wash is 40% of it (alpha 0.4); the outer is 50% of that (alpha 0.2). In the second collection the inner
@@ -27,6 +33,7 @@
 import JSZip from 'jszip';
 import { describe, test, expect } from '../../test-harness';
 import { TokenExporter } from '../../src/plugin/exporter';
+import { MultiFormatTokenExporter } from '../../src/plugin/multi-format-exporter';
 
 const CORE = 'VariableCollectionId:1:0';
 const CORE_MODE = '1:0';
@@ -118,6 +125,25 @@ async function exportFiles(options: Record<string, unknown> = {}): Promise<Recor
   return out;
 }
 
+async function dotLines(prefix: string): Promise<string[]> {
+  installFigma();
+  const exporter = new MultiFormatTokenExporter({
+    tokenNameCase: 'preserve',
+    includeDTCG: false,
+    additionalFormats: [{ format: 'dot-notation' }],
+  } as never);
+  const zip = await JSZip.loadAsync(await exporter.exportToZipWithFormats());
+  const lines: string[] = [];
+  for (const name of Object.keys(zip.files).sort()) {
+    if (zip.files[name].dir || name.indexOf('dot-notation/') !== 0) continue;
+    const text = await zip.files[name].async('string');
+    for (const line of text.split('\n')) {
+      if (line.indexOf(prefix) === 0) lines.push(name.slice('dot-notation/'.length) + ' ' + line);
+    }
+  }
+  return lines;
+}
+
 function find(files: Record<string, any>, fileHint: string, path: string[]): any {
   const name = Object.keys(files).find(n => n.indexOf(fileHint) !== -1);
   let node = name ? files[name] : undefined;
@@ -154,5 +180,27 @@ describe('a tinted wash whose color aliases another wash (#4478)', () => {
   test('with Figma extensions on, aliasOf keeps the outer reference and opacity', async () => {
     const t = find(await exportFiles({ includeFigmaExtensions: true }), 'core', ['color', 'brand-40-half']);
     expect(t.$extensions.figma.aliasOf).toEqual({ color: '{color.brand-40}', opacity: 50 });
+  });
+});
+
+describe('the dot-notation format: a tinted wash whose color aliases another wash (#4478)', () => {
+  test('same collection: the outer opacity multiplies the inner wash alpha', async () => {
+    expect(await dotLines('color.brand-40-half')).toEqual([
+      'core.txt color.brand-40-half: "{color.brand-40} @ 50%" -> "rgba(255, 128, 0, 0.20)"',
+    ]);
+  });
+
+  test('across collections: the inner wash resolves in each mode', async () => {
+    expect(await dotLines('tint.brand-half')).toEqual([
+      'theme-dark.txt tint.brand-half: "{tint.brand} @ 50%" -> "rgba(255, 128, 0, 0.40)"',
+      'theme-light.txt tint.brand-half: "{tint.brand} @ 50%" -> "rgba(255, 128, 0, 0.20)"',
+    ]);
+  });
+
+  test('Dark, inner wash in a third collection: its own aliases resolve in the mode it was read in, not the outer mode', async () => {
+    expect(await dotLines('tint.surface-half')).toEqual([
+      'theme-dark.txt tint.surface-half: "{surface.wash} @ 50%" -> "rgba(255, 128, 0, 0.20)"',
+      'theme-light.txt tint.surface-half: "{surface.wash} @ 50%" -> "rgba(255, 128, 0, 0.20)"',
+    ]);
   });
 });

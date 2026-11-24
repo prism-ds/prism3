@@ -953,7 +953,8 @@ export class TokenExporter {
   }
 
   // `resolveInMode`, also reporting the collection and mode the walk ended in (prism3 #4478), so a value that is itself
-  // composed can resolve its own aliases where it lives.
+  // composed can resolve its own aliases where it lives. The mode is the one the walk asked for: where a variable fell
+  // back to its first mode, every variable in that collection falls back the same way, so it is not rewritten.
   private resolveInModeAt(
     value: unknown,
     variableMap: Map<string, Variable>,
@@ -986,7 +987,6 @@ export class TokenExporter {
       }
       const pick =
         currentMode !== undefined && currentMode in target.valuesByMode ? currentMode : modeIds[0];
-      currentMode = pick;
       current = target.valuesByMode[pick];
     }
     if (isVariableAlias(current)) {

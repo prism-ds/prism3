@@ -130,7 +130,7 @@ const ADDED: Record<string, number> = {
   'tests/unit/css-hsl-color.test.ts': 4,
   // prism3 #4478 — a tinted wash whose color aliases another wash lost its own opacity. The inner wash resolves, in
   // its own collection and mode, and the outer opacity multiplies its alpha.
-  'tests/unit/wash-over-wash.test.ts': 6,
+  'tests/unit/wash-over-wash.test.ts': 9,
   // prism3 #3885 — a paint style layering a gradient with other paints is skipped, and its name only reached the dev
   // console. The sandbox now posts it with the export result, and the panel's footer names it beside the blur skips.
   'tests/unit/skipped-gradient-summary.test.ts': 5,

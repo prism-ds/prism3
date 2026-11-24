@@ -19,9 +19,10 @@ the panel did not report.
   or `hsla(0, 100%, 50%, 0.4)` below full opacity. sRGB output is unchanged.
 - **A wash over a wash keeps both opacities.** A color variable at an opacity
   whose color is another variable at an opacity exported the bare reference,
-  and its own opacity was lost. It now exports the color they resolve to, with
-  both opacities multiplied into the alpha: 40% over 50% is an alpha of 0.2.
-  Each resolves in its own collection and mode, as Figma resolves it.
+  and its own opacity was lost (in the dot-notation format, it read `null`).
+  Every format now exports the color they resolve to, with both opacities
+  multiplied into the alpha: 40% over 50% is an alpha of 0.2. Each resolves
+  in its own collection and mode, as Figma resolves it.
 - **The export summary names skipped layered-gradient styles.** A paint style
   that stacks a gradient with other paints has no single-gradient form and is
   left out. The panel's footer now names it, beside any skipped blur-only
