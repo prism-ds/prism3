@@ -89,6 +89,9 @@
     "@layer base": {
       "*": {
         "@apply outline-ring": {}
+      },
+      ".focus-visible\\:ring-ring\\/50:focus-visible:not([aria-invalid=\"true\"])": {
+        "--tw-ring-color": "var(--ring) !important"
       }
     }
   }

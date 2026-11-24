@@ -187,6 +187,22 @@ Install a brand's theme into a shadcn/ui project:
 npx shadcn add https://prism3-ds.vercel.app/r/<brand>.json
 ```
 
+The registry item carries two rules beyond the theme variables, both for focus. Stock shadcn/ui draws the focus outline
+(`outline-ring/50`) and the focus ring of Button, Input, Select, Checkbox, Switch and Badge (`focus-visible:ring-ring/50`)
+at 50%, which is 1.9–2.8:1 against the page. The rules draw both at the full `--ring`, 3.7:1 or more on every hosted
+brand. A ring on an invalid field keeps its stock `destructive` color. The plain `out/shadcn/<brand>.css` carries
+neither rule.
+
+Three stock classes still draw text under 4.5:1. The theme leaves them as shadcn ships them, and `lint-shadcn-contrast`
+measures each one on every run (#4387, #4388, #4411). One class edit in the component raises each, measured on the
+hosted brands:
+
+| Component | Stock class | Measured | Edit | After the edit |
+|---|---|---|---|---|
+| Alert, `destructive` description | `text-destructive/90` | 3.91–3.97:1 light, 3.62–3.63:1 dark | `text-destructive` | 4.56:1 or more in light. Dark stays at 4.25:1: `--destructive` is a fill under white text, and no one value clears both. |
+| Input and Select, placeholder in dark | `dark:bg-input/30` | 3.78–3.83:1 | remove it | 4.99:1 or more: the placeholder sits on the page color. |
+| Button, `link` variant in dark | `text-primary` | 4.23–4.25:1 | add `dark:text-foreground` | 18:1. The link loses the brand hue in dark; a project that wants a hue sets its own `text-*` class. |
+
 Only some of the engine's `.ts` files are actually imported by that bundle, so the script names the
 others as exclusions rather than naming the imported ones as inclusions. That direction is the point: a new
 engine file is unlisted, so it triggers a build it may not need — wasteful but safe. Naming the imported ones

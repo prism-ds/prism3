@@ -191,9 +191,25 @@ export const shadcnCss = (h: Handoff): string => {
   ].join('\n');
 };
 
-/** Q2997.17 B: stock shadcn's scaffold fades the focus ring to 50% (`outline-ring/50`), below 3:1 on the page. The
- *  registry item restores the full-strength ring the theme's own `ring` was measured at. */
-export const SHADCN_BASE_CSS = { '@layer base': { '*': { '@apply outline-ring': {} } } } as const;
+/** The stock class that fades the box-shadow focus ring, on the focused element, minus an invalid field: stock
+ *  shadcn draws that one's ring in `destructive` (`aria-invalid:ring-destructive/20`), and the rule leaves it alone. */
+export const SHADCN_RING_SELECTOR = '.focus-visible\\:ring-ring\\/50:focus-visible:not([aria-invalid="true"])';
+
+/** Q2997.17 B: stock shadcn's scaffold fades the focus outline to 50% (`outline-ring/50`), below 3:1 on the page. The
+ *  registry item restores the full-strength outline the theme's own `ring` was measured at.
+ *
+ *  #4386 (owner decision 2026-11-24, A for the ring): Button, Input, Select, Checkbox, Switch and Badge focus with a
+ *  box-shadow ring instead, `focus-visible:ring-ring/50`, which the outline rule never reaches. The second rule sets that
+ *  ring's color back to the full `--ring`. It is the one non-stock rule here: `!important` because the stock class
+ *  lives in the later `utilities` layer, and an important declaration in an earlier layer outranks it. It is tied to
+ *  shadcn's class name, so a renamed class orphans it; `lint-shadcn-contrast` measures the ring at 50% with this rule
+ *  applied, and fails by name if it stops reaching. The plain `<brand>.css` carries neither rule. */
+export const SHADCN_BASE_CSS = {
+  '@layer base': {
+    '*': { '@apply outline-ring': {} },
+    [SHADCN_RING_SELECTOR]: { '--tw-ring-color': 'var(--ring) !important' },
+  },
+} as const;
 
 /** The `registry:theme` item `npx shadcn add <url>` installs. */
 export const shadcnRegistryItem = (h: Handoff): Record<string, unknown> => ({

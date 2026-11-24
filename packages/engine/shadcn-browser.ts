@@ -11,8 +11,13 @@ export type Rgba = [number, number, number, number];
 export type ShadcnPage = {
   /** Each expression's color, drawn alone on a cleared canvas: [r, g, b, alpha byte]. */
   read: (mode: 'light' | 'dark', exprs: readonly string[]) => Promise<Rgba[]>;
-  /** Each [ink, ground] pair, the ground drawn opaque and the ink composited over it: the opaque [r, g, b] pair. */
-  over: (mode: 'light' | 'dark', pairs: ReadonlyArray<readonly [string, string]>) => Promise<Array<{ ink: Rgba; ground: Rgba }>>;
+  /** Each [ink, ground] pair, the ground drawn opaque and the ink composited over it: the opaque [r, g, b] pair. With a
+   *  third entry, `under`, that is drawn opaque first and the ground composited over it at its own alpha (a faded fill,
+   *  such as `bg-input/30`, over the page). */
+  over: (mode: 'light' | 'dark', pairs: ReadonlyArray<readonly [string, string, string?]>) => Promise<Array<{ ink: Rgba; ground: Rgba }>>;
+  /** `css` added to the page, then a button carrying `className` focused by script: the computed `--tw-ring-color` on it,
+   *  `var()` resolved, and whether it matched `:focus-visible`. */
+  ringColor: (mode: 'light' | 'dark', css: string, className: string) => Promise<{ value: string; focusVisible: boolean }>;
   close: () => Promise<void>;
 };
 
@@ -36,20 +41,36 @@ export const openShadcnPage = async (css: string): Promise<ShadcnPage> => {
     const px = () => Array.from(g.getImageData(0, 0, 1, 1).data);
     window.__shadcn = {
       read: (exprs) => exprs.map((e) => { g.clearRect(0, 0, 1, 1); g.fillStyle = resolve(e); g.fillRect(0, 0, 1, 1); return px(); }),
-      over: (pairs) => pairs.map(([ink, ground]) => {
+      over: (pairs) => pairs.map(([ink, ground, under]) => {
         g.clearRect(0, 0, 1, 1);
-        g.fillStyle = resolve('oklch(from ' + ground + ' l c h / 1)'); g.fillRect(0, 0, 1, 1);
+        if (under) {
+          g.fillStyle = resolve('oklch(from ' + under + ' l c h / 1)'); g.fillRect(0, 0, 1, 1);
+          g.fillStyle = resolve(ground); g.fillRect(0, 0, 1, 1);
+        } else {
+          g.fillStyle = resolve('oklch(from ' + ground + ' l c h / 1)'); g.fillRect(0, 0, 1, 1);
+        }
         const gp = px();
         g.fillStyle = resolve(ink); g.fillRect(0, 0, 1, 1);
         return { ink: px(), ground: gp };
       }),
+      ringColor: ([css, className]) => {
+        let st = document.getElementById('extra-css');
+        if (!st) { st = document.createElement('style'); st.id = 'extra-css'; document.head.appendChild(st); }
+        st.textContent = css;
+        let b = document.getElementById('ring-probe');
+        if (!b) { b = document.createElement('button'); b.id = 'ring-probe'; document.body.appendChild(b); }
+        b.className = className;
+        b.blur(); b.focus();
+        return { value: getComputedStyle(b).getPropertyValue('--tw-ring-color').trim(), focusVisible: b.matches(':focus-visible') };
+      },
     };
   })()`);
-  const call = (fn: 'read' | 'over', mode: 'light' | 'dark', arg: unknown) =>
+  const call = (fn: 'read' | 'over' | 'ringColor', mode: 'light' | 'dark', arg: unknown) =>
     page.evaluate(`(() => { document.documentElement.className = ${JSON.stringify(mode === 'dark' ? 'dark' : '')}; return window.__shadcn.${fn}(${JSON.stringify(arg)}); })()`);
   return {
     read: (mode, exprs) => call('read', mode, exprs),
     over: (mode, pairs) => call('over', mode, pairs),
+    ringColor: (mode, css, className) => call('ringColor', mode, [css, className]),
     close: () => browser.close(),
   };
 };
