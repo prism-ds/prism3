@@ -1,13 +1,13 @@
 # Prism3 guides for designers
 
-<!-- DRAFT for owner review (#2637, lane 4; rewritten around Update file for #3264). Every factual claim cites its source in an HTML comment of the form `src: path:line`, and a claim that quotes nothing carries the cited block's fingerprint (`src: path:line#1a2b3c4d`, #3417), and `lint-guide-claims.ts` checks that each still resolves and still holds what the claim quotes. -->
+<!-- DRAFT for owner review (#2637, lane 4; rewritten around Update file for #3264). Every factual claim cites its source in an HTML comment of the form `src: path@"first line".."last line"`, naming the cited lines by their text rather than their numbers (#4455), and a claim that quotes nothing carries the cited block's fingerprint (`src: path@"…".."…"#1a2b3c4d`, #3417), and `lint-guide-claims.ts` checks that each still resolves and still holds what the claim quotes. -->
 
-Prism3 generates a brand's design tokens from a small set of choices: a primary color, a neutral, type, shape, motion and a few more. <!-- src: packages/engine/levers.ts:380-388#6e625336 -->
-You make those choices in Studio, either on the web or inside the Figma plugin, and the preview updates as you go. <!-- src: apps/plugin/src/ui/entry.ts:10-38#6258203d -->
-The engine checks every text and fill pairing it generates against a contrast floor, such as 4.5:1 for body text, in every mode the brand ships. <!-- src: packages/engine/mcp.ts:384-389#787f0dc9 -->
-Secondary, status and link text is checked on the page and on the secondary background, and on every background nearer the page. Text on a deeper background isn't checked unless the brand moves its contrast floor there; then each of those colors is picked again to clear it. <!-- src: packages/engine/modes.ts:406-454#979c5e3f --> <!-- src: packages/engine/test.ts:856-881#fd07d44a -->
-In Figma, **Update file** writes the result as variables, modes and styles, then builds component sets and style-guide tables that use them. <!-- src: apps/studio/src/state/update-file.ts:330-425 -->
-The same brand exports as DTCG token files or as a brand brief, so developers and agents read the same values you set. <!-- src: apps/studio/src/export-settings.ts:105-114#7f4a6381 -->
+Prism3 generates a brand's design tokens from a small set of choices: a primary color, a neutral, type, shape, motion and a few more. <!-- src: packages/engine/levers.ts@"export const leverGroups".."];"#6e625336 -->
+You make those choices in Studio, either on the web or inside the Figma plugin, and the preview updates as you go. <!-- src: apps/plugin/src/ui/entry.ts@"import './component-catalog".."mountAgentLink();"#6258203d -->
+The engine checks every text and fill pairing it generates against a contrast floor, such as 4.5:1 for body text, in every mode the brand ships. <!-- src: packages/engine/mcp.ts@"type: 'array', description: 'Optional".."kind: { type: 'string"#787f0dc9 -->
+Secondary, status and link text is checked on the page and on the secondary background, and on every background nearer the page. Text on a deeper background isn't checked unless the brand moves its contrast floor there; then each of those colors is picked again to clear it. <!-- src: packages/engine/modes.ts@"const bg = bgLadder(".."base: surfAtP(baseS."#979c5e3f --> <!-- src: packages/engine/test.ts@"// the steps that built".."const m = new RegExp"#fd07d44a -->
+In Figma, **Update file** writes the result as variables, modes and styles, then builds component sets and style-guide tables that use them. <!-- src: apps/studio/src/state/update-file.ts@"button: 'Update file".."guidesSub: 'Drawn with" -->
+The same brand exports as DTCG token files or as a brand brief, so developers and agents read the same values you set. <!-- src: apps/studio/src/export-settings.ts@"label: 'Design tokens".."label: 'Brand brief'"#7f4a6381 -->
 
 ## Guides
 
