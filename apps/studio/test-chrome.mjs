@@ -3396,7 +3396,7 @@ for (const host of ['web', 'figma']) {
           const settleWaited = settled.length > 0 && due > take.t0 + POST_SETTLE_MS;
           const ms = (v) => Math.round(v - (due - 200));
           ok(waited.length === 1 && tookMs < POST_WAIT_MS && !settleWaited,
-            `#4073 ${where}: a read that expects a post reads one that lands 200 ms late (read ${JSON.stringify(waited)} in ${tookMs} ms, bound ${POST_WAIT_MS}), and the settle step does not wait for it (read ${JSON.stringify(settled.map(({ type }) => ({ type })))}; read from ${ms(take.t0)} to ${ms(take.t1)} ms, entry due at 200${settled[0] ? `, landed at ${ms(settled[0].at)}` : ''})`);
+            `#4073 ${where}: a read that expects a post reads one that lands 200 ms late (read ${JSON.stringify(waited.map(({ type }) => ({ type })))} in ${tookMs} ms, bound ${POST_WAIT_MS}), and the settle step does not wait for it (read ${JSON.stringify(settled.map(({ type }) => ({ type })))}; read from ${ms(take.t0)} to ${ms(take.t1)} ms, entry due at 200${settled[0] ? `, landed at ${ms(settled[0].at)}` : ''})`);
         }
         // Idle: nothing has run. #2909: the rail shell draws no Activity tile (the drawer's own row is Activity), on both
         // hosts since Q2909.9 A, so only the drawer is read. #3113 (Q3113.9 A): the plugin draws its bar row from launch,
