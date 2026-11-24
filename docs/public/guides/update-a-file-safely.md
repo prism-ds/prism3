@@ -41,10 +41,10 @@ A file that isn't set up opens with "This file isn't set up for Prism3 yet. This
 
 The dialog closes and the run starts. The steps run one at a time: Set up file, Theme, the update in place, To add, then Style guides. The update in place runs before To add, though To add is listed first. <!-- src: apps/studio/src/state/update-file.ts:48#d0a2a83c --> On a file's first run, with Theme ticked, the run then ends by drawing the cover and About this library. <!-- src: apps/studio/src/state/update-file.ts:196-198#754d28f9 -->
 
-While it runs, the button reads **Updating**. The status strip at the foot of the panel says which step and set it is on. When the run ends, it shows a line such as "Theme applied" or "File updated", followed by "Details in Activity." <!-- src: apps/studio/src/state/update-file.ts:332 --> <!-- src: apps/studio/src/state/status-strip.ts:143-150 -->
+While it runs, the button reads **Updating**. The status strip at the foot of the panel says which step and set it is on. When the run ends, it shows a line such as "Theme applied" or "File updated", followed by "Details in Activity." <!-- src: apps/studio/src/state/update-file.ts:332 --> <!-- src: apps/studio/src/state/status-strip.ts:155-162 -->
 Each step's full result goes to its row in the Activity drawer.
 
-Choose **Update file** again during a run to follow it: "Step 2 of 4 · Theme", each set being updated, and a button to stop, such as "Stop after Button". The set being written finishes, and the rest are left as they were. <!-- src: apps/studio/src/state/update-file.ts:439 --> <!-- src: apps/studio/src/state/status-strip.ts:140-141 -->
+Choose **Update file** again during a run to follow it: "Step 2 of 4 · Theme", each set being updated, and a button to stop, such as "Stop after Button". The set being written finishes, and the rest are left as they were. <!-- src: apps/studio/src/state/update-file.ts:439 --> <!-- src: apps/studio/src/state/status-strip.ts:152-153 -->
 
 If a step fails, the dialog opens next time with "The last update stopped at" and the step and its reason. <!-- src: apps/studio/src/state/update-file.ts:440 -->
 
@@ -104,7 +104,7 @@ An ordinary hand edit, such as a recolor, stays a hand edit, and the set keeps u
 
 To turn a set's updates off yourself, choose **Turn off updates** on its row under **Due**. <!-- src: apps/studio/src/state/update-file.ts:398 -->
 A set whose updates are off is listed under **Updates off** in the dialog. <!-- src: apps/studio/src/state/update-file.ts:396 --> When the update turned it off, its row adds "Turned off when an update couldn’t apply around your edits." <!-- src: apps/studio/src/state/update-file.ts:397 -->
-Choose **Turn updates back on** to hand it back. <!-- src: apps/studio/src/state/update-file.ts:399 --> That writes nothing to the set but the setting: the next Update file checks it as it checks any other set, and Keep still holds your edits until you choose otherwise. <!-- src: apps/plugin/src/main.ts:2480#c00ec9d7 -->
+Choose **Turn updates back on** to hand it back. <!-- src: apps/studio/src/state/update-file.ts:399 --> That writes nothing to the set but the setting: the next Update file checks it as it checks any other set, and Keep still holds your edits until you choose otherwise. <!-- src: apps/plugin/src/main.ts:2486#c00ec9d7 -->
 
 The setting is kept in the file, on the set, so it holds when the file is opened again. <!-- src: apps/plugin/src/updates-off.ts:30#eb506b52 -->
 
@@ -128,8 +128,8 @@ What Clean up can delete: <!-- src: apps/plugin/src/prune-figma.ts:18-32#6e2fac9
 
 A variable or style Prism3 wrote under **Rename**, whose name ends in "(Prism3)", is never on the list while the brand still writes the name before that suffix. <!-- src: apps/plugin/src/prune-figma.ts:325-345 -->
 
-The delete works out the list again from a fresh read of the file before it deletes anything. <!-- src: apps/plugin/src/main.ts:619-620#88108fd2 -->
-If the list is not the one the tab showed, or the file does not hold the brand in the panel yet, it deletes nothing. Otherwise it saves a named version, then deletes. <!-- src: apps/plugin/src/main.ts:738-741#40ecfc79 -->
+The delete works out the list again from a fresh read of the file before it deletes anything. <!-- src: apps/plugin/src/main.ts:609-610#88108fd2 -->
+If the list is not the one the tab showed, or the file does not hold the brand in the panel yet, it deletes nothing. Otherwise it saves a named version, then deletes. <!-- src: apps/plugin/src/main.ts:728-731#40ecfc79 -->
 
 After a style-guide run that found tables Prism3 no longer draws, **Clean up** lists them too: "2 style-guide tables the generator no longer draws." Choose **Remove *N* tables** to delete them. <!-- src: apps/studio/src/state/update-file.ts:444-445 -->
 
@@ -157,4 +157,4 @@ Removing a mode removes its values from every variable in the collection, so mov
 | "Off until a brand loads. This file's saved brand didn't open, and writing now would put the demo brand over it." | The brand saved in this file didn't open. The dialog's **Update file** button, Clean up's delete and every other write stay off. <!-- src: apps/studio/src/main.ts:1973 --> | Close the plugin and open it again: it reads the saved brand again as it opens. If the brand still doesn't open, import its `design.md` (brand menu › **Import design.md…**). |
 | `✗ update refused`, "the file changed since the check" | Something in the file moved between the check and the update. <!-- src: apps/plugin/src/update-apply.ts:1125 --> | Open Update file again and read the new check. |
 | "the named version could not be saved" | Figma refused to save the safety version, so the update wrote nothing. <!-- src: apps/plugin/src/update-apply.ts:1227 --> | Try again. Nothing in the file changed. If it fails again, the detail in Activity holds Figma's reason. |
-| `nothing built — set '…' on this page varies by different axes and was left as it is` | A set with that name already exists on the page, built with different options. <!-- src: apps/plugin/src/main.ts:1088 --> | Rename or move the existing set. |
+| `nothing built — set '…' on this page varies by different axes and was left as it is` | A set with that name already exists on the page, built with different options. <!-- src: apps/plugin/src/main.ts:1083 --> | Rename or move the existing set. |

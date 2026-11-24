@@ -40,6 +40,33 @@ export function toCSSVariableName(tokenPath: string, prefix: string = ''): strin
 }
 
 /**
+ * Writes a DTCG color object as a CSS color, in the notation of its own color space (prism3 #4477): `srgb` as
+ * `rgb(r, g, b)` / `rgba(r, g, b, a)`, `hsl` as `hsl(h, s%, l%)` / `hsla(h, s%, l%, a)`, the alpha form only below
+ * full alpha. The exporter writes HSL components as degrees and percents (0–100). Returns null for any other space,
+ * so the caller decides what to write rather than a `String(object)`.
+ */
+export function formatDTCGColor(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const color = value as { colorSpace?: string; components?: number[]; alpha?: number };
+  if (!Array.isArray(color.components) || color.components.length < 3) {
+    return null;
+  }
+  const translucent = color.alpha !== undefined && color.alpha < 1;
+  const [c1, c2, c3] = color.components;
+  if (color.colorSpace === 'srgb') {
+    const rgb = [Math.round(c1 * 255), Math.round(c2 * 255), Math.round(c3 * 255)].join(', ');
+    return translucent ? `rgba(${rgb}, ${color.alpha})` : `rgb(${rgb})`;
+  }
+  if (color.colorSpace === 'hsl') {
+    const hsl = `${c1}, ${c2}%, ${c3}%`;
+    return translucent ? `hsla(${hsl}, ${color.alpha})` : `hsl(${hsl})`;
+  }
+  return null;
+}
+
+/**
  * CSS Token Transformer
  * Handles conversion of DTCG tokens to CSS values
  */
@@ -69,18 +96,8 @@ export class CSSTokenTransformer implements TokenTransformer {
       return this.aliasToVar(value.slice(1, -1));
     }
 
-    if (value.colorSpace === 'srgb') {
-      const [r, g, b] = value.components;
-      const rgb = [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-
-      if (value.alpha !== undefined && value.alpha < 1) {
-        return `rgba(${rgb.join(', ')}, ${value.alpha})`;
-      } else {
-        return `rgb(${rgb.join(', ')})`;
-      }
-    }
-
-    return String(value);
+    const css = formatDTCGColor(value);
+    return css !== null ? css : String(value);
   }
 
   transformDimension(token: DTCGToken, path: string): string {
@@ -178,14 +195,10 @@ export class CSSTokenTransformer implements TokenTransformer {
       const color = layer.color;
       if (typeof color === 'string') {
         parts.push(color);
-      } else if (color.colorSpace === 'srgb') {
-        const [r, g, b] = color.components;
-        const rgb = [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-
-        if (color.alpha !== undefined && color.alpha < 1) {
-          parts.push(`rgba(${rgb.join(', ')}, ${color.alpha})`);
-        } else {
-          parts.push(`rgb(${rgb.join(', ')})`);
+      } else {
+        const css = formatDTCGColor(color);
+        if (css !== null) {
+          parts.push(css);
         }
       }
     }
