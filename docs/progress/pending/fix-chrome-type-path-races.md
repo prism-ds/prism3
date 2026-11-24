@@ -19,17 +19,21 @@ The lane that filed #4466 measured 3 in 280 under similar conditions.
 
 ### #4465 and #4342: located, not fixed
 
-Neither reproduced: 0 in 72 runs of the #2183 case here (3 processes, 2 CPU burners), 0 in 471 in #4465's investigation, and 2 full shard-3 runs in CI's order (13537/13537 each).
+Neither reproduced locally: 0 in 72 runs of the #2183 case here (3 processes, 2 CPU burners), 0 in 471 in #4465's investigation, and 2 full shard-3 runs in CI's order (13537/13537 each).
 
 What the CI line means is now measured. `locator.click` resolving `type-fluid`, logging `waiting for element to be visible, enabled and stable` and then nothing for 30 s is exactly what a JavaScript loop planted on the Type page, starting just after Show advanced turns on, produces. Playwright's actionability check waits on the page's frames, and a page whose main thread has stopped never answers. A switch that is hidden, disabled, moving or replaced each logs its reason instead (`element is not visible`, `element was detached from the DOM, retrying`, measured). So the CI failures are a page that stopped on the Type path, as #4465's investigation concluded, not a race on the switch.
 
 So the next hit says where:
-- `test-bounded.mjs` exports `stallWhere(page)`: on a page `watchStalls` already watches, it pauses the page through the debugger and names its JavaScript stack, or says it was running none (layout, paint, GC, or no frames at all). It says nothing on an unwatched page, because a debugger turned on after the stall never lands.
+- `test-bounded.mjs` exports `stallWhere(page)`. On a page `watchStalls` already watches, it reads three things, in this order: whether the main thread still runs a script (idle, with no frame produced, or busy), whether the page draws again within 30 s (a long busy spell, or a hang), and, if it is still stopped, its JavaScript stack through the debugger, or that it was running none. The pause comes last, because a pause that doesn't land stays pending and would stop the next script the other readings run. It says nothing on an unwatched page, because a debugger turned on after the stall never lands.
 - `within` (section 21's bounded waits, #4127) appends it when the page renders no frame. Section 21 calls `watchStalls` after its #4127 self-check, whose frames are held by a stub rather than stuck.
 - The #2183 arm calls `watchStalls` after `open`, and its catch adds whether the page still renders frames and, if not, where it stopped. Its `openTypeAdvanced` reveal is no longer swallowed by `.catch(() => {})`, so a reveal that stops fails by name instead of surfacing 30 s later as an anonymous click timeout.
-- A self-check (`#4342: a wait on a page stuck in JavaScript names where it stopped`): a page of its own, watched, stuck in a loop named `stallSelfCheck`, must be reported by that name.
+- A self-check (`#4342: a wait on a page stuck in JavaScript names where it stopped`): a page of its own, watched, stuck in a loop named `stallSelfCheck`, must be reported as busy, not back, and stopped in that function.
 
 With the planted loop, the arms read: `#2183 web light: … waiting for element to be visible, enabled and stable; the page renders no frame; it was running JavaScript: mutationHang (page):23366`, and `QA-B9/B17/I11: … Type: the type scale: the preview pane's frames did not settle within 30s; the page renders no frame; it was running JavaScript: mutationHang`.
+
+### The first capture, on this PR's own CI run
+
+The stall hit CI on this PR's first run (chrome (3), run 45338584333), and the first version of the capture read: `#2183 web dark: … waiting for element to be visible, enabled and stable; the page renders no frame; the debugger could not pause it within 5s: it was not running JavaScript (layout, paint, GC, or no frames being produced at all)`. So it is not a JavaScript loop in the studio. The busy-or-idle and comes-back readings were added after that, to split what is left: style, layout, paint or a synchronous call on a busy main thread, or frame production stalled behind an idle one.
 
 ### Mutations, each in a committed tree, each failing by name
 
@@ -37,7 +41,8 @@ With the planted loop, the arms read: `#2183 web light: … waiting for element 
 - **M2:** `READ_SWITCH` no longer sets `disabled`. Every switch's disabled-skin check fails by name.
 - **M3:** a `for (;;)` loop planted on the Type page 400 ms after Show advanced turns on. Section 35 fails all four cases with the stack, and section 21 fails with its named step and the stack.
 - **M4:** `within` no longer asks `stallWhere`. `#4342: a wait on a page stuck in JavaScript names where it stopped …` fails (`… the page renders no frame`, no location).
+- **M5:** `stallWhere` always reads the main thread as idle. The same self-check fails (`… the main thread still runs a script, so it is idle …`).
 
 ### For whoever picks #4465 up next
 
-When the arm next fails on CI, read the part after "the page renders no frame". A JavaScript stack names the loop. "Not running JavaScript" points at layout, paint or GC, and then a CDP trace on failure is the next step.
+When the arm next fails on CI, read the part after "the page renders no frame". "Busy" with no JavaScript stack points at style, layout, paint or a synchronous call such as a font lookup: a CDP trace started before the Type page opens is the next step. "Idle, no frame being produced" points at the compositor or the GPU process. "Drew a frame again Ns later" makes it a long busy spell, not a hang.
