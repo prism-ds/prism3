@@ -3246,6 +3246,9 @@ const takeFrom = (page, key, n = 0, type = null) => page.evaluate(async ({ key, 
   }
   const w = rec.slice();
   rec.length = 0;
+  // When this read began and ended, on the page's clock: the #4073 self-check judges the settle step by them, not by the
+  // runner's clock, which load stretches.
+  window.__p3Take = { t0, t1: performance.now() };
   return w;
 }, { key, n, type, wait: POST_WAIT_MS, floor: POST_SETTLE_MS });
 /** The writes posted since the last read, once `n` (of `type`, when given) have landed: for a read that expects a write.
@@ -3372,17 +3375,28 @@ for (const host of ['web', 'figma']) {
         await recordPosts(page);
         // #4073, #3686: the reads themselves, once. An entry that lands 200 ms late (four settle windows) is read by a read
         // that expects it, and not by the settle step, which waits no longer than it did. A record of its own, so no
-        // listener on the page sees it. (mutation: `takeFrom` not polling, the settle alone → this arm, by name)
+        // listener on the page sees it. The settle half is judged on the page's clock: `late()` records when the entry is
+        // due and the entry when it landed, and the settle read fails only if it took an entry that was not yet due when
+        // its own settle window closed. Under load the read can begin after the entry is due, and then reading it is no
+        // fault of the settle step. (mutation: `takeFrom` not polling, the settle alone → this arm, by name; the settle
+        // step grown to 300 ms → this arm, by name)
         if (host === 'web' && theme === 'light' && w === WIDTHS[0].w) {
-          const late = () => page.evaluate(() => { window.__p3Late = []; setTimeout(() => window.__p3Late.push({ type: 'late' }), 200); });
+          const late = () => page.evaluate(() => {
+            window.__p3Late = [];
+            window.__p3Due = performance.now() + 200;
+            setTimeout(() => window.__p3Late.push({ type: 'late', at: performance.now() }), 200);
+          });
           await late();
           const t0 = Date.now();
           const waited = await takeFrom(page, '__p3Late', 1);
           const tookMs = Date.now() - t0;
           await late();
           const settled = await takeFrom(page, '__p3Late', 0);
-          ok(waited.length === 1 && settled.length === 0 && tookMs < POST_WAIT_MS,
-            `#4073 ${where}: a read that expects a post reads one that lands 200 ms late (read ${JSON.stringify(waited)} in ${tookMs} ms, bound ${POST_WAIT_MS}), and the settle step does not wait for it (read ${JSON.stringify(settled)})`);
+          const { due, take } = await page.evaluate(() => ({ due: window.__p3Due, take: window.__p3Take }));
+          const settleWaited = settled.length > 0 && due > take.t0 + POST_SETTLE_MS;
+          const ms = (v) => Math.round(v - (due - 200));
+          ok(waited.length === 1 && tookMs < POST_WAIT_MS && !settleWaited,
+            `#4073 ${where}: a read that expects a post reads one that lands 200 ms late (read ${JSON.stringify(waited)} in ${tookMs} ms, bound ${POST_WAIT_MS}), and the settle step does not wait for it (read ${JSON.stringify(settled.map(({ type }) => ({ type })))}; read from ${ms(take.t0)} to ${ms(take.t1)} ms, entry due at 200${settled[0] ? `, landed at ${ms(settled[0].at)}` : ''})`);
         }
         // Idle: nothing has run. #2909: the rail shell draws no Activity tile (the drawer's own row is Activity), on both
         // hosts since Q2909.9 A, so only the drawer is read. #3113 (Q3113.9 A): the plugin draws its bar row from launch,
