@@ -2103,18 +2103,29 @@ class TokenPressUI {
 
       if (result.success) {
         const skipped = Array.isArray(result.skippedBlurStyles) ? result.skippedBlurStyles : [];
+        // prism3 #3885: a paint style that layers a gradient with other paints
+        // has no single DTCG gradient form, so it is skipped; name it here too.
+        const skippedGradients = Array.isArray(result.skippedGradientStyles)
+          ? result.skippedGradientStyles
+          : [];
+        const notes = [];
         if (skipped.length > 0) {
           // DTCG shadow type cannot represent BACKGROUND_BLUR / LAYER_BLUR;
           // surface skipped names so the author can re-author them as real
           // shadows or remove them from the file.
-          const list = skipped.join(", ");
-          this.setFooterStatus(
-            `Exported ${result.fileCount} file(s). Skipped ${skipped.length} blur-only effect style(s): ${list}`
-          );
+          notes.push(`Skipped ${skipped.length} blur-only effect style(s): ${skipped.join(", ")}`);
           console.warn(
             `[Token Press] Skipped ${skipped.length} blur-only effect style(s) — DTCG shadow cannot represent background/layer blur:`,
             skipped
           );
+        }
+        if (skippedGradients.length > 0) {
+          notes.push(
+            `Skipped ${skippedGradients.length} layered gradient style(s): ${skippedGradients.join(", ")}`
+          );
+        }
+        if (notes.length > 0) {
+          this.setFooterStatus(`Exported ${result.fileCount} file(s). ${notes.join(". ")}`);
         } else {
           this.setFooterStatus(`Exported ${result.fileCount} file(s) successfully`);
         }

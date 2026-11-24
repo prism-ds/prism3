@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-11-24
+
+A patch release: two exports that wrote a wrong or unusable color, and a skip
+the panel did not report.
+
+### Fixed
+- **The CSS format writes HSL colors.** With Color Space set to HSL, every
+  color in `tokens.css` read `[object Object]`, and a shadow with an HSL color
+  lost its color. Both are now written in HSL notation: `hsl(0, 100%, 50%)`,
+  or `hsla(0, 100%, 50%, 0.4)` below full opacity. sRGB output is unchanged.
+- **A wash over a wash keeps both opacities.** A color variable at an opacity
+  whose color is another variable at an opacity exported the bare reference,
+  and its own opacity was lost. It now exports the color they resolve to, with
+  both opacities multiplied into the alpha: 40% over 50% is an alpha of 0.2.
+  Each resolves in its own collection and mode, as Figma resolves it.
+- **The export summary names skipped layered-gradient styles.** A paint style
+  that stacks a gradient with other paints has no single-gradient form and is
+  left out. The panel's footer now names it, beside any skipped blur-only
+  effect styles, instead of only the developer console.
+
 ## [3.0.1] - 2026-11-23
 
 A patch release. Its headline fix is the first entry under Fixed: a color
