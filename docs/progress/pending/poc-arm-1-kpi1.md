@@ -27,6 +27,11 @@ on #3408: the scripted floor of KPI 1's "Developer + CLI" experience. A person's
 **Held for the owner:** K1 on #3408, whether the from-scratch time includes `npm ci`. The tool uses A (timed) until
 then, and the cell shows the install's own seconds, so either reading is on the card.
 
-**Checked:** 10 self-test cases on the tool and 13 on the scorecard (the new case failed before the rows existed). Five
+**Checked:** 13 self-test cases on the tool and 13 on the scorecard (the new case failed before the rows existed). Five
 code mutations each fail their own case by name. Three plants in real runs each fail by name: a generated file that
 drifts, the CLI skipped after the edit, and the token CSS and Storybook not rebuilt after it.
+
+**Review fixes.** The K1 headline arithmetic is now a self-tested function: a mutation that always left the install
+out had survived. A failed run's line carries the failures listed under it, not just their count. Each live read is
+held to a typed scope (both forms, both themes, 16 readings), so a reader that drops a form fails the real run. K2, the
+from-scratch start state both arms share, is posted on #3408.

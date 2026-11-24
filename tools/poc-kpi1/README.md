@@ -49,16 +49,25 @@ by probe, form and theme, when:
 - its value after the edit isn't the token's new value ("unchanged: the edit did not reach it");
 - the edit didn't move its token, so the probe would pass whether or not the edit reached anything.
 
+The reader and the judge share `one-edit.ts`'s form and theme lists, so a reader that dropped a form would drop it from
+the judge too. `kpi1.ts` therefore holds each live read to its own typed scope (`SCOPE`: both forms, both themes, 16
+readings), and a read outside it fails by name.
+
 **What it logs:**
 - the wall-clock seconds;
 - each command, with its seconds;
 - the hand edits, with the update's own edit counted apart from fixes. A fix is a hand edit the run needed beyond the
   one it was asked to make. The script makes none, so a run that would need one fails instead;
-- the errors. A command that exits non-zero ends the run, so a passing run has 0 and was right first time.
+- the errors. A command that exits non-zero ends the run, so a passing run has 0 and was right first time. A failed
+  run's line carries the cause: the first failure line plus up to five of the `- …` lines listed under it (how
+  `check-build.ts` and the a11y checks name each failure), so a red first try can be diagnosed from the card.
 
 **Owner decision K1 (#3408, pending):** does the from-scratch time include `npm ci`? The value uses A (timed) until the
 owner answers. The line names the install's own seconds and the decision, so either reading is on the card. The choice
-is `K1` in `kpi1.ts`.
+is `K1` in `kpi1.ts`, and the headline arithmetic (`headline`) is self-tested under both answers.
+
+**Owner decision K2 (#3408, pending):** the from-scratch start state both arms share. Today the code is on disk
+(untimed) and `npm ci` prefers a warm cache.
 
 **Scorecard rows** (`tools/poc-scorecard/measures.ts`): `kpi1-cli-scratch`, `kpi1-cli-update` and `kpi3-one-edit`. The
 last reads the update run's second line. A measurement, not a CI gate: it needs the npm registry (a warm cache serves

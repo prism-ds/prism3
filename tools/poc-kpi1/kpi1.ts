@@ -80,6 +80,8 @@ export const EDIT: { what: string; from: string; to: string }[] = [
   { what: 'the primary color', from: 'primary: { l: 0.4709, c: 0.3001, h: 266.75 }', to: 'primary: { l: 0.52, c: 0.14, h: 160 }' },
   { what: 'the radius scale', from: 'radiusScale: 1', to: 'radiusScale: 2' },
 ];
+/** K2 on #3408: the from-scratch start state both arms share. A (the code on disk, untimed; the npm cache warm) until answered. */
+export const K2: { start: string; state: 'pending' | 'answered' } = { start: 'the code on disk, untimed; npm cache warm (K2 A', state: 'pending' };
 /** K1 on #3408: is `npm ci` inside the from-scratch time? A (timed) until the owner answers. */
 export const K1: { timed: boolean; state: 'pending' | 'answered' } = { timed: true, state: 'pending' };
 
@@ -134,7 +136,7 @@ export const summary = (r: Result): string => {
   const edits = r.steps.filter((s) => s.kind === 'edit').length;
   const k1 = `install ${r.installSeconds}s (K1 ${K1.timed ? 'A: timed' : 'B: untimed'}${K1.state === 'pending' ? ', pending' : ''})`;
   return r.run === 'scratch'
-    ? `OK kpi1 (scratch): ${r.seconds} seconds; ${plural(commands, 'command')}, ${plural(edits, 'hand edit')}, 0 fixes, 0 errors, first try; ${k1}`
+    ? `OK kpi1 (scratch): ${r.seconds} seconds; ${plural(commands, 'command')}, ${plural(edits, 'hand edit')}, 0 fixes, 0 errors, first try; ${k1}; start: ${K2.start}${K2.state === 'pending' ? ', pending' : ''})`
     : `OK kpi1 (update): ${r.seconds} seconds; ${plural(commands, 'command')}, ${plural(edits, 'hand edit')} (the update), 0 fixes, 0 errors, first try`;
 };
 
@@ -325,7 +327,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const base = { seconds: 21.4, installSeconds: 6.1, probes: 0, failure: null, copy: '' };
     const s = summary({ ...base, run: 'scratch', steps: SCRATCH.map((x) => ({ kind: 'command' as const, what: x.what, seconds: 1 })) });
     const u = summary({ ...base, run: 'update', seconds: 6.2, steps: [{ kind: 'edit', what: 'e', seconds: 0 }, ...UPDATE.map((x) => ({ kind: 'command' as const, what: x.what, seconds: 1 }))] });
-    const want = [`OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed${K1.state === 'pending' ? ', pending' : ''})`,
+    const want = [`OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed${K1.state === 'pending' ? ', pending' : ''}); start: the code on disk, untimed; npm cache warm (K2 A${K2.state === 'pending' ? ', pending' : ''})`,
       'OK kpi1 (update): 6.2 seconds; 2 commands, 1 hand edit (the update), 0 fixes, 0 errors, first try'];
     return s === want[0] && u === want[1] ? null : `${s}\n${u}`; } },
 ];

@@ -124,7 +124,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const m = (id: string) => ARMS['arm-1'].measures.find((x) => x.id === id);
     const [scratch, update, edit] = [m('kpi1-cli-scratch'), m('kpi1-cli-update'), m('kpi3-one-edit')];
     if (!scratch || !update || !edit) return `not measured: ${([['kpi1-cli-scratch', scratch], ['kpi1-cli-update', update], ['kpi3-one-edit', edit]] as const).filter(([, x]) => !x).map(([id]) => id).join(', ')}`;
-    const s = 'OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed)';
+    const s = 'OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed); start: the code on disk, untimed; npm cache warm (K2 A)';
     const u = 'OK kpi1 (update): 6.2 seconds; 2 commands, 1 hand edit (the update), 0 fixes, 0 errors, first try\nOK one edit: 16 readings reach the edited tokens, 4 probes in both forms and both themes, from 1 edit (x)';
     const fail = 'FAIL kpi1 (update): step "npx tsx packages/engine/cli.ts" exited 1: x';
     const got = [parse(scratch, s), parse(update, u), parse(edit, u), parse(scratch, fail), parse(update, fail)];

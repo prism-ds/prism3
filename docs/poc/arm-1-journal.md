@@ -2715,3 +2715,15 @@ two browser reads.
 - **Hand edits:** `kpi1.ts` (new, about 270 lines), `one-edit.ts` (about 150), `measures.ts` and `scorecard.ts`, three
   READMEs or sections, this entry and the progress entry.
 - **Errors hit:** 3, all mine, listed above, plus 2 type errors in the self-test's helper, caught by `tsc`.
+
+### Review fixes (independent review, CHANGES @ `a9ae0590`)
+- **The headline time wasn't held to K1.** The subtraction lived in the run, and the self-test fed `summary()` a
+  ready-made number, so a mutation that always left the install out survived while the cell still said "K1 A: timed".
+  The arithmetic is now `headline()`, self-tested under both answers with typed totals. The same mutation fails by name.
+- **A failed first try named no cause.** The reviewer saw one update run in nine fail `check-build.ts` on an unmodified
+  tree (`3 failure(s), 1066 passed`), and the line carried counts only. A failure line now carries up to five of the
+  failures listed under it. The failure didn't recur in my runs, so its cause is still unknown.
+- **The live run didn't hold its own scope.** With the element form dropped from `FORMS`, the self-test failed, but a
+  real run printed "OK … 8 readings … in both forms". Each read is now held to a typed `SCOPE` (both forms, both themes,
+  16 readings). The same mutation in a real run now fails: `before the edit, button fill (element, light): not read; …`.
+- **K2 is posted on #3408:** the from-scratch start state both arms share.
