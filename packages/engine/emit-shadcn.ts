@@ -191,19 +191,36 @@ export const shadcnCss = (h: Handoff): string => {
   ].join('\n');
 };
 
-/** The stock class that fades the box-shadow focus ring, on the focused element, minus an invalid field: stock
- *  shadcn draws that one's ring in `destructive` (`aria-invalid:ring-destructive/20`), and the rule leaves it alone. */
-export const SHADCN_RING_SELECTOR = '.focus-visible\\:ring-ring\\/50:focus-visible:not([aria-invalid="true"])';
+/** The stock selectors that fade the box-shadow focus ring to 50%, as stock Tailwind 4.3.3 compiles each `ring-ring/50`
+ *  form shadcn/ui uses: `focus-visible:` (Button, Input, Select, Checkbox, Switch, Badge, Tabs, Textarea and more),
+ *  the Slider thumb's unconditional class, the Calendar's `has-focus:` and its focused day, the Input OTP's active slot,
+ *  `focus-within:` (Combobox, Attachment), the Input Group's control and Bubble's `[button,a]:` (#4386, owner decision
+ *  2026-11-24 A on #4575: every shadcn focus ring at full strength). Each mirrors the stock rule's own selector, so the
+ *  override applies exactly where stock fades the ring. */
+export const SHADCN_RING_FORMS: readonly string[] = [
+  '.focus-visible\\:ring-ring\\/50:focus-visible',
+  '.ring-ring\\/50',
+  '.has-focus\\:ring-ring\\/50:has(:focus)',
+  '.group-data-\\[focused\\=true\\]\\/day\\:ring-ring\\/50:is(:where(.group\\/day)[data-focused="true"] *)',
+  '.data-\\[active\\=true\\]\\:ring-ring\\/50[data-active="true"]',
+  '.focus-within\\:ring-ring\\/50:focus-within',
+  '.has-\\[\\[data-slot\\=input-group-control\\]\\:focus-visible\\]\\:ring-ring\\/50:has(:is([data-slot=input-group-control]:focus-visible))',
+  '.\\[button\\,a\\]\\:focus-visible\\:ring-ring\\/50:is(button, a):focus-visible',
+];
+/** The one selector the ring rule carries: every form, minus an invalid field. Stock shadcn draws that ring in
+ *  `destructive`, flagged on the element itself (`aria-invalid:ring-destructive/20`) or on a field inside it
+ *  (`has-aria-invalid:`, the Combobox), and the rule leaves both alone. */
+export const SHADCN_RING_SELECTOR = `:is(${SHADCN_RING_FORMS.join(', ')}):not([aria-invalid="true"], :has([aria-invalid="true"]))`;
 
 /** Q2997.17 B: stock shadcn's scaffold fades the focus outline to 50% (`outline-ring/50`), below 3:1 on the page. The
  *  registry item restores the full-strength outline the theme's own `ring` was measured at.
  *
- *  #4386 (owner decision 2026-11-24, A for the ring): Button, Input, Select, Checkbox, Switch and Badge focus with a
- *  box-shadow ring instead, `focus-visible:ring-ring/50`, which the outline rule never reaches. The second rule sets that
- *  ring's color back to the full `--ring`. It is the one non-stock rule here: `!important` because the stock class
- *  lives in the later `utilities` layer, and an important declaration in an earlier layer outranks it. It is tied to
- *  shadcn's class name, so a renamed class orphans it; `lint-shadcn-contrast` measures the ring at 50% with this rule
- *  applied, and fails by name if it stops reaching. The plain `<brand>.css` carries neither rule. */
+ *  #4386 (owner decision 2026-11-24, A for the ring): shadcn's components focus with a box-shadow ring instead, drawn
+ *  in `ring-ring/50` through one of the forms in `SHADCN_RING_FORMS`, which the outline rule never reaches. The second
+ *  rule sets that ring's color back to the full `--ring`. It is the one non-stock rule here: `!important` because the
+ *  stock classes live in the later `utilities` layer, and an important declaration in an earlier layer outranks them.
+ *  It is tied to shadcn's class names, so a renamed class orphans it; `lint-shadcn-contrast` measures every form at 50%
+ *  with this rule applied, and fails by name if it stops reaching one. The plain `<brand>.css` carries neither rule. */
 export const SHADCN_BASE_CSS = {
   '@layer base': {
     '*': { '@apply outline-ring': {} },

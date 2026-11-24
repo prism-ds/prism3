@@ -8,6 +8,9 @@
  * the way `tools/block-capture` loads it. The engine package itself still declares no dependency.
  */
 export type Rgba = [number, number, number, number];
+/** A focus-ring probe: markup carrying stock classes, the element to focus (none for a ring set by a data attribute),
+ *  and the element whose ring is read. */
+export type RingProbe = { html: string; focus?: string; read: string };
 export type ShadcnPage = {
   /** Each expression's color, drawn alone on a cleared canvas: [r, g, b, alpha byte]. */
   read: (mode: 'light' | 'dark', exprs: readonly string[]) => Promise<Rgba[]>;
@@ -15,9 +18,9 @@ export type ShadcnPage = {
    *  third entry, `under`, that is drawn opaque first and the ground composited over it at its own alpha (a faded fill,
    *  such as `bg-input/30`, over the page). */
   over: (mode: 'light' | 'dark', pairs: ReadonlyArray<readonly [string, string, string?]>) => Promise<Array<{ ink: Rgba; ground: Rgba }>>;
-  /** `css` added to the page, then a button carrying `className` focused by script: the computed `--tw-ring-color` on it,
-   *  `var()` resolved, and whether it matched `:focus-visible`. */
-  ringColor: (mode: 'light' | 'dark', css: string, className: string) => Promise<{ value: string; focusVisible: boolean }>;
+  /** `css` added to the page and `probe.html` drawn, then `probe.focus` (when given) focused by script: the computed
+   *  `--tw-ring-color` on `probe.read`, `var()` resolved (empty when no rule sets it). */
+  ringColor: (mode: 'light' | 'dark', css: string, probe: RingProbe) => Promise<{ value: string }>;
   close: () => Promise<void>;
 };
 
@@ -53,15 +56,16 @@ export const openShadcnPage = async (css: string): Promise<ShadcnPage> => {
         g.fillStyle = resolve(ink); g.fillRect(0, 0, 1, 1);
         return { ink: px(), ground: gp };
       }),
-      ringColor: ([css, className]) => {
+      ringColor: ([css, probe]) => {
         let st = document.getElementById('extra-css');
         if (!st) { st = document.createElement('style'); st.id = 'extra-css'; document.head.appendChild(st); }
         st.textContent = css;
-        let b = document.getElementById('ring-probe');
-        if (!b) { b = document.createElement('button'); b.id = 'ring-probe'; document.body.appendChild(b); }
-        b.className = className;
-        b.blur(); b.focus();
-        return { value: getComputedStyle(b).getPropertyValue('--tw-ring-color').trim(), focusVisible: b.matches(':focus-visible') };
+        let host = document.getElementById('ring-probe');
+        if (!host) { host = document.createElement('div'); host.id = 'ring-probe'; document.body.appendChild(host); }
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        host.innerHTML = probe.html;
+        if (probe.focus) host.querySelector(probe.focus).focus();
+        return { value: getComputedStyle(host.querySelector(probe.read)).getPropertyValue('--tw-ring-color').trim() };
       },
     };
   })()`);
@@ -70,7 +74,7 @@ export const openShadcnPage = async (css: string): Promise<ShadcnPage> => {
   return {
     read: (mode, exprs) => call('read', mode, exprs),
     over: (mode, pairs) => call('over', mode, pairs),
-    ringColor: (mode, css, className) => call('ringColor', mode, [css, className]),
+    ringColor: (mode, css, probe) => call('ringColor', mode, [css, probe]),
     close: () => browser.close(),
   };
 };

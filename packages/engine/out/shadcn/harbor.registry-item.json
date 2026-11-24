@@ -90,7 +90,7 @@
       "*": {
         "@apply outline-ring": {}
       },
-      ".focus-visible\\:ring-ring\\/50:focus-visible:not([aria-invalid=\"true\"])": {
+      ":is(.focus-visible\\:ring-ring\\/50:focus-visible, .ring-ring\\/50, .has-focus\\:ring-ring\\/50:has(:focus), .group-data-\\[focused\\=true\\]\\/day\\:ring-ring\\/50:is(:where(.group\\/day)[data-focused=\"true\"] *), .data-\\[active\\=true\\]\\:ring-ring\\/50[data-active=\"true\"], .focus-within\\:ring-ring\\/50:focus-within, .has-\\[\\[data-slot\\=input-group-control\\]\\:focus-visible\\]\\:ring-ring\\/50:has(:is([data-slot=input-group-control]:focus-visible)), .\\[button\\,a\\]\\:focus-visible\\:ring-ring\\/50:is(button, a):focus-visible):not([aria-invalid=\"true\"], :has([aria-invalid=\"true\"]))": {
         "--tw-ring-color": "var(--ring) !important"
       }
     }
