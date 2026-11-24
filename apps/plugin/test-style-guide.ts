@@ -331,9 +331,9 @@ import { dirname, join } from 'node:path';
 import { ensureStyleGuideCells } from './src/style-guide-cells';
 import type { CellsApi } from './src/style-guide-cells';
 import { STYLE_GUIDE_GROUPS, styleGuideGroupOf } from '@prism3/engine/figma';
-import { planStyleGuide, runStyleGuide, removeRetiredTables, styleGuideSummary, contrastText, humanizeName, varKind, sizeByPadding, catalogFor, isSetUp, tableMovesDue, relocateTables } from './src/style-guide';
+import { planStyleGuide, runStyleGuide, removeRetiredTables, fingerprintOf, styleGuideSummary, contrastText, humanizeName, varKind, sizeByPadding, catalogFor, isSetUp, tableMovesDue, relocateTables } from './src/style-guide';
 import { createRunGuard, busyMessage } from './src/run-guard';
-import type { StyleGuideApi, SgCatalog, SgCollection, SgVariable, SgTable, TableOutcome, StyleGuideResult, StyleGuideRun, StyleGuideOptions, StyleGuideProgress } from './src/style-guide';
+import type { StyleGuideApi, SgNode, SgCatalog, SgCollection, SgVariable, SgTable, TableOutcome, StyleGuideResult, StyleGuideRun, StyleGuideOptions, StyleGuideProgress } from './src/style-guide';
 import { parseDesignMd, brandTheme, resolveAllModes } from '@prism3/engine';
 
 let failures = 0;
@@ -507,8 +507,9 @@ class N {
   strokes: unknown = [];
   characters?: string;
   fontName?: unknown;
-  /** A mixed-font text node's segments, as `getStyledTextSegments(['fontName'])` returns them. */
-  segments?: { fontName: unknown }[];
+  /** A mixed-font text node's segments, as `getStyledTextSegments(['fontName'])` returns them. A segment may list the
+   *  overrides applied over its text style (`textStyleOverrides`, #4482): a semantic bold or italic keeps the style. */
+  segments?: { fontName: unknown; textStyleOverrides?: { type: string }[]; start?: number; end?: number }[];
   visible = true;
   mainComponent: N | null = null;
   componentProperties?: Record<string, { type: string; value: unknown }>;
@@ -4924,6 +4925,96 @@ const main = async (): Promise<void> => {
         && JSON.stringify(rows.map((r) => r.token)) === JSON.stringify(REF[1]),
         `43l: a breakpoint with no grid style keeps its row, its Columns chip "⚠ no grid style", and no other row carries it (${lg?.extra?.[0].value} [${lg?.extra?.[0].alias}]; elsewhere: ${others.join(', ') || 'none'})`);
     }
+  }
+
+  console.log('44. a theme type family is not a hand edit on a table (#4482)');
+  {
+    // THE THEME'S FAMILY MOVES, as Apply Theme moves it: a font family variable takes a new value, and the host
+    // re-resolves every text that follows it — a text in a style whose family is bound to it, and a text whose own family
+    // is bound to it — each in the mode pinned on it. The shim's own re-resolve (docs/34): the plugin's reading is not used.
+    const themeFamily = (sh: Shim, varName: string, family: string): number => {
+      const v = sh.vars.find((x) => x.name === varName)!;
+      for (const m of Object.keys(v.valuesByMode)) v.valuesByMode[m] = family;
+      const follows = (id: string | undefined, node: N): string | null => {
+        const bv = id ? sh.vars.find((x) => x.id === id) : undefined;
+        const val = bv ? valueAt(sh.world, node, bv) : undefined;
+        return typeof val === 'string' ? val : null;
+      };
+      const roots: N[] = [];
+      for (const st of sh.styles) { const ff = st.boundVariables.fontFamily?.id; if (ff) { const val = follows(ff, new N('TEXT')); if (val) st.fontName = { ...st.fontName, family: val }; } }
+      let moved = 0;
+      for (const p of sh.pages) roots.push(...p.findAll((k) => k.type === 'TEXT'));
+      for (const t of roots) {
+        const st = t.textStyleId ? sh.styles.find((x) => x.id === t.textStyleId) : undefined;
+        const fam = st ? follows(st.boundVariables.fontFamily?.id, t) : follows(t.boundVariables.fontFamily?.id, t);
+        const cur = t.fontName as { family?: string; style?: string } | undefined;
+        if (fam && cur && typeof cur === 'object' && cur.family !== fam) { t.fontName = { ...cur, family: fam }; moved++; }
+      }
+      return moved;
+    };
+    // A STALE TEXT-STYLES TABLE: every style moved under one folder, so the table is drawn under a new key and the one
+    // drawn before is superseded. The style ids stay, so its specimens keep their styles.
+    const regroupStyles = (sh: Shim): void => { for (const st of sh.styles) st.name = `brand/${st.name}`; };
+    const TS = 'Style guide — Text styles';
+    const FONT_VAR = 'pds3/core/font/family/body';
+    const editedOf = (r: StyleGuideResult): string[] => r.kept.filter((k) => k.reason === 'edited').map((k) => k.name);
+    const editedNames = (sh: Shim): string[] => sh.pages.flatMap((p) => p.findAll((k) => / \(edited\)$/.test(k.name)).map((k) => k.name));
+    /** A file with every table drawn, `edit` applied to the Text styles table by hand, the theme's body family moved to
+     *  Proof Sans, and, when `stale`, the styles regrouped so that table is superseded; then Update file's style-guide run. */
+    const scenario = async (o: { stale: boolean; font: boolean; edit?: (t: N, sh: Shim) => void; age?: boolean }): Promise<{ r: StyleGuideResult; t: N; sh: Shim; moved: number }> => {
+      const sh = await phase2File();
+      await draw(sh.api, contract);
+      const t = tableFrame(sh.sem, 'Text styles')!;
+      // AGED: the table's print rewritten as a run before #4482 recorded it, the default reading (no form prefix).
+      if (o.age) t.pluginData['prism3-style-guide-print'] = await fingerprintOf(t as unknown as SgNode);
+      o.edit?.(t, sh);
+      const moved = o.font ? themeFamily(sh, FONT_VAR, 'Proof Sans') : 0;
+      if (o.stale) regroupStyles(sh);
+      return { r: await draw(sh.api, contract), t, sh, moved };
+    };
+
+    // UPDATE FILE AFTER A THEME FONT CHANGE, NOTHING ELSE: every table is drawn again under its own key, none is judged by
+    // its print, none is kept aside.
+    const plain = await scenario({ stale: false, font: true });
+    ok(plain.moved > 0 && editedOf(plain.r).length === 0 && plain.r.kept.length === 0 && editedNames(plain.sh).length === 0 && !plain.t.removed,
+      `44: theme font/redrawn: after the body family moves (${plain.moved} texts re-resolved), Update keeps no table aside and names nothing "(edited)" (kept ${JSON.stringify(plain.r.kept)})`);
+
+    // THE CONTROL: superseded with no font change, the table is deleted, so every "kept" below is the font's or the edit's doing.
+    const ctl = await scenario({ stale: true, font: false });
+    ok(JSON.stringify(ctl.r.stale) === JSON.stringify([TS]) && JSON.stringify(ctl.r.deleted) === JSON.stringify([TS]) && ctl.t.removed,
+      `44: theme font/control: a superseded Text styles table nobody touched is deleted (stale ${JSON.stringify(ctl.r.stale)}, deleted ${JSON.stringify(ctl.r.deleted)}, kept ${JSON.stringify(ctl.r.kept)})`);
+
+    // #4482: the same table, superseded in the Update that follows a theme font change. Its specimens re-resolved to the new
+    // family under the same style: no one edited it, so it is deleted, never kept aside as edited.
+    const font = await scenario({ stale: true, font: true });
+    ok(font.moved > 0 && JSON.stringify(font.r.deleted) === JSON.stringify([TS]) && editedOf(font.r).length === 0 && editedNames(font.sh).length === 0 && font.t.removed,
+      `44: theme font/superseded: a theme family change is not a hand edit; the superseded Text styles table is deleted, not kept as edited (${font.moved} texts re-resolved; deleted ${JSON.stringify(font.r.deleted)}, kept ${JSON.stringify(font.r.kept)})`);
+
+    // A REAL HAND EDIT IS STILL ONE, after the same font change. Each edit made on a specimen, the text drawn "Abc 123" in
+    // the body style.
+    const specimen = (t: N): N => t.findAll((k) => k.type === 'TEXT' && !!k.textStyleId && k.characters === 'Abc 123')[0];
+    const edits: [string, (t: N, sh: Shim) => void][] = [
+      // A font picked by hand detaches the style: the text reads by its values.
+      ['font picked', (t) => { const x = specimen(t); x.textStyleId = ''; x.fontName = { family: 'Inter', style: 'Bold' }; }],
+      ['another style', (t, sh) => { const x = specimen(t); x.textStyleId = sh.styles.find((st) => st.id !== x.textStyleId)!.id; }],
+      // Cmd+B over the whole line keeps the style and lists the override (review B1 of #4486).
+      ['semantic bold', (t) => { const x = specimen(t); x.fontName = { family: 'Inter', style: 'Bold' }; x.segments = [{ fontName: x.fontName, start: 0, end: 7, textStyleOverrides: [{ type: 'SEMANTIC_WEIGHT' }] }]; }],
+      ['text retyped', (t) => { specimen(t).characters = 'Abc 124'; }],
+    ];
+    for (const [what, edit] of edits) {
+      const e = await scenario({ stale: true, font: true, edit });
+      ok(JSON.stringify(editedOf(e.r)) === JSON.stringify([TS]) && e.r.deleted.length === 0 && !e.t.removed,
+        `44: theme font/hand edit (${what}): a superseded Text styles table edited by hand is kept, reported as edited, after the theme font change too (kept ${JSON.stringify(e.r.kept)}, deleted ${JSON.stringify(e.r.deleted)})`);
+    }
+
+    // A PRINT RECORDED BEFORE #4482 is compared the way it was taken: untouched, it still matches and the table is deleted.
+    // After a theme font change it cannot match (nothing recorded the old font): kept, the safe direction.
+    const aged = await scenario({ stale: true, font: false, age: true });
+    ok(JSON.stringify(aged.r.deleted) === JSON.stringify([TS]) && aged.t.removed,
+      `44: theme font/aged print: a print taken before #4482 still matches an untouched table, which is deleted (deleted ${JSON.stringify(aged.r.deleted)}, kept ${JSON.stringify(aged.r.kept)})`);
+    const agedFont = await scenario({ stale: true, font: true, age: true });
+    ok(JSON.stringify(editedOf(agedFont.r)) === JSON.stringify([TS]) && !agedFont.t.removed,
+      `44: theme font/aged print, font moved: a print taken before #4482 reads the resolved font, so it is kept as edited, the safe direction (kept ${JSON.stringify(agedFont.r.kept)})`);
   }
 
   if (failures) { console.error(`\n${failures} style-guide check(s) failed`); process.exit(1); }
