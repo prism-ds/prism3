@@ -214,25 +214,7 @@ export const readSaved = (v: unknown): SavedStyleGuide | null => {
 export const selectionOf = (cat: StyleGuideCatalog, rec: SavedStyleGuide | null): Set<number> =>
   new Set(cat.tables.flatMap((t, i) => (!rec || rec.tables === null || rec.tables.includes(t.key) ? [i] : [])));
 
-/** WHAT YOU SEE IS DRAWN (#4480, owner decision Q1 A, 2026-11-23): the tables a selection draws under a collection view.
- *  With one collection in view (`view`, a collection id the catalog holds), only the selected tables in that collection;
- *  with every collection in view, or a view the catalog no longer holds, the whole selection. Tables selected in another
- *  collection stay in the selection, so choosing Every collection again brings them back, but they are not drawn. The
- *  page's summary and Draw and Update file's step all count and draw through this. */
-export const drawnOf = (cat: StyleGuideCatalog, sel: ReadonlySet<number>, view: string | null): Set<number> => {
-  const col = view === null ? undefined : cat.collections.find((c) => c.id === view);
-  if (!col) return new Set(sel);
-  const own = new Set(col.items.flatMap((it) => (it.table >= 0 ? [it.table] : [])));
-  return new Set([...sel].filter((t) => own.has(t)));
-};
-
 /** What Update file posts for the style guides (Q2909.23 A): the saved selection and options, or, with nothing saved,
- *  every table with the defaults, as the page draws on its first open. A saved collection view narrows the selection
- *  (`drawnOf`, #4480 Q1 A). */
+ *  every table with the defaults, as the page draws on its first open. */
 export const savedDrawOptions = (cat: StyleGuideCatalog, rec: SavedStyleGuide | null): StyleGuideOptions =>
-  drawOptions(cat, drawnOf(cat, selectionOf(cat, rec), rec?.view ?? null), rec?.opt ?? DEFAULT_OPTIONS);
-
-/** How many tables `savedDrawOptions` draws: the tables it names, or every table in the file when it names none (#4480,
- *  owner decision Q2 A: Update file's Style guides row says it before the run). */
-export const savedDrawCount = (cat: StyleGuideCatalog, rec: SavedStyleGuide | null): number =>
-  savedDrawOptions(cat, rec).tables?.length ?? cat.tables.length;
+  drawOptions(cat, selectionOf(cat, rec), rec?.opt ?? DEFAULT_OPTIONS);

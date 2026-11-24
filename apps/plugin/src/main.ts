@@ -18,7 +18,7 @@
  * Compiled under `tsconfig.main.json` (plugin-typings, `lib` WITHOUT `dom`), so any accidental
  * `document`/`window` reference is a COMPILE error — the two-context split is enforced by types.
  */
-import { applyHeadline, APPLY_FAILED_HEADLINE, failureDetail, conflictHeadline, componentHeadline, staleNote, missesLine, refsItems, partialWriteHeadline, partialWriteItem, fromClauses, motionReplacedItem } from './apply-summary';
+import { applyHeadline, APPLY_FAILED_HEADLINE, failureDetail, conflictHeadline, componentHeadline, staleNote, missesLine, refsItems, partialWriteHeadline, partialWriteItem, fromClauses, motionReplacedItem, weightFallbackNote, retiredWeightsItem } from './apply-summary';
 import { ENGINE_VERSION, formerDefIds, serializeBrandInput, resolveAllModes, brandTheme, UnrecognizedPersistedInputError, type BrandInput } from '@prism3/engine';
 import { appendBuildNote, buildNote, parseBuildId } from '../../studio/src/build-identity';
 import { isIssueUrl } from '../../studio/src/state/report';
@@ -402,7 +402,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
     // The write sequence — fonts first, pre-flight, then the guarded executor calls — lives in
     // `apply-theme.ts` since #111, so the MCP paste harness can prove parity against this exact path. The
     // global `figma` is the host; everything below this line (the report) is unchanged.
-    const { plans, pf, guarded, before, chose, exec, names, applied } = await runApplyTheme(input, figma, () => saveVersion(figma, { run: 'apply-theme' }).then(() => undefined), themePace(sink), choices);
+    const { plans, pf, guarded, before, chose, exec, names, applied, weightFallbacks } = await runApplyTheme(input, figma, () => saveVersion(figma, { run: 'apply-theme' }).then(() => undefined), themePace(sink), choices);
     const { colorFiles, floatPlan, fontPlan, motionPlan } = plans;
     // #4157 (owner A): the file's plan allows fewer modes than the apply adds. Refused whole, before any write, in one line.
     if (!guarded.ok && guarded.limit) { sink.data({ modeLimit: guarded.limit }); const line = modeLimitLine(guarded.limit); postVerdict({ type: 'apply-result', ok: false, headline: '✗ not applied', summary: line, lines: [line] }, sink); return; }
@@ -418,7 +418,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       postVerdict({ type: 'apply-result', ok: false, headline: conflictHeadline(guarded.conflicts.length), summary: conflicts, lines: [conflicts], ...collisions }, sink);
       return;
     }
-    const { mig, r, f, s, gs, tv, ts, mv, uc, styleRenames } = guarded.result;
+    const { mig, r, f, s, gs, tv, ts, mv, uc, rw, styleRenames } = guarded.result;
     // `motion` (#2412) — TIMING + EASING through the mixed-type executor; its refusals count with the font ones.
     const motionTotal = mv.collections.reduce((n, c) => n + c.total, 0);
     const motionCreated = mv.collections.reduce((n, c) => n + c.created, 0);
@@ -458,7 +458,8 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       ...f.collections.map((c) => ({ name: c.name, names: c.orphans })),
       ...tv.collections.map((c) => ({ name: c.name, names: c.orphans })),
       ...mv.collections.map((c) => ({ name: c.name, names: c.orphans })), { name: `${names.core ?? 'core'}/other`, names: uc }, // #1109, DRAFT label
-    ].map((o) => ({ ...o, names: unlessRenamedPlanned(o.names, plannedVariables) })).filter((o) => o.names.length);
+    // #4474: a weight variable this run removed (`rw.removed`) was counted as an orphan before it went; it is not drift.
+    ].map((o) => ({ ...o, names: unlessRenamedPlanned(o.names, plannedVariables).filter((n) => !rw.removed.includes(n)) })).filter((o) => o.names.length);
     const orphanCount = allOrphans.reduce((n, o) => n + o.names.length, 0);
     const orphanNote = orphanCount
       ? `⚠ ${orphanCount} variables the brand no longer writes (${allOrphans.map((o) => `${o.name}: ${o.names.length}`).join(', ')}). Nothing was deleted — Update file › Clean up lists them`
@@ -544,6 +545,8 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       : '';
     // One item per axis and per note, each joined by `, ` (#2177: one line each in the Activity drawer).
     const { summary, lines } = fromClauses([
+      // #4474 (owner decision A): a missing weight was found before the first write, so it is said first.
+      weightFallbackNote(weightFallbacks),
       `Palette: ${r.paletteTotal} (+${r.paletteCreated})`, `Color: ${r.colorTotal} (+${r.colorCreated})`,   // #4185 B row 3: labels (owner, 2026-11-20)
       `Layout: ${f.collections.length} collections (+${floatCreated})`,   // #4185 B row 3 (DRAFT): words, not abbreviations
       `Styles: ${s.effects.total} effects (+${s.effects.created}, ${s.effects.bound} bound) / ${s.paints.total} gradients (+${s.paints.created}, ${s.paints.bound} stops bound) / ${gs.total} grid styles (+${gs.created})`,
@@ -551,6 +554,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       `Motion: ${motionTotal} variables (+${motionCreated})`,
       // #2412 (Q293 A): the one deletion Apply makes, so it is always said (wording: Q302).
       motionReplacedItem(mv.replaced.length),
+      retiredWeightsItem(rw.removed),   // #4474: the other deletion Apply makes, so it is always said
       `${r.bound + f.bound + tv.bound + mv.bound + ts.bound} bindings`, misses ? `${misses} misses` : '',
       ...renameNotes, orphanNote, orphanStylesNote, strandedNote, resolvedNote, skippedNote, gridSkippedNote(gs.skipped), fontNote, refusedNote,
       // #1909: what the person chose for the collisions this apply met, when it met any (copy DRAFT, `choiceNote`).
@@ -586,6 +590,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
         orphans: allOrphans, orphanStyles: orphanStyleGroups, stranded,
         renames: { migrated, refused: migRefused, mapRefusals: mig.refusals },
         textStylesSkipped: ts.skipped, fontsUnavailable: pf.unavailable, resolvedStyles: ts.resolvedStyles,
+        weightFallbacks, retiredWeights: rw,
       },
     });
     postVerdict({ type: 'apply-result', ok: misses === 0, headline: applyHeadline(misses, ts.skipped.length), summary, lines }, sink);
