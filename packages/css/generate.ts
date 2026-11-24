@@ -32,7 +32,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { demoHtml } from './demo';
-import { motionBinding, readUncommitted, uniformRedline } from './emission';
+import { claimMotion, motionBinding, readUncommitted, uniformRedline } from './emission';
 import { hitTargetFloor, pendingReplacement } from './residual';
 import { tree, TOKEN_ROOT, v, leaf, kebab, tracking, fmt, type Rule } from './tokens';
 import { fieldLabelCss, fieldMessageCss, passwordFieldCss, textFieldCss } from './fields';
@@ -285,6 +285,44 @@ const reduced: Rule[] = [
   { sel: `${ROOT_CLASS} > ${spin} > svg`, decls: [['animation-duration', motion('motion.turn-reduced')]] },
   { sel: `${busy} > ${spin}`, decls: [['animation-duration', motion('motion.enter-reduced')]] },
 ];
+const SPINNER_MOTION = ['motion.turn', 'motion.turn-reduced', 'motion.enter', 'motion.enter-reduced', 'motion.enter-easing'];
+
+// ------------------------------------------------------------------------------------------------ the button's motion
+// Q146 A (#3841, #4375): the state change and the press, from the def's five motion bindings. A part's transition
+// names exactly the paint properties some color row sets on it, so a paint added to the def is animated without an
+// edit here. Under reduced motion the color change keeps its reduced duration and the press resolves to none, as the
+// def's `motion.reduceMotion` says; the press has no reduced binding.
+const BUTTON_MOTION = ['motion.state', 'motion.state-easing', 'motion.state-reduced', 'motion.press', 'motion.press-easing'];
+const bmotion = (key: string) => v(motionBinding(spec, key));
+/** The press's magnitude. No token holds it: Q-PS1 A keeps it a documented raw value (`check-raw-values.ts`). */
+const PRESS_SCALE = '0.98';
+const painted = new Map<string, Set<string>>();
+for (const row of spec.colors) for (const p of row.parts) {
+  for (const k of Object.keys(p)) if (k !== 'part') painted.set(p.part, new Set([...(painted.get(p.part) ?? []), PAINT_PROP[k]]));
+}
+for (const [part, props] of [...painted].sort(([a], [b]) => (a === 'container' ? -1 : b === 'container' ? 1 : a.localeCompare(b)))) {
+  const each = (dur: string) => [...props].sort().map((prop) => `${prop} ${dur} ${bmotion('motion.state-easing')}`);
+  const press = part === 'container' ? [`transform ${bmotion('motion.press')} ${bmotion('motion.press-easing')}`] : [];
+  add(partSel(ROOT_CLASS, part), [['transition', [...each(bmotion('motion.state')), ...press].join(', ')]],
+    part === 'container' ? 'motion (Q146 A): the state change on motion.state, the press on motion.press' : undefined);
+  reduced.push({ sel: partSel(ROOT_CLASS, part), decls: [['transition', each(bmotion('motion.state-reduced')).join(', ')]] });
+}
+add(`${ROOT_CLASS}${STATE_SEL.pressed}`, [['transform', `scale(${PRESS_SCALE})`]], 'the press: a subtle scale, never on an inert button (Q-PS1 A: the magnitude is a documented raw value)');
+reduced.push({ sel: `${ROOT_CLASS}${STATE_SEL.pressed}`, decls: [['transform', 'none']] });
+
+// Every component this package draws (the three top-level ones and what they nest) has a rule for each motion binding
+// it carries, or generation stops by name (#4375).
+{
+  const claimed: Record<string, string[]> = { [COMPONENT]: BUTTON_MOTION, [spinnerSpec.id]: SPINNER_MOTION };
+  const seen = new Set<string>();
+  const walk = (id: string) => {
+    if (seen.has(id) || !specs[id]) return;
+    seen.add(id);
+    claimMotion(specs[id], claimed[id] ?? []);
+    for (const n of specs[id].nesting ?? []) for (const c of n.components ?? []) walk(c.split('/')[0]);
+  };
+  for (const id of [COMPONENT, 'text-field', 'password-field']) walk(id);
+}
 
 // ------------------------------------------------------------------------------------------------ write
 export const generate = (): string => [
