@@ -42,3 +42,12 @@ accessibility checks.
 **Scorecard.** No row's value moves: geometry across the forms stays 360 checks, token parity 1,770 and 1,666. Each
 harness check gains one self-test mutant, which the card doesn't count. The scorecard harness and the CLI runs aren't
 touched.
+
+### After review (CHANGES at `0d07f5e2`)
+
+- **The #4436 fixture step can now fail on the defect it fixes.** The review's mutation, `const CONTRACT_FILE = ARM_1;`
+  (base's defect: `--contract` ignored), passed: the fixture describes arm 1's own Storybook, so a run that fell back to
+  arm 1's contract found every story, ran arm 1's mutants and overwrote arm 1's record. `check-geometry.ts` now reads
+  the file `--contract` names by its own path, never through `CONTRACT_FILE`, and fails when the loaded contract's `arm`
+  isn't that file's: `FAIL setup: --contract names the contract "…", but the geometry loaded "arm 1: …" (#4436) …`.
+  Before the fix the same mutation exited 0; after it, it fails by name. No scorecard row moves.

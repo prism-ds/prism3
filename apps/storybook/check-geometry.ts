@@ -254,6 +254,16 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname 
     console.log(`wrote ${recordTo.startsWith(STATIC) ? `storybook-static${recordTo.slice(STATIC.length)}` : recordTo} (${Object.keys(record).length} cases)`);
   });
   if (!existsSync(CONTRACT_FILE)) { console.error(`FAIL setup: no contract at ${CONTRACT_FILE}`); process.exit(1); }
+  // #4436 review: the contract measured is the one asked for. The file `--contract` names is read here by its own path,
+  // never through `CONTRACT_FILE`, so a run that fell back to arm 1's contract (base's defect, which measured arm 1 and
+  // passed) fails by name instead of passing on arm 1's stories.
+  if (arg('--contract')) {
+    const asked = (JSON.parse(readFileSync(resolve(arg('--contract')!), 'utf8')) as { arm?: string }).arm;
+    if (CONTRACT.arm !== asked) {
+      console.error(`FAIL setup: --contract names the contract "${asked}", but the geometry loaded "${CONTRACT.arm}" (#4436): a run on the wrong contract measures arm 1's stories and passes`);
+      process.exit(1);
+    }
+  }
   const forms = Object.keys(CONTRACT.forms);
   const summary = `${CONTRACT.arm}: every story its contract names, ${forms.join(' and ')} forms, left to right and right to left: the root's extent, padding, border and radii, and each anatomy part's box, equal to the ${REF} form's to 0.01px.`;
   await main('geometry', summary, run as never, IS_ARM_1 ? [...ARM_1_MUTANTS, ...DROPPED('geometry')] : contractMutants() as never, IS_ARM_1
