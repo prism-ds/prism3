@@ -33,5 +33,12 @@ drifts, the CLI skipped after the edit, and the token CSS and Storybook not rebu
 
 **Review fixes.** The K1 headline arithmetic is now a self-tested function: a mutation that always left the install
 out had survived. A failed run's line carries the failures listed under it, not just their count. Each live read is
-held to a typed scope (both forms, both themes, 16 readings), so a reader that drops a form fails the real run. K2, the
-from-scratch start state both arms share, is posted on #3408.
+held to a typed scope (both forms, both themes, 16 readings), so a reader that drops a form fails the real run.
+
+**Second pass (owner decisions 2026-11-24).**
+- `headline` now reads `K1` itself, and its self-test sets `K1.timed` both ways and puts it back, so the run can't time
+  one reading and label it the other.
+- The one-edit line is built from the reading's own keys (`scopeOf`): a read of the HTML form alone prints "the html
+  forms", never a fixed "both forms".
+- **K2 → A.** The start state is the code on disk (untimed) with the npm cache warm. The cell names it without
+  "pending", and the arm input contract (`ARM-CONTRACT.md`) names it for arm 2.

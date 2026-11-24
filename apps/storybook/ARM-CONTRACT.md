@@ -8,6 +8,14 @@ its own, and `check-arm-contract.ts` tells it, by name, what's missing.
 npx tsx apps/storybook/check-arm-contract.ts --contract <your-contract.json> --storybook <your storybook-static dir>
 ```
 
+## KPI 1: the start state both arms share (K2 A)
+
+KPI 1's from-scratch run starts from **the code on disk, untimed, with the npm cache warm** (owner decision K2 A on
+#3408, 2026-11-24). Getting the code (a clone, a copy, or an `npm create` template fetch) is setup and isn't timed; the
+install, when the run has one, reads a warm cache. Arm 1's run is `tools/poc-kpi1/kpi1.ts`, and its KPI 1 cell names
+this start state. Another arm's KPI 1 run starts from the same state, so the two times measure the same thing. Whether
+the install itself is inside the time is K1, still open.
+
 ## What the file holds
 
 ```jsonc

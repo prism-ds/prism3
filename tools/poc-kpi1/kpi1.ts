@@ -80,18 +80,20 @@ export const EDIT: { what: string; from: string; to: string }[] = [
   { what: 'the primary color', from: 'primary: { l: 0.4709, c: 0.3001, h: 266.75 }', to: 'primary: { l: 0.52, c: 0.14, h: 160 }' },
   { what: 'the radius scale', from: 'radiusScale: 1', to: 'radiusScale: 2' },
 ];
-/** K2 on #3408: the from-scratch start state both arms share. A (the code on disk, untimed; the npm cache warm) until answered. */
-export const K2: { start: string; state: 'pending' | 'answered' } = { start: 'the code on disk, untimed; npm cache warm (K2 A', state: 'pending' };
+/** K2 on #3408 (owner decision 2026-11-24, A): the from-scratch start state both arms share, the code on disk (untimed) with the
+ *  npm cache warm. Also named in the arm input contract (`apps/storybook/ARM-CONTRACT.md`), so arm 2 runs from the same state. */
+export const K2: { start: string; state: 'pending' | 'answered' } = { start: 'the code on disk, untimed; npm cache warm (K2 A', state: 'answered' };
 /** K1 on #3408: is `npm ci` inside the from-scratch time? A (timed) until the owner answers. */
 export const K1: { timed: boolean; state: 'pending' | 'answered' } = { timed: true, state: 'pending' };
 
 export type Run = 'scratch' | 'update';
 type Step = { kind: 'command' | 'edit'; what: string; seconds: number };
-export type Result = { run: Run; steps: Step[]; seconds: number; installSeconds: number; probes: number; failure: string | null; copy: string };
+export type Result = { run: Run; steps: Step[]; seconds: number; installSeconds: number; probes: number; failure: string | null; copy: string; read?: Reading };
 
-/** The headline seconds, to a tenth: the timed run's milliseconds, less the install's when K1 leaves it untimed. */
-export const headline = (totalMs: number, installMs: number, timed: boolean): number =>
-  Math.round((totalMs - (timed ? 0 : installMs)) / 100) / 10;
+/** The headline seconds, to a tenth: the timed run's milliseconds, less the install's when K1 leaves it untimed. It reads
+ *  `K1` itself rather than taking it from the caller, so the run can't time one reading and label it the other. */
+export const headline = (totalMs: number, installMs: number): number =>
+  Math.round((totalMs - (K1.timed ? 0 : installMs)) / 100) / 10;
 
 const tsx = (f: string, ...a: string[]) => ['npx', 'tsx', f, ...a];
 const SCRATCH: { what: string; argv: string[]; install?: true; plant?: string }[] = [
@@ -151,9 +153,18 @@ export const covered = (r: Reading): string[] => {
   return [...missing.map((k) => `${k}: not read`), ...(n !== SCOPE.readings ? [`${n} readings, not the ${SCOPE.readings} promised`] : [])];
 };
 
-/** KPI 3's line: the readings, each a probe in one form and one theme. */
-export const oneEditLine = (readings: number) =>
-  `OK one edit: ${readings} readings reach the edited tokens, ${PROBES.length} probes in both forms and both themes, from 1 edit (${PROBES.map((p) => p.name).join(', ')})`;
+/** The forms and the themes a reading actually holds, read from its keys (`<probe> (<form>, <theme>)`). */
+export const scopeOf = (r: Reading): { forms: string[]; themes: string[] } => {
+  const pairs = Object.keys(r).map((k) => /\(([^,]+), ([^)]+)\)$/.exec(k)).filter((m): m is RegExpExecArray => !!m);
+  return { forms: [...new Set(pairs.map((m) => m[1]))], themes: [...new Set(pairs.map((m) => m[2]))] };
+};
+const and = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+/** KPI 3's line, from the reading itself: its count, and the forms and themes its keys name (#4574 review: never a fixed
+ *  "both forms" that a narrower read would still print). */
+export const oneEditLine = (r: Reading) => {
+  const { forms, themes } = scopeOf(r);
+  return `OK one edit: ${Object.keys(r).length} readings reach the edited tokens, ${PROBES.length} probes in the ${and(forms)} forms and the ${and(themes)} themes, from 1 edit (${PROBES.map((p) => p.name).join(', ')})`;
+};
 
 // ------------------------------------------------------------------------------------------------ the run
 const sh = (argv: string[], cwd: string) => spawnSync(argv[0], argv.slice(1), { cwd, encoding: 'utf8', maxBuffer: 1 << 28 });
@@ -216,7 +227,7 @@ export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): R
       const t0 = Date.now();
       go(SCRATCH, true, 'scratch');
       if (opts.plant === 'drift') writeFileSync(join(tmp, DRIFT), `${readFileSync(join(tmp, DRIFT), 'utf8')}/* drift */\n`);
-      res.seconds = headline(Date.now() - t0, installMs, K1.timed);
+      res.seconds = headline(Date.now() - t0, installMs);
       checkScratch('scratch');
       return res;
     }
@@ -244,6 +255,7 @@ export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): R
     const bad = [...covered(before).map((x) => `before the edit, ${x}`), ...covered(after).map((x) => `after the edit, ${x}`), ...judge(before, after, wantBefore, expected(outDir))];
     if (bad.length) throw new Error(`FAIL one edit: ${plural(bad.length, 'reading')} wrong: ${bad.join('; ')}`);
     res.probes = Object.keys(after).length;
+    res.read = after;
   } catch (e) {
     const m = (e as Error).message;
     res.failure = m.startsWith('FAIL') ? m : `FAIL kpi1 (${run}): ${m}`;
@@ -311,9 +323,15 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const missing = GENERATED.filter((f) => !existsSync(resolve(REPO, f)));
     return missing.length || new Set(GENERATED).size !== GENERATED.length ? `missing or repeated: ${missing.join(', ')}` : null; } },
   { name: 'the headline time counts the install under K1 A and leaves it out under B, from planted step times', check: () => {
-    // Typed totals: 20,000ms timed with a 6,050ms install. A gives 20.0; B gives 13.95, which rounds to 14.0.
-    const got = [headline(20_000, 6_050, true), headline(20_000, 6_050, false), headline(3_549, 0, true)];
-    return got.join() === '20,14,3.5' ? null : `headline gave ${got.join(', ')}, expected 20, 14, 3.5`; } },
+    // Typed totals: 20,000ms timed with a 6,050ms install. A gives 20.0; B gives 13.95, which rounds to 14.0. K1 is set
+    // each way here and put back, so the case holds the function the run calls, with no flag passed in.
+    const was = K1.timed;
+    try {
+      K1.timed = true; const a = [headline(20_000, 6_050), headline(3_549, 0)];
+      K1.timed = false; const b = headline(20_000, 6_050);
+      const got = [...a, b];
+      return got.join() === '20,3.5,14' ? null : `headline gave ${got.join(', ')}, expected 20, 3.5 (K1 A) and 14 (K1 B)`;
+    } finally { K1.timed = was; } } },
   { name: 'a failure line carries the failures listed under it, capped, not just their count', check: () => {
     const out = 'noise\nFAIL storybook: 7 failure(s), 1066 passed\n  - a: x\n  - b: y\n  - c\n  - d\n  - e\n  - f\n  - g\nOK other';
     const got = firstError(out);
@@ -323,6 +341,12 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const htmlOnly = Object.fromEntries(Object.entries(now).filter(([k]) => k.includes('(html,')));
     const bad = covered(htmlOnly);
     return bad.length === 9 && bad[0] === 'button fill (element, light): not read' && bad[8] === '8 readings, not the 16 promised' ? null : JSON.stringify(bad); } },
+  { name: 'the one-edit line names the forms and themes the reading holds, not a fixed "both"', check: () => {
+    const full = oneEditLine(now);
+    const htmlOnly = oneEditLine(Object.fromEntries(Object.entries(now).filter(([k]) => k.includes('(html,'))));
+    const wantFull = 'OK one edit: 16 readings reach the edited tokens, 4 probes in the html and element forms and the light and dark themes, from 1 edit (button fill, button corner, text field corner, password field corner)';
+    const wantHtml = 'OK one edit: 8 readings reach the edited tokens, 4 probes in the html forms and the light and dark themes, from 1 edit (button fill, button corner, text field corner, password field corner)';
+    return full === wantFull && htmlOnly === wantHtml ? null : `${full}\n${htmlOnly}`; } },
   { name: 'the summary lines name the time, commands, hand edits, fixes, errors and the install with K1', check: () => {
     const base = { seconds: 21.4, installSeconds: 6.1, probes: 0, failure: null, copy: '' };
     const s = summary({ ...base, run: 'scratch', steps: SCRATCH.map((x) => ({ kind: 'command' as const, what: x.what, seconds: 1 })) });
@@ -346,5 +370,5 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'kpi1.ts')) {
   for (const s of r.steps) console.log(`  step: ${s.kind === 'edit' ? 'edit   ' : 'command'} ${s.what} [${s.seconds.toFixed(1)}s]`);
   if (r.failure) { console.error(r.failure); console.log(r.failure); process.exit(1); }
   console.log(summary(r));
-  if (run === 'update') console.log(oneEditLine(r.probes));
+  if (run === 'update') console.log(oneEditLine(r.read ?? {}));
 }

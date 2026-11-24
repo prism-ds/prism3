@@ -66,8 +66,9 @@ readings), and a read outside it fails by name.
 owner answers. The line names the install's own seconds and the decision, so either reading is on the card. The choice
 is `K1` in `kpi1.ts`, and the headline arithmetic (`headline`) is self-tested under both answers.
 
-**Owner decision K2 (#3408, pending):** the from-scratch start state both arms share. Today the code is on disk
-(untimed) and `npm ci` prefers a warm cache.
+**Owner decision K2 (#3408, A):** the from-scratch start state both arms share is the code on disk (untimed) with the
+npm cache warm (`npm ci --prefer-offline`). The cell names it, and so does the arm input contract
+(`apps/storybook/ARM-CONTRACT.md`), so arm 2 runs from the same state.
 
 **Scorecard rows** (`tools/poc-scorecard/measures.ts`): `kpi1-cli-scratch`, `kpi1-cli-update` and `kpi3-one-edit`. The
 last reads the update run's second line. A measurement, not a CI gate: it needs the npm registry (a warm cache serves
