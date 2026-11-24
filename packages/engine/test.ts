@@ -46980,6 +46980,48 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
     `#4200 theme_brand states the one size figure the hint uses, and names the agent link's \`input\` alias`);
 }
 
+// #4125 (owner decisions A and A, 2026-11-20) — score_consumption's contract rate read 100% when pairs were never
+// checked. `vacuous` (#4200) covers the all-unresolved run only; the mixed run (12 checked, 1 pair unresolved) still read
+// `rate: 1` with nothing beside it. `coverage` is the share of (pair, mode) combinations that resolved. And a pair whose
+// side is a raw palette primitive was always unresolved, so the UI that leaks a primitive got no contrast check: it is
+// now measured, and listed in `leaks`. EXPECTED values are counted here from the input (pairs × modes), and the
+// primitive's contrast is read from the tree's own `contrastOnWhite`, never from eval.ts.
+// BY-NAME MUTATION: return `coverage: 1` → the mixed and all-unresolved arms fail; drop `primitiveHex` (resolve roles
+// only) → the primitive arms fail.
+{
+  const b4125 = { id: 'v4125', modes: ['light', 'dark'], primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 262, chroma: 0.01 } };
+  const score = (pairs: object[]) => (mcpCallTool('score_consumption', { brand: b4125, refs: ['color.text.primary'], pairs }).structuredContent as any).contracts;
+  const none = score([{ fg: 'color.text.nope', bg: 'background.primary' }, { fg: 'text.primary', bg: 'background.nope' }]);
+  ok(none.checked === 0 && none.vacuous === true && none.coverage === 0,
+    `#4125 an all-unresolved run reports coverage 0 beside vacuous (got ${JSON.stringify(none)})`);
+  // Three pairs over two modes is six combinations; two pairs resolve in both, so four are checked: 4 / 6.
+  const mixed = score([{ fg: 'text.primary', bg: 'background.primary' }, { fg: 'text.secondary', bg: 'background.primary' }, { fg: 'color.text.nope', bg: 'background.primary' }]);
+  ok(mixed.checked === 4 && mixed.vacuous === false && Math.abs(mixed.coverage - 4 / 6) < 1e-9 && mixed.unresolved.length === 1,
+    `#4125 a mixed run reports coverage 4/6, so one unresolved pair no longer reads as 100% (got ${JSON.stringify(mixed)})`);
+  const all = score([{ fg: 'text.primary', bg: 'background.primary' }]);
+  ok(all.coverage === 1 && all.leaks.length === 0, `#4125 a run where every pair resolves reports coverage 1 and no leaks (got ${JSON.stringify(all)})`);
+  // A palette primitive in a pair is measured, in every mode, and listed as a leak: root-relative, braced and
+  // root-qualified alike. White text on primary.100 fails; the ratio is the tree's own contrastOnWhite for that step.
+  const tree = buildTree(brandTheme(b4125 as unknown as BrandInput)).tree;
+  const onWhite = Number(tree[Object.keys(tree).find((k) => !k.startsWith('$'))!].core.palette.primary['100'].$extensions.prism3.contrastOnWhite);
+  for (const bg of ['core.palette.primary.100', '{core.palette.primary.100}', '{prism.core.palette.primary.100}']) {
+    const label = `core.palette.white on ${bg}`;
+    const r = score([{ fg: 'core.palette.white', bg }]);
+    const f = r.failures.filter((x: any) => x.pair === label);
+    ok(r.checked === 2 && r.unresolved.length === 0 && JSON.stringify(r.leaks) === JSON.stringify([label]) && f.length === 2
+        && f.every((x: any) => Math.abs(x.ratio - onWhite) <= 0.011 && x.min === 4.5),
+      `#4125 white on ${bg} is measured in both modes at the tree's ${onWhite}:1 and listed as a leak (got ${JSON.stringify(r)})`);
+  }
+  // A role on a primitive: measured too, and a role-only pair in the same run is not called a leak.
+  const rolePrim = score([{ fg: 'text.primary', bg: 'core.palette.white' }, { fg: 'text.primary', bg: 'background.primary' }]);
+  ok(rolePrim.checked === 4 && JSON.stringify(rolePrim.leaks) === JSON.stringify(['text.primary on core.palette.white']),
+    `#4125 a role on a palette primitive is measured and only that pair is a leak (got ${JSON.stringify(rolePrim)})`);
+  // A translucent primitive has no contrast of its own, so it stays unresolved rather than measured.
+  const alpha = score([{ fg: 'text.primary', bg: 'core.palette.transparent' }]);
+  ok(alpha.checked === 0 && alpha.unresolved.length === 1 && alpha.leaks.length === 0,
+    `#4125 a translucent primitive stays unresolved (got ${JSON.stringify(alpha)})`);
+}
+
 // #4200 A, B (DRAFT copy) — the CLI and the MCP server say what failed and what to do next: no raw stack trace from
 // file-facts-cli, no "cannot read design file" without the cause, one header per kind of brand failure.
 {

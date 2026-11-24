@@ -399,7 +399,7 @@ export const toolDefs = (brandSchema: unknown) => [
       type: 'object',
       properties: {
         consumption: { type: 'object', description: 'total / valid / invented / inventedRate / primitiveLeaks / primitiveLeakRate.' },
-        contracts: { type: 'object', description: 'checked / pass / rate / vacuous / failures / unresolved — omitted when no pairs were given. vacuous is true when no pair resolved in any mode, so rate 1 measured nothing.' },
+        contracts: { type: 'object', description: 'checked / pass / rate / vacuous / coverage / failures / unresolved / leaks — omitted when no pairs were given. vacuous is true when no pair resolved in any mode, so rate 1 measured nothing. coverage is the share of pair-and-mode checks that resolved, 0 to 1. leaks lists pairs measured through a raw palette color (core.palette.*) rather than a role.' },
       },
       required: ['consumption'],
     },
