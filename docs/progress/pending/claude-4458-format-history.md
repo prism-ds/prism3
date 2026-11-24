@@ -11,8 +11,15 @@ covers version numbers. The half that covers counts is #4510, in its own PR.
 
 - Per published format, one row per version, oldest first, one row per line. Each row holds the version, the branch
   that took it, a 16-hex hash of the format's JSON schema, and a note on what the version adds.
-- **The hash ignores prose.** `description`, `title`, `$comment` and `examples` are dropped, keys are sorted, and the
-  schema's own `$id` reads as `<$id>`, so a raise doesn't change its own hash. Any other edit changes it.
+- **The hash ignores annotations, not names.** The walk knows what each position holds. In a schema, the annotation
+  keywords `description`, `title`, `$comment` and `examples` are dropped. In a name map (`properties`,
+  `patternProperties`, `$defs`, `definitions`, `dependentSchemas`) every name is kept, so a property called
+  `description` counts like any other. Keys are sorted, and the schema's own `$id` reads as `<$id>`, so a raise doesn't
+  change its own hash.
+- **Counted:** a property or `$defs` member added, removed or retyped, whatever its name; a `required` member; an
+  `enum` or `const` value; a bound; `additionalProperties`; any keyword other than the four annotations; an array's
+  order. **Not counted:** an annotation's text where it annotates a schema, key order, formatting, and the version in
+  the schema's own `$id`.
 - The gate hashes with its own walk, not `component-contract.ts`'s `schemaShape`. Sharing that walk would tie every
   recorded hash to another gate's fact list, which no version raise could repair. The duplication is deliberate.
 - Four formats are registered: every `prism3-*` schema in `schema/` (ai-metadata, component-defs, component-docs,
@@ -44,7 +51,25 @@ covers version numbers. The half that covers counts is #4510, in its own PR.
   - an unregistered `prism3-*` schema → `SCOPE`.
   - Control: a description edit passes.
 - **Self-check.** The gate runs its real `judge` over 10 planted records, including the three ways to resolve the
-  merge, and 6 hash probes. The case count is written by hand.
+  merge, and 11 hash probes. Both counts are written by hand.
+
+### Review fixes (the review at `f34e58cb`)
+
+- **B1: a property named like an annotation was invisible.** The first walk dropped `description`, `title` and
+  `examples` at every depth, so it also dropped real properties with those names: `description` on component-defs'
+  `$defs/prop` and `$defs/def`, component-docs' `$defs/prop` and `$defs/component`, and file-facts' variable and style
+  items. The reviewer's four mutations all passed: a `description` property retyped, one deleted, a `title` property
+  added to a closed object, and file-facts' `description` deleted. Now each fails `SHAPE` by name.
+  - **The trap in the obvious fix.** "Keep the key when its parent key is `properties`" fails on component-defs'
+    `$defs/spec`, whose property is itself *named* `properties`: the `description` under that property is an
+    annotation, with `properties` as its parent key. So the walk tracks the role of each position (a schema, a name
+    map, or data), not the parent key. A probe holds that case: editing that annotation leaves the hash as it is.
+  - **Re-seeded.** Three seed hashes change (component-defs, component-docs, file-facts), and ai-metadata's doesn't.
+    They're this PR's own rows and not on `main`, so `--accept` rewrote them.
+- **S1: a rewrite needs `origin/main`.** Where `origin/main` couldn't be read, `--accept` treated every row as unmerged
+  and could rewrite one. Now it refuses the rewrite by name and says to fetch; an append still works. A readable
+  `origin/main` without the record holds no rows, which is the state before this PR merges. `origin/main` is read as
+  last fetched, so the refusal text and the header both say to fetch first.
 
 ### Limits, stated in the gate's header
 
