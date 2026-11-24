@@ -15,14 +15,21 @@ build it now, as its own PR, gate only.
 - **EXPECTED.** `shadow.<rung>` in `<brand>.tokens.json` for the mode (dark from `$extensions.prism3.modes`), through
   the gate's own walk (`expectedRaw`, split out of `expectedValue`), its own dimension reader (`expectedPx`) and its
   own color parser. `emit-tailwind.ts` reads the handoff through `resolveRole` and writes `toOklchCss`; the gate uses
-  neither. The rung for each variable is `TAILWIND_SHADOWS`, the map's claim.
+  neither.
+- **The rung is typed in the gate (review of this PR).** The first version took each variable's rung from
+  `TAILWIND_SHADOWS`, the map the emitter writes from. Swapping `shadow-md` and `shadow-lg` there passed every gate
+  but `drift`, and a regen cleared that. `EXPECTED_SHADOWS` now types the six variables and their roles in the gate.
+  The map is read only to fail when it names a rung the table doesn't, or drops one.
 - **Scope is asserted, not counted.** The arm fails if it read fewer than every brand's theme in both modes, or
   compared no layers. Today: 120 layers, 5 brands × 2 modes × 6 rungs × 2 layers.
 
 ### Mutations
-Both failed the gate by name; see the PR's Ready comment for the lines.
+Each failed the gate by name; see the PR's Ready comments for the lines.
 - Swap only the shadow variables between `:root` and `.dark` in `emit-tailwind.ts` (the issue's mutation).
 - Change one emitted shadow: `shadow-md-value` written from `shadow.lg`.
+- Swap `shadow-md` and `shadow-lg` in `TAILWIND_SHADOWS`: `prism3 tailwind light shadow-md-value layer 1: lengths
+  0 2 4 -2 → 0 3 6 -3`.
+- Add a rung to the map only: `TAILWIND_SHADOWS names shadow-3xl, which EXPECTED_SHADOWS does not`.
 
 ### Trap
 The page script is a string inside a template literal, so a regex in it needs doubled backslashes. Single ones
