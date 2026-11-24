@@ -220,7 +220,7 @@ export class P3TextField extends LitElement {
     return html`<div class="p3-text-field" data-component="text-field" data-prop-size=${this.size} data-prop-validation=${this.validation}>${label}<div class="p3-text-field__control"><div class="p3-text-field__content">${this.leadingIcon !== undefined && this.leadingIcon !== null
       ? html`<span class="p3-text-field__leading-visual" aria-hidden="true">${this.leadingIcon}</span>`
       : nothing}<input class="p3-text-field__entry" id=${inputId} type=${this.type} name=${this.name ?? nothing}
-        placeholder=${this.placeholder ?? nothing} value=${this.defaultValue ?? nothing} autocomplete=${this.autoComplete ?? nothing} inputmode=${this.inputMode ?? nothing}
+        placeholder=${this.placeholder ?? nothing} value=${this.defaultValue ?? nothing} autocomplete=${this.autoComplete ?? nothing} inputmode=${this.inputMode ?? nothing} dir="auto"
         ?required=${this.required} ?disabled=${this.disabled} ?readonly=${this.readOnly}
         aria-busy=${this.isPending ? 'true' : nothing} aria-invalid=${status === 'error' ? 'true' : nothing}
         aria-describedby=${writeMessage ? messageId : nothing} @input=${this.#onInput}></div><span class="p3-text-field__spinner" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-opacity="0.2"></circle><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="20.73 62.83" transform="rotate(-90 12 12)"></circle></svg></span>${this.trailingIcon !== undefined && this.trailingIcon !== null

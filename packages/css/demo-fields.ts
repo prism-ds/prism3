@@ -59,7 +59,7 @@ export const fieldHtml = (o: FieldOpts): string => {
   const filled = o.state !== 'rest' && o.state !== 'disabled';
   const input = [
     `<input class="${P}__entry" id="${o.id}"`,
-    o.kind === 'password-field' ? ' type="password" autocomplete="current-password" spellcheck="false" autocapitalize="none"' : ' type="email" autocomplete="email"',
+    o.kind === 'password-field' ? ' type="password" autocomplete="current-password" spellcheck="false" autocapitalize="none"' : ' type="email" autocomplete="email" dir="auto"',
     ` name="${o.kind === 'password-field' ? 'password' : 'email'}"`,
     c.placeholder ? ` placeholder="${c.placeholder}"` : '',
     filled ? ` value="${c.value}"` : '',

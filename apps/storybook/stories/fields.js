@@ -110,7 +110,7 @@ export const markup = (kind, c, id) => {
   const withMessage = p.showMessage || status !== 'default';
   const attr = (name, v) => (v === undefined || v === null || v === false ? '' : v === true ? ` ${name}` : ` ${name}="${esc(v)}"`);
   const input = `<input class="${P}__entry"${attr('id', id)}${attr('type', kind === 'password-field' ? 'password' : p.type)}`
-    + `${attr('name', p.name)}${attr('autocomplete', p.autoComplete)}${kind === 'password-field' ? ' spellcheck="false" autocapitalize="none"' : ''}`
+    + `${attr('name', p.name)}${attr('autocomplete', p.autoComplete)}${kind === 'password-field' ? ' spellcheck="false" autocapitalize="none"' : ' dir="auto"'}`
     + `${attr('placeholder', p.placeholder)}${attr('value', p.defaultValue)}`
     + `${attr('aria-describedby', withMessage ? msgId : undefined)}${attr('aria-invalid', status === 'error' ? 'true' : undefined)}`
     + `${attr('required', p.required)}${attr('disabled', p.disabled)}${attr('readonly', p.readOnly)}${attr('aria-busy', p.isPending ? 'true' : undefined)}>`;

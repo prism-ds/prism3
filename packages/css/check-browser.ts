@@ -22,8 +22,16 @@
  *    #4140 the token CSS follows the OS into dark wherever no `data-theme` is set, so the demo's light section must
  *    name `data-theme="light"` or, on a dark OS, it shows dark tokens and only a light-scheme run can't see it.
  *
- * SELF-TEST: four mutants, each must fail by name — the label tracking rebound, a rest fill rebound to the hover
- * token, a ring drawn on any `:focus` (so a mouse click shows it), and the medium hit target shrunk to 24px.
+ * 6. MOTION (Q146 A, #4375). A forced state is read once its transition has finished, never mid-flight. The button's
+ *    fill and border, and its label's ink, transition on `motion.duration.fast` with `motion.easing-role.default`, and
+ *    the press (`:active`) scales it by 0.98 (Q-PS1 A, this file's own literal) on the same duration and curve. An
+ *    inert button (disabled, inactive, pending) never scales. Under `prefers-reduced-motion: reduce` the colors
+ *    transition on `motion.duration-reduced.fast` and the press resolves to none. The house brand resolves both
+ *    durations to the same value, so which one is bound is held by `check-parity.ts`'s sentinels; this holds the values.
+ *
+ * SELF-TEST: seven mutants, each must fail by name — the label tracking rebound, a rest fill rebound to the hover
+ * token, a ring drawn on any `:focus` (so a mouse click shows it), the medium hit target shrunk to 24px, the
+ * transitions removed, the press kept under reduced motion, and a disabled button that scales on press.
  */
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
@@ -87,6 +95,10 @@ const samples = (theme: string): Sample[] => {
   ];
 };
 const THEMES: Record<string, string> = { light: 'light', dark: 'dark' }; // demo theme → oracle mode
+/** The press's magnitude (Q-PS1 A), written here apart from the generator's. */
+const PRESS_SCALE = 0.98;
+/** Waits until every finite animation and transition on the page has ended, so a forced state reads settled. */
+const SETTLED = `Promise.all(document.getAnimations().filter((a) => a.effect.getTiming().iterations !== Infinity).map((a) => a.finished))`;
 
 export const run = async (browser: any, extraCss = '', colorScheme: 'light' | 'dark' = 'light'): Promise<{ failures: string[]; passed: number }> => {
   const failures: string[] = [];
@@ -117,6 +129,7 @@ export const run = async (browser: any, extraCss = '', colorScheme: 'light' | 'd
         const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docId, selector: sel });
         if (!nodeId) { failures.push(os + `${s.demo}: no such demo button`); continue; }
         await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [s.force] });
+        await page.evaluate(SETTLED);
       }
       const got = await page.evaluate(([q, part, prop]: string[]) => {
         const el = document.querySelector(q);
@@ -128,6 +141,7 @@ export const run = async (browser: any, extraCss = '', colorScheme: 'light' | 'd
       if (s.force) {
         const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docId, selector: sel });
         await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+        await page.evaluate(SETTLED);
       }
     }
     // pending: the spinner takes the leading cell; the label keeps its name
@@ -153,6 +167,69 @@ export const run = async (browser: any, extraCss = '', colorScheme: 'light' | 'd
     const wantLs = await page.evaluate((v: string) => { const el = document.createElement('span'); el.style.letterSpacing = v; document.body.append(el); const out = getComputedStyle(el).letterSpacing; el.remove(); return out; }, `${ratio * parseFloat(tr[1])}px`);
     ok(tr[0] === wantLs, `${theme} text medium label letter-spacing is ${tr[0]}, core.font.letter-spacing-role.normal (${ratio}) × ${tr[1]} is ${wantLs}`);
   }
+
+  // 6. motion: each property's duration and curve, the press, and the reduced-motion twin
+  const force = async (q: string, pseudo: string[]) => {
+    const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docId, selector: q });
+    if (nodeId) await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: pseudo });
+    await page.evaluate(SETTLED);
+    return !!nodeId;
+  };
+  /** A part's transition for one property: the duration and curve its lists give it, or null when it has none. */
+  const transitionOf = (q: string, part: string, prop: string) => page.evaluate(([sel, pt, pr]: string[]) => {
+    const el = document.querySelector(sel);
+    const node = el && (pt ? el.querySelector(pt) : el);
+    if (!node) return null;
+    const cs = getComputedStyle(node);
+    const props = cs.transitionProperty.split(', ');
+    const i = props.findIndex((x) => x === pr || x === 'all');
+    if (i < 0) return null;
+    // no named helper in here: tsx's keepNames wraps it in `__name`, which the page does not define
+    const durs = cs.transitionDuration.split(/,\s*(?![^()]*\))/);
+    const eases = cs.transitionTimingFunction.split(/,\s*(?![^()]*\))/);
+    return { duration: durs[i % durs.length], easing: eases[i % eases.length] };
+  }, [q, part, prop]);
+  const normTime = (val: string) => page.evaluate((x: string) => { const el = document.createElement('div'); el.style.transitionDuration = x; document.body.append(el); const out = getComputedStyle(el).transitionDuration; el.remove(); return out; }, val);
+  const normEase = (val: string) => page.evaluate((x: string) => { const el = document.createElement('div'); el.style.transitionTimingFunction = x; document.body.append(el); const out = getComputedStyle(el).transitionTimingFunction; el.remove(); return out; }, val);
+  // The oracle resolves no cubicBezier, so a curve is followed through the emitted DTCG's aliases here (one tree: the
+  // house brand's curves don't vary by mode).
+  const ease = (_mode: string, token: string): string => {
+    const dtcg = json(TOKEN_TREE);
+    const root = Object.keys(dtcg).find((k) => !k.startsWith('$'))!;
+    let val: unknown = `{${root}.${token}}`;
+    for (let hops = 0; typeof val === 'string' && /^\{.+\}$/.test(val) && hops < 10; hops++) {
+      val = (val as string).slice(1, -1).split('.').reduce((n: any, k) => n?.[k], dtcg)?.$value;
+    }
+    if (!Array.isArray(val) || val.length !== 4) throw new Error(`${token} does not resolve to a cubic-bezier in ${TOKEN_TREE}`);
+    return `cubic-bezier(${val.join(', ')})`;
+  };
+  for (const reduce of [false, true]) {
+    await page.emulateMedia({ reducedMotion: reduce ? 'reduce' : 'no-preference' });
+    const rm = reduce ? 'under reduced motion: ' : '';
+    for (const [theme, mode] of Object.entries(THEMES)) {
+      const rest = `[data-demo="${theme}/default/filled/default/medium/rest"]`;
+      const dur = await normTime(resolved(mode, reduce ? 'motion.duration-reduced.fast' : 'motion.duration.fast'));
+      const crv = await normEase(ease(mode, 'motion.easing-role.default'));
+      for (const [part, prop] of [['', 'background-color'], ['', 'border-color'], ['.p3-button__label', 'color']]) {
+        const t = await transitionOf(rest, part, prop);
+        const what = `${rm}${theme} filled rest${part ? ` ${part}` : ''} ${prop}`;
+        ok(!!t && t.duration === dur && t.easing === crv, `${what} transitions ${t ? `over ${t.duration} on ${t.easing}` : 'not at all'}, ${reduce ? 'motion.duration-reduced.fast' : 'motion.duration.fast'} and motion.easing-role.default resolve to ${dur} and ${crv}`);
+      }
+      const tf = await transitionOf(rest, '', 'transform');
+      if (!reduce) ok(!!tf && tf.duration === dur && tf.easing === crv, `${theme} filled rest transform (the press) transitions ${tf ? `over ${tf.duration} on ${tf.easing}` : 'not at all'}, motion.duration.fast and motion.easing-role.default resolve to ${dur} and ${crv}`);
+      const scale = (q: string) => page.evaluate((sel: string) => getComputedStyle(document.querySelector(sel)!).transform, q);
+      const want = reduce ? 'none' : `matrix(${PRESS_SCALE}, 0, 0, ${PRESS_SCALE}, 0, 0)`;
+      for (const st of ['rest', 'disabled', 'inactive', 'pending']) {
+        const q = `[data-demo="${theme}/default/filled/default/medium/${st}"]`;
+        if (!(await force(q, ['active']))) { failures.push(os + `${theme} ${st}: no such demo button`); continue; }
+        const got = await scale(q);
+        if (st === 'rest') ok(got === want, `${rm}${theme} filled :active transform is ${got}, ${reduce ? 'the press resolves to none under reduced motion' : `the press scales by ${PRESS_SCALE}`} (${want})`);
+        else ok(got === 'none', `${rm}${theme} ${st} :active transform is ${got}: an inert button never scales on press`);
+        await force(q, []);
+      }
+    }
+  }
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
 
   // 2. focus-visible on keyboard, not on mouse
   await page.mouse.click(5, 5);
@@ -188,6 +265,15 @@ const MUTANTS: { name: string; css: string; mustName: RegExp }[] = [
   { name: 'a rest fill rebound to the hover token',
     css: '.p3-button[data-prop-appearance="filled"][data-prop-surface="default"]:not(:hover) { background-color: var(--pds3-color-interactive-primary-fill-hover) !important; }',
     mustName: /default\/filled\/default\/medium\/rest background-color is .*color\.interactive\.primary\.fill\.rest/ },
+  { name: 'the transitions removed',
+    css: '.p3-button, .p3-button > * { transition: none !important; }',
+    mustName: /light filled rest background-color transitions not at all, motion\.duration\.fast/ },
+  { name: 'the press kept under reduced motion',
+    css: '@media (prefers-reduced-motion: reduce) { .p3-button:active:not(:disabled, [aria-disabled="true"]) { transform: scale(0.98) !important; } }',
+    mustName: /under reduced motion: light filled :active transform is matrix\(0\.98, 0, 0, 0\.98, 0, 0\), the press resolves to none/ },
+  { name: 'a disabled button that scales on press',
+    css: '.p3-button:disabled:active { transform: scale(0.98) !important; }',
+    mustName: /light disabled :active transform is matrix\(0\.98, 0, 0, 0\.98, 0, 0\): an inert button never scales on press/ },
   { name: 'a ring on any :focus, so a mouse click shows it',
     css: '.p3-button:focus { outline: var(--pds3-focus-ring-width) solid var(--pds3-color-border-focus) !important; }',
     mustName: /mouse focus: a click should focus the button and show no ring/ },

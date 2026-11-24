@@ -104,7 +104,7 @@ The field writes the `<p class="p3-field-message">` and names its id in the inpu
   <div class="p3-text-field__control">
     <div class="p3-text-field__content">
       <span class="p3-text-field__leading-visual" aria-hidden="true"><svg …></svg></span>
-      <input class="p3-text-field__entry" id="email" type="email" autocomplete="email" required
+      <input class="p3-text-field__entry" id="email" type="email" autocomplete="email" dir="auto" required
              aria-describedby="email-message" aria-invalid="true">
     </div>
     <span class="p3-text-field__spinner" aria-hidden="true"><svg …></svg></span>
@@ -261,6 +261,7 @@ The button def's `codeOnly` list, and its spinner and focus ring:
 | RTL (`right-to-left`) | Logical properties throughout. | Per-icon `autoMirror` for directional glyphs. |
 | Press behavior, form integration (`runtime-behavior`) | — | S4: suppressing clicks while pending or inactive, the polite live region that announces busy, form status. |
 | Inactive (`not-projected`) | Takes the disabled paint, stays focusable. | Surfacing the blockage reason on focus. |
+| State change and press (`motion`, Q146 A, #4375) | The fill and border, and each part's ink, transition on `motion.state` with `motion.state-easing`: exactly the paint properties the spec's color rows set on the part. The press (`:active`) scales the button by 0.98, a documented raw value (Q-PS1 A), on `motion.press` with `motion.press-easing`; an inert button (disabled, inactive, pending) never scales. Under reduced motion the colors keep `motion.state-reduced` and the press is none. The generator stops by name on a motion binding it has no rule for. | — |
 | Spinner rotation, reduced motion, enter fade (`motion`) | Turns on `motion.duration.spin`, slowed to `motion.duration-reduced.spin` under reduced motion; fades in on `motion.duration.fast`. | The host's anti-flash delay and minimum show time (script). |
 
 ## The fields: decisions, and what the defs ask of code (S3)
@@ -285,6 +286,7 @@ fields' 120px minimum width as a documented raw px.
 | The Show/Hide button (`implementation`, Q301.4 A, Q301.5 A) | `password-field.js`: type switch, "Show"/"Hide" + hidden " password", focus and caret kept, a polite announcement, no `aria-pressed`. | The element (S4). |
 | Back to hidden on submit (Q301.7 A) | `password-field.js`, on the form's `submit`. | — |
 | One toggle only (`platform-owned`) | `::-ms-reveal` hidden. | — |
+| Content direction (the text field's `accessibility.aria`, #4051) | The text field's input carries `dir="auto"`, so a value's direction can differ from the page's: a Latin email address stays left to right on a right-to-left page. The password field's input has none: its def doesn't ask for it, and whether it should is an open owner decision on #4051. | — |
 | The input's attributes (`semantics`) | In the contract and the demo: `autocomplete`, `spellcheck="false"`, `autocapitalize="none"`. | `passwordrules`. |
 | The label row and the button's hit area (`hit-target`, Q380 A) | The button sets `min-block-size: 0` and the def's zero block padding. Its `::before` reads the button def's `size.<field size>.hit-target`: centered at small, anchored to the row's bottom at medium and large. | — |
 | The trailing affix as a control (`semantics`) | — (decorative glyph only) | A Clear or reveal button (S4). |
@@ -299,8 +301,8 @@ fields' 120px minimum width as a documented raw px.
 |---|---|
 | `npm run -w @prism3/css check:generated` | `button.css` and `demo.html` are what the generator writes from the emission. No script here imports the engine except `residual.ts`, and that file exports only its two facts (Q142 A). |
 | `npm run -w @prism3/css check:raw-values` | No hex, `rgb()`, non-zero `px` or primitive token in the CSS, outside the documented exceptions (the agent-adherence scorer's own R2). |
-| `npm run -w @prism3/css check:parity` | Rendered in Chromium, every part × size × state binds the token `specs.json` names, and every prop and value in `components.ai.json` has a markup mapping. Mutants must fail by name. |
-| `npm run -w @prism3/css test:browser` | `demo.html` on the light and dark themes: computed colors and sizes against the resolved token values, focus-visible on keyboard and not on mouse. |
+| `npm run -w @prism3/css check:parity` | Rendered in Chromium, every part × size × state binds the token `specs.json` names, each of Button's motion bindings is the transition it names (with reduced motion too), and every prop and value in `components.ai.json` has a markup mapping. Mutants must fail by name. |
+| `npm run -w @prism3/css test:browser` | `demo.html` on the light and dark themes: computed colors and sizes against the resolved token values, each forced state read once its transition ends, the transitions and the press (and their reduced-motion twins), focus-visible on keyboard and not on mouse. |
 | (S3) the same four | Extended to the fields: `generate.ts` writes the four field stylesheets; `check-raw-values.ts` scans them; `check-parity-fields.ts` and `check-browser-fields.ts` are the fields' parity and browser checks, run by `check:parity` and `test:browser`. |
 
 The browser checks need the token CSS built first: `npm run -w @prism3/tokens build`.

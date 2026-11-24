@@ -66,3 +66,13 @@ export const motionBinding = (spec: any, key: string): string => {
   if (!t) throw new Error(`${spec.id} has no motion binding "${key}" in the emission`);
   return t;
 };
+
+/**
+ * #4375: every motion binding a component carries has a rule in this package, or generation stops by name. Before it,
+ * the generator read motion by key and ignored the rest, so Button's five bindings (Q146 A) arrived and every check
+ * passed with no transition in the CSS. `claimed` is the keys the caller writes a rule for.
+ */
+export const claimMotion = (spec: any, claimed: string[]): void => {
+  const extra = Object.keys(spec.motion ?? {}).filter((k) => !claimed.includes(k));
+  if (extra.length) throw new Error(`${spec.id} carries motion binding${extra.length > 1 ? 's' : ''} ${extra.join(', ')} that @prism3/css has no rule for (#4375): write its rule in generate.ts, or the CSS drops the motion silently`);
+};
