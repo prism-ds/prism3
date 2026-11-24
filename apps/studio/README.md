@@ -194,8 +194,10 @@ The registry item carries two rules beyond the theme variables, both for focus. 
 ring takes several forms: `focus-visible:` (Button, Input, Select, Checkbox, Switch, Badge, Tabs, Textarea and others),
 the Slider thumb, the Calendar and its focused day, the Input OTP slot, `focus-within:` (Combobox, Attachment), Input
 Group and Bubble. The rules draw all of them at the full `--ring`, 3.7:1 or more on the three hosted brands. A ring on an
-invalid field keeps its stock `destructive` color. The plain `out/shadcn/<brand>.css` carries neither rule. The item's
-`docs` field points here.
+invalid field keeps its stock `destructive` color. In dark mode the rules also reach the `destructive` Button and Badge:
+their stock ring is the destructive red at 40%, about 1.6:1 against the page, so they focus in the brand's `--ring`
+instead, about 5:1. A destructive control's focus ring is the brand's ring color in dark, not red. The plain
+`out/shadcn/<brand>.css` carries neither rule. The item's `docs` field points here.
 
 Three stock classes still draw text under 4.5:1. The theme leaves them as shadcn ships them, and `lint-shadcn-contrast`
 measures each one on every run (#4387, #4388, #4411). One class edit in the component raises each. The ratios are the
