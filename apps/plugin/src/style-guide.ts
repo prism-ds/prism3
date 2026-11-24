@@ -1405,7 +1405,7 @@ export interface SgNode extends CellNode {
   getPluginData?(key: string): string;
   setExplicitVariableModeForCollection?(collection: unknown, modeId: string): void;
   setProperties?(props: Record<string, string | boolean>): void;
-  getStyledTextSegments?(fields: ('fontName' | 'fontSize' | 'fontWeight' | 'textStyleId' | 'boundVariables')[]): readonly { fontName: unknown }[];
+  getStyledTextSegments?(fields: ('fontName' | 'fontSize' | 'fontWeight' | 'textStyleId' | 'boundVariables' | 'textStyleOverrides')[]): readonly { fontName: unknown }[];
   getMainComponentAsync?(): Promise<unknown>;
   remove?(): void;
   /** Phase 2: bind a node property (a bar's `width`, a corner, a text's `fontSize`) to a variable. */
@@ -1670,6 +1670,19 @@ const AT_KEY = 'prism3-style-guide-at';
 /** What a table held when the generator last wrote it (`fingerprintOf`) — a superseded table that still matches
  *  is deleted, one that does not was edited by hand and is kept. */
 const PRINT_KEY = 'prism3-style-guide-print';
+/**
+ * THE TABLE'S PRINT, SECOND FORM (#4482). The first form (no prefix) read each text's resolved font, size and weight. A
+ * Text styles table draws its specimens in the file's text styles, and a Font family table binds its specimens' family
+ * to the variable; a theme that changes a family re-resolves both, so a superseded table nobody touched read as edited
+ * and was kept, offered for removal by hand. The second form reads a styled text as its style and the overrides listed
+ * over it, and a bound font field as its variable (`fingerprintOf`'s `bindings` and `overrides`). A print in the first
+ * form is still compared in that form: untouched, it matches until the theme's fonts change, and then reads as edited,
+ * as it did, since nothing recorded the old font. A table carries the second form from its next draw.
+ */
+const TABLE_PRINT_V2 = '2:';
+const tablePrint = async (wrap: SgNode): Promise<string> => `${TABLE_PRINT_V2}${await fingerprintOf(wrap, { bindings: true, overrides: true })}`;
+const tablePrintMatches = async (wrap: SgNode, print: string): Promise<boolean> =>
+  !!print && (print.startsWith(TABLE_PRINT_V2) ? (await tablePrint(wrap)) === print : (await fingerprintOf(wrap)) === print);
 /** `<page id>|<frame id>`: where the generator wrote the table, and the frame it wrote. Plugin data travels with a
  *  duplicate and the id does not, so the frame id tells the generator's own frame from a designer's copy of it; the
  *  page id tells a table left on its page from one moved to another page at the same x and y. */
@@ -1816,7 +1829,7 @@ const FONT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as con
  * What a designer does still moves it: a font, size or weight set by hand on a styled text detaches the style, so the
  * text then reads by its values; a different style reads a different id; a value typed over a variable reads the value.
  */
-type FontRead = { fontName?: unknown; fontSize?: unknown; fontWeight?: unknown; textStyleId?: unknown; boundVariables?: unknown };
+type FontRead = { fontName?: unknown; fontSize?: unknown; fontWeight?: unknown; textStyleId?: unknown; boundVariables?: unknown; textStyleOverrides?: unknown };
 const BOUND_FONT = { family: 'fontFamily', style: 'fontStyle', size: 'fontSize', weight: 'fontWeight' } as const;
 // A TextNode lists a bound text field as an array of aliases (`VariableAlias[]`); a styled segment's `boundVariables`
 // holds one alias. Read both: an array as every alias's id, in order.
@@ -1826,8 +1839,14 @@ const boundOf = (bv: unknown, k: string): string | null => {
   const ids = (Array.isArray(b) ? b.map(idOf) : [idOf(b)]).filter((id): id is string => typeof id === 'string' && id !== '');
   return ids.length ? ids.join(',') : null;
 };
-const typeByBinding = (t: FontRead): string => {
-  if (typeof t.textStyleId === 'string' && t.textStyleId) return `style:${t.textStyleId}`;
+/** The overrides a segment lists over its text style (`SEMANTIC_WEIGHT`, `SEMANTIC_ITALIC`, …), sorted; '' when none. */
+const overridesOf = (v: unknown): string => (Array.isArray(v)
+  ? v.map((o) => (o && typeof o === 'object' ? String((o as { type?: unknown }).type) : String(o))).sort().join(',') : '');
+const typeByBinding = (t: FontRead, overrides = false): string => {
+  if (typeof t.textStyleId === 'string' && t.textStyleId) {
+    const over = overrides ? overridesOf(t.textStyleOverrides) : '';
+    return over ? `style:${t.textStyleId}+${over}` : `style:${t.textStyleId}`;
+  }
   const bv = t.boundVariables;
   const f = (t.fontName && typeof t.fontName === 'object' ? t.fontName : {}) as { family?: unknown; style?: unknown };
   const at = (k: keyof typeof BOUND_FONT, v: unknown): unknown => { const id = boundOf(bv, BOUND_FONT[k]); return id ? `@${id}` : v; };
@@ -1835,15 +1854,34 @@ const typeByBinding = (t: FontRead): string => {
   return stable([font, at('size', t.fontSize), at('weight', t.fontWeight)]);
 };
 const SEGMENT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as const;
-const boundTypeKey = (n: SgNode): string => {
+/**
+ * THE OVERRIDES OVER A STYLE (#4482, review B1 of #4486), read when `overrides` is asked for. A bold or italic set over a
+ * whole styled line (Cmd+B, Cmd+I) keeps the text style and lists the override on its segments (`textStyleOverrides`,
+ * `SEMANTIC_WEIGHT` / `SEMANTIC_ITALIC`), so a styled text read by its style id alone would not see it. With `overrides`,
+ * a styled text also reads the overrides each run lists. A host that cannot list them has the run's resolved face read
+ * instead: a family change leaves the face, and a face that moves reads as an edit, the safe direction.
+ */
+const overrideKey = (n: SgNode): string => {
+  let segs: unknown;
+  try { segs = n.getStyledTextSegments?.(['textStyleOverrides']); } catch { segs = undefined; }
+  if (!Array.isArray(segs)) { const f = read(n, 'fontName') as { style?: unknown } | null | undefined; return `face:${String(f?.style)}`; }
+  return segs.map((s) => { const q = (s ?? {}) as { start?: unknown; end?: unknown; textStyleOverrides?: unknown }; const o = overridesOf(q.textStyleOverrides); return o ? `${String(q.start)}-${String(q.end)}:${o}` : ''; })
+    .filter(Boolean).join(';');
+};
+const boundTypeKey = (n: SgNode, overrides = false): string => {
   const own: FontRead = { fontName: read(n, 'fontName'), fontSize: read(n, 'fontSize'), fontWeight: read(n, 'fontWeight'), textStyleId: read(n, 'textStyleId'), boundVariables: read(n, 'boundVariables') };
-  if (![own.fontName, own.fontSize, own.fontWeight, own.textStyleId].some((v) => typeof v === 'symbol')) return typeByBinding(own);
-  // Mixed: each run as its own, with its bindings where the host can list them.
+  if (![own.fontName, own.fontSize, own.fontWeight, own.textStyleId].some((v) => typeof v === 'symbol')) {
+    const key = typeByBinding(own);
+    const over = overrides && typeof own.textStyleId === 'string' && own.textStyleId ? overrideKey(n) : '';
+    return over ? `${key}+${over}` : key;
+  }
+  // Mixed: each run as its own, with its bindings (and, asked, its overrides) where the host can list them.
+  const extra = overrides ? (['boundVariables', 'textStyleOverrides'] as const) : (['boundVariables'] as const);
   let segs: readonly unknown[] | undefined;
-  try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS, 'boundVariables']); } catch { segs = undefined; }
+  try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS, ...extra]); } catch { segs = undefined; }
   if (!segs) { try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS]); } catch { segs = undefined; } }
   if (!Array.isArray(segs)) return 'mixed';
-  return segs.map((s) => { const q = (s ?? {}) as FontRead & { start?: unknown; end?: unknown }; return `${String(q.start)}-${String(q.end)}:${typeByBinding(q)}`; }).join(';');
+  return segs.map((s) => { const q = (s ?? {}) as FontRead & { start?: unknown; end?: unknown }; return `${String(q.start)}-${String(q.end)}:${typeByBinding(q, overrides)}`; }).join(';');
 };
 
 /**
@@ -1860,9 +1898,10 @@ const boundTypeKey = (n: SgNode): string => {
  *
  * `bindings` (#4470) reads each text's type by what it is bound to (`boundTypeKey`) instead of the values it resolves
  * to. Off by default: every print recorded before it (the style guide's tables, the About frame, a usage panel's fourth
- * form) was taken over the resolved values, and is still compared the way it was taken.
+ * form) was taken over the resolved values, and is still compared the way it was taken. `overrides` (#4482) also reads,
+ * with `bindings`, the overrides a styled text lists over its style (`overrideKey`); a table's print asks for it.
  */
-export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean } = {}): Promise<string> => {
+export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean; overrides?: boolean } = {}): Promise<string> => {
   const parts: string[] = [];
   // A TITLE CELL IS NOT AN EDIT (owner decision 15): a designer renames rows there, so a table with a title column
   // leaves the title column out (its cells and its "Name" header, which fills the column), and with it the widths that follow the title column's width: the table's own, its
@@ -1879,7 +1918,7 @@ export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean } =
     const fields = FINGERPRINT_FIELDS.map((k) => stable(read(n, k)));
     // A text set in more than one font reads `figma.mixed` on these; its segments carry each run's font instead.
     const font = FONT_FIELDS.map((k) => read(n, k));
-    const fontKey = opts.bindings ? boundTypeKey(n) : font.some((v) => typeof v === 'symbol')
+    const fontKey = opts.bindings ? boundTypeKey(n, !!opts.overrides) : font.some((v) => typeof v === 'symbol')
       ? stable(n.getStyledTextSegments?.([...FONT_FIELDS]) ?? 'mixed') : stable(font);
     let main = '';
     if (n.type === 'INSTANCE') {
@@ -3003,7 +3042,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
     wrap.setPluginData?.(ROWS_KEY, JSON.stringify(after));
     // Stamped last, once the table holds everything this run writes: the frame it was written on, and what it holds.
     wrap.setPluginData?.(MARK_KEY, `${String(page.id)}|${String(wrap.id)}`);
-    wrap.setPluginData?.(PRINT_KEY, await fingerprintOf(wrap));
+    wrap.setPluginData?.(PRINT_KEY, await tablePrint(wrap));
     out.push(created
       ? { key: t.key, title: t.title, page: t.page, status: 'created', rows: t.rows.length }
       : { key: t.key, title: t.title, page: t.page, status: 'updated', rows: t.rows.length, diff: diffRows(was, after) });
@@ -3085,14 +3124,14 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
     if (inGroup) {
       const top = topOf(f, p);
       if (!top || top === f || String(top.id) !== inGroup || bar < 0 || mark.slice(0, bar) !== String(p.id)) return 'moved';
-      return (await fingerprintOf(f)) === print ? 'unedited' : 'edited';
+      return (await tablePrintMatches(f, print)) ? 'unedited' : 'edited';
     }
     const parent = f.parent as { id?: unknown } | null | undefined;
     if (!parent || (parent !== p && (p.id === undefined || parent.id !== p.id))) return 'moved';
     if (bar < 0 || mark.slice(0, bar) !== String(p.id)) return 'moved';
     const at = recordOf(f);
     if (!at || !near(num(f.x), at.x) || !near(num(f.y), at.y)) return 'moved';
-    return (await fingerprintOf(f)) === print ? 'unedited' : 'edited';
+    return (await tablePrintMatches(f, print)) ? 'unedited' : 'edited';
   };
   // A REMOVED TABLE'S SUBTREE IS NEVER READ AGAIN (#2704). `framesOn` is gathered before the loop and holds every frame
   // on the page, the frames inside each table too (its grid, its cells, its header instance's sublayers). The host
