@@ -152,10 +152,10 @@ export interface HostSession {
    *  next one lands, and has no `ok`. Folded in as a third variant it would also widen the type it shares
    *  with `applyState`, forcing the theme write to handle a state it can never be in. Kept beside it, `componentState === 'pending'` still means exactly "in flight" and this only
    *  says how far. */
-  readonly componentProgress: { phase: 'build' | 'wire' | 'retry'; done: number; total: number; throttled?: boolean } | null;
+  readonly componentProgress: { phase: 'build' | 'wire' | 'retry'; done: number; total: number } | null;
   /** How far the panel's in-flight style-guide run has got (#1778): `done` of `total` tables, `null` between runs
    *  and before the first reading. A sibling of `styleGuideState` for the `componentProgress` reason: not a verdict. */
-  readonly styleGuideProgress: { done: number; total: number; throttled?: boolean } | null;
+  readonly styleGuideProgress: { done: number; total: number } | null;
   /** What the Build style guides page shows (S11.2): the host's last `style-guide-catalog`, `null` until one arrives.
    *  `error` is the host's words when it could not read the file. */
   readonly styleGuideCatalog: { readonly catalog: StyleGuideCatalog; readonly error: string | null } | null;
@@ -477,7 +477,7 @@ export const reduce = (prev: HostSession, m: HostMessage): HostSession => {
       // Accepted only while the build is in flight. A boundary message still queued behind the verdict
       // would otherwise bring back the fraction the verdict just cleared.
       if (s.componentState !== 'pending') return s;
-      return { ...s, componentProgress: { phase: m.phase, done: m.done, total: m.total, throttled: m.throttled } };
+      return { ...s, componentProgress: { phase: m.phase, done: m.done, total: m.total } };
     case 'run-progress':
       // #3170: the status strip's reading. It belongs to the panel's run, which `main.ts` holds, so it moves no host slot.
       return s;
@@ -485,7 +485,7 @@ export const reduce = (prev: HostSession, m: HostMessage): HostSession => {
       // #1778. The `component-progress` rule: accepted only while the panel's own run is in flight, so a reading
       // still queued behind the verdict cannot bring a finished run's count back.
       if (s.styleGuideState !== 'pending') return s;
-      return { ...s, styleGuideProgress: { done: m.done, total: m.total, throttled: m.throttled } };
+      return { ...s, styleGuideProgress: { done: m.done, total: m.total } };
     case 'prune-result':
       // Three outcomes, told apart by `applied` and `count`: a finished delete, a preview with something
       // to remove (the confirm dialog), or a preview with nothing stale (a pill, never an empty dialog).

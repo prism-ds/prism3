@@ -39,7 +39,7 @@ import { Theme, brandTheme } from './theme';
 import { parseDesignMd } from './design-md';
 import { parseStandardDesignMd, standardToBrandInput, isStandardDesignMd } from './standard-design-md';
 import { buildFidelityReport } from './fidelity';
-import { emitTheme, validateBrandInput } from './emit-dtcg';
+import { emitTheme, fileInDir, validateBrandInput } from './emit-dtcg';
 import type { BrandInput } from './theme';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
@@ -58,12 +58,16 @@ const writeComponentSpecs = (input: BrandInput, resolvedOut: string) => {
   const doc = exportComponentDefs(componentDefs, { brand: input, build });
   const names = componentDefsFileNames(doc.brand!.id);
   const text = JSON.stringify(doc, null, 2) + '\n';
-  writeFileSync(resolve(resolvedOut, names.contracts), text);
-  writeFileSync(resolve(resolvedOut, names.defs), text);
-  writeFileSync(resolve(resolvedOut, names.specs), JSON.stringify(toSpecsComponents(doc), null, 2) + '\n');
-  console.log(`  [written] ${resolve(resolvedOut, names.contracts)}  (${Object.keys(doc.components).length} components)`);
-  console.log(`  [written] ${resolve(resolvedOut, names.defs)}  (the same file under its old name, for one release)`);
-  console.log(`  [written] ${resolve(resolvedOut, names.specs)}`);
+  // #4214: through the write guard `emitTheme` uses, all three checked before the first is written.
+  let at: { contracts: string; defs: string; specs: string };
+  try { at = { contracts: fileInDir(resolvedOut, names.contracts), defs: fileInDir(resolvedOut, names.defs), specs: fileInDir(resolvedOut, names.specs) }; }
+  catch (e) { return fail(`could not write the component specs for '${doc.brand!.id}' to ${resolvedOut}: ${(e as Error).message}`); }
+  writeFileSync(at.contracts, text);
+  writeFileSync(at.defs, text);
+  writeFileSync(at.specs, JSON.stringify(toSpecsComponents(doc), null, 2) + '\n');
+  console.log(`  [written] ${at.contracts}  (${Object.keys(doc.components).length} components)`);
+  console.log(`  [written] ${at.defs}  (the same file under its old name, for one release)`);
+  console.log(`  [written] ${at.specs}`);
 };
 
 const fail = (msg: string): never => {
@@ -199,7 +203,9 @@ const main = () => {
     const stats = emitAndGate(theme, resolvedOut, designPath!, 'standard');
     if (fidelity) {
       const { md, anchorDe } = buildFidelityReport(std, classification, input, theme, stats, xApplied);
-      const reportPath = resolve(resolvedOut, `${theme.id}-fidelity-report.md`);
+      let reportPath: string;
+      try { reportPath = fileInDir(resolvedOut, `${theme.id}-fidelity-report.md`); }   // #4214: the write guard
+      catch (e) { return fail(`could not write the fidelity report for '${theme.id}' to ${resolvedOut}: ${(e as Error).message}`); }
       writeFileSync(reportPath, md);
       console.log(`  [written] ${reportPath}  (anchor ΔE00 ${anchorDe.toFixed(2)})`);
     }

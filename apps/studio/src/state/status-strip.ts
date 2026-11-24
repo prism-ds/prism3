@@ -34,8 +34,6 @@ export type RunReading = {
   readonly item: string | null;
   readonly done: number;
   readonly total: number;
-  /** #4476: the host read its hand-backs as throttled by a hidden Figma window. */
-  readonly throttled?: boolean;
 };
 
 /** The run as the strip follows it: when it started, when the panel last heard from it, the step's last reading, the
@@ -46,25 +44,18 @@ export type StripRun = {
   readonly reading: RunReading | null;
   readonly seen: readonly string[];
   readonly updated: { readonly done: number; readonly total: number; readonly finished: boolean } | null;
-  /** #4476: some reading of this run said the host is throttling it. Kept to the run's end, so the note explains a slow
-   *  run to a designer who comes back to the window. */
-  readonly throttled?: boolean;
 };
 
 export const startStripRun = (now: number): StripRun => ({ startedAt: now, heardAt: now, reading: null, seen: [], updated: null });
 
 /** The run after a reading from it. An update's `work` reading names the set it starts, so the set before it is done. */
 export const withReading = (r: StripRun, m: RunReading, now: number): StripRun => ({
-  ...r, heardAt: now, reading: m, throttled: !!r.throttled || !!m.throttled,
+  ...r, heardAt: now, reading: m,
   seen: m.run === 'update' && m.phase === 'work' && m.item && !r.seen.includes(m.item) ? [...r.seen, m.item] : r.seen,
 });
 
-/** #4476: the Build set and Style guides progress line, with the throttling note after it once the host reads the run as
- *  throttled (`STRIP_COPY.throttled`, the one copy of the words). */
-export const withThrottleNote = (line: string, throttled: boolean | undefined): string => (throttled ? `${line} · ${STRIP_COPY.throttled}` : line);
-
 /** The run after it was heard from without a reading of its own (a build's or a style guide's progress, a step's start). */
-export const heard = (r: StripRun, now: number, throttled = false): StripRun => ({ ...r, heardAt: now, throttled: !!r.throttled || throttled });
+export const heard = (r: StripRun, now: number): StripRun => ({ ...r, heardAt: now });
 
 /** The run as a step ends and the next starts: the update's count is kept for the verdict, the step's reading goes. */
 export const stepEnded = (r: StripRun, now: number): StripRun => ({
@@ -146,9 +137,6 @@ export const STRIP_COPY = {
   theCheck: 'the check',
   of: (n: number, of: number): string => `${n} of ${of}`,
   still: (what: string): string => `Still working on ${what}`,
-  /** #4476 DRAFT (OWNER DECISION pending): a run's progress line once the host throttles its hand-backs, because Figma's
-   *  window is hidden. The Build set and Style guides lines carry it too (`withThrottleNote`). */
-  throttled: 'Figma slows plugins while its window is hidden — keep it visible to finish sooner.',
   stopAfter: (what: string): string => `Stop after ${what}`,
   stopping: (what: string): string => `Stopping after ${what}…`,
   /** Each step's words once it is done, for the verdict line. */
@@ -232,8 +220,7 @@ export const stripView = (x: {
       count = STRIP_COPY.of(step.queue.at, step.queue.of);
       fill = step.queue.of ? (step.queue.at - 1) / step.queue.of : null;
     }
-    // #4476: a throttled run says why it is slow, in place of "Still working on…", which it explains.
-    const still = run.throttled ? STRIP_COPY.throttled : x.now - run.heardAt >= SILENCE_MS ? STRIP_COPY.still(on) : null;
+    const still = x.now - run.heardAt >= SILENCE_MS ? STRIP_COPY.still(on) : null;
     return { kind: 'running', what, n: count ? `${count} · ${clock}` : clock, fill, still,
       stop: { label: step.stopping ? STRIP_COPY.stopping(stopOn) : STRIP_COPY.stopAfter(stopOn), disabled: step.stopping } };
   }

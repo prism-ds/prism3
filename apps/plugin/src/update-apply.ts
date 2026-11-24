@@ -810,7 +810,7 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
       ...(opts.description ? { description: opts.description } : {}),
       ...(opts.yieldTo ? { yieldTo: opts.yieldTo } : {}),
       // #3170 Q3170.5 A: the plugin passes 1, so `yieldTo` is asked after every member and hands the thread back once
-      // about 50 ms of work has run (the run's `handBack` in `main.ts`, #4476). The executor's own chunking is unchanged.
+      // about 50 ms of work has run (`main.ts` `paced`). The executor's own chunking is unchanged.
       ...(opts.chunk ? { chunk: opts.chunk } : {}),
       ...(pageFor(t, live) ? { targetPage: pageFor(t, live) } : {}),
       // A single-component def is built and updated as the build makes it: separate components, no set (#2296).

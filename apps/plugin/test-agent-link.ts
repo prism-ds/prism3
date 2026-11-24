@@ -569,11 +569,8 @@ section('one-run — a style guide asked for from one entry point while the othe
     for (let i = 0; i < 20 && held.length; i++) { for (const fn of held.splice(0)) fn(); for (let j = 0; j < 40; j++) await settle(); }
   };
   const r0 = root as Record<string, unknown>;
-  const saved = { load: host.loadAllPagesAsync, vars: host.variables, find: r0.findAllWithCriteria, pages: root.children };
+  const saved = { load: host.loadAllPagesAsync, vars: host.variables, find: r0.findAllWithCriteria };
   host.loadAllPagesAsync = async () => undefined;
-  // #4476: the run hands back between tables only once 50 ms of work has run, and this file's one table costs nothing. A
-  // page to load is a hand-back at every pass while the host is prompt (`handBack`'s `every`), so the run holds there.
-  root.children = [{ name: 'Cover', type: 'PAGE', children: [], loadAsync: async () => undefined }];
   // The style guide saves a named version before its first table (#2828); this fake host takes it and records nothing.
   host.saveVersionHistoryAsync = async () => ({ id: "v" });
   host.variables = {
@@ -631,7 +628,7 @@ section('one-run — a style guide asked for from one entry point while the othe
   ok(results_().length === 1 && !posted.some((m) => m.type === 'refused'), 'one-run: once both have reported, the next click runs');
 
   delete host.saveVersionHistoryAsync;
-  host.loadAllPagesAsync = saved.load; host.variables = saved.vars; r0.findAllWithCriteria = saved.find; root.children = saved.pages;
+  host.loadAllPagesAsync = saved.load; host.variables = saved.vars; r0.findAllWithCriteria = saved.find;
   g.setTimeout = pollTimeout as unknown as typeof setTimeout;
 }
 

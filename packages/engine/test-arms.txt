@@ -254,7 +254,6 @@ apps/plugin/test-style-guides-page.mjs #3553
 apps/plugin/test-style-guides-page.mjs #4480
 apps/plugin/test-style-renames.ts #1040
 apps/plugin/test-tabs-indicator.ts #3344
-apps/plugin/test-throttle.ts #724
 apps/plugin/test-update-apply.ts #2296
 apps/plugin/test-update-apply.ts #2328
 apps/plugin/test-update-apply.ts #2343
@@ -648,7 +647,6 @@ apps/studio/test-chrome.mjs #4225
 apps/studio/test-chrome.mjs #4226
 apps/studio/test-chrome.mjs #4228
 apps/studio/test-chrome.mjs #4235
-apps/studio/test-chrome.mjs #4476
 apps/studio/test-chrome.mjs #4481
 apps/studio/test-chrome.mjs #533
 apps/studio/test-chrome.mjs #574
@@ -874,6 +872,7 @@ packages/engine/mcp-test.ts #4147
 packages/engine/mcp-test.ts #4150
 packages/engine/mcp-test.ts #4151
 packages/engine/mcp-test.ts #4156
+packages/engine/mcp-test.ts #4214
 packages/engine/test.ts #1007
 packages/engine/test.ts #1009
 packages/engine/test.ts #1010

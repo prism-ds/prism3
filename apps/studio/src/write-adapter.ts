@@ -64,13 +64,13 @@ export type HostMessage =
   | { kind: 'style-guide-catalog'; catalog: StyleGuideCatalog; error: string | null }
   | { kind: 'style-guide-tables'; tables: { key: string; title: string; page: string }[] }
   | { kind: 'style-guide-table'; index: number; status: 'drawing' | 'done' | 'failed'; reason: string | null }
-  | { kind: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number; throttled: boolean }
+  | { kind: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number }
   // #1778 — how far a style-guide run has got: `done` of `total` tables. Non-terminal, like
   // `component-progress`, so it belongs in the style guide's pending state, never its verdict slot.
-  | { kind: 'style-guide-progress'; done: number; total: number; throttled: boolean }
+  | { kind: 'style-guide-progress'; done: number; total: number }
   // #3170 part 2 — how far a run the panel started has got, for the status strip (`state/status-strip.ts`). Non-terminal,
   // like `component-progress`: never a verdict.
-  | { kind: 'run-progress'; run: 'read' | 'update' | 'apply-theme' | 'capture' | 'adopt'; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number; throttled: boolean }
+  | { kind: 'run-progress'; run: 'read' | 'update' | 'apply-theme' | 'capture' | 'adopt'; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number }
   // #1521 — a prune preview (`applied: false`, `count` = what would be removed) or its outcome
   // (`applied: true`, `count` = what was removed). The UI reads `count` on a preview to decide
   // whether to open its confirm dialog, and `applied` to tell a preview from a verdict.
@@ -546,8 +546,7 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
     // so a degraded one is still worth showing; a progress reading is one of dozens and the next one
     // is milliseconds away, so a "0 of 0" is strictly worse than the previous reading staying put.
     const r = progressReading(m);
-    // #4476: `throttled` is true only when the host says so; anything else reads as not throttled.
-    return r ? { kind: 'component-progress', ...r, chunkMs: count(m.chunkMs) ?? 0, throttled: m.throttled === true } : null;
+    return r ? { kind: 'component-progress', ...r, chunkMs: count(m.chunkMs) ?? 0 } : null;
   },
   // #3170. Validated and dropped when unusable, for the `component-progress` reason above: a reading that says nothing
   // usable leaves the strip on the last one.
@@ -557,12 +556,12 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
     const done = count(m.done);
     const total = count(m.total);
     if (!run || !phase || done === null || total === null || done > total) return null;
-    return { kind: 'run-progress', run, phase, item: isId(m.item) ? m.item : null, done, total, throttled: m.throttled === true };
+    return { kind: 'run-progress', run, phase, item: isId(m.item) ? m.item : null, done, total };
   },
   'style-guide-progress': (m) => {
     // #1778. Validated and dropped when unusable, for the `component-progress` reason above.
     const r = tableReading(m);
-    return r ? { kind: 'style-guide-progress', ...r, throttled: m.throttled === true } : null;
+    return r ? { kind: 'style-guide-progress', ...r } : null;
   },
   'prune-result': (m) => {
     // #1521. `count` and `applied` are validated at the boundary like the other numeric/flag fields

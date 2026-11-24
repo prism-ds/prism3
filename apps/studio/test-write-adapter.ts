@@ -117,24 +117,14 @@ accepts('style-guide-result without a headline', { type: 'style-guide-result', o
   { kind: 'style-guide-result', ok: true, headline: '✓ style guide written', summary: 't' , lines: null, retired: [] });
 // #3189: an agent's Capture baseline and Adopt readings reach the strip; an unknown run is dropped.
 accepts('run-progress from Capture baseline', { type: 'run-progress', run: 'capture', phase: 'work', item: 'button', done: 2, total: 60 },
-  { kind: 'run-progress', run: 'capture', phase: 'work', item: 'button', done: 2, total: 60, throttled: false });
+  { kind: 'run-progress', run: 'capture', phase: 'work', item: 'button', done: 2, total: 60 });
 accepts('run-progress from Adopt', { type: 'run-progress', run: 'adopt', phase: 'check', item: null, done: 0, total: 60 },
-  { kind: 'run-progress', run: 'adopt', phase: 'check', item: null, done: 0, total: 60, throttled: false });
+  { kind: 'run-progress', run: 'adopt', phase: 'check', item: null, done: 0, total: 60 });
 drops('run-progress from an unknown run', wire({ type: 'run-progress', run: 'paint', phase: 'work', item: null, done: 0, total: 1 }));
 accepts('component-progress', { type: 'component-progress', phase: 'wire', done: 3.7, total: 10, chunkMs: 41 },
-  { kind: 'component-progress', phase: 'wire', done: 3, total: 10, chunkMs: 41, throttled: false });
+  { kind: 'component-progress', phase: 'wire', done: 3, total: 10, chunkMs: 41 });
 accepts('style-guide-progress', { type: 'style-guide-progress', done: 6.4, total: 22, tableMs: 900 },
-  { kind: 'style-guide-progress', done: 6, total: 22, throttled: false });
-// #4476: `throttled` is carried only as the host's literal `true`; anything else is not throttled. Mutation: the adapter
-// dropping the field (or coercing it) → these three `throttled` arms fail by name.
-accepts('component-progress, throttled', { type: 'component-progress', phase: 'build', done: 3, total: 10, chunkMs: 41, throttled: true },
-  { kind: 'component-progress', phase: 'build', done: 3, total: 10, chunkMs: 41, throttled: true });
-accepts('style-guide-progress, throttled', { type: 'style-guide-progress', done: 28, total: 45, tableMs: 900, throttled: true },
-  { kind: 'style-guide-progress', done: 28, total: 45, throttled: true });
-accepts('run-progress, throttled', { type: 'run-progress', run: 'update', phase: 'work', item: 'button', done: 2, total: 9, throttled: true },
-  { kind: 'run-progress', run: 'update', phase: 'work', item: 'button', done: 2, total: 9, throttled: true });
-accepts('style-guide-progress, throttled as a word, not throttled', { type: 'style-guide-progress', done: 1, total: 2, tableMs: 1, throttled: 'yes' },
-  { kind: 'style-guide-progress', done: 1, total: 2, throttled: false });
+  { kind: 'style-guide-progress', done: 6, total: 22 });
 accepts('agent-progress (a style guide\'s table reading)', { type: 'agent-progress', id: 'a1', progress: { at: 't', phase: 'table', done: 6, total: 22, chunkMs: 900 } },
   { kind: 'agent-progress', id: 'a1', phase: 'table', done: 6, total: 22 });
 accepts('prune-result (preview)', { type: 'prune-result', ok: true, applied: false, count: 5, summary: 'r' },

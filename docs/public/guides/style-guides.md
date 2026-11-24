@@ -26,7 +26,7 @@ Write the theme first if you want the color tables to show contrast. The contras
 2. Tick **Style guides**: "Drawn with the settings in Docs. A rerun updates each table in place." It is ticked by default only on a file that isn't set up yet. <!-- src: apps/studio/src/state/update-file.ts:423-426 --> Beside it, the row says how many tables the run will draw, such as "2 tables". <!-- src: apps/studio/src/state/update-file.ts:429 -->
 3. Choose **Update file**.
 
-The status strip says "Style guides drawn" when the run ends, and the Activity drawer lists each table. If the run went wrong, the drawer's **Update again** opens Update file again. <!-- src: apps/studio/src/state/status-strip.ts:155-156 --> <!-- src: apps/studio/src/shell/activity.ts:252 -->
+The status strip says "Style guides drawn" when the run ends, and the Activity drawer lists each table. If the run went wrong, the drawer's **Update again** opens Update file again. <!-- src: apps/studio/src/state/status-strip.ts:143-144 --> <!-- src: apps/studio/src/shell/activity.ts:252 -->
 
 *[Screenshot placeholder: the Style guides tab in Docs, with groups ticked and the options column.]*
 
