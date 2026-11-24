@@ -3,16 +3,22 @@
  *
  * Loads one emitted shadcn CSS file into headless Chromium and reads colors back as 8-bit sRGB, through the browser's
  * own CSS parser and its canvas, so neither gate converts a color with `color.ts`, the code the projector uses.
+ * `shadows` reads a `box-shadow` back the same way: Chromium's computed layers, each color painted on the canvas (#4355).
  *
  * Playwright is loaded at run time from the workspace (it is an `apps/studio` and `apps/plugin` devDependency, #767),
  * the way `tools/block-capture` loads it. The engine package itself still declares no dependency.
  */
 export type Rgba = [number, number, number, number];
+/** One `box-shadow` layer as Chromium computes it: lengths in px, the color painted like `read` (opaque rgb + raw alpha). */
+export type ShadowLayer = { inset: boolean; lengths: number[]; rgba: Rgba };
 export type ShadcnPage = {
   /** Each expression's color, drawn alone on a cleared canvas: [r, g, b, alpha byte]. */
   read: (mode: 'light' | 'dark', exprs: readonly string[]) => Promise<Rgba[]>;
   /** Each [ink, ground] pair, the ground drawn opaque and the ink composited over it: the opaque [r, g, b] pair. */
   over: (mode: 'light' | 'dark', pairs: ReadonlyArray<readonly [string, string]>) => Promise<Array<{ ink: Rgba; ground: Rgba }>>;
+  /** Each expression set as an element's `box-shadow`, read back from the computed style, split into layers;
+   *  `null` when Chromium computed `none` (an unset or unparsed value). */
+  shadows: (mode: 'light' | 'dark', exprs: readonly string[]) => Promise<Array<ShadowLayer[] | null>>;
   close: () => Promise<void>;
 };
 
@@ -34,7 +40,26 @@ export const openShadcnPage = async (css: string): Promise<ShadcnPage> => {
     const g = cv.getContext('2d', { colorSpace: 'srgb', willReadFrequently: true });
     const resolve = (expr) => { el.style.color = ''; el.style.color = expr; return getComputedStyle(el).color; };
     const px = () => Array.from(g.getImageData(0, 0, 1, 1).data);
+    // Top-level commas only: a color function's own commas (rgba(…)) stay inside its layer.
+    const splitTop = (s) => { const out = []; let d = 0, cur = '';
+      for (const ch of s) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && d === 0) { out.push(cur.trim()); cur = ''; } else cur += ch; }
+      if (cur.trim()) out.push(cur.trim()); return out; };
+    const paint = (c) => { g.clearRect(0, 0, 1, 1); g.fillStyle = resolve(c); g.fillRect(0, 0, 1, 1); return px(); };
     window.__shadcn = {
+      shadows: (exprs) => exprs.map((e) => {
+        el.style.boxShadow = ''; el.style.boxShadow = e;
+        const cs = getComputedStyle(el).boxShadow;
+        if (!cs || cs === 'none') return null;
+        return splitTop(cs).map((layer) => {
+          const fn = /[a-z-]+\\([^()]*(?:\\([^()]*\\)[^()]*)*\\)/i.exec(layer);
+          const color = fn ? fn[0] : 'transparent';
+          const rest = (fn ? layer.replace(color, ' ') : layer).trim().split(/\\s+/);
+          const inset = rest.includes('inset');
+          const lengths = rest.filter((t) => t !== 'inset').map((t) => parseFloat(t));
+          const raw = paint(color), opaque = paint('oklch(from ' + color + ' l c h / 1)');
+          return { inset, lengths, rgba: [opaque[0], opaque[1], opaque[2], raw[3]] };
+        });
+      }),
       read: (exprs) => exprs.map((e) => { g.clearRect(0, 0, 1, 1); g.fillStyle = resolve(e); g.fillRect(0, 0, 1, 1); return px(); }),
       over: (pairs) => pairs.map(([ink, ground]) => {
         g.clearRect(0, 0, 1, 1);
@@ -45,11 +70,12 @@ export const openShadcnPage = async (css: string): Promise<ShadcnPage> => {
       }),
     };
   })()`);
-  const call = (fn: 'read' | 'over', mode: 'light' | 'dark', arg: unknown) =>
+  const call = (fn: 'read' | 'over' | 'shadows', mode: 'light' | 'dark', arg: unknown) =>
     page.evaluate(`(() => { document.documentElement.className = ${JSON.stringify(mode === 'dark' ? 'dark' : '')}; return window.__shadcn.${fn}(${JSON.stringify(arg)}); })()`);
   return {
     read: (mode, exprs) => call('read', mode, exprs),
     over: (mode, pairs) => call('over', mode, pairs),
+    shadows: (mode, exprs) => call('shadows', mode, exprs),
     close: () => browser.close(),
   };
 };

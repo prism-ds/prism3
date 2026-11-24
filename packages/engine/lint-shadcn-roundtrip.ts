@@ -17,9 +17,17 @@
  *     instead, so the two read different files by different code.
  * The role for each variable is the map's claim; gate 4 holds that claim, and this gate holds the value.
  *
+ * SHADOWS (#4355). The Tailwind theme also sets `--shadow-<rung>-value` in `:root` and `.dark`. Each is set as a
+ * `box-shadow` in Chromium and read back from the computed style (`page.shadows`): per layer, inset, the four lengths
+ * in px and the color painted on the canvas. EXPECTED is the `shadow.<rung>` value in `<brand>.tokens.json` for that
+ * mode, through the same alias walk (`expectedRaw`) and color parser as the colors, never `emit-tailwind.ts`'s
+ * `shadowCss` or the handoff it reads. The rung for each variable is `TAILWIND_SHADOWS`, the map's claim.
+ *
  * MUTATIONS: round L to two places in `emit-shadcn.ts` and this fails `prism3 light popover: #e9e9e9 → #eaeaea` (or a
  * neighbor) by name. Swap the modes in `emit-tailwind.ts` (light variables in `.dark`) and this fails
- * `prism3 tailwind light background: …` by name.
+ * `prism3 tailwind light background: …` by name. Swap only the shadow variables (`shadows('dark')` in `:root`,
+ * `shadows('light')` in `.dark`) and this fails `prism3 tailwind light shadow-xs-value layer 1: alpha 26 → 8` (or a
+ * neighbor) by name.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { emitShadcn, handoffBrands } from './emit-shadcn.ts';
 import { emitTailwind } from './emit-tailwind.ts';
 import { SHADCN_COLOR_VARS } from './projections/shadcn.ts';
+import { shadowModeVar, TAILWIND_SHADOWS } from './projections/tailwind.ts';
 import { openShadcnPage } from './shadcn-browser.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,8 +44,8 @@ const OUT = resolve(here, 'out');
 
 type Node = { $value?: unknown; $extensions?: { prism3?: { modes?: Record<string, { $value?: unknown }> } } };
 
-/** The role's emitted value in `mode`, from the full tree, aliases followed. */
-export const expectedValue = (root: string, tree: Record<string, unknown>, role: string, mode: 'light' | 'dark'): string => {
+/** The role's emitted value in `mode`, from the full tree, aliases followed: a string, or a composite as stored. */
+export const expectedRaw = (root: string, tree: Record<string, unknown>, role: string, mode: 'light' | 'dark'): unknown => {
   const at = (path: string): Node | undefined => {
     let n: unknown = tree;
     for (const k of path.split('.')) n = n && typeof n === 'object' ? (n as Record<string, unknown>)[k] : undefined;
@@ -47,12 +56,31 @@ export const expectedValue = (root: string, tree: Record<string, unknown>, role:
   let v: unknown = mode === 'dark' ? (first.$extensions?.prism3?.modes?.dark?.$value ?? first.$value) : first.$value;
   for (let hop = 0; hop < 16; hop++) {
     const m = typeof v === 'string' ? /^\{([^}]+)\}$/.exec(v) : null;
-    if (!m) return String(v);
+    if (!m) return v;
     const path = m[1]!.startsWith(`${root}.`) ? m[1]!.slice(root.length + 1) : m[1]!;
     v = at(path)?.$value;
   }
   throw new Error(`${role}: alias chain too deep`);
 };
+
+/** The role's emitted value in `mode` as a string (a color). */
+export const expectedValue = (root: string, tree: Record<string, unknown>, role: string, mode: 'light' | 'dark'): string =>
+  String(expectedRaw(root, tree, role, mode));
+
+/** A DTCG dimension (`"4px"`, `"0.25rem"` or `{ value, unit }`) in CSS px, the unit Chromium computes. */
+export const expectedPx = (d: unknown): number => {
+  const o = d && typeof d === 'object' ? d as { value?: unknown; unit?: unknown } : null;
+  const [n, unit] = o ? [Number(o.value), String(o.unit)] : (() => {
+    const m = /^(-?[0-9.]+)(px|rem)?$/.exec(String(d).trim());
+    if (!m) throw new Error(`unreadable emitted dimension ${JSON.stringify(d)}`);
+    return [Number(m[1]), m[2] ?? 'px'];
+  })();
+  if (unit === 'px') return n;
+  if (unit === 'rem') return n * 16;
+  throw new Error(`unreadable emitted dimension ${JSON.stringify(d)}`);
+};
+
+type ExpectedLayer = { color: unknown; offsetX: unknown; offsetY: unknown; blur: unknown; spread: unknown; inset?: boolean };
 
 /** `#rrggbb[aa]` or `rgb[a](…)` as [r, g, b, alpha byte]. */
 export const expectedRgba = (value: string): [number, number, number, number] => {
@@ -71,8 +99,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   emitShadcn(tmp);
   emitTailwind(tmp);
   const failures: string[] = [];
-  let checked = 0, withAlpha = 0, files = 0;
+  let checked = 0, withAlpha = 0, files = 0, shadowFiles = 0, shadowLayers = 0;
   const vars = Object.entries(SHADCN_COLOR_VARS);
+  const shadowVars = Object.entries(TAILWIND_SHADOWS);
   const brands = handoffBrands();
   for (const brand of brands) {
     const full = JSON.parse(readFileSync(join(OUT, `${brand}.tokens.json`), 'utf8')) as Record<string, Record<string, unknown>>;
@@ -94,19 +123,50 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
             else if (got[0] !== want[0] || got[1] !== want[1] || got[2] !== want[2]) failures.push(`${label} ${mode} ${k}: ${hex(want)} → ${hex(got)}`);
             if (gotAlpha !== want[3]) failures.push(`${label} ${mode} ${k}: alpha ${want[3]} → ${gotAlpha}`);
           });
+          // The shadow arm (#4355): only the Tailwind theme carries shadow variables.
+          if (file.endsWith('.theme.css')) {
+            const read = await page.shadows(mode, shadowVars.map(([k]) => `var(--${shadowModeVar(k)})`));
+            shadowFiles++;
+            shadowVars.forEach(([k, role], i) => {
+              const name = `${label} ${mode} ${shadowModeVar(k)}`;
+              const raw = expectedRaw(root, full[root]!, role, mode);
+              const want = (Array.isArray(raw) ? raw : [raw]) as ExpectedLayer[];
+              const got = read[i];
+              if (!got) { failures.push(`${name}: computed none (unset or unparsed)`); return; }
+              if (got.length !== want.length) { failures.push(`${name}: ${want.length} layers → ${got.length}`); return; }
+              want.forEach((w, j) => {
+                const at = `${name} layer ${j + 1}`, g = got[j]!;
+                shadowLayers++;
+                const color = expectedRgba(typeof w.color === 'string' && /^\{/.test(w.color) ? expectedValue(root, full[root]!, w.color.slice(1, -1).replace(`${root}.`, ''), mode) : String(w.color));
+                const lengths = [w.offsetX, w.offsetY, w.blur, w.spread].map(expectedPx);
+                if (Boolean(w.inset) !== g.inset) failures.push(`${at}: inset ${Boolean(w.inset)} → ${g.inset}`);
+                if (g.lengths.length !== 4 || lengths.some((v, n) => Math.abs(v - g.lengths[n]!) > 0.01)) {
+                  failures.push(`${at}: lengths ${lengths.join(' ')} → ${g.lengths.join(' ')}`);
+                }
+                if (g.rgba[0] !== color[0] || g.rgba[1] !== color[1] || g.rgba[2] !== color[2]) failures.push(`${at}: ${hex(color)} → ${hex(g.rgba)}`);
+                if (g.rgba[3] !== color[3]) failures.push(`${at}: alpha ${color[3]} → ${g.rgba[3]}`);
+              });
+            });
+          }
         }
       } finally { await page.close(); }
     }
   }
   // Both files per brand must have been read: a scope that silently dropped the Tailwind theme would pass on half.
   if (files !== brands.length * 2) failures.push(`read ${files} files, expected ${brands.length * 2} (shadcn + tailwind per brand)`);
+  // The shadow arm must have read every Tailwind theme in both modes, and found layers to compare (docs/34: represented).
+  if (shadowFiles !== brands.length * 2) failures.push(`shadow arm read ${shadowFiles} theme modes, expected ${brands.length * 2}`);
+  if (!shadowVars.length || shadowLayers === 0) failures.push('shadow arm compared no layers');
   if (failures.length) {
     console.error(`✗ shadcn round trip: ${failures.length} of ${checked} values do not land on their emitted color`);
     for (const f of failures) console.error(`    ${f}`);
     console.error('\n  Fix: a `<brand>` line is emit-shadcn.ts losing a channel (raise toOklchCss precision); a `<brand> tailwind` line is\n' +
-      '  emit-tailwind.ts writing a value that is not the brand\'s color in that mode (check which mode block it writes).');
+      '  emit-tailwind.ts writing a value that is not the brand\'s color in that mode (check which mode block it writes);\n' +
+      '  a `shadow-<rung>-value` line is emit-tailwind.ts writing a shadow that is not the brand\'s `shadow.<rung>` in that mode.');
     process.exit(1);
   }
   console.log(`✓ shadcn round trip — ${checked} values over ${brands.length} brands × 2 files (shadcn, tailwind) × 2 modes × ` +
-    `${vars.length} variables, each parsed by Chromium back to its emitted 8-bit color (${withAlpha} with alpha).`);
+    `${vars.length} variables, each parsed by Chromium back to its emitted 8-bit color (${withAlpha} with alpha); ` +
+    `${shadowLayers} shadow layers over ${shadowFiles} Tailwind theme modes × ${shadowVars.length} shadows, each computed ` +
+    'by Chromium back to its emitted lengths and color.');
 }
