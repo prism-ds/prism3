@@ -62,6 +62,8 @@ export interface PlatformExport {
   extension: string;
   /** MIME type */
   mimeType: string;
+  /** Token paths the format had no form for and left out of this file (prism3 #3886), for the export footer. */
+  omitted?: string[];
 }
 
 /**

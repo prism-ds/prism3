@@ -158,6 +158,40 @@ export class CSSTokenTransformer implements TokenTransformer {
     }
   }
 
+  /**
+   * prism3 #3886: a DTCG `cubicBezier` (`[x1, y1, x2, y2]`) is CSS's `cubic-bezier()`. An alias stays a `var()`.
+   */
+  transformCubicBezier(token: DTCGToken): string | null {
+    const value = token.$value as unknown;
+    if (typeof value === 'string' && value.charAt(0) === '{') {
+      return this.aliasToVar(value.slice(1, -1));
+    }
+    if (Array.isArray(value) && value.length === 4 && value.every(n => typeof n === 'number')) {
+      return `cubic-bezier(${value.join(', ')})`;
+    }
+    return null;
+  }
+
+  /**
+   * prism3 #3886: a DTCG `duration` is written in `ms`. The object form (`{ value, unit }`) is converted, seconds
+   * included; a string such as `"50ms"` is already CSS. An alias stays a `var()`.
+   */
+  transformDuration(token: DTCGToken): string | null {
+    const value = token.$value as unknown;
+    if (typeof value === 'string') {
+      return value.charAt(0) === '{' ? this.aliasToVar(value.slice(1, -1)) : value;
+    }
+    if (value && typeof value === 'object' && typeof (value as { value?: unknown }).value === 'number') {
+      const d = value as { value: number; unit?: string };
+      const ms = d.unit === 's' ? d.value * 1000 : d.value;
+      return `${Math.round(ms * 1000) / 1000}ms`;
+    }
+    if (typeof value === 'number') {
+      return `${value}ms`;
+    }
+    return null;
+  }
+
   transformGeneric(token: DTCGToken, path: string, type: string): string {
     const value = token.$value;
 
@@ -248,6 +282,7 @@ export class CSSFormatExporter extends BaseFormatExporter {
     (this.transformer as CSSTokenTransformer).setPrefix(prefix);
 
     const lines: string[] = [];
+    const omitted: string[] = [];
 
     // Add header comment with mode name if available
     const modeName = tokens.$extensions?.figma?.mode;
@@ -267,6 +302,11 @@ export class CSSFormatExporter extends BaseFormatExporter {
         } else {
           const cssPath = toCSSVariableName(path, prefix);
           const value = this.transformToken(token, path);
+          // prism3 #3886: a value with no CSS form is left out and named, never written as JSON.
+          if (value === null) {
+            omitted.push(path);
+            return;
+          }
           lines.push(`  --${cssPath}: ${value};`);
         }
       });
@@ -289,7 +329,11 @@ export class CSSFormatExporter extends BaseFormatExporter {
 
     const content = lines.join('\n');
 
-    return [this.createExport('tokens.css', content, 'css', 'text/css')];
+    const out = this.createExport('tokens.css', content, 'css', 'text/css');
+    if (omitted.length > 0) {
+      out.omitted = omitted;
+    }
+    return [out];
   }
 
   getSupportedExtensions(): string[] {
@@ -300,7 +344,13 @@ export class CSSFormatExporter extends BaseFormatExporter {
     return 'CSS Custom Properties';
   }
 
-  private transformToken(token: DTCGToken, path: string): string {
+  /**
+   * The CSS value of a token, or null when CSS has no form for it (prism3 #3886, owner decision A): easing and
+   * durations have one; any other value that is an object or an array (a gradient, a spring, a font stack) does not,
+   * and is left out rather than written as JSON.
+   */
+  private transformToken(token: DTCGToken, path: string): string | null {
+    const transformer = this.transformer as CSSTokenTransformer;
     switch (token.$type) {
       case 'color':
         return this.transformer.transformColor(token, path);
@@ -310,8 +360,17 @@ export class CSSFormatExporter extends BaseFormatExporter {
         return this.transformer.transformTypography(token, path);
       case 'shadow':
         return this.transformer.transformShadow(token, path);
-      default:
+      case 'cubicBezier':
+        return transformer.transformCubicBezier(token);
+      case 'duration':
+        return transformer.transformDuration(token);
+      default: {
+        const value = token.$value as unknown;
+        if (value !== null && typeof value === 'object') {
+          return null;
+        }
         return this.transformer.transformGeneric(token, path, token.$type);
+      }
     }
   }
 

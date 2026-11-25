@@ -2108,6 +2108,12 @@ class TokenPressUI {
         const skippedGradients = Array.isArray(result.skippedGradientStyles)
           ? result.skippedGradientStyles
           : [];
+        // prism3 #3884: a solid paint style is not exported yet. prism3 #3886: a
+        // token the CSS format has no form for is left out of the CSS file.
+        const skippedSolids = Array.isArray(result.skippedSolidPaintStyles)
+          ? result.skippedSolidPaintStyles
+          : [];
+        const skippedCss = Array.isArray(result.skippedCssValues) ? result.skippedCssValues : [];
         const notes = [];
         if (skipped.length > 0) {
           // DTCG shadow type cannot represent BACKGROUND_BLUR / LAYER_BLUR;
@@ -2123,6 +2129,12 @@ class TokenPressUI {
           notes.push(
             `Skipped ${skippedGradients.length} layered gradient style(s): ${skippedGradients.join(", ")}`
           );
+        }
+        if (skippedSolids.length > 0) {
+          notes.push(`Skipped ${skippedSolids.length} solid paint style(s): ${skippedSolids.join(", ")}`);
+        }
+        if (skippedCss.length > 0) {
+          notes.push(`Skipped ${skippedCss.length} token(s) in the CSS file: ${skippedCss.join(", ")}`);
         }
         if (notes.length > 0) {
           this.setFooterStatus(`Exported ${result.fileCount} file(s). ${notes.join(". ")}`);
@@ -2143,7 +2155,7 @@ class TokenPressUI {
         // Restore the live token/file summary after the success message
         // has had time to register. Hold the warning longer so the user has
         // time to read the skipped-style names.
-        const summaryDelay = skipped.length > 0 ? 10000 : 4000;
+        const summaryDelay = notes.length > 0 ? 10000 : 4000;
         setTimeout(() => this.updateFooterSummary(), summaryDelay);
       } else {
         this.setFooterStatus(`Export failed: ${result.error}`);

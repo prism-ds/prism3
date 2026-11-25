@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-11-25
+
+A patch release: library bindings inside composites say where they came from,
+the CSS format writes motion values, and two more skips reach the summary.
+
+### Fixed
+- **A composite names a library binding.** A text style, shadow or gradient
+  stop bound to a variable from another library exported the value with no
+  record of where it came from, and a font weight could come out as an alias
+  to an unrelated local variable that held the same weight. Each such
+  sub-property now exports its resolved value, with an `externalAlias` marker
+  per sub-property in `$extensions.figma` (the same fields a whole-token
+  library alias carries, keyed by the sub-property's path, such as
+  `fontWeight` or `0.color`).
+- **The CSS format writes easing and durations.** An easing curve read
+  `[0.2,0,0,1]` and a duration `{"value":100,"unit":"ms"}`. They are now
+  `cubic-bezier(0.2, 0, 0, 1)` and `100ms` (a duration in seconds is
+  converted). A value with no CSS form, such as a gradient or a spring, is
+  left out of `tokens.css` instead of written as JSON, and the footer names it.
+- **The export summary names skipped solid paint styles.** A paint style
+  whose visible paints are solid colors is not exported, and it used to be
+  left out without a word. The footer now names it, beside the other skips.
+
 ## [3.0.2] - 2026-11-24
 
 A patch release: two exports that wrote a wrong or unusable color, and a skip
