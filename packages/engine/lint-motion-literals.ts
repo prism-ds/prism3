@@ -52,7 +52,7 @@
  * defs a recipe governs.
  *
  * WHAT IT CANNOT SEE, stated so it is not trusted past it: a rule that names a real token for the wrong
- * job (`motion.transition.enter` on an exit). The names are checked; the judgment is the reviewer's.
+ * job (`motion.preset.fade` on an exit). The names are checked; the judgment is the reviewer's.
  * Half 3 reads only a reduced role tagged with its direction; an untagged one is not ordered by it.
  *
  * Mutations, each failing by name (recorded in the PR): `200ms` in the skill → DURATION LITERAL;
@@ -316,7 +316,7 @@ const selfCheck = (): string[] => {
     ['bind `motion.duration-ms.200`', 'PRIMITIVE STEP'],
   ];
   for (const [sample, kind] of fires) if (!kinds(sample).includes(kind)) bad.push(`${kind} no longer fires on "${sample}"`);
-  const clean = 'R11 starts `motion.stagger` apart on `motion.transition.enter`; WCAG 2.2.2; a 44px target; the easing role decelerates; #3484.';
+  const clean = 'R11 starts `motion.stagger` apart on `motion.preset.fade`; WCAG 2.2.2; a 44px target; the easing role decelerates; #3484.';
   // Dotted versions stay out of the leading-dot arm (#3564): neither half of `v1.2s` is a duration.
   // #3592: `linear` as a token name, in the skill's list of shape names, and as an English word stays clean.
   const linearNames = 'spin on `motion.easing.linear`; | `motion.easing.*` | `linear`, `standard`, `decelerate` |; a linear bar fills; linear-progress';

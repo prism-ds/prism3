@@ -78,8 +78,8 @@ Use a Toast to confirm something the user did, when the page already shows the c
 
 ### Motion
 
-- **Enter:** An 8px slide up and a fade (motion.transition.enter: motion.duration.normal, motion.easing-role.enter).
-- **Exit:** A fade (motion.transition.exit: motion.duration.fast, motion.easing-role.exit). A replacement plays the exit, then the enter.
+- **Enter:** An 8px slide up and a fade (motion.preset.fade: motion.duration.normal, motion.easing-role.enter).
+- **Exit:** A fade (motion.duration.fast with motion.easing-role.exit). A replacement plays the exit, then the enter.
 - **Reduced motion:** Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal.
 
 ## Content guidelines

@@ -246,9 +246,18 @@ const report = (where: string, diffs: Diff[], kinds: Diff['kind'][]): void => {
 // ── motion: the round trip to the engine's DTCG (#2394) ─────────────────────────────────────────────
 /** The DTCG motion types with a Figma form (#2412). `transition` has none (Q291 4). */
 const MOTION_TYPES = new Set(['duration', 'cubicBezier', 'spring']);
-/** Motion families typed `duration` that have no Figma form yet. `spring-duration` is each spring's CSS settle time
- *  (#3510); the TIMING a Figma spring pairs with is G5 (#3485), named by the owner, and lands with its own arm here. */
-const NO_FIGMA_FORM_YET = new Set(['spring-duration']);
+/** Motion families typed `duration` that have no Figma form yet. Since #2857 a spring's settle time is a hidden TIMING
+ *  primitive (a spring preset's duration aliases it), so none is left; the set stays as the place a new one is named. */
+const NO_FIGMA_FORM_YET = new Set<string>([]);
+/**
+ * #4593, A KNOWN TOKENPRESS FOLD: TokenPress turns any group whose token children's names contain "duration", "delay"
+ * or "easing" into one `transition` composite, so each motion preset's four slots (#2857) come back as a composite at
+ * `motion.preset.<name>` (with the wrong duration and a linear curve). It is exempted exactly: a preset counts as folded
+ * only when the export holds a `transition` at the preset and none of its four slots. The fold count is asserted equal
+ * to the presets the engine emits, so this exemption fails by name the day TokenPress stops folding.
+ */
+const PRESET_SLOTS = ['duration', 'easing', 'delay', 'duration-reduced'];
+const presetFolds: Record<string, { folded: number; presets: number }> = {};
 /** Every DTCG motion leaf with a Figma form under `<root>.motion`, by dotted path, from the engine's own token tree. */
 const dtcgMotion = (brand: string): Map<string, any> => {
   const tree = JSON.parse(readFileSync(join(REPO, 'packages/engine/out', `${brand}.tokens.json`), 'utf8'));
@@ -278,9 +287,15 @@ const motionRoundTrip = (exported: Map<string, Leaf>, dtcg: Map<string, any>): D
     // One mode exports as `shared/`; with more, the emitter's base mode is `Default` and the rest are re-points.
     const mode = file.split('/')[0];
     const first = mode === 'shared' || mode === 'Default';
+    // #4593: the presets TokenPress folded, each exactly (its composite present, none of its slots).
+    const presetGroups = [...new Set([...dtcg.keys()].filter((p) => /\.motion\.preset\.[a-z0-9-]+\.[a-z-]+$/.test(p)).map((p) => p.replace(/\.[a-z-]+$/, '')))];
+    const folded = new Set(presetGroups.filter((g) => exported.get(`${file}#${g}`)?.$type === 'transition' && PRESET_SLOTS.every((sl) => !exported.has(`${file}#${g}.${sl}`))));
+    const tally = (presetFolds[file + '|' + dtcg.size] ??= { folded: 0, presets: 0 });
+    tally.folded = folded.size; tally.presets = presetGroups.length;
     for (const [k, a] of exported) {
       const [f, path] = k.split('#');
       if (f !== file) continue;
+      if (folded.has(path)) continue;
       const leaf = dtcg.get(path);
       if (!leaf) { out.push({ kind: 'ADDED', key: k, detail: `${a.$type} ${J(a.$value)} — no motion token with a Figma form at this path in the engine's DTCG` }); continue; }
       if (a.$type !== leaf.$type) { out.push({ kind: 'RETYPED', key: k, detail: `export ${a.$type}, engine ${leaf.$type}` }); continue; }
@@ -291,9 +306,17 @@ const motionRoundTrip = (exported: Map<string, Leaf>, dtcg: Map<string, any>): D
         : typeof a.$value?.bounce === 'number' && typeof want?.damping === 'number' && Math.abs(a.$value.bounce - (1 - want.damping)) < 1e-4;
       if (!agree) out.push({ kind: 'VALUE', key: k, detail: `export ${J(a.$value)}, engine ${J(want)}` });
     }
-    for (const path of dtcg.keys()) if (!exported.has(`${file}#${path}`)) out.push({ kind: 'REMOVED', key: `${file}#${path}`, detail: `engine ${J(dtcg.get(path).$value)}, not in the export` });
+    for (const path of dtcg.keys()) if (!exported.has(`${file}#${path}`) && !folded.has(path.replace(/\.[a-z-]+$/, ''))) out.push({ kind: 'REMOVED', key: `${file}#${path}`, detail: `engine ${J(dtcg.get(path).$value)}, not in the export` });
   }
   return out;
+};
+/** #4593: every preset the engine emits came back folded, and there are ten. Fails by name once TokenPress stops
+ *  folding, so the exemption above cannot outlive the defect. Reads and clears the tallies `motionRoundTrip` left. */
+const presetFoldHolds = (brand: string): void => {
+  const tallies = Object.values(presetFolds);
+  for (const k of Object.keys(presetFolds)) delete presetFolds[k];
+  ok(tallies.length > 0 && tallies.every((t) => t.presets === 10 && t.folded === t.presets),
+    `${brand} motion: #4593 the known TokenPress fold still fires on every preset, so its exemption is still needed (${JSON.stringify(tallies)})`);
 };
 /** The floors, per type: a brand whose DTCG has none of one would make that arm vacuous. */
 const MIN_MOTION: Record<string, number> = { duration: 20, cubicBezier: 10, spring: 3 };
@@ -480,6 +503,7 @@ for (const brand of GATED) {
     motionFloors(brand, motion);
     report(`${brand} motion, Apply Theme's file → DTCG`, motionRoundTrip(actual, motion), ['ADDED', 'REMOVED', 'RETYPED', 'VALUE']);
     report(`${brand} motion, the emission → DTCG`, motionRoundTrip(expected, motion), ['ADDED', 'REMOVED', 'RETYPED', 'VALUE']);
+    presetFoldHolds(brand);
     // Text spacing, both exports against the engine's DTCG (#2423).
     const textSpacing = dtcgTextSpacing(brand);
     textSpacingFloors(brand, textSpacing);
@@ -506,6 +530,7 @@ for (const brand of Object.keys(EXCLUDED).filter((id) => discovered.includes(id)
     motionFloors(brand, motion);
     const emitted = leavesOf((await runTokenPress(adaptBrand(brand, join(FIGMA_OUT, brand)))).files);
     report(`${brand} motion, the emission → DTCG`, motionRoundTrip(emitted, motion), ['ADDED', 'REMOVED', 'RETYPED', 'VALUE']);
+    presetFoldHolds(brand);
     const textSpacing = dtcgTextSpacing(brand);
     textSpacingFloors(brand, textSpacing);
     report(`${brand} text spacing, the emission → DTCG`, textSpacingRoundTrip(emitted, textSpacing), ['ADDED', 'REMOVED', 'RETYPED', 'VALUE']);

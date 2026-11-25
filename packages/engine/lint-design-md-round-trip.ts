@@ -86,6 +86,10 @@ const STRING_CANDIDATES = [
   '#2f6b4f',
   // #3076: an icon glyph's art, one filled SVG path on the 24×24 artboard (`icons.glyphs.*.path`).
   'M2 2h20v20H2z',
+  // #2857: a motion preset slot is a motion path (`duration.<step>`, `easing-role.<role>`, `delay.<step>`).
+  'duration.normal',
+  'easing-role.enter',
+  'delay.show',
 ];
 /** Keys tried for a map with no `propertyNames` enum: one that needs quoting, with a space at each end, and one plain. */
 const KEY_CANDIDATES = [' A key: "x" #1 ', 'mobile'];

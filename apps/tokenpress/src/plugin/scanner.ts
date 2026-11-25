@@ -70,14 +70,25 @@ export class TokenScanner {
    * such an id for any variable the file has imported. Each id is looked up once; a target that is
    * itself an alias is followed, up to `MAX_HOPS`. An id the API cannot resolve is left out, so it
    * stays a broken alias, as before.
+   *
+   * `boundIds` are the variables styles bind directly (a text style's font weight, a gradient stop, a
+   * shadow's color; prism3 #4366): a binding to a library variable is looked up the same way, in the
+   * first hop, so a composite can name the library it came from.
    */
-  async resolveExternalAliasTargets(variables: Variable[]): Promise<ExternalAliasTargets> {
+  async resolveExternalAliasTargets(variables: Variable[], boundIds: string[] = []): Promise<ExternalAliasTargets> {
     const MAX_HOPS = 10;
     const known = new Set(variables.map(v => v.id));
     const found: Variable[] = [];
     let frontier = variables;
-    for (let hop = 0; hop < MAX_HOPS && frontier.length > 0; hop++) {
-      const missing: string[] = [];
+    const seed: string[] = [];
+    boundIds.forEach(id => {
+      if (!known.has(id)) {
+        known.add(id);
+        seed.push(id);
+      }
+    });
+    for (let hop = 0; hop < MAX_HOPS && (frontier.length > 0 || (hop === 0 && seed.length > 0)); hop++) {
+      const missing: string[] = hop === 0 ? seed.slice() : [];
       frontier.forEach(v => {
         Object.values(v.valuesByMode).forEach(value => {
           aliasTargetIds(value).forEach(id => {

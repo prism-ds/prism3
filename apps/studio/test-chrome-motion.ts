@@ -1,13 +1,13 @@
 /**
- * The chrome's eased scroll follows `motion.transition.default` wherever its alias points (#2098 item 4), in Node.
+ * The chrome's eased scroll follows `motion.preset.crossfade.transition` wherever its alias points (#2098 item 4), in Node.
  *
  *   npx tsx apps/studio/test-chrome-motion.ts
  *
  * `--p3-transition-dur` and `--p3-transition-ease` are the edit-reveal's and the jump links' scroll. Since #2041
- * `chrome/spec.mjs` reads both from the one composite the engine emits for them, `motion.transition.default`
- * (its `duration` and `timingFunction` members). Over the committed emission that is indistinguishable from
+ * `chrome/spec.mjs` reads both from the one composite the engine emits for them, `motion.preset.crossfade.transition`
+ * (its `duration` and `timingFunction` members; `motion.transition.default` until #2857 retired it). Over the committed emission that is indistinguishable from
  * reading `motion.duration.normal` and `motion.easing-role.default` directly, because the composite points at
- * exactly those, so test-chrome.mjs's QA-B9 arm cannot tell the two reads apart. This arm can: it repoints the
+ * exactly those, through the preset's slots, so test-chrome.mjs's QA-B9 arm cannot tell the two reads apart. This arm can: it repoints the
  * composite's members in a fixture and checks the variables move with it.
  *
  * INDEPENDENT OF WHAT IT CHECKS (docs/34). The subject is the product's own path from token tree to CSS value:
@@ -58,9 +58,9 @@ for (const mode of ['light', 'dark'] as const) {
 
   const fixture = structuredClone(modes[mode]);
   const m = fixture.pds3.motion;
-  const def = m.transition?.default?.$value as Record<string, unknown> | undefined;
+  const def = (m.preset as unknown as Record<string, Record<string, { $value: unknown }>> | undefined)?.crossfade?.transition?.$value as Record<string, unknown> | undefined;
   ok(!!def && typeof def.duration === 'string' && typeof def.timingFunction === 'string',
-    `${mode}: the emission carries motion.transition.default with aliased duration and timingFunction members (${JSON.stringify(def)})`);
+    `${mode}: the emission carries motion.preset.crossfade.transition with aliased duration and timingFunction members (${JSON.stringify(def)})`);
   if (!def) continue;
   m.duration['p3-fixture-ms'] = { $type: 'duration', $value: DUR };
   m.duration['p3-fixture'] = { $type: 'duration', $value: '{pds3.motion.duration.p3-fixture-ms}' };

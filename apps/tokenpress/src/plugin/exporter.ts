@@ -54,6 +54,8 @@ export class TokenExporter {
   protected fileCount = 0;
   private skippedBlurStyles: string[] = [];
   private skippedGradientStyles: string[] = [];
+  /** Paint styles whose visible paints are all solid (prism3 #3884): not exported yet, so named in the footer. */
+  private skippedSolidPaintStyles: string[] = [];
 
   /**
    * The namespace prefix that aliases in the file currently being built must
@@ -208,6 +210,7 @@ export class TokenExporter {
     this.fileCount = 0;
     this.skippedBlurStyles = [];
     this.skippedGradientStyles = [];
+    this.skippedSolidPaintStyles = [];
 
     const reportProgress = (progress: number, message: string) => {
       if (progressCallback) {
@@ -221,7 +224,12 @@ export class TokenExporter {
       await this.scanner.scanAll({
       excludedCollectionNames: this.options.excludedCollections,
     });
-    this.setExternalAliasTargets(await this.scanner.resolveExternalAliasTargets(variables));
+    this.setExternalAliasTargets(
+      await this.scanner.resolveExternalAliasTargets(
+        variables,
+        this.styleBoundIds(textStyles, effectStyles, paintStyles)
+      )
+    );
 
     // When any collection has multiple modes we lay the ZIP out as
     //   tokens/shared/<single-mode files>      ← apply to every mode
@@ -272,6 +280,79 @@ export class TokenExporter {
     this.externalVariables = new Map(targets.variables.map(v => [v.id, v]));
     this.externalCollectionNames = targets.collectionNames;
     this.externalCollectionDefaultModes = targets.collectionDefaultModes || {};
+  }
+
+  /**
+   * The variable ids the styles bind directly (prism3 #4366): a text style's properties, a shadow's, a gradient
+   * stop's color. A binding to a team-library variable is looked up with the other external targets, so the
+   * composite can name where its value came from.
+   */
+  private styleBoundIds(textStyles: TextStyle[], effectStyles: EffectStyle[], paintStyles: PaintStyle[]): string[] {
+    const ids: string[] = [];
+    const add = (alias: unknown) => {
+      if (alias && typeof alias === 'object' && typeof (alias as { id?: unknown }).id === 'string') {
+        ids.push((alias as { id: string }).id);
+      }
+    };
+    const addAll = (bound: unknown) => {
+      if (!bound || typeof bound !== 'object') {
+        return;
+      }
+      Object.keys(bound).forEach(key => {
+        const value = (bound as Record<string, unknown>)[key];
+        if (Array.isArray(value)) {
+          value.forEach(add);
+        } else {
+          add(value);
+        }
+      });
+    };
+    (textStyles || []).forEach(style => addAll((style as unknown as { boundVariables?: unknown }).boundVariables));
+    (effectStyles || []).forEach(style =>
+      (style.effects || []).forEach(effect => addAll((effect as unknown as { boundVariables?: unknown }).boundVariables))
+    );
+    (paintStyles || []).forEach(style =>
+      (style.paints || []).forEach(paint => {
+        const stops = (paint as unknown as { gradientStops?: Array<{ boundVariables?: unknown }> }).gradientStops;
+        if (stops) {
+          stops.forEach(stop => addAll(stop.boundVariables));
+        }
+      })
+    );
+    return ids;
+  }
+
+  /**
+   * The `externalAlias` marker for a binding to a team-library variable (prism3 #4490's four fields), or null when
+   * the id is a local variable. A composite keys one per sub-property (prism3 #4366, owner decision A).
+   */
+  protected externalMarkerOf(id: string): JsonObject | null {
+    const external = this.externalVariables.get(id);
+    if (!external) {
+      return null;
+    }
+    return {
+      reference: createAliasReference(external.name, this.options.tokenNameCase, this.activeNamespace),
+      variableId: external.id,
+      variableKey: external.key,
+      collection: this.externalCollectionNames[external.variableCollectionId] || null,
+    };
+  }
+
+  /**
+   * Writes a composite's markers to `$extensions.figma.externalAlias`, keyed by the sub-property's path inside
+   * `$value` (`fontWeight`, `0.color`). Written whether or not Figma extensions are on, as #4490's whole-token
+   * marker is: it says where a value came from, it isn't metadata about the style.
+   */
+  private attachExternalMarkers(token: DTCGToken, markers: JsonObject): void {
+    if (Object.keys(markers).length === 0) {
+      return;
+    }
+    const extensions = (token.$extensions || {}) as Record<string, Record<string, unknown>>;
+    const figmaExt = extensions.figma || {};
+    figmaExt.externalAlias = markers;
+    extensions.figma = figmaExt;
+    token.$extensions = extensions;
   }
 
   /** An id → variable map over `variables` and the external alias targets. */
@@ -406,6 +487,8 @@ export class TokenExporter {
       durationFormat: this.options.durationFormat || 'object',
       tokenNameCase: this.options.tokenNameCase || 'preserve',
       namespace: this.activeNamespace,
+      // prism3 #4366: a sub-property bound to a library variable is its resolved value, never a cache match.
+      externalIds: new Set(Array.from(this.externalVariables.keys())),
     };
 
     // Process text styles with adaptive batch sizing
@@ -479,6 +562,17 @@ export class TokenExporter {
               },
             };
           }
+
+          // prism3 #4366: each sub-property bound to a library variable names it.
+          const typographyMarkers: JsonObject = {};
+          Object.keys(boundVars).forEach(key => {
+            const bound = boundVars[key];
+            const marker = bound ? this.externalMarkerOf(bound.id) : null;
+            if (marker && (typographyValue as unknown as Record<string, unknown>)[key] !== undefined) {
+              typographyMarkers[key] = marker;
+            }
+          });
+          this.attachExternalMarkers(token, typographyMarkers);
 
           this.setNestedProperty(typographyTokens, tokenPath.split('/'), token);
           processedCount++;
@@ -575,6 +669,26 @@ export class TokenExporter {
         };
       }
 
+      // prism3 #4366: a shadow property bound to a library variable names it. The key is the property's path in
+      // `$value`: one layer is an object, several an array; Figma's `radius` is DTCG's `blur`.
+      const layers = effectStyle.effects.filter(e => e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW');
+      const shadowMarkers: JsonObject = {};
+      layers.forEach((effect, index) => {
+        const bound = (effect as unknown as { boundVariables?: Record<string, { id: string } | undefined> }).boundVariables;
+        if (!bound) {
+          return;
+        }
+        Object.keys(bound).forEach(key => {
+          const alias = bound[key];
+          const marker = alias ? this.externalMarkerOf(alias.id) : null;
+          if (marker) {
+            const name = key === 'radius' ? 'blur' : key;
+            shadowMarkers[layers.length === 1 ? name : `${index}.${name}`] = marker;
+          }
+        });
+      });
+      this.attachExternalMarkers(token, shadowMarkers);
+
       this.setNestedProperty(shadowTokens, tokenPath.split('/'), token);
     });
 
@@ -603,11 +717,13 @@ export class TokenExporter {
    * have no place in `$value`. They go in `$extensions.figma` when Figma
    * extensions are on.
    *
-   * Only a style whose one visible paint is a gradient is exported. A solid or
-   * image style is not a gradient and is left alone. A style that layers a
-   * gradient with other paints has no single-gradient form, so it is skipped
-   * and its name collected (see `getSkippedGradientStyles`), never dropped
-   * silently.
+   * Only a style whose one visible paint is a gradient is exported. A style that
+   * layers a gradient with other paints has no single-gradient form, so it is
+   * skipped and its name collected (see `getSkippedGradientStyles`), never
+   * dropped silently. A style whose visible paints are all solid is not exported
+   * either (prism3 #3884, owner decision A: a solid-style file and its naming
+   * policy are a future feature), and is named the same way
+   * (`getSkippedSolidPaintStyles`). An image style is left alone.
    */
   private exportGradients(
     zip: JSZip,
@@ -626,6 +742,9 @@ export class TokenExporter {
       const visible = paintStyle.paints.filter(p => p.visible !== false);
       const gradients = visible.filter(p => gradientTypes.indexOf(p.type) !== -1);
       if (gradients.length === 0) {
+        if (visible.length > 0 && visible.every(p => p.type === 'SOLID')) {
+          this.skippedSolidPaintStyles.push(paintStyle.name);
+        }
         return;
       }
       if (visible.length !== 1) {
@@ -655,9 +774,15 @@ export class TokenExporter {
 
     gradientStyles.forEach(entry => {
       const paint = entry.paint;
-      const stops: DTCGGradient = paint.gradientStops.map(stop => {
+      const gradientMarkers: JsonObject = {};
+      const stops: DTCGGradient = paint.gradientStops.map((stop, index) => {
         let color: DTCGColor | string | null = null;
         const bound = stop.boundVariables && stop.boundVariables.color;
+        // prism3 #4366: a stop bound to a library variable is its resolved color, marked by the stop's index.
+        const marker = bound ? this.externalMarkerOf(bound.id) : null;
+        if (marker) {
+          gradientMarkers[`${index}.color`] = marker;
+        }
         if (bound) {
           const target = variableMap.get(bound.id);
           if (target) {
@@ -697,6 +822,7 @@ export class TokenExporter {
         }
         token.$extensions = { figma: figmaExt };
       }
+      this.attachExternalMarkers(token, gradientMarkers);
 
       this.setNestedProperty(
         gradientTokens,
@@ -868,15 +994,9 @@ export class TokenExporter {
     variableMap: Map<string, Variable>,
     modeId?: string
   ): DTCGToken {
-    const color = this.resolveInMode(value.color, variableMap, variable.variableCollectionId, modeId);
-    const percent = this.resolveInMode(value.opacity, variableMap, variable.variableCollectionId, modeId);
-    const isRgb =
-      typeof color === 'object' && color !== null && !isVariableAlias(color) && 'r' in color;
+    const washed = this.resolveWashInMode(value, variableMap, variable.variableCollectionId, modeId, 0);
     let dtcgValue: VariableConversionValue;
-    if (isRgb && typeof percent === 'number') {
-      const rgb = color as RGB | RGBA;
-      const alpha = (hasAlpha(rgb) ? rgb.a : 1) * (percent / 100);
-      const washed: RGBA = { r: rgb.r, g: rgb.g, b: rgb.b, a: alpha };
+    if (washed !== null) {
       dtcgValue =
         this.options.colorFormat === 'css' ? this.convertColorToCSS(washed) : this.convertColor(washed);
     } else {
@@ -922,18 +1042,64 @@ export class TokenExporter {
     collectionId: string,
     modeId?: string
   ): unknown {
+    return this.resolveInModeAt(value, variableMap, collectionId, modeId).value;
+  }
+
+  // A tinted wash resolved to one RGBA (prism3 #2365), or null when a half does not reach a literal. The color half may
+  // alias ANOTHER wash (prism3 #4478): Figma's `VariableComposedColor` lets its alias target any COLOR variable, whose
+  // value may itself be composed. That inner wash is resolved in the collection and mode the walk ended in, as Figma
+  // resolves it, and the outer opacity multiplies its alpha. Depth-limited, as the alias walk is.
+  private resolveWashInMode(
+    wash: { color: unknown; opacity: unknown },
+    variableMap: Map<string, Variable>,
+    collectionId: string,
+    modeId: string | undefined,
+    depth: number
+  ): RGBA | null {
+    if (depth >= 10) {
+      return null;
+    }
+    const percent = this.resolveInMode(wash.opacity, variableMap, collectionId, modeId);
+    if (typeof percent !== 'number') {
+      return null;
+    }
+    const at = this.resolveInModeAt(wash.color, variableMap, collectionId, modeId);
+    const color = at.value;
+    let base: RGBA | null = null;
+    if (isComposedColor(color)) {
+      base = this.resolveWashInMode(color, variableMap, at.collectionId, at.modeId, depth + 1);
+    } else if (typeof color === 'object' && color !== null && !isVariableAlias(color) && 'r' in color) {
+      const rgb = color as RGB | RGBA;
+      base = { r: rgb.r, g: rgb.g, b: rgb.b, a: hasAlpha(rgb) ? rgb.a : 1 };
+    }
+    if (base === null) {
+      return null;
+    }
+    return { r: base.r, g: base.g, b: base.b, a: base.a * (percent / 100) };
+  }
+
+  // `resolveInMode`, also reporting the collection and mode the walk ended in (prism3 #4478), so a value that is itself
+  // composed can resolve its own aliases where it lives. The mode is the one the walk asked for: where a variable fell
+  // back to its first mode, every variable in that collection falls back the same way, so it is not rewritten.
+  private resolveInModeAt(
+    value: unknown,
+    variableMap: Map<string, Variable>,
+    collectionId: string,
+    modeId?: string
+  ): { value: unknown; collectionId: string; modeId?: string } {
+    const unresolved = { value: value, collectionId: collectionId, modeId: modeId };
     let current: unknown = value;
     let currentCollection = collectionId;
     let currentMode = modeId;
     const seen = new Set<string>();
     for (let hops = 0; hops < 10 && isVariableAlias(current); hops++) {
       if (seen.has(current.id)) {
-        return value;
+        return unresolved;
       }
       seen.add(current.id);
       const target = variableMap.get(current.id);
       if (!target) {
-        return value;
+        return unresolved;
       }
       if (target.variableCollectionId !== currentCollection) {
         currentCollection = target.variableCollectionId;
@@ -943,13 +1109,16 @@ export class TokenExporter {
       }
       const modeIds = Object.keys(target.valuesByMode);
       if (modeIds.length === 0) {
-        return value;
+        return unresolved;
       }
       const pick =
         currentMode !== undefined && currentMode in target.valuesByMode ? currentMode : modeIds[0];
       current = target.valuesByMode[pick];
     }
-    return isVariableAlias(current) ? value : current;
+    if (isVariableAlias(current)) {
+      return unresolved;
+    }
+    return { value: current, collectionId: currentCollection, modeId: currentMode };
   }
 
   // Walks an alias chain to the deepest non-alias source and returns its
@@ -1807,5 +1976,15 @@ export class TokenExporter {
    */
   getSkippedGradientStyles(): string[] {
     return this.skippedGradientStyles.slice();
+  }
+
+  /** Paint styles whose visible paints are all solid, named because they are not exported (prism3 #3884). */
+  getSkippedSolidPaintStyles(): string[] {
+    return this.skippedSolidPaintStyles.slice();
+  }
+
+  /** Token paths left out of a CSS file (prism3 #3886). The DTCG-only export writes no CSS, so none. */
+  getSkippedCssValues(): string[] {
+    return [];
   }
 }

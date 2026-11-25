@@ -521,14 +521,17 @@ export type MainToUi =
    *  loops over the same member count, so a bare fraction would appear to restart at 0 halfway through a
    *  build that is progressing perfectly. `chunkMs` is what the chunk cost, carried up so a live run can
    *  CALIBRATE the chunk size: the shim has no event loop, so that number cannot be gated and has to be
-   *  observed. See `CHUNK` in `write-components.ts`. */
-  | { type: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number }
+   *  observed. See `CHUNK` in `write-components.ts`.
+   *
+   *  `throttled` (#4476, on this reading, `style-guide-progress` and `run-progress`): set once the run's hand-backs read
+   *  as throttled by a hidden Figma window (`handBack` in `pace.ts`), so the progress line carries its note. */
+  | { type: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number; throttled?: true }
   /** A style-guide run is UNDERWAY (#1778) — posted once before the first table (`done: 0`) and after each
    *  table, so the pending pill reads "Drawing table 7 of 22…" while the executor yields to the host between
    *  tables. Its own kind for the `component-progress` reason: a reading is not a verdict, and it must not
    *  land in either action's result slot. `tableMs` is what the last table cost, the live run's calibration
    *  data for the executor's yield spacing (`CELLS_PER_YIELD` in `style-guide.ts`); 0 on the first reading. */
-  | { type: 'style-guide-progress'; done: number; total: number; tableMs: number }
+  | { type: 'style-guide-progress'; done: number; total: number; tableMs: number; throttled?: true }
   /** #3170 part 2 (Q3170.1–2 A): how far a run the panel started has got, for the status strip at the panel's foot.
    *  `run`: the read after open (`read`, a page at a time), the panel's in-place update (`update`), or its Apply Theme
    *  (`apply-theme`). `phase`: `check`, the read before the first write (no item yet); `work`, `item` being done, with
@@ -538,7 +541,7 @@ export type MainToUi =
    *  the `component-progress` reason: a reading is not a verdict. Never sent for an agent's update or Apply Theme.
    *  #3189: also an agent's Capture baseline (`capture`) and Adopt (`adopt`), which the panel never starts: `check`, the
    *  file being read; `work`, the def `item` reached, `done` of `total` before it; `finish`, every def done. */
-  | { type: 'run-progress'; run: RunProgressKind; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number }
+  | { type: 'run-progress'; run: RunProgressKind; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number; throttled?: true }
   /** Boot read-back (#109): whether an existing Prism3 theme in the file passes the contract, plus a
    *  human summary. Informational — the actual knob-rehydration is `restore-input` below.
    *

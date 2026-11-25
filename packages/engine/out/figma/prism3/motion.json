@@ -69,6 +69,17 @@
       "hiddenFromPublishing": true
     },
     {
+      "name": "pds3/motion/duration-ms/400",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "400ms — duration primitive",
+      "value": 0.4,
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
       "name": "pds3/motion/duration-ms/500",
       "resolvedType": "TIMING",
       "scopes": [
@@ -320,11 +331,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "50ms — normal duration with reduce motion on",
-      "value": 0.05,
+      "description": "100ms — normal duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/50"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -333,11 +344,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "0ms — moderate duration with reduce motion on",
-      "value": 0,
+      "description": "100ms — moderate duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/0"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -346,11 +357,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "0ms — slow duration with reduce motion on",
-      "value": 0,
+      "description": "100ms — slow duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/0"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -359,11 +370,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "0ms — slower duration with reduce motion on",
-      "value": 0,
+      "description": "100ms — slower duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/0"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -372,11 +383,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "0ms — long duration with reduce motion on",
-      "value": 0,
+      "description": "100ms — long duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/0"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -385,11 +396,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "0ms — longer duration with reduce motion on",
-      "value": 0,
+      "description": "100ms — longer duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/0"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -398,11 +409,11 @@
       "scopes": [
         "ALL_SCOPES"
       ],
-      "description": "0ms — longest duration with reduce motion on",
-      "value": 0,
+      "description": "100ms — longest duration with reduce motion on",
+      "value": 0.1,
       "alias": {
         "type": "VARIABLE_ALIAS",
-        "name": "pds3/motion/duration-ms/0"
+        "name": "pds3/motion/duration-ms/100"
       }
     },
     {
@@ -429,6 +440,32 @@
       "alias": {
         "type": "VARIABLE_ALIAS",
         "name": "pds3/motion/duration-ms/2600"
+      }
+    },
+    {
+      "name": "pds3/motion/delay/show",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "400ms — wait before showing, so a fast result shows nothing",
+      "value": 0.4,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/400"
+      }
+    },
+    {
+      "name": "pds3/motion/delay/min-show",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "500ms — least time a shown indicator stays",
+      "value": 0.5,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/500"
       }
     },
     {
@@ -655,7 +692,8 @@
           "bounce": 0.1
         }
       },
-      "alias": null
+      "alias": null,
+      "hiddenFromPublishing": true
     },
     {
       "name": "pds3/motion/spring/gentle",
@@ -670,7 +708,8 @@
           "bounce": 0.2
         }
       },
-      "alias": null
+      "alias": null,
+      "hiddenFromPublishing": true
     },
     {
       "name": "pds3/motion/spring/bouncy",
@@ -685,7 +724,668 @@
           "bounce": 0.4
         }
       },
-      "alias": null
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
+      "name": "pds3/motion/spring/effects",
+      "resolvedType": "EASING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "effects spring, bounce 0 — its length comes from the duration it plays with",
+      "value": {
+        "type": "CUSTOM_SPRING",
+        "easingFunctionSpring": {
+          "bounce": 0
+        }
+      },
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
+      "name": "pds3/motion/spring-duration/snappy",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "317ms — the snappy spring's settle time",
+      "value": 0.317,
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
+      "name": "pds3/motion/spring-duration/gentle",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "435ms — the gentle spring's settle time",
+      "value": 0.435,
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
+      "name": "pds3/motion/spring-duration/bouncy",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "360ms — the bouncy spring's settle time",
+      "value": 0.36,
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
+      "name": "pds3/motion/spring-duration/effects",
+      "resolvedType": "TIMING",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "231ms — the effects spring's settle time",
+      "value": 0.231,
+      "alias": null,
+      "hiddenFromPublishing": true
+    },
+    {
+      "name": "pds3/motion/preset/state/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "fast — state duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/fast"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/state/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "default — state easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0.2,
+          "y1": 0,
+          "x2": 0,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/default"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/state/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — state delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/state/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "fast reduced — state reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/fast"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/fade/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "normal — fade duration",
+      "resolvedType": "TIMING",
+      "value": 0.2,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/normal"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/fade/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "enter — fade easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0,
+          "y1": 0,
+          "x2": 0.2,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/enter"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/fade/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — fade delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/fade/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "normal reduced — fade reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/normal"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/crossfade/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "normal — crossfade duration",
+      "resolvedType": "TIMING",
+      "value": 0.2,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/normal"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/crossfade/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "default — crossfade easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0.2,
+          "y1": 0,
+          "x2": 0,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/default"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/crossfade/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — crossfade delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/crossfade/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "normal reduced — crossfade reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/normal"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/move/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "moderate — move duration",
+      "resolvedType": "TIMING",
+      "value": 0.3,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/moderate"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/move/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "default — move easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0.2,
+          "y1": 0,
+          "x2": 0,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/default"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/move/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — move delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/move/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "moderate reduced — move reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/moderate"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/reveal/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "slow — reveal duration",
+      "resolvedType": "TIMING",
+      "value": 0.5,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/slow"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/reveal/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "enter — reveal easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0,
+          "y1": 0,
+          "x2": 0.2,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/enter"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/reveal/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — reveal delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/reveal/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "slow reduced — reveal reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/slow"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/draw/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "slow — draw duration",
+      "resolvedType": "TIMING",
+      "value": 0.5,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/slow"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/draw/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "default — draw easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0.2,
+          "y1": 0,
+          "x2": 0,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/default"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/draw/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — draw delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/draw/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "slow reduced — draw reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/slow"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/surface/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "moderate — surface duration",
+      "resolvedType": "TIMING",
+      "value": 0.3,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/moderate"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/surface/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "enter — surface easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0,
+          "y1": 0,
+          "x2": 0.2,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/enter"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/surface/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — surface delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/surface/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "moderate reduced — surface reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/moderate"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/expand/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "normal — expand duration",
+      "resolvedType": "TIMING",
+      "value": 0.2,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/normal"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/expand/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "default — expand easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0.2,
+          "y1": 0,
+          "x2": 0,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/default"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/expand/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — expand delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/expand/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "normal reduced — expand reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/normal"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/step/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "moderate — step duration",
+      "resolvedType": "TIMING",
+      "value": 0.3,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/moderate"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/step/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "default — step easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0.2,
+          "y1": 0,
+          "x2": 0,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/default"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/step/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — step delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/step/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "moderate reduced — step reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/moderate"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/settle/duration",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "slow — settle duration",
+      "resolvedType": "TIMING",
+      "value": 0.5,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration/slow"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/settle/easing",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "enter — settle easing",
+      "resolvedType": "EASING",
+      "value": {
+        "type": "CUSTOM_CUBIC_BEZIER",
+        "easingFunctionCubicBezier": {
+          "x1": 0,
+          "y1": 0,
+          "x2": 0.2,
+          "y2": 1
+        }
+      },
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/easing-role/enter"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/settle/delay",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "none — settle delay",
+      "resolvedType": "TIMING",
+      "value": 0,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-ms/0"
+      }
+    },
+    {
+      "name": "pds3/motion/preset/settle/duration-reduced",
+      "scopes": [
+        "ALL_SCOPES"
+      ],
+      "description": "slow reduced — settle reduced duration",
+      "resolvedType": "TIMING",
+      "value": 0.1,
+      "alias": {
+        "type": "VARIABLE_ALIAS",
+        "name": "pds3/motion/duration-reduced/slow"
+      }
     }
   ]
 }

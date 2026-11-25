@@ -89,7 +89,11 @@
     "@layer base": {
       "*": {
         "@apply outline-ring": {}
+      },
+      ":is(.focus-visible\\:ring-ring\\/50:focus-visible, .ring-ring\\/50, .has-focus\\:ring-ring\\/50:has(:focus), .group-data-\\[focused\\=true\\]\\/day\\:ring-ring\\/50:is(:where(.group\\/day)[data-focused=\"true\"] *), .data-\\[active\\=true\\]\\:ring-ring\\/50[data-active=\"true\"], .focus-within\\:ring-ring\\/50:focus-within, .has-\\[\\[data-slot\\=input-group-control\\]\\:focus-visible\\]\\:ring-ring\\/50:has(:is([data-slot=input-group-control]:focus-visible)), .\\[button\\,a\\]\\:focus-visible\\:ring-ring\\/50:is(button, a):focus-visible):not([aria-invalid=\"true\"], :has([aria-invalid=\"true\"]))": {
+        "--tw-ring-color": "var(--ring) !important"
       }
     }
-  }
+  },
+  "docs": "Focus rings draw at full strength. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme"
 }
