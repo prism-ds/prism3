@@ -12,6 +12,7 @@
 // (Apple "substitute, don't delete": small informational motion preserved/floored,
 // large/vestibular motion eliminated) — not a hand-maintained second list.
 import { springSettleMs } from './spring';
+import type { MotionPattern } from './motion-patterns';
 
 export type Bezier = [number, number, number, number];
 /** One preset's slots as a brand re-points them (#2857, Q-MS3 A), each a `motion` path. Absent slots keep the default.
@@ -95,6 +96,9 @@ export type MotionAxis = {
   // Every preset (the ten of Q-MP2 A), resolved through the brand's mapping (#2857). Emitted to the tree as the
   // `motion.preset.<name>.*` alias tier (Q-MS1 A, Q-MS8 A), to Figma as published variables, and named in the sidecar.
   presets: MotionPreset[];
+  // The motion patterns (#2857 phase 2, Q-PT1 A): what each component's motion moves, as tracks naming presets, with
+  // the brand's track overrides applied (`motion-patterns.ts`). Set by the theme builders, beside the presets.
+  patterns?: MotionPattern[];
   // The brand-only group, validated, in input order. Absent when the brand sets none.
   brandOnly?: Record<string, MotionBrandOnly>;
 };

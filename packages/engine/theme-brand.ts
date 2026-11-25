@@ -14,6 +14,7 @@ import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_
 import { PALETTE_NAME_RE, RESERVED_PALETTES, STATUS_DEFAULTS, statusRamp, inRedTerritory, hueDist, RED_CHROMA_FLOOR, normalizeDisabledStrategy, normalizeDisabledMin } from './theme-color';
 import { buildDims } from './theme-dims';
 import { buildMotion, checkCurveForRole, REDUCED_CAP_MS, type MotionAxis } from './theme-motion';
+import { resolvePatterns } from './motion-patterns';
 import { LINE_HEIGHT_KEYS, LETTER_SPACING_KEYS, DISPLAY_VARIANTS, buildTypography, withLabelDefault, WEIGHT_ROLE_DEFAULT, type FontFamilyBinding, type WeightRole, deriveFamilies, WEIGHT_ROLE_ORDER, type TypeGroup, deriveTypefaces, PER_MODE_SIZE_GROUPS, type PerModeSizeGroup, HEADING_SIZE_FLOOR, mobileEndpoint, TYPE_GROUPS } from './theme-type';
 import { buildShadow, darkShadowSeed, type ShadowAxis, type ShadowStep, type ShadowLayer } from './theme-shadow';
 import { buildLayout, gridGapNotes } from './theme-layout';
@@ -620,6 +621,8 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // Only a mode whose tempo DIFFERS from the baseline gets an entry (no-diff suppression) → byte-identical
   // when unused. Easing/spring/transitions are tempo-invariant, so they're not re-emitted.
   const motion = buildMotion(input.motionPersonality);
+  // The patterns (#2857 phase 2): the engine's, with the brand's track overrides, each checked by name (Q-PT15 A).
+  motion.patterns = resolvePatterns(input.motionPersonality?.patterns, motion.presets.map((p) => p.preset));
   const baseTempo = input.motionPersonality?.tempo ?? 'standard';
   const motionByMode: NonNullable<MotionAxis['motionByMode']> = {};
   for (const [m, lev] of Object.entries(modeLevers)) {

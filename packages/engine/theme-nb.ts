@@ -7,6 +7,7 @@ import { type OKLCH, type Role, type NbMeasured, type Theme, type PaletteBuild, 
 import { statusRamp, STATUS_DEFAULTS } from './theme-color';
 import { buildDims } from './theme-dims';
 import { buildMotion } from './theme-motion';
+import { resolvePatterns } from './motion-patterns';
 import { buildTypography, withLabelDefault } from './theme-type';
 import { buildShadow, darkShadowSeed } from './theme-shadow';
 import { buildLayout } from './theme-layout';
@@ -71,7 +72,7 @@ export const nbThemeFrom = (s: NbMeasured): Theme => {
     // ground, `foreground.primary`'s palette color in each mode, at 70%.
     glassRoles: { card: { role: 'foreground.primary', alpha: 70 } },
     radioDot: 70,
-    dims, motion: buildMotion(),
+    dims, motion: { ...buildMotion(), patterns: resolvePatterns() },
     // The label category always ships the `default` role (Q225 A, Q226 A), here as in every brand.
     // #3077 (owner decisions 2026-10-27): caption.md is 10px, and display, title, body, caption and label are pinned
     // to the `open` letter spacing (+1%) at every size; eyebrow keeps its nudge, one step in from `wider` (+2%).
