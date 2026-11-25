@@ -13,6 +13,11 @@
  *
  * THE EXPECTED VALUES ARE NOT DERIVED FROM THE CODE UNDER TEST (docs/34): the fixture has exactly one layered style,
  * `brand/layered`, and one plain gradient, `brand/sunrise`, which must not be reported.
+ *
+ * prism3 3.0.3 adds two more skips to the same summary, the same two halves each:
+ *   - #3884 (owner decision A): a solid paint style is not exported; it is named. The fixture has one, `brand/flat`.
+ *   - #3886 (owner decision A): the CSS format leaves out a value it has no CSS form for, and names it. The fixture's
+ *     one gradient, `brand.sunrise`, is that value: it exports as DTCG and has no CSS form.
  */
 
 import { readFileSync } from 'node:fs';
@@ -35,6 +40,7 @@ const linear = {
 };
 const paintStyles = [
   { id: 'S:1', name: 'brand/sunrise', description: '', paints: [linear] },
+  { id: 'S:3', name: 'brand/flat', description: '', paints: [{ type: 'SOLID', visible: true, color: { r: 1, g: 0, b: 0 } }] },
   {
     id: 'S:2',
     name: 'brand/layered',
@@ -164,6 +170,45 @@ describe('skipped layered-gradient styles reach the export summary (#3885)', () 
     const text = footerAfter({ skippedBlurStyles: ['blur/glass'], skippedGradientStyles: ['brand/layered'] });
     expect(text).toBe(
       'Exported 2 file(s). Skipped 1 blur-only effect style(s): blur/glass. Skipped 1 layered gradient style(s): brand/layered'
+    );
+  });
+
+  test('the sandbox posts the skipped solid paint styles on the standard path (#3884)', async () => {
+    const result = await exportResult({});
+    expect(result.skippedSolidPaintStyles).toEqual(['brand/flat']);
+  });
+
+  test('the sandbox posts the skipped solid paint styles and the CSS-skipped tokens on the multi-format path', async () => {
+    const result = await exportResult({ formatCss: true });
+    expect(result.skippedSolidPaintStyles).toEqual(['brand/flat']);
+    expect(result.skippedCssValues).toEqual(['brand.sunrise']);
+  });
+
+  test('with no CSS file, nothing is reported as left out of one (#3886)', async () => {
+    const result = await exportResult({});
+    expect(result.skippedCssValues).toEqual([]);
+  });
+
+  test('the panel footer names a skipped solid paint style (#3884)', () => {
+    const text = footerAfter({ skippedSolidPaintStyles: ['brand/flat'] });
+    expect(text).toBe('Exported 2 file(s). Skipped 1 solid paint style(s): brand/flat');
+  });
+
+  test('the panel footer names a token left out of the CSS file (#3886)', () => {
+    const text = footerAfter({ skippedCssValues: ['brand.sunrise'] });
+    expect(text).toBe('Exported 2 file(s). Skipped 1 token(s) with no CSS form: brand.sunrise');
+  });
+
+  test('the panel footer names every kind of skip, in order', () => {
+    const text = footerAfter({
+      skippedBlurStyles: ['blur/glass'],
+      skippedGradientStyles: ['brand/layered'],
+      skippedSolidPaintStyles: ['brand/flat'],
+      skippedCssValues: ['brand.sunrise'],
+    });
+    expect(text).toBe(
+      'Exported 2 file(s). Skipped 1 blur-only effect style(s): blur/glass. Skipped 1 layered gradient style(s): brand/layered. ' +
+        'Skipped 1 solid paint style(s): brand/flat. Skipped 1 token(s) with no CSS form: brand.sunrise'
     );
   });
 
