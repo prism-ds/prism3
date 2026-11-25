@@ -13,7 +13,7 @@ that only `lint-component-surface.ts --accept` writes.
 
 - **`apps/plugin/test-canvas-furniture.ts`, `rollout/switch`.** This held `withSet.length === 68`. The expected list
   is now the baseline's default projections (keys with no `@`) of more than one member, less the three single
-  components. A difference is named both ways: `not built: [...]` and `not in the baseline: [...]`.
+  components. A difference is named both ways: `not built: [...]` and `not in the baseline: [...]`. A def that builds one member but isn't in `ONE_MEMBER` is named as that, `one member in the baseline, not in ONE_MEMBER: [...]`, and not as missing from the baseline, which records it with one member.
 - **`apps/studio/test-component-groups.ts`.** This held `catalog.length === 74`. The catalog's ids are now held to
   the baseline's default projections, both ways.
 - **`apps/plugin/test-roundtrip.ts`, #1667.** This held `BUTTON_LAID.length === 8`. The ids are now held to the
@@ -41,5 +41,7 @@ so it isn't changed here.
   - the furniture filter drops `tag` → `rollout/switch … not built: ["tag"]`;
   - the generated catalog loses `divider` → `every set is listed once … not in the catalog: ["divider"]`;
   - `BUTTON_LAID` drops `toggle-button` → `#1667 … off: ["toggle-button@edges","toggle-button@smaller"]`.
+  - the baseline records `tag` with one member → `rollout/switch … one member in the baseline, not in ONE_MEMBER: ["tag"]` (before the finish lane's fix it read `not in the baseline: ["tag"]`, which was wrong);
+  - the baseline loses `tag`, or gains a `tag-copy` with a `@button-edges` projection → each of the three tests names the id, both ways.
 - **No count was replaced by a floor or removed.** Each test now asserts more than before: which ids, not only how
   many.
