@@ -519,6 +519,7 @@ export const buildFigmaDims = (theme: Theme): FigmaDimsCollections => {
 //                                    names an animation style binds (phase 3), so re-pointing a preset is one
 //                                    alias move. A spring preset's easing aliases motion/spring/<name>, and its
 //                                    duration motion/spring-duration/<name>.
+//   motion/preset/<name>/exit/<slot> → the same, for an arriving preset's exit half (#2857, Q-PT3 A).
 //   motion/preset/<name>/transition → NOT EMITTED: Figma has no composite variable, and the nearest thing, an
 //                                    animation style, must also name WHAT animates, which a DTCG transition does
 //                                    not say (Q291 4). A preset's composite is its slots, and every slot is
@@ -696,9 +697,14 @@ export const buildFigmaMotion = (theme: Theme): FigmaCollectionFile[] => {
       const curve = /\.motion\.easing-role\./.test(v) ? curveOf(resolved.$value) : curveOf(v);
       return { alias: aliasFigName(v), value: bezierEasing(motion.easing[curve].$value) };
     };
-    const presets: FigmaVar[] = Object.keys(motion.preset ?? {}).flatMap((name) => (['duration', 'easing', 'delay', 'duration-reduced'] as const).map((slot) => {
-      const leaf = motion.preset[name][slot];
-      const base = { name: ns(`motion/preset/${name}/${slot}`), scopes: MOTION_SCOPES, description: figmaPresetDescription(name, slot, leaf.$extensions.prism3.aliasOf) };
+    // An arriving preset's exit half (#2857, Q-PT3 A) is published the same way, under `motion/preset/<name>/exit/`.
+    const halves = Object.keys(motion.preset ?? {}).flatMap((name) => [
+      { path: name, label: name, group: motion.preset[name] },
+      ...(motion.preset[name].exit ? [{ path: `${name}/exit`, label: `${name} exit`, group: motion.preset[name].exit }] : []),
+    ]);
+    const presets: FigmaVar[] = halves.flatMap(({ path, label, group }) => (['duration', 'easing', 'delay', 'duration-reduced'] as const).map((slot) => {
+      const leaf = group[slot];
+      const base = { name: ns(`motion/preset/${path}/${slot}`), scopes: MOTION_SCOPES, description: figmaPresetDescription(label, slot, leaf.$extensions.prism3.aliasOf) };
       if (slot === 'easing') {
         const t = easingTarget(leaf.$value);
         return { ...base, resolvedType: 'EASING' as const, value: t.value, alias: { type: 'VARIABLE_ALIAS' as const, name: t.alias } };
