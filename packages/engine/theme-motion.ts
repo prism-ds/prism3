@@ -149,7 +149,8 @@ export const MOTION_DELAYS: Readonly<Record<string, number>> = { show: 400, 'min
  *  offers the KB's "pop", `popup` and `contextual`), so it lives in this one constant: renaming it is mechanical. */
 export const QUICK_ARRIVAL_PRESET = 'pop';
 /**
- * The default preset slots (#2857): the ten presets of Q-MP2 A on the rows approved in Q-MP8 A, each slot aliasing
+ * The default preset slots (#2857): the ten presets of Q-MP2 A on the rows approved in Q-MP8 A, and phase 2's `pop`
+ * (Q-PT4 A) and `press` (Q-PT7 A), with `move` on normal (Q-PT5 A), each slot aliasing
  * the role it plays on (Q-MS1 A). A brand re-points any slot with `motionPersonality.presets`. Every preset starts at
  * once (no delay), and its reduced duration follows its duration slot (Q-MS6 A).
  * - state: a micro state change or press → `fast`, in place.

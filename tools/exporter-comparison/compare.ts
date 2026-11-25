@@ -827,7 +827,7 @@ const explainViaModeOverlay = (
 const NOT_IN_EMISSION: Array<{ prefix: string; match?: RegExp; why: string }> = [
   // Narrowed from `motion.` by #2412: durations, curves, roles and springs are Figma variables now. #2857 retired the
   // four `motion.transition.*`; a preset's composite is the composite now, matched by its pattern (its slots pair).
-  { prefix: 'motion.preset.<name>.transition', match: /^motion\.preset\.[a-z0-9-]+\.transition$/, why: 'a preset\'s transition is a composite and Figma has no composite variable (owner Q291 4): its slots are emitted, the composite is not' },
+  { prefix: 'motion.preset.<name>[.exit].transition', match: /^motion\.preset\.[a-z0-9-]+(\.exit)?\.transition$/, why: 'a preset\'s transition is a composite and Figma has no composite variable (owner Q291 4): its slots are emitted, the composite is not' },
   { prefix: 'motion.distance.', why: 'a FLOAT aliasing `space/100` crosses collections, which neither motion writer binds yet (#4589); the animation styles that bind it are phase 3' },
   // `core.font.line-height` and `core.font.letter-spacing` were here until #2423 emitted them as the `text-spacing`
   // collection: both ladders and their roles now round-trip by path.

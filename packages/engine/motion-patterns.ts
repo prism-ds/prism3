@@ -233,7 +233,7 @@ const clausesOf = (tracks: readonly MotionTrack[], verb: (tr: MotionTrack) => st
   return out.map((c) => `the ${c.element} ${list(c.verbs)}`);
 };
 /** One pattern as a sentence. A run of tracks on one preset shares it: "…, on motion.preset.surface; …". */
-const patternSays = (p: MotionPattern, labelled: boolean): string => {
+const patternSays = (p: MotionPattern, named: boolean): string => {
   const runs: { preset: string; tracks: MotionTrack[] }[] = [];
   for (const tr of p.tracks) {
     const last = runs[runs.length - 1];
@@ -241,7 +241,7 @@ const patternSays = (p: MotionPattern, labelled: boolean): string => {
     else runs.push({ preset: tr.preset, tracks: [tr] });
   }
   const body = runs.map((r) => `${list(clausesOf(r.tracks, (tr) => verbOf(tr, p.half)))} on ${presetToken(r.preset)}`).join('; ');
-  return sentence(`${labelled && p.label ? `for ${p.label}, ` : ''}${body}`);
+  return sentence(`${named && p.label ? `for ${p.label}, ` : ''}${body}`);
 };
 /** What one element does under reduced motion, its tracks together: what still plays, on which reduced duration, and
  *  what doesn't ("the panel fades in on motion.preset.surface.duration-reduced, with no scale"). */

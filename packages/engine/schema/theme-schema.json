@@ -433,7 +433,6 @@
           "propertyNames": { "pattern": "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*$" },
           "additionalProperties": {
             "type": "object",
-            "propertyNames": { "pattern": "^[a-z][a-z0-9-]*\\.(opacity|transform|size|color)$" },
             "additionalProperties": {
               "type": "object",
               "additionalProperties": false,

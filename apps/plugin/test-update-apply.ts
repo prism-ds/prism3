@@ -7770,10 +7770,10 @@ section('dialog size — a set built with the width-only size axis leaves 16 mem
   const SMALL = 'placement=center, footer=inline, size=small', LARGE = 'placement=center, footer=stacked, size=large';
   const MED = 'placement=center, footer=inline, size=medium', MED2 = 'placement=center, footer=stacked, size=medium';
   // The rebuilt def projects exactly the set main shipped: origin/main's `component-surface.json` records dialog at
-  // 24 members, sha256 529ad20a… over its sorted `name|stamp` rows (typed here, from that baseline; it was 5a835955… until #4057 moved main's Dialog projection, and 17ff3a9b… until #4084).
+  // 24 members, sha256 529ad20a… over its sorted `name|stamp` rows (typed here, from that baseline; it was 5a835955… until #4057 moved main's Dialog projection, 17ff3a9b… until #4084, and 529ad20a… until #2857 phase 2 rewrote its motion notes).
   const oldPlans = figmaAnatomySet(oldDef, { swapTarget: SWAP_TARGET });
   const oldSha = createHash('sha256').update(figmaAnatomySet(oldDef).map((x) => `${planComponentName(x)}|${planStamp(x)}`).sort().join('\n')).digest('hex');
-  ok(oldPlans.length === 24 && oldSha === '529ad20a03c8de6f3621ef34f4f9219e4af1b6873cbbe3aea9c5bd8028e1e14f',
+  ok(oldPlans.length === 24 && oldSha === '4891dd310957be2d327c63206d8c85eb29a794a90bc6a4f0c9efedfd2d00e1a0',
     `premise: the old def rebuilt here projects main's 24-member Dialog set exactly (${oldPlans.length}, ${oldSha.slice(0, 12)}…)`);
   ok(names.length === 24 && names.includes(SMALL) && names.includes(LARGE) && names.filter((n) => n.includes('size=')).length === 24,
     `premise: dialog holds the 24 members of the old set, ${SMALL} among them (${names.length})`);
