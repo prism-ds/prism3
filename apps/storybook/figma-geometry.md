@@ -81,8 +81,19 @@ button 2px wider in code than its text. Both are a border: CSS's border takes la
 (or the button's absent one) doesn't. A record made before this carried no part strokes, so those lines counted as
 findings of their own. Each record from this one on carries every layer's layout border, and the code record carries
 each part's CSS border and padding. The comparison then groups every line a part's border explains under that part,
-one finding per bordered part, as it does for the button's root. Whether that difference stays is OWNER DECISION G1
-on #3408.
+one finding per bordered part, as it does for the button's root.
+
+**Settled by the owner (G1 A on #3408, 2026-11-25).** The field control's 1px inset is a real difference, a visible
+1px shift of the content, consistent with decision 1 A on the button's border. It's counted once per bordered part and
+isn't modeled away. The systemic fix is on main, as #4599: Figma's builder includes the stroke in layout on bordered
+parts, so Figma's box model matches CSS's. Once that lands and the record is re-made, the border findings resolve at
+the source.
+
+**What a re-record shows.** A part whose stroke reports `inLayout: true` takes its border in Figma's layout as CSS
+does, so Figma's insets match the code's (17px, not 16). That part's border lines don't regroup: they vanish, and so
+does its border finding. A part whose stroke is out of layout (`inLayout: false`, or no stroke where CSS draws a
+transparent border) keeps its lines, grouped under one finding for that part. Read a re-record that has fewer lines as
+#4599's fix reaching the file, not as a lost comparison.
 
 ## Not yet verified live
 
