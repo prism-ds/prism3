@@ -133,10 +133,11 @@ export const PRODUCT_VARS = [
   ['gbar-h', 'core.dimension.44', 'core.dimension.44', D, 'the gradient editor\'s bar (V8)'],
   // QA-B9, QA-B17: the eased scroll's duration and curve, both read from one composite the engine emits, so the two
   // cannot drift apart (the shared styling pass; #2015 read `motion.duration.normal` and the mockup's `ease` row
-  // separately). Since #2857 retired `motion.transition.*`, that is `motion.preset.crossfade.transition`, the preset
-  // on the same step and role the default transition had (`normal`, `default`), so the scroll is unchanged.
-  ['transition-dur', 'motion.preset.crossfade.transition#duration', 'motion.preset.crossfade.transition#duration', T, 'the eased scroll of the edit-reveal and the jump links'],
-  ['transition-ease', 'motion.preset.crossfade.transition#timingFunction', 'motion.preset.crossfade.transition#timingFunction', E, 'the eased scroll\'s curve'],
+  // separately). Since #2857 retired `motion.transition.*`, that is a preset composite: `motion.preset.move.transition`
+  // since phase 2 (Q-PT6 A), the preset for a change of position, on `normal` with `default` (Q-PT5 A), the step and
+  // role the scroll always had, so the scroll is unchanged.
+  ['transition-dur', 'motion.preset.move.transition#duration', 'motion.preset.move.transition#duration', T, 'the eased scroll of the edit-reveal and the jump links'],
+  ['transition-ease', 'motion.preset.move.transition#timingFunction', 'motion.preset.move.transition#timingFunction', E, 'the eased scroll\'s curve'],
   // S13.1: the layout column the brand menu (four, concept's 288px popover) and the export dialog (twelve, 864px,
   // the legacy dialog's width) are measured in, from the dimension grid; and the dialogs' scrim, the engine's role.
   ['l-col', 'core.dimension.72', 'core.dimension.72', D, 'the brand menu\'s and the export dialog\'s column'],
