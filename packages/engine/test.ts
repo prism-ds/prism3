@@ -92,6 +92,7 @@ import type { AnatomyPlan, ButtonLayout } from './anatomy-figma';
 import { heightExclusions } from './branded-button';
 import { makeSignInButton } from './components/sign-in-button';
 import { PROVIDER_LOGO_NAMES as SIGN_IN_MARK_NAMES } from './provider-logo-glyphs';
+import { MOTION_PATTERNS, patternProblems, motionProse, reducedKindOf, trackKey, type MotionPattern } from './motion-patterns';
 import { componentDefs, button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, icon, focusRing, fieldLabel, fieldMessage, textField, checkboxControl, checkboxRow, checkboxGroup, radioGroup, textarea, radioControl, radioRow, switchControl, switchRow, select, spinner, tag, tab, divider, counter, searchField, cardNumberField, progress } from './components/index';
 // The glyph vocabulary, for #864's geometry assertions. Imported so EXPECTED comes from the set rather
 // than from the projector that read it — the two halves `docs/34` requires.
@@ -6947,8 +6948,9 @@ arm: {
     // #2857: the presets replaced the transitions. Every preset easing slot on its default names the ROLE, never its
     // curve, so a mode's re-point reaches it through the alias.
     const offRole = Object.entries(mo.preset as Record<string, any>).filter(([, p]) => !/\.motion\.easing-role\.[a-z]+\}$/.test(p.easing.$value));
-    ok(Object.keys(mo.preset).length === 10 && offRole.length === 0,
-      `D(a0): every default preset's easing names a role, so it inherits the re-point (${offRole.map(([n, p]) => `${n}: ${p.easing.$value}`).join(', ') || '10 presets on roles'})`);
+    const offRoleExit = Object.entries(mo.preset as Record<string, any>).filter(([, p]) => p.exit && !/\.motion\.easing-role\.exit\}$/.test(p.exit.easing.$value));
+    ok(Object.keys(mo.preset).length === 12 && offRole.length === 0 && offRoleExit.length === 0,
+      `D(a0): every default preset's easing names a role, and every exit half the exit role, so they inherit the re-point (${[...offRole, ...offRoleExit].map(([n, p]) => `${n}: ${p.easing.$value}`).join(', ') || '12 presets on roles'})`);
     ok(mo['easing-role'].default.$extensions?.prism3?.modes === undefined,
       'D(a0): an unre-pointed role is untouched (no blanket override)');
     // The BASELINE is settable too, and a mode deviates from it — without that, a mode could override
@@ -6973,9 +6975,11 @@ arm: {
         const wrong = Object.keys(presets).filter((name) => {
           const role = /\.motion\.easing-role\.([a-z]+)\}$/.exec(presets[name].easing.$value)?.[1];
           const curve = /\.motion\.easing\.([a-z0-9-]+)\}$/.exec(mo['easing-role'][role ?? '']?.$value ?? '')?.[1];
-          return !curve || !String(presets[name].easing.$description ?? '').endsWith(` (${curve})`);
+          const exitCurve = /\.motion\.easing\.([a-z0-9-]+)\}$/.exec(mo['easing-role'].exit?.$value ?? '')?.[1];
+          return !curve || !String(presets[name].easing.$description ?? '').endsWith(` (${curve})`)
+            || (presets[name].exit && !String(presets[name].exit.easing.$description ?? '').endsWith(` (${exitCurve})`));
         });
-        ok(Object.keys(presets).length === 10 && wrong.length === 0,
+        ok(Object.keys(presets).length === 12 && wrong.length === 0,
           `#2062: on the ${label} brand, every preset easing description names the curve its easing role resolves to (${Object.keys(presets).length} presets)${wrong.length ? ` — wrong: ${wrong.map((n) => `${n} says "${presets[n].easing.$description}"`).join('; ')}` : ''}`);
       }
     }
@@ -33506,12 +33510,21 @@ arm: {
   const al = (name: string, sec: number, target: string): Row => [`motion/${name}`, sec, `motion/${target}`];
   // Each spring's settle time, read once off the emitted brief (the same in every brand: springs ignore tempo).
   const SETTLES: Row[] = [hid('spring-duration/snappy', 0.317), hid('spring-duration/gentle', 0.435), hid('spring-duration/bouncy', 0.36), hid('spring-duration/effects', 0.231)];
-  // The ten presets' TIMING slots (#2857, Q-MS1 A): duration on its step, no delay (the 0ms primitive), and the reduced
-  // twin of its step. Typed per brand, since the step's seconds move with tempo.
-  const presetRows = (dur: Record<string, number>, red: Record<string, number>): Row[] => ([
-    ['state', 'fast'], ['fade', 'normal'], ['crossfade', 'normal'], ['move', 'moderate'], ['reveal', 'slow'],
-    ['draw', 'slow'], ['surface', 'moderate'], ['expand', 'normal'], ['step', 'moderate'], ['settle', 'slow'],
-  ] as const).flatMap(([p, step]): Row[] => [al(`preset/${p}/duration`, dur[step], `duration/${step}`), al(`preset/${p}/delay`, 0, 'duration-ms/0'), al(`preset/${p}/duration-reduced`, red[step], `duration-reduced/${step}`)]);
+  // The twelve presets' TIMING slots (#2857, Q-MS1 A; phase 2 adds pop and press, Q-PT4 A and Q-PT7 A, and moves `move`
+  // to normal, Q-PT5 A): duration on its step, no delay (the 0ms primitive), and the reduced twin of its step. Then each
+  // arriving preset's exit half (Q-PT3 A), one step shorter, at `preset/<name>/exit/*`. Typed per brand, since the
+  // step's seconds move with tempo.
+  const slots = (at: string, step: string, dur: Record<string, number>, red: Record<string, number>): Row[] =>
+    [al(`${at}/duration`, dur[step], `duration/${step}`), al(`${at}/delay`, 0, 'duration-ms/0'), al(`${at}/duration-reduced`, red[step], `duration-reduced/${step}`)];
+  const presetRows = (dur: Record<string, number>, red: Record<string, number>): Row[] => [
+    ...([
+      ['state', 'fast'], ['fade', 'normal'], ['crossfade', 'normal'], ['move', 'normal'], ['reveal', 'slow'],
+      ['draw', 'slow'], ['surface', 'moderate'], ['expand', 'normal'], ['step', 'moderate'], ['settle', 'slow'],
+      ['pop', 'fast'], ['press', 'instant'],
+    ] as const).flatMap(([p, step]) => slots(`preset/${p}`, step, dur, red)),
+    ...([['fade', 'fast'], ['reveal', 'moderate'], ['surface', 'normal'], ['settle', 'moderate'], ['pop', 'instant']] as const)
+      .flatMap(([p, step]) => slots(`preset/${p}/exit`, step, dur, red)),
+  ];
   const NB_MOTION: Row[] = [
     prim(0, 0), prim(40, 0.04), prim(50, 0.05), prim(100, 0.1), prim(200, 0.2), prim(300, 0.3), prim(400, 0.4), prim(500, 0.5), prim(800, 0.8),
     prim(900, 0.9), prim(1100, 1.1), prim(1300, 1.3), prim(1600, 1.6), prim(2600, 2.6),
@@ -33523,13 +33536,14 @@ arm: {
     sem('duration-reduced/moderate', 100, 0.1), sem('duration-reduced/slow', 100, 0.1), sem('duration-reduced/slower', 100, 0.1),
     sem('duration-reduced/long', 100, 0.1), sem('duration-reduced/longer', 100, 0.1), sem('duration-reduced/longest', 100, 0.1),
     sem('duration-reduced/spin', 2600, 2.6), sem('duration-reduced/sweep', 2600, 2.6),
-    sem('delay/show', 400, 0.4), sem('delay/min-show', 500, 0.5),
+    sem('delay/show', 400, 0.4), sem('delay/min-show', 500, 0.5), sem('delay/hide', 300, 0.3), sem('delay/skip', 300, 0.3),
     sem('stagger', 40, 0.04),
     ...SETTLES,
-    ...presetRows({ fast: 0.1, normal: 0.2, moderate: 0.3, slow: 0.5 }, { fast: 0.1, normal: 0.1, moderate: 0.1, slow: 0.1 }),
+    ...presetRows({ instant: 0.05, fast: 0.1, normal: 0.2, moderate: 0.3, slow: 0.5 }, { instant: 0.05, fast: 0.1, normal: 0.1, moderate: 0.1, slow: 0.1 }),
   ];
   const AURORA_MOTION: Row[] = [
-    prim(0, 0), prim(30, 0.03), prim(40, 0.04), prim(80, 0.08), prim(100, 0.1), prim(160, 0.16), prim(240, 0.24), prim(400, 0.4), prim(500, 0.5),
+    // 300ms joined with phase 2's motion.delay.hide and motion.delay.skip (Q-PT13 A, Q-PT14 A); delays don't scale with tempo.
+    prim(0, 0), prim(30, 0.03), prim(40, 0.04), prim(80, 0.08), prim(100, 0.1), prim(160, 0.16), prim(240, 0.24), prim(300, 0.3), prim(400, 0.4), prim(500, 0.5),
     prim(640, 0.64), prim(720, 0.72), prim(800, 0.8), prim(880, 0.88), prim(1040, 1.04), prim(1600, 1.6), prim(2600, 2.6),
     sem('duration/instant', 40, 0.04), sem('duration/fast', 80, 0.08), sem('duration/normal', 160, 0.16), sem('duration/moderate', 240, 0.24),
     sem('duration/slow', 400, 0.4), sem('duration/slower', 640, 0.64), sem('duration/spin', 800, 0.8), sem('duration/sweep', 1600, 1.6),
@@ -33538,10 +33552,10 @@ arm: {
     sem('duration-reduced/moderate', 100, 0.1), sem('duration-reduced/slow', 100, 0.1), sem('duration-reduced/slower', 100, 0.1),
     sem('duration-reduced/long', 100, 0.1), sem('duration-reduced/longer', 100, 0.1), sem('duration-reduced/longest', 100, 0.1),
     sem('duration-reduced/spin', 2600, 2.6), sem('duration-reduced/sweep', 2600, 2.6),
-    sem('delay/show', 400, 0.4), sem('delay/min-show', 500, 0.5),
+    sem('delay/show', 400, 0.4), sem('delay/min-show', 500, 0.5), sem('delay/hide', 300, 0.3), sem('delay/skip', 300, 0.3),
     sem('stagger', 30, 0.03),
     ...SETTLES,
-    ...presetRows({ fast: 0.08, normal: 0.16, moderate: 0.24, slow: 0.4 }, { fast: 0.08, normal: 0.1, moderate: 0.1, slow: 0.1 }),
+    ...presetRows({ instant: 0.04, fast: 0.08, normal: 0.16, moderate: 0.24, slow: 0.4 }, { instant: 0.04, fast: 0.08, normal: 0.1, moderate: 0.1, slow: 0.1 }),
   ];
   // EASING: `[name, value, alias, hidden]`. Curves are hidden primitives, roles published aliases of a curve, springs
   // hidden primitives since #2857 (a preset is the published handle), `bounce` only: 1 − the damping ratio
@@ -33565,8 +33579,10 @@ arm: {
     ['motion/spring/bouncy', spring(0.4), null, true],
     ['motion/spring/effects', spring(0), null, true],
     ...([['state', 'default'], ['fade', 'enter'], ['crossfade', 'default'], ['move', 'default'], ['reveal', 'enter'], ['draw', 'default'],
-      ['surface', 'enter'], ['expand', 'default'], ['step', 'default'], ['settle', 'enter']] as const).map(([p, role]): ERow => [
+      ['surface', 'enter'], ['expand', 'default'], ['step', 'default'], ['settle', 'enter'], ['pop', 'enter'], ['press', 'default']] as const).map(([p, role]): ERow => [
       `motion/preset/${p}/easing`, role === 'enter' ? bez(0, 0, 0.2, 1) : bez(0.2, 0, 0, 1), `motion/easing-role/${role}`, false]),
+    // #2857 phase 2 (Q-PT3 A): each arriving preset's exit half eases on the exit role.
+    ...(['fade', 'reveal', 'surface', 'settle', 'pop'] as const).map((p): ERow => [`motion/preset/${p}/exit/easing`, bez(0.4, 0, 1, 1), 'motion/easing-role/exit', false]),
   ];
 
   /** The emitted `motion.json` of a theme, through the same shell regen writes with. */
@@ -43557,7 +43573,7 @@ arm: {
     ['label mode on an icon-only trigger, with no aria-label (K6 B)', JSON.stringify(kind?.values) === '["description","label"]' && /`aria-labelledby` pointing at it and no `aria-label`/.test(co)],
     ['Escape hides it without moving focus, and it never takes focus (OD-T1 A)', /Escape hides it without moving focus/.test(co) && /It never takes focus/.test(co)],
     ['at once on keyboard focus, after the delay on hover, at once in the skip window (OD-T4 A)', /after `delay`, at once on keyboard focus/.test(co) && /within the shared skip window/.test(co)],
-    ['a fade alone with no scale, no animation in the skip window, the reduced fade both ways (K7 A)', /show: opacity 0 to 1, a fade alone with no scale/.test(co) && !/scale from/.test(co) && [tdMotionEntry.replace('a fade alone with no scale', ''), td.motion?.enter ?? '', td.motion?.exit ?? '', td.motion?.reduceMotion ?? ''].every((t) => !SIZE_CHANGE.test(t)) && tdMotionEntry !== '' && /Inside the skip window it appears with no animation/.test(co) && /both ways fade on `motion\.duration-reduced\.fast`/.test(co)],
+    ['a fade alone with no scale, no animation in the skip window, the reduced fade both ways (K7 A)', /show: opacity 0 to 1, a fade alone with no scale/.test(co) && !/scale from/.test(co) && [tdMotionEntry.replace('a fade alone with no scale', ''), td.motion?.enter ?? '', td.motion?.exit ?? '', td.motion?.reduceMotion ?? ''].every((t) => !SIZE_CHANGE.test(t)) && tdMotionEntry !== '' && /Inside the skip window \(`motion\.delay\.skip`\) it appears with no animation/.test(co) && /fades on `motion\.preset\.pop\.duration-reduced` to show and `motion\.preset\.pop\.exit\.duration-reduced` to hide/.test(co)],
     ['an owned positioning layer on the platform, no library (K8 A)', /`popover="manual"`/.test(co) && /CSS anchor positioning/.test(co) && /No positioning library/.test(co)],
     ['max width 240, offset space.100 (OD-T6)', /up to 240px/.test(co) && /offset `space\.100` from the trigger to the arrow\\'s tip|offset `space\.100` from the trigger to the arrow's tip/.test(co)],
     ['logical sides that mirror in right-to-left (OD-X2 A)', /start and end are logical/.test(co)],
@@ -43714,9 +43730,14 @@ arm: {
   ok(moved.length === 0 && carved.length === 0,
     `#2877 dialog end: modal — role="dialog" with aria-modal, focus held, page inert and the scrim at every placement, the end panel included, and no line excepts a placement${moved.length ? ` — MOVED: ${moved.join(', ')}` : ''}${carved.length ? ` — CARVED: ${carved.map((t) => t.slice(0, 70)).join(' | ')}` : ''}`);
   const rm = [dg.motion?.reduceMotion ?? '', line('motion')];
-  ok(rm.every((t) => /every placement and the backdrop fade only, with no slide and no scale, on `?motion\.duration-reduced\.normal`? to open and to close/.test(t))
-    && !rm.some((t) => /at once|no fade|0ms|duration-reduced\.moderate/.test(t)),
-    `#3488 dialog reduced motion: every placement and the backdrop fade only, on motion.duration-reduced.normal, and no line says at once, no fade or 0ms (Q-M5 A) (got ${JSON.stringify(dg.motion?.reduceMotion)})`);
+  // #2857 phase 2: the reduced fades are each preset's own reduced duration, named per pattern (the def's prose is
+  // generated from them; the code-only line states it once). The R7 core is the same: a fade, never a deletion.
+  ok(/every placement and the backdrop fade only, with no slide and no scale, on each preset's `\.duration-reduced`/.test(line('motion'))
+    && ['surface', 'surface.exit', 'fade', 'fade.exit'].every((p) => rm[0].includes(`motion.preset.${p}.duration-reduced`))
+    && /the scrim fades in on motion\.preset\.surface\.duration-reduced; the panel fades in on motion\.preset\.surface\.duration-reduced, with no scale/.test(rm[0])
+    && /the panel fades in on motion\.preset\.surface\.duration-reduced, instead of sliding/.test(rm[0])
+    && !rm.some((t) => /no fade|0ms|duration-reduced\.moderate/.test(t)),
+    `#3488 dialog reduced motion: every placement and the backdrop fade only, on their presets' reduced durations, and no line says no fade or 0ms (Q-M5 A) (got ${JSON.stringify(dg.motion?.reduceMotion)})`);
   // The end panel's code rules: 480 wide, full height, capped at 100vw − 48px, sliding in from the end edge, mirrored.
   ok(/An end panel is full height and 480px wide, at most `100vw − 48px`/.test(line('per-breakpoint placement, no automatic switch'))
     && /an end panel slides in from the end edge/.test(line('motion')) && /An end panel sits at the left edge/.test(line('right-to-left')),
@@ -45874,11 +45895,12 @@ arm: {
   // (1) THE DEFAULT ROWS ARE THE OWNER'S (Q-MP2 A names, Q-MP8 A rows, Q-MS6 A reduced from the duration). The names
   // are the decision's own list, in its order; each row is [step, easing role]; the reduced twin follows the step, and
   // every preset starts at once. ACTUAL is the sidecar the engine emits for the canonical brand, and the tree it names.
-  const QMP2 = 'state, fade, crossfade, move, reveal, draw, surface, expand, step and settle'.split(/, | and /);
+  // Phase 2 adds `pop` (Q-PT4 A; its name still the owner's) and `press` (Q-PT7 A), and moves `move` to normal (Q-PT5 A).
+  const QMP2 = 'state, fade, crossfade, move, reveal, draw, surface, expand, step, settle, pop and press'.split(/, | and /);
   const ROWS: Record<string, [string, string]> = {
-    state: ['fast', 'default'], fade: ['normal', 'enter'], crossfade: ['normal', 'default'], move: ['moderate', 'default'],
+    state: ['fast', 'default'], fade: ['normal', 'enter'], crossfade: ['normal', 'default'], move: ['normal', 'default'],
     reveal: ['slow', 'enter'], draw: ['slow', 'default'], surface: ['moderate', 'enter'], expand: ['normal', 'default'],
-    step: ['moderate', 'default'], settle: ['slow', 'enter'],
+    step: ['moderate', 'default'], settle: ['slow', 'enter'], pop: ['fast', 'enter'], press: ['instant', 'default'],
   };
   const prism3Input = readExampleBrand('./examples/prism3.design.md');
   const stockPresets = sidecar(prism3Input).motion_presets ?? {};
@@ -45889,8 +45911,8 @@ arm: {
       || p.resolves_to?.duration !== `motion.duration.${step}` || p.resolves_to?.easing !== `motion.easing-role.${role}`
       || p.resolves_to?.delay !== 'motion.duration-ms.0' || p.resolves_to?.duration_reduced !== `motion.duration-reduced.${step}`;
   });
-  ok(QMP2.length === 10 && wrongRows.length === 0 && JSON.stringify(Object.keys(stockPresets)) === JSON.stringify(QMP2),
-    `#2857 Q-MP2/Q-MP8/Q-MS1: the ten presets, in order, each naming its motion.preset.<name> tokens and resolving to its approved step and role, no delay, and its step's reduced twin (${Object.keys(stockPresets).join(', ')})${wrongRows.length ? ` — wrong: ${wrongRows.map((n) => `${n} ${JSON.stringify(stockPresets[n])}`).join('; ')}` : ''}`);
+  ok(QMP2.length === 12 && wrongRows.length === 0 && JSON.stringify(Object.keys(stockPresets)) === JSON.stringify(QMP2),
+    `#2857 Q-MP2/Q-MP8/Q-MS1, Q-PT4/Q-PT5/Q-PT7: the twelve presets, in order, each naming its motion.preset.<name> tokens and resolving to its approved step and role, no delay, and its step's reduced twin (${Object.keys(stockPresets).join(', ')})${wrongRows.length ? ` — wrong: ${wrongRows.map((n) => `${n} ${JSON.stringify(stockPresets[n])}`).join('; ')}` : ''}`);
   // The sidecar is read off the tree: each named token is a real leaf, each `resolves_to` its alias, and every slot holds
   // an alias, never a number (Q-MS2 A).
   const p3tree = buildTree(brandTheme(prism3Input)).tree;
@@ -45956,8 +45978,10 @@ arm: {
     ok(JSON.stringify(mo.spring?.effects?.$value) === JSON.stringify({ damping: 1, stiffness: 1600 }) && mo['spring-duration']?.effects?.$value === '231ms' && /^linear\(/.test(mo['spring-easing']?.effects?.$value ?? ''),
       `#2857 Q-MP4 A: motion.spring.effects is damping 1, stiffness 1600, settling in 231ms, with a CSS linear() curve (${JSON.stringify(mo.spring?.effects?.$value)}, ${mo['spring-duration']?.effects?.$value})`);
     const relaxed = treeOf(withMotion({ tempo: 'relaxed' })).motion;
-    ok(msOf(mo.delay?.show?.$value ?? '') === 400 && msOf(mo.delay?.['min-show']?.$value ?? '') === 500 && msOf(relaxed.delay?.show?.$value ?? '') === 400 && Object.keys(mo.delay ?? {}).join() === 'show,min-show',
-      `#2857 G6 B: motion.delay.show 400ms and motion.delay.min-show 500ms, the same at a relaxed tempo (${mo.delay?.show?.$value}, ${mo.delay?.['min-show']?.$value}; relaxed ${relaxed.delay?.show?.$value})`);
+    ok(msOf(mo.delay?.show?.$value ?? '') === 400 && msOf(mo.delay?.['min-show']?.$value ?? '') === 500 && msOf(relaxed.delay?.show?.$value ?? '') === 400
+      && msOf(mo.delay?.hide?.$value ?? '') === 300 && msOf(mo.delay?.skip?.$value ?? '') === 300 && msOf(relaxed.delay?.hide?.$value ?? '') === 300 && msOf(relaxed.delay?.skip?.$value ?? '') === 300
+      && Object.keys(mo.delay ?? {}).join() === 'show,min-show,hide,skip',
+      `#2857 G6 B, Q-PT13 A, Q-PT14 A: motion.delay.show 400ms, min-show 500ms, hide 300ms and skip 300ms, the same at a relaxed tempo (${mo.delay?.show?.$value}, ${mo.delay?.['min-show']?.$value}, ${mo.delay?.hide?.$value}, ${mo.delay?.skip?.$value}; relaxed ${relaxed.delay?.show?.$value}, ${relaxed.delay?.hide?.$value})`);
     ok(mo.distance?.nudge?.$type === 'dimension' && mo.distance?.nudge?.$value === '{prism.space.100}',
       `#2857 Q-MP6 A: motion.distance.nudge aliases space.100 (${mo.distance?.nudge?.$value})`);
   }
@@ -46089,6 +46113,205 @@ arm: {
     [...Object.keys(c.guaranteed), ...c.brandDependent].filter((p) => p.startsWith('motion.brand.') || p === 'motion.brand');
   ok(inContract(live).length === 0 && inContract(committed).length === 0 && Object.keys(live.guaranteed).includes('motion.duration.longest'),
     `#2857 brand-only: no motion.brand.* path is guaranteed or brand-dependent, in the live corpus contract or the committed baseline (live ${JSON.stringify(inContract(live))}, committed ${JSON.stringify(inContract(committed))})`);
+}
+
+// #2857 — MOTION PHASE 2 (owner decisions Q-PT1–Q-PT17, all A, comment 7168486289): the exit halves, `pop` and `press`,
+// `move` on normal, the hide and skip delays, and the pattern file. EXPECTED throughout is typed here from the decisions,
+// never read from MOTION_PRESET_DEFAULTS, MOTION_PATTERNS or the generator; where an arm runs the engine's checker
+// (`patternProblems`) it runs it on a planted pattern whose verdict is typed.
+{
+  const base = { id: 'patterns2857', primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.008 } };
+  const withMotion = (mp: Record<string, unknown>) => ({ ...base, motionPersonality: mp }) as unknown as BrandInput;
+  const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+  const sidecar = (input: BrandInput) => { const th = brandTheme(input); return buildAiMetadata(th, buildTree(th).tree) as any; };
+  const treeOf = (input: BrandInput) => buildTree(brandTheme(input)).tree.prism;
+
+  // (1) THE EXIT HALVES (Q-PT3 A): each arriving preset, and only those, carries `exit`, one step shorter on the exit
+  // role, the same five slots; the sidecar names them and what they resolve to.
+  const EXIT: Record<string, string> = { fade: 'fast', reveal: 'moderate', surface: 'normal', settle: 'moderate', pop: 'instant' };
+  {
+    const mo = treeOf(withMotion({})).motion;
+    const side = sidecar(withMotion({})).motion_presets;
+    const withExit = Object.keys(mo.preset).filter((n) => 'exit' in mo.preset[n]).sort();
+    const bad = Object.entries(EXIT).filter(([n, step]) => {
+      const x = mo.preset[n]?.exit, s = side[n]?.exit;
+      return !x || x.duration.$value !== `{prism.motion.duration.${step}}` || x.easing.$value !== '{prism.motion.easing-role.exit}'
+        || x.delay.$value !== '{prism.motion.duration-ms.0}' || x['duration-reduced'].$value !== `{prism.motion.duration-reduced.${step}}`
+        || JSON.stringify(x.transition?.$value) !== JSON.stringify({ duration: `{prism.motion.preset.${n}.exit.duration}`, timingFunction: `{prism.motion.preset.${n}.exit.easing}`, delay: `{prism.motion.preset.${n}.exit.delay}` })
+        || s?.token !== `motion.preset.${n}.exit.transition` || s?.resolves_to?.duration !== `motion.duration.${step}` || s?.resolves_to?.easing !== 'motion.easing-role.exit';
+    });
+    ok(JSON.stringify(withExit) === JSON.stringify(Object.keys(EXIT).sort()) && bad.length === 0,
+      `#2857 Q-PT3 A: fade, reveal, surface, settle and pop each carry an exit half one step shorter on the exit role, in the tree and the sidecar, and no in-place preset has one (with exit: ${withExit.join(', ')}${bad.length ? `; wrong: ${bad.map(([n]) => n).join(', ')}` : ''})`);
+    // A brand re-points an exit slot, and only that half moves.
+    const over = treeOf(withMotion({ presets: { surface: { exit: { duration: 'duration.fast', easing: 'easing.accelerate' } } } })).motion;
+    ok(over.preset.surface.exit.duration.$value === '{prism.motion.duration.fast}' && over.preset.surface.exit.easing.$value === '{prism.motion.easing.accelerate}'
+      && over.preset.surface.exit['duration-reduced'].$value === '{prism.motion.duration-reduced.fast}'
+      && JSON.stringify(over.preset.surface.duration) === JSON.stringify(mo.preset.surface.duration)
+      && Object.keys(over.preset).filter((n) => JSON.stringify(over.preset[n]) !== JSON.stringify(mo.preset[n])).join() === 'surface',
+      `#2857 Q-PT3 A: a brand re-points surface's exit half, its reduced twin follows, and nothing else moves (${over.preset.surface.exit.duration.$value})`);
+    // Refused by name: an exit slot re-pointed to a number, an exit on an in-place preset, an unknown exit slot.
+    const refusals: [string, Record<string, unknown>, RegExp][] = [
+      ['an exit half re-pointed to a number', { presets: { surface: { exit: { duration: 300 } } } }, /motionPersonality\.presets\.surface\.exit\.duration: a slot names a motion path, never a number \(got 300\)/],
+      ['an exit on an in-place preset', { presets: { move: { exit: { duration: 'duration.fast' } } } }, /motionPersonality\.presets\.move\.exit: only a preset that brings something in has an exit half/],
+      ['an unknown exit slot', { presets: { surface: { exit: { reduced: 'duration.fast' } } } }, /motionPersonality\.presets\.surface\.exit: unknown slot 'reduced'/],
+    ];
+    for (const [label, mp, want] of refusals) {
+      const msg = refusal(() => brandTheme(withMotion(mp)));
+      ok(want.test(msg), `#2857 Q-PT3 A: ${label} is refused by name (got ${JSON.stringify(msg.slice(0, 160))})`);
+    }
+    ok(validateBrandInput(withMotion({ presets: { surface: { exit: { duration: 300 } } } }) as never).length > 0
+      && validateBrandInput(withMotion({ presets: { pop: { exit: { duration: 'duration.fast' } }, press: { duration: 'duration.fast' } } }) as never).length === 0,
+      '#2857 phase 2: the brand-input schema takes pop, press and an exit half, and refuses an exit slot that is a number');
+  }
+
+  // (2) R3 IN EVERY COMMITTED BRAND: an exit half is shorter than its entrance, and its reduced twin no longer. ACTUAL is
+  // each committed DTCG, aliases followed to milliseconds; the relation is the rule's, typed here.
+  {
+    const OUT = resolve(HERE, 'out');
+    const files = readdirSync(OUT).filter((f) => /^[^.]+\.tokens\.json$/.test(f));
+    const wrong: string[] = [];
+    for (const f of files) {
+      const doc = JSON.parse(readFileSync(resolve(OUT, f), 'utf8'));
+      const root = Object.keys(doc).find((k) => !k.startsWith('$'))!;
+      const msOf = (v: unknown, d = 0): number => {
+        if (typeof v === 'string' && /^\{.+\}$/.test(v)) return msOf(v.slice(1, -1).split('.').reduce((n: any, k) => n?.[k], doc).$value, d + 1);
+        if (typeof v === 'string') { const m = /^([\d.]+)(ms|s)$/.exec(v); if (m) return Number(m[1]) * (m[2] === 's' ? 1000 : 1); }
+        if (v && typeof v === 'object' && 'value' in (v as any)) return (v as any).value * ((v as any).unit === 's' ? 1000 : 1);
+        return NaN;
+      };
+      for (const n of Object.keys(EXIT)) {
+        const p = doc[root].motion.preset[n];
+        const [en, ex, enR, exR] = [p.duration.$value, p.exit?.duration.$value, p['duration-reduced'].$value, p.exit?.['duration-reduced'].$value].map((v) => msOf(v));
+        if (!(ex < en) || !(exR <= enR)) wrong.push(`${f} ${n}: exit ${ex}ms (reduced ${exR}) vs enter ${en}ms (reduced ${enR})`);
+      }
+    }
+    ok(files.length >= 5 && wrong.length === 0, `#2857 R3: in each of ${files.length} committed brands, every exit half is shorter than its entrance and its reduced twin no longer${wrong.length ? ` — ${wrong.slice(0, 3).join('; ')}` : ''}`);
+  }
+
+  // (3) THE STARTER SET (Q-PT16 A): the §2 table's patterns, by name and half; the owner's start scales (Q-PT10 A); the
+  // scrim on its panel's preset (Q-PT8 A); the in-place travels on move (Q-PT5 A); tooltip and popover on pop (Q-PT4 A).
+  {
+    const TABLE: [string, string][] = [
+      ['dialog/enter', 'enter'], ['dialog/exit', 'exit'], ['dialog/bottom/enter', 'enter'], ['dialog/bottom/exit', 'exit'], ['dialog/end/enter', 'enter'], ['dialog/end/exit', 'exit'],
+      ['toast/enter', 'enter'], ['toast/exit', 'exit'], ['tooltip/show', 'enter'], ['tooltip/hide', 'exit'], ['popover/open', 'enter'], ['popover/close', 'exit'],
+      ['accordion/expand', 'enter'], ['accordion/collapse', 'exit'], ['fade/in', 'enter'], ['fade/out', 'exit'], ['hover', 'change'], ['pressed', 'change'], ['pressed/release', 'change'],
+      ['tabs/select', 'change'], ['switch/toggle', 'change'], ['segmented/select', 'change'],
+    ];
+    ok(JSON.stringify(MOTION_PATTERNS.map((p) => [p.name, p.half])) === JSON.stringify(TABLE),
+      `#2857 Q-PT16 A: the starter set is the §2 table, in order (got ${MOTION_PATTERNS.map((p) => p.name).join(', ')})`);
+    const track = (name: string, key: string) => MOTION_PATTERNS.find((p) => p.name === name)?.tracks.find((t) => trackKey(t) === key);
+    const facts: [string, boolean][] = [
+      ['dialog scales from 0.96', track('dialog/enter', 'panel.transform')?.scale === 0.96 && track('dialog/exit', 'panel.transform')?.scale === 0.96],
+      ['popover scales from 0.95', track('popover/open', 'popover.transform')?.scale === 0.95],
+      ['press scales to 0.98', track('pressed', 'control.transform')?.scale === 0.98],
+      ['the scrim plays on its panel\'s preset', MOTION_PATTERNS.filter((p) => p.name.startsWith('dialog/')).every((p) => track(p.name, 'scrim.opacity')?.preset === p.tracks.find((t) => t.element === 'panel')?.preset)],
+      ['the dialog opens on surface and closes on surface.exit', track('dialog/enter', 'panel.opacity')?.preset === 'surface' && track('dialog/exit', 'panel.opacity')?.preset === 'surface.exit'],
+      ['the in-place travels name move', ['tabs/select:underline.transform', 'switch/toggle:thumb.transform', 'segmented/select:pill.transform', 'accordion/expand:indicator.transform'].every((s) => track(s.split(':')[0], s.split(':')[1])?.preset === 'move')],
+      ['tooltip and popover on pop', track('tooltip/show', 'tooltip.opacity')?.preset === 'pop' && track('tooltip/hide', 'tooltip.opacity')?.preset === 'pop.exit' && track('popover/close', 'popover.opacity')?.preset === 'pop.exit'],
+      ['toast slides by the nudge', JSON.stringify(track('toast/enter', 'toast.transform')?.distance) === '{"token":"distance.nudge"}'],
+      ['no pattern staggers', MOTION_PATTERNS.every((p) => !('stagger' in p) && p.tracks.every((t) => !('stagger' in t)))],
+    ];
+    const off = facts.filter(([, v]) => !v).map(([k]) => k);
+    ok(off.length === 0, `#2857 Q-PT4/5/8/10 A: the starter set's typed facts hold${off.length ? ` — wrong: ${off.join('; ')}` : ''}`);
+    ok(patternProblems(MOTION_PATTERNS).length === 0, `#2857: the engine's patterns pass their own check (${patternProblems(MOTION_PATTERNS).join('; ')})`);
+  }
+
+  // (4) REDUCED KINDS (Q-PT11 A) on the engine's data, typed per track: opacity and color keep; a transform or size off
+  // where its element also fades, fade where it doesn't; and the explicit offs.
+  {
+    const kind = (name: string, key: string) => { const p = MOTION_PATTERNS.find((x) => x.name === name)!; return reducedKindOf(p.tracks.find((t) => trackKey(t) === key)!, p); };
+    const want: [string, string, string][] = [
+      ['dialog/enter', 'scrim.opacity', 'keep'], ['dialog/enter', 'panel.transform', 'off'], ['dialog/bottom/enter', 'panel.transform', 'fade'],
+      ['dialog/end/exit', 'panel.transform', 'fade'], ['toast/enter', 'toast.transform', 'off'], ['accordion/expand', 'panel.size', 'off'],
+      ['accordion/expand', 'indicator.transform', 'off'], ['switch/toggle', 'track.color', 'keep'], ['switch/toggle', 'thumb.transform', 'off'], ['pressed', 'control.transform', 'off'],
+    ];
+    const bad = want.filter(([n, k, w]) => kind(n, k) !== w).map(([n, k, w]) => `${n} ${k}: ${kind(n, k)} (want ${w})`);
+    ok(bad.length === 0, `#2857 Q-PT11 A: each track's reduced kind is the default's, or its own off${bad.length ? ` — ${bad.join('; ')}` : ''}`);
+  }
+
+  // (5) THE CHECKER, ON PLANTED PATTERNS whose verdicts are typed: a track naming a preset that doesn't exist, and a
+  // pattern whose every track goes off under reduced motion (R7), each fail by name; a sound pattern passes.
+  {
+    const planted = (tracks: MotionPattern['tracks']): MotionPattern[] => [{ name: 'planted/enter', half: 'enter', tracks }];
+    const unknown = patternProblems(planted([{ element: 'x', property: 'opacity', preset: 'nope' }]));
+    ok(unknown.length === 1 && /pattern 'planted\/enter' track 'x\.opacity': unknown preset 'nope'/.test(unknown[0]), `#2857: a track naming a nonexistent preset fails by name (${unknown.join('; ')})`);
+    const allOff = patternProblems(planted([{ element: 'x', property: 'transform', transform: 'travel', preset: 'move', reduced: 'off' }, { element: 'y', property: 'size', preset: 'expand', reduced: 'off' }]));
+    ok(allOff.length === 1 && /pattern 'planted\/enter': every track goes off under reduced motion.*\(R7\)/.test(allOff[0]), `#2857 R7: a pattern whose every track goes off fails by name (${allOff.join('; ')})`);
+    const sound = patternProblems(planted([{ element: 'x', property: 'transform', transform: 'travel', preset: 'move', reduced: 'off' }, { element: 'x', property: 'color', preset: 'move' }]));
+    ok(sound.length === 0, `#2857 R7: a pattern that keeps one track passes (${sound.join('; ')})`);
+    const misuse = patternProblems(planted([{ element: 'x', property: 'opacity', preset: 'fade', scale: 0.9 }, { element: 'x', property: 'opacity', preset: 'fade' }]));
+    ok(misuse.some((m) => /a start scale belongs to a scale/.test(m)) && misuse.some((m) => /two tracks share this key/.test(m)), `#2857: a scale off a scale track and a repeated track key fail by name (${misuse.join('; ')})`);
+  }
+
+  // (6) BRAND OVERRIDES PER TRACK (Q-PT15 A): a track's preset, distance, scale and reduced kind move, in the sidecar;
+  // never which tracks exist. Each refusal by name.
+  {
+    const mp = sidecar(withMotion({ patterns: { 'dialog/enter': { 'panel.transform': { scale: 0.9, preset: 'preset.settle' } }, 'toast/enter': { 'toast.transform': { distance: 'space.200' } } } })).motion_patterns;
+    const stock = sidecar(withMotion({})).motion_patterns;
+    const panel = mp['dialog/enter'].tracks.find((t: any) => t.element === 'panel' && t.property === 'transform');
+    const toast = mp['toast/enter'].tracks.find((t: any) => t.property === 'transform');
+    const moved = Object.keys(stock).filter((n) => JSON.stringify(stock[n]) !== JSON.stringify(mp[n]));
+    ok(panel?.scale === 0.9 && panel?.preset === 'motion.preset.settle' && toast?.distance === 'space.200' && JSON.stringify(moved) === '["dialog/enter","toast/enter"]'
+      && mp['dialog/enter'].tracks.length === stock['dialog/enter'].tracks.length,
+      `#2857 Q-PT15 A: a brand re-points a track's preset, scale and distance, and only those patterns move (${JSON.stringify(panel)}; moved ${JSON.stringify(moved)})`);
+    const refusals: [string, Record<string, unknown>, RegExp][] = [
+      ['an unknown pattern', { 'dialog/open': {} }, /motionPersonality\.patterns: unknown pattern 'dialog\/open'/],
+      ['an added track', { 'dialog/enter': { 'panel.size': { scale: 0.9 } } }, /motionPersonality\.patterns\.dialog\/enter: unknown track 'panel\.size'; a brand changes a track, never which tracks exist/],
+      ['an unknown field', { 'dialog/enter': { 'panel.transform': { stagger: 1 } } }, /motionPersonality\.patterns\.dialog\/enter\.panel\.transform: unknown field 'stagger'/],
+      ['a preset that is a number', { 'dialog/enter': { 'panel.transform': { preset: 300 } } }, /motionPersonality\.patterns\.dialog\/enter\.panel\.transform\.preset: a preset is a path/],
+      ['a preset that does not exist', { 'dialog/enter': { 'panel.transform': { preset: 'preset.nope' } } }, /pattern 'dialog\/enter' track 'panel\.transform': unknown preset 'nope'/],
+      ['a distance that is a CSS length', { 'toast/enter': { 'toast.transform': { distance: '8px' } } }, /motionPersonality\.patterns\.toast\/enter\.toast\.transform\.distance: a distance is a token path/],
+      ['a start scale above 1', { 'dialog/enter': { 'panel.transform': { scale: 1.2 } } }, /a start scale is above 0 and at most 1 \(got 1\.2\)/],
+      ['every track off under reduced motion', { 'tabs/select': { 'panel.opacity': { reduced: 'off' } } }, /pattern 'tabs\/select': every track goes off under reduced motion.*\(R7\)/],
+    ];
+    for (const [label, patterns, want] of refusals) {
+      const msg = refusal(() => brandTheme(withMotion({ patterns })));
+      ok(want.test(msg), `#2857 Q-PT15 A: ${label} is refused by name (got ${JSON.stringify(msg.slice(0, 160))})`);
+    }
+    ok(validateBrandInput(withMotion({ patterns: { 'dialog/enter': { 'panel.transform': { scale: 1.2 } } } }) as never).length > 0
+      && validateBrandInput(withMotion({ patterns: { 'dialog/enter': { 'panel.transform': { scale: 0.9, reduced: 'fade' } } } }) as never).length === 0,
+      '#2857 Q-PT15 A: the brand-input schema takes a track override and refuses a start scale above 1');
+  }
+
+  // (7) THE AGENT FILE'S motion_patterns: every pattern, its tracks spelled as tokens, its reduced kinds resolved. One
+  // pattern typed whole.
+  {
+    const mp = sidecar(withMotion({})).motion_patterns;
+    ok(Object.keys(mp).length === 22 && JSON.stringify(mp['dialog/enter']) === JSON.stringify({ half: 'enter', tracks: [
+      { element: 'scrim', property: 'opacity', preset: 'motion.preset.surface', reduced: 'keep' },
+      { element: 'panel', property: 'opacity', preset: 'motion.preset.surface', reduced: 'keep' },
+      { element: 'panel', property: 'transform', transform: 'scale', preset: 'motion.preset.surface', scale: 0.96, reduced: 'off' },
+      { element: 'content', property: 'opacity', preset: 'motion.preset.fade', reduced: 'keep' },
+    ] }) && mp['toast/enter'].tracks[1].distance === 'motion.distance.nudge',
+      `#2857 Q-PT1 A: the agent file carries the 22 patterns, dialog/enter as typed (${JSON.stringify(mp['dialog/enter'])?.slice(0, 200)})`);
+  }
+
+  // (8) THE DEFS NAME THEIR PATTERNS, AND THEIR PROSE IS GENERATED FROM THEM (Q-PT2 A). The set of defs and the names
+  // each plays are typed; each prose field opens with exactly what its patterns generate (a def's own notes may follow),
+  // and one generated sentence is typed whole, so the generator is held too.
+  {
+    const OWNERS: Record<string, string[]> = {
+      dialog: ['dialog/enter', 'dialog/exit', 'dialog/bottom/enter', 'dialog/bottom/exit', 'dialog/end/enter', 'dialog/end/exit'],
+      toast: ['toast/enter', 'toast/exit'], tooltip: ['tooltip/show', 'tooltip/hide'], popover: ['popover/open', 'popover/close'], menu: ['popover/open', 'popover/close'],
+      accordion: ['accordion/expand', 'accordion/collapse'], tabs: ['tabs/select'], 'switch-control': ['switch/toggle'], 'segmented-control': ['segmented/select'],
+    };
+    const named = Object.fromEntries(componentDefs.filter((d) => d.motion?.patterns?.length).map((d) => [d.id, d.motion!.patterns!]));
+    ok(JSON.stringify(Object.keys(named).sort()) === JSON.stringify(Object.keys(OWNERS).sort()) && Object.entries(OWNERS).every(([id, ns]) => JSON.stringify(named[id]) === JSON.stringify(ns)),
+      `#2857 Q-PT16 A: exactly the §2 components name patterns, each its own (got ${JSON.stringify(named)})`);
+    const drift = componentDefs.filter((d) => d.motion?.patterns?.length).flatMap((d) => {
+      const gen = motionProse(d.motion!.patterns!);
+      return (['enter', 'exit', 'reduceMotion'] as const).filter((f) => !(d.motion![f] ?? '').startsWith(gen[f])).map((f) => `${d.id}.motion.${f}`);
+    });
+    ok(drift.length === 0, `#2857 Q-PT2 A: every pattern-owning def's motion prose opens with what its patterns generate${drift.length ? ` — hand-edited: ${drift.join(', ')}` : ''}`);
+    const dialog = componentDefs.find((d) => d.id === 'dialog')!;
+    ok((dialog.motion?.enter ?? '').startsWith('For a centered dialog, the scrim fades in and the panel fades in and scales up from 96% on motion.preset.surface; the content fades in on motion.preset.fade. ')
+      && (componentDefs.find((d) => d.id === 'tooltip')!.motion?.exit ?? '').startsWith('The tooltip fades out on motion.preset.pop.exit.'),
+      `#2857 Q-PT2 A: the generated prose reads as typed (dialog enter: ${JSON.stringify(dialog.motion?.enter?.slice(0, 120))})`);
+    // Tooltip on its three delays (Q-PT13 A, Q-PT14 A).
+    const tt = componentDefs.find((d) => d.id === 'tooltip')!;
+    ok(['motion.delay.show', 'motion.delay.hide', 'motion.delay.skip'].every((t) => JSON.stringify(tt).includes(t)),
+      '#2857 Q-PT13/Q-PT14 A: the tooltip names motion.delay.show, motion.delay.hide and motion.delay.skip');
+  }
 }
 
 // ------------------------------------------------------------------- #4161 / #4163: the tree says which leaves are which
@@ -46905,9 +47128,10 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   // ai-metadata.ts: a merge that leaves two shapes under one id (git merges identical version lines silently) fails this
   // arm by name.
   const aiDoc = buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree) as any;
-  ok(aiDoc.$schema === 'prism3-ai-metadata/0.8' && aiSchema.$id === 'prism3-ai-metadata/0.8' && 'icons' in aiDoc && 'motion_presets' in aiDoc
+  // Phase 2 takes 0.9: motion_presets gains each arriving preset's exit half, and motion_patterns joins.
+  ok(aiDoc.$schema === 'prism3-ai-metadata/0.9' && aiSchema.$id === 'prism3-ai-metadata/0.9' && 'icons' in aiDoc && 'motion_presets' in aiDoc && 'motion_patterns' in aiDoc
     && Object.values<any>(aiDoc.motion_presets).every((p) => typeof p.token === 'string' && typeof p.resolves_to === 'object'),
-    `#3076 / #2857: the sidecar is schema 0.8 since motion_presets took its token shape, with icons and the preset tokens in it (got $schema ${aiDoc.$schema}, $id ${aiSchema.$id})`);
+    `#3076 / #2857: the sidecar is schema 0.9 since motion_patterns joined, with icons, the preset tokens and the patterns in it (got $schema ${aiDoc.$schema}, $id ${aiSchema.$id})`);
   const xErrs = validateJsonSchema(JSON.parse(readFileSync(resolve(HERE, 'schema', 'component-defs.schema.json'), 'utf8')), JSON.parse(JSON.stringify(xdoc)));
   ok(xErrs.length === 0, `#3076 a mapped brand's component export is valid against component-defs.schema.json (${xErrs.slice(0, 3).join('; ')})`);
   // DUPLICATE ART IS REPORTED, NEVER REFUSED (owner decision 2026-11-20 A). Each brand glyph below is typed by hand as a

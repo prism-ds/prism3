@@ -7778,7 +7778,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — the `tooltip/show` and `tooltip/hide` patterns: show is opacity 0 to 1, a fade alone with no scale, on `motion.preset.pop`; hide is a fade on `motion.preset.pop.exit`. Inside the skip window (`motion.delay.skip`) it appears with no animation. Under `prefers-reduced-motion` both ways fade on the presets' `.duration-reduced`."
+          "description": "motion — the `tooltip/show` and `tooltip/hide` patterns. On show: opacity 0 to 1, a fade alone with no scale, on `motion.preset.pop`. On hide: a fade on `motion.preset.pop.exit`. Inside the skip window (`motion.delay.skip`) it appears with no animation. Under `prefers-reduced-motion` it fades on `motion.preset.pop.duration-reduced` to show and `motion.preset.pop.exit.duration-reduced` to hide."
         },
         {
           "class": "right-to-left",

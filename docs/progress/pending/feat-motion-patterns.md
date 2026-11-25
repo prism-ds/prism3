@@ -1,0 +1,13 @@
+## (2026-11-25) — Motion phase 2: the pattern file, exit halves, pop and press (#2857)
+
+Built to the owner's phase 2 decisions (Q-PT1–Q-PT17, all A). The name of the quick-arrival preset (Q-PT4) is still open, so it's built as `pop`, held in one constant, `QUICK_ARRIVAL_PRESET`.
+
+- **Exit halves (Q-PT3 A).** Each arriving preset carries `motion.preset.<name>.exit.*`, one step shorter on the exit role. Every committed brand's reduced exit is no longer than its reduced entrance; `test.ts` holds that against the emitted milliseconds. The reduced twins aren't ordered in general, so this needed checking.
+- **The pattern file (Q-PT1 A) is engine data, `motion-patterns.ts`, not tokens.** It imports the preset defaults from `theme-motion.ts`, so `buildMotion` can't import it back. The patterns are resolved in `theme-brand.ts` and `theme-nb.ts`, and `theme-motion.ts` imports only the type.
+- **Generated prose (Q-PT2 A).** A def that names patterns writes its `motion` field with `motionOf`, and its own notes are appended after the generated sentences. So `notes` is not a def field: the docs gate reads every def leaf, and a note would be a leaf the page doesn't carry verbatim. Under reduced motion the prose is grouped by element, so it reads "the panel fades in on …, with no scale" instead of one clause per track.
+- **What the gates found:**
+  - **`lint-motion-literals` half 4** compares the reduced durations a recipe names with each def's. The generated prose names a preset's own reduced duration (`motion.preset.surface.duration-reduced`), so the gate's reader now takes both forms. Its strict "exactly the recipe's roles" rule forced a recipe split: the switch and segmented control travel on `move` while checkbox and radio stay on `fast`. So `prism3-motion` has ten recipes, and banner's prose names the `fade` preset it already played on.
+  - **`json-schema-lite`** refuses an unknown keyword rather than ignoring it. It now implements `exclusiveMinimum` and `maximum` for the start scale. The agent-file schema's `$ref` into another def's property became a `$defs` entry of its own.
+  - **`theme-schema.json` is hand-authored and strict,** so a brand with `patterns` or a preset `exit` failed input validation until both were added. It also had no `pop` or `press`.
+  - **Format raises:** the agent file 0.9, the component export 1.8 and the component docs 1.3, each recorded in `format-history.json`. One `--note` landed on all three rows, so two notes were corrected by hand.
+- **Trap for the next lane.** The `Popover / open` and `Popover / close` names in the popover and menu notes were the wireframe's; the patterns are `popover/open` and `popover/close`. The Figma style per pattern is phase 3.
