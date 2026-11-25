@@ -1,0 +1,4 @@
+---
+engine: minor
+---
+The MCP serves components (#4467). `list_components` returns every component's id, name, one-line summary and status, in about 13,000 characters. `get_component` returns one component's contract: its props with their allowed values and defaults, its variants and states, each part with the tokens it may bind, when to use it and when not, its partners, and its motion: the `motion.*` tokens it binds and its motion patterns, each track naming its preset, in at most 25,000 characters. With `brand` (a BrandInput), the token names are the ones the brand's settings bind, and each comes with its value: a color as a hex in every mode, anything else at the end of its alias chain. Without it, the answer is brand-neutral. Both are built from the component definitions and the contract export, so an agent no longer reads the whole export to place one component. `prism3-build-ui` tells an agent to list, then get, before it composes.

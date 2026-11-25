@@ -57,6 +57,7 @@ import { parseStandardDesignMd, isStandardDesignMd, standardToBrandInput } from 
 import { ENGINE_VERSION } from './version';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
+import { listComponents, getComponent } from './mcp-components';
 import { BUILD_IDENTITY } from './build-identity';
 
 // Reads the shared constant rather than restating it: a hardcoded duplicate is exactly how a
@@ -483,6 +484,58 @@ export const toolDefs = (brandSchema: unknown) => [
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
+  // #4467 (owner decision A, 2026-11-25): the component surface, so an agent asks for one component instead of
+  // reading the whole contract export. Both read `componentDefs` and the export live (`mcp-components.ts`).
+  {
+    name: 'list_components',
+    title: 'List the components',
+    description: `List every component the system defines: its id, name, one-line summary and status. About ${COMPONENT_LIST_CHARS.toLocaleString('en-US')} characters. Call it before composing UI, then call get_component for each component you place, so you build from the contract rather than from what a component usually looks like elsewhere.`,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number', description: 'How many components are listed.' },
+        components: {
+          type: 'array', description: 'One entry per component, in registry order.',
+          items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, summary: { type: 'string' }, status: { type: 'string' } }, required: ['id', 'name', 'summary', 'status'] },
+        },
+      },
+      required: ['total', 'components'],
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'get_component',
+    title: 'Get one component\'s contract',
+    description: 'One component\'s contract: its props with their allowed values and defaults, its variants and states, each part with the tokens it may bind (grouped by the property it binds), when to use it and when not (whenToUse, avoidWhen), its partners, and its motion: the motion.* tokens it binds and its motion patterns, each track naming the preset it plays on. Pass `brand`, the same BrandInput theme_brand takes, to resolve it for that brand: the token names the brand\'s settings bind, and `values`, each named token\'s value (a color as a hex per mode). Without `brand` the answer is brand-neutral: token names at the default settings. Take the id from list_components; an unknown id is refused, with the nearest ids. At most ' + COMPONENT_RESULT_CEILING.toLocaleString('en-US') + ' characters.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'A component id from list_components, such as "button".' },
+        brand: { type: 'object', description: 'Optional. The same BrandInput you pass to theme_brand — see that tool for the full input schema.' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }, name: { type: 'string' }, status: { type: 'string' }, summary: { type: 'string' },
+        brand: { description: 'null when brand-neutral; else the brand\'s id, token root and modes.' },
+        props: { type: 'array', description: 'The code API: each prop with its type, allowed values, default and whether it is required.' },
+        variants: { type: 'object', description: 'Each variant axis and its values.' },
+        states: { type: 'array', items: { type: 'string' } },
+        parts: { type: 'array', description: 'Each part: its path, kind, when it is present, and the tokens it may bind, by property.' },
+        values: { type: 'object', description: 'With brand: each named token\'s value for the brand.' },
+        whenToUse: { type: 'string' }, avoidWhen: { type: 'string' },
+        partners: { type: 'object', description: 'commonPartners, composesWith and alternativeTo: component ids.' },
+        motion: { type: 'object', description: 'The motion prose, the motion.* tokens it binds and, where the component has them, its motion patterns (with brand, the brand\'s overrides applied).' },
+        digest: { type: 'string', description: 'A change signal for this component\'s contract.' },
+      },
+      required: ['id', 'name', 'props', 'parts', 'partners', 'motion'],
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  },
 ];
 
 /** Sections included when the caller does not say. `notes` is the decisions log — every gap the
@@ -506,6 +559,11 @@ export const toolDefs = (brandSchema: unknown) => [
  *  did it silently: an agent that never passes `include` gets a themed brand with no indication that
  *  fifteen choices were made for it. Defaults decide what most callers actually see. */
 export const DEFAULT_THEME_SECTIONS = ['notes'];
+/** #4467: the size `list_components` states in its description, and the ceiling `get_component` states and keeps. Both
+ *  are held in `mcp-test.ts`: the list within 15% of this figure, and every component's result, neutral and for a brand,
+ *  at or under the ceiling. */
+export const COMPONENT_LIST_CHARS = 13_000;
+export const COMPONENT_RESULT_CEILING = 25_000;
 /** #4200 D (DRAFT): the two large payloads' size for a four-mode brand, one figure each, stated once. The description and
  *  the withheld-section hint both read it, and test.ts holds it to ±15% of the measured size. */
 export const PAYLOAD_CHARS = { tokens: 440_000, aiMetadata: 565_000 } as const;
@@ -813,6 +871,31 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
     });
   }
 
+  if (name === 'list_components') {
+    const components = listComponents(componentDefs);
+    return structured({ total: components.length, components });
+  }
+  if (name === 'get_component') {
+    const id = args?.id;
+    if (typeof id !== 'string' || !id) return text({ error: 'get_component requires `id`: a component id from list_components', errors: [`id is ${shapeOf(id)}; it takes a component id, such as "button"`] }, true);
+    // the id first: an unknown one is refused before any brand is built
+    if (!componentDefs.some((d) => d.id === id)) {
+      const words = id.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const nearest = componentDefs.map((d) => d.id).filter((c) => words.some((w) => c.includes(w))).slice(0, 5);
+      return text({ error: `get_component: no component has the id "${id}"`, errors: [`"${id}" is not a component id; list_components returns every id${nearest.length ? `. Nearest: ${nearest.join(', ')}` : ''}`], ...(nearest.length ? { nearest } : {}) }, true);
+    }
+    let brand: { input: BrandInput; theme: Theme; tree: unknown } | undefined;
+    if (args && typeof args === 'object' && 'brand' in args) {
+      const noBrand = missingBrand('get_component', args.brand);
+      if (noBrand) return noBrand;
+      const errors = validateBrandInput(args.brand);
+      if (errors.length) return text({ error: FAILS_SCHEMA, errors }, true);
+      const b = buildBrand(args.brand);
+      if (refused(b)) return b;
+      brand = { input: args.brand as BrandInput, theme: b.theme, tree: b.built.tree };
+    }
+    return structured(getComponent(componentDefs, id, brand)!);
+  }
   if (name === 'list_levers') {
     // `describe` returns the prose `tools/list` summarizes (#1760): the named fields exactly as the
     // schema file has them, so every field stays describable in full however the inline copy is cut.

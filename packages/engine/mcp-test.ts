@@ -468,6 +468,8 @@ await new Promise((r) => setTimeout(r, 3000));
     theme_from_brief: { brief: ['---', 'id: schema', 'primary: { l: 0.5, c: 0.15, h: 250 }', 'neutral: { hue: 250, chroma: 0.01 }', '---'].join('\n') },
     export_theme: { brand: B, outDir: 'packages/engine/.mcp-test-4151-out', include: ['tokens'] },
     validate_brand: B,
+    list_components: {},
+    get_component: { id: 'button', brand: B },
   };
   const listed = ((await server.reply(server.send('tools/list'))).result?.tools ?? []) as Array<{ name: string; outputSchema?: unknown }>;
   try {
@@ -762,6 +764,88 @@ await new Promise((r) => setTimeout(r, 3000));
   const fullNonLever = (catalog.structuredContent?.nonLeverFields ?? []).map((f: { key: string }) => f.key).sort().join(',');
   ok(fullKeys.length > 0 && missing.length === 0 && summaryKeys.length === fullKeys.length && nonLever === fullNonLever && nonLever.length > 0,
     `#4147: the summary names every lever and non-lever field the full catalog names (${summaryKeys.length} of ${fullKeys.length} levers; missing: ${missing.join(', ') || 'none'})`);
+}
+
+// ---- #4467: list_components and get_component (owner decision A, 2026-11-25) -------------------------------------
+// The oracles are not the tools' subject (docs/34): the component ids come from the committed catalog
+// (`out/components/components.ai.json`, a regen artifact `regen --check` holds), never from `componentDefs`, which the
+// list reads; the size figures and the pill radius are typed here; the ceilings are read from the served descriptions
+// and held to the literals below.
+{
+  const catalog = JSON.parse(readFileSync(join(HERE, 'out/components/components.ai.json'), 'utf8')).components as Record<string, { name: string; ai?: { avoidWhen?: string } }>;
+  const catalogIds = Object.keys(catalog);
+  const list = await server.call('list_components', {});
+  const listed: { id: string; name: string; summary: string; status: string }[] = list.structuredContent?.components ?? [];
+  const listedIds = listed.map((c) => c.id);
+  const notListed = catalogIds.filter((id) => !listedIds.includes(id));
+  const notInCatalog = listedIds.filter((id) => !catalogIds.includes(id));
+  ok(list.isError !== true && catalogIds.length > 0 && notListed.length === 0 && notInCatalog.length === 0 && list.structuredContent?.total === catalogIds.length,
+    `#4467: list_components lists every component the catalog holds, and nothing else (${listedIds.length} listed, ${catalogIds.length} in the catalog; missing: ${notListed.join(', ') || 'none'}; extra: ${notInCatalog.join(', ') || 'none'})`);
+  ok(listed.length > 0 && listed.every((c) => typeof c.name === 'string' && c.name && typeof c.summary === 'string' && c.summary && typeof c.status === 'string' && c.status && catalog[c.id]?.name === c.name),
+    '#4467: each listed component carries its catalog name, a one-line summary and a status');
+
+  // the size: the list sits well under the result budget, and the figure its description states is within 15% of it
+  const tools = (await server.reply(server.send('tools/list'))).result?.tools ?? [];
+  const desc = (n: string): string => tools.find((t: { name: string }) => t.name === n)?.description ?? '';
+  const listChars = list.content[0].text.length;
+  const stated = Number((desc('list_components').match(/About ([\d,]+) characters/)?.[1] ?? 'NaN').replace(/,/g, ''));
+  ok(listChars <= 16_000 && Math.abs(stated - listChars) <= listChars * 0.15,
+    `#4467: list_components is ${listChars.toLocaleString('en-US')} characters (ceiling 16,000), and its description states ${Number.isNaN(stated) ? 'nothing' : stated.toLocaleString('en-US')}, within 15%`);
+
+  // one component, brand-neutral
+  const neutral = await server.call('get_component', { id: 'button' });
+  const n = neutral.structuredContent ?? {};
+  const radiusOf = (v: { parts?: { part: string; tokens: Record<string, string[]> }[] }) => v.parts?.find((p) => p.part === 'container')?.tokens?.radius ?? [];
+  ok(neutral.isError !== true && n.id === 'button' && n.brand === null && Array.isArray(n.props) && n.props.some((p: { name: string }) => p.name === 'label')
+    && n.avoidWhen === catalog.button?.ai?.avoidWhen && Array.isArray(n.partners?.alternativeTo) && n.values === undefined,
+    `#4467: get_component returns the button's contract brand-neutral: props, its catalog avoidWhen, partners and no values (brand ${JSON.stringify(n.brand)}, ${n.props?.length ?? 0} props)`);
+
+  // the same component for a brand: the names its settings bind, and their values
+  const pill = { id: 'pill', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 }, controlShape: 'pill' };
+  const branded = await server.call('get_component', { id: 'button', brand: pill });
+  const b = branded.structuredContent ?? {};
+  const fill = b.parts?.find((p: { part: string }) => p.part === 'container')?.tokens?.fill?.[0];
+  const fillValue = fill ? b.values?.[fill] : undefined;
+  ok(branded.isError !== true && b.brand?.id === 'pill' && JSON.stringify(radiusOf(n)) === '["radius.md"]' && JSON.stringify(radiusOf(b)) === '["radius.capsule"]'
+    && b.values?.['radius.capsule'] === '999px'
+    && !!fillValue && typeof fillValue === 'object' && (b.brand.modes as string[]).every((m: string) => /^#[0-9a-f]{6}$/i.test(fillValue[m] ?? '')),
+    `#4467: with a pill brand, get_component binds radius.capsule (999px) where brand-neutral binds radius.md, and resolves the fill to a hex in every mode (neutral ${JSON.stringify(radiusOf(n))}, brand ${JSON.stringify(radiusOf(b))}, fill ${fill} → ${JSON.stringify(fillValue)})`);
+
+  // refusals, by name
+  const unknown = await server.callJson('get_component', { id: 'carousel' });
+  ok(unknown.isError && /no component has the id "carousel"/.test(unknown.payload?.error ?? ''),
+    `#4467: an unknown component id is refused by name (${JSON.stringify(unknown.payload?.error)})`);
+  const notABrand = await server.callJson('get_component', { id: 'button', brand: 'acme' });
+  const schemaBrand = await server.callJson('get_component', { id: 'button', brand: { id: 'acme' } });
+  ok(notABrand.isError && /get_component requires `brand`: a BrandInput object/.test(notABrand.payload?.error ?? '')
+    && schemaBrand.isError && schemaBrand.payload?.error === 'the brand input fails the schema' && (schemaBrand.payload?.errors ?? []).some((e: string) => /^primary is missing/.test(e)),
+    `#4467: an unknown brand is refused by name: a string that is not a BrandInput, and a BrandInput the schema fails (${JSON.stringify(notABrand.payload?.error)}; ${JSON.stringify(schemaBrand.payload?.errors?.[0])})`);
+
+  // motion patterns (#4601): the patterns the catalog names for a def come back, with their tracks; a brand's track
+  // override shows in its answer. The oracle is the committed catalog's names, and the override's preset, typed here.
+  const dlg = (await server.call('get_component', { id: 'dialog' })).structuredContent ?? {};
+  const dlgNames = (dlg.motion?.patterns ?? []).map((p: { name: string }) => p.name);
+  const catNames = (catalog as Record<string, { motion?: { patterns?: string[] } }>).dialog?.motion?.patterns ?? [];
+  const slowPanel = { ...pill, id: 'slow', motionPersonality: { patterns: { 'dialog/enter': { 'panel.opacity': { preset: 'preset.fade' } } } } };
+  const dlgB = (await server.call('get_component', { id: 'dialog', brand: slowPanel })).structuredContent ?? {};
+  const trackPreset = (v: { motion?: { patterns?: { name: string; tracks: { element: string; property: string; preset: string }[] }[] } }) =>
+    v.motion?.patterns?.find((p) => p.name === 'dialog/enter')?.tracks.find((t) => t.element === 'panel' && t.property === 'opacity')?.preset;
+  ok(catNames.length > 0 && JSON.stringify(dlgNames) === JSON.stringify(catNames) && (dlg.motion?.patterns ?? []).every((p: { tracks?: unknown[] }) => Array.isArray(p.tracks) && p.tracks.length > 0)
+    && trackPreset(dlg) === 'surface' && trackPreset(dlgB) === 'fade',
+    `#4467: get_component returns the motion patterns the catalog names for a def, with their tracks, and a brand's track override (dialog/enter panel.opacity: neutral ${trackPreset(dlg)}, brand ${trackPreset(dlgB)}; names ${dlgNames.join(', ') || 'none'})`);
+
+  // the ceiling: every component, brand-neutral and for the brand, at or under the figure its description states
+  const ceiling = Number((desc('get_component').match(/At most ([\d,]+) characters/)?.[1] ?? 'NaN').replace(/,/g, ''));
+  const over: string[] = [];
+  let largest = 0;
+  for (const id of catalogIds) for (const args of [{ id }, { id, brand: pill }]) {
+    const r = await server.call('get_component', args);
+    const chars = r.content?.[0]?.text?.length ?? Infinity;
+    largest = Math.max(largest, chars);
+    if (r.isError === true || chars > ceiling) over.push(`${id}${'brand' in args ? ' (brand)' : ''} ${r.isError ? 'refused' : chars.toLocaleString('en-US')}`);
+  }
+  ok(ceiling === 25_000 && over.length === 0,
+    `#4467: every component's get_component result, brand-neutral and for a brand, is at most the 25,000 characters its description states (stated ${Number.isNaN(ceiling) ? 'nothing' : ceiling.toLocaleString('en-US')}; largest ${largest.toLocaleString('en-US')}; over: ${over.join(', ') || 'none'})`);
 }
 
 server.stop();
