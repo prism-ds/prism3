@@ -27,8 +27,9 @@ the CSS format writes motion values, and two more skips reach the summary.
   converted). A value with no CSS form, such as a gradient or a spring, is
   left out of `tokens.css` instead of written as JSON, and the footer names it.
 - **The export summary names skipped solid paint styles.** A paint style
-  whose visible paints are solid colors is not exported, and it used to be
-  left out without a word. The footer now names it, beside the other skips.
+  whose visible paints are solid colors is not exported, and the export used
+  to leave it out without saying so. The footer now names it, beside the
+  other skips.
 
 ## [3.0.2] - 2026-11-24
 

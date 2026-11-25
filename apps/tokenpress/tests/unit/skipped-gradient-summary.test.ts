@@ -196,7 +196,7 @@ describe('skipped layered-gradient styles reach the export summary (#3885)', () 
 
   test('the panel footer names a token left out of the CSS file (#3886)', () => {
     const text = footerAfter({ skippedCssValues: ['brand.sunrise'] });
-    expect(text).toBe('Exported 2 file(s). Skipped 1 token(s) in the CSS file: brand.sunrise');
+    expect(text).toBe('Exported 2 file(s). Skipped 1 token(s) with no CSS form: brand.sunrise');
   });
 
   test('the panel footer names every kind of skip, in order', () => {
@@ -208,7 +208,7 @@ describe('skipped layered-gradient styles reach the export summary (#3885)', () 
     });
     expect(text).toBe(
       'Exported 2 file(s). Skipped 1 blur-only effect style(s): blur/glass. Skipped 1 layered gradient style(s): brand/layered. ' +
-        'Skipped 1 solid paint style(s): brand/flat. Skipped 1 token(s) in the CSS file: brand.sunrise'
+        'Skipped 1 solid paint style(s): brand/flat. Skipped 1 token(s) with no CSS form: brand.sunrise'
     );
   });
 

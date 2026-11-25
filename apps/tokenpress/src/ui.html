@@ -2134,7 +2134,7 @@ class TokenPressUI {
           notes.push(`Skipped ${skippedSolids.length} solid paint style(s): ${skippedSolids.join(", ")}`);
         }
         if (skippedCss.length > 0) {
-          notes.push(`Skipped ${skippedCss.length} token(s) in the CSS file: ${skippedCss.join(", ")}`);
+          notes.push(`Skipped ${skippedCss.length} token(s) with no CSS form: ${skippedCss.join(", ")}`);
         }
         if (notes.length > 0) {
           this.setFooterStatus(`Exported ${result.fileCount} file(s). ${notes.join(". ")}`);
