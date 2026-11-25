@@ -433,7 +433,7 @@ of the tree in `$TMPDIR`. **From scratch**, it removes every generated output (l
 engine CLI, both component generators and the Storybook build. Every removed file must come back equal to the committed
 one, and `check-build.ts` must pass. **The update** makes one edit to the brand input (the primary color and the radius
 scale), then times the CLI and the Storybook build. `one-edit.ts` then reads four hand-written probes in Chromium, in
-both forms and both themes, before and after the edit, against the emitted DTCG. The time's install question is owner
-decision K1. **No gate sibling, and not in CI, on purpose:** it needs the npm registry and Chromium, and what it
+both forms and both themes, before and after the edit, against the emitted DTCG. The install is inside the time (owner
+decision K1 A). **No gate sibling, and not in CI, on purpose:** it needs the npm registry and Chromium, and what it
 measures is a scorecard row, not a merge rule. It exits 1 with a FAIL line on any failure, so the card reads FAIL, never
 a time. `--self-test` plants each judge's failure, and `--plant` plants a miss into a real run.

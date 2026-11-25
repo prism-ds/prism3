@@ -24,8 +24,8 @@ on #3408: the scripted floor of KPI 1's "Developer + CLI" experience. A person's
 - **One edit reaches both forms:** 16 of 16 readings. The button fill went from the blue to the green, and every
   corner doubled, in the HTML form and the element form, light and dark.
 
-**Held for the owner:** K1 on #3408, whether the from-scratch time includes `npm ci`. The tool uses A (timed) until
-then, and the cell shows the install's own seconds, so either reading is on the card.
+**Decided by the owner:** K1 A on #3408 (2026-11-25). The from-scratch time includes `npm ci`, and the cell also shows
+the install's own seconds.
 
 **Checked:** 13 self-test cases on the tool and 13 on the scorecard (the new case failed before the rows existed). Five
 code mutations each fail their own case by name. Three plants in real runs each fail by name: a generated file that

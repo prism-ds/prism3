@@ -62,9 +62,10 @@ readings), and a read outside it fails by name.
   run's line carries the cause: the first failure line plus up to five of the `- …` lines listed under it (how
   `check-build.ts` and the a11y checks name each failure), so a red first try can be diagnosed from the card.
 
-**Owner decision K1 (#3408, pending):** does the from-scratch time include `npm ci`? The value uses A (timed) until the
-owner answers. The line names the install's own seconds and the decision, so either reading is on the card. The choice
-is `K1` in `kpi1.ts`, and the headline arithmetic (`headline`) is self-tested under both answers.
+**Owner decision K1 (#3408, A, 2026-11-25):** the from-scratch time includes `npm ci`, timed from the warm cache (K2
+A). The line still names the install's own seconds. The answer is `K1` in `kpi1.ts`. The headline arithmetic
+(`headline`) is self-tested under both readings, and a second case holds the answer itself: a headline that leaves the
+install out fails by name.
 
 **Owner decision K2 (#3408, A):** the from-scratch start state both arms share is the code on disk (untimed) with the
 npm cache warm (`npm ci --prefer-offline`). The cell names it, and so does the arm input contract

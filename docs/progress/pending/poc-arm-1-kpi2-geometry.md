@@ -23,7 +23,8 @@ the KPI 2 inventory posted on #3408 the same day.
     rule decision 1 A applies to the button's root.
   - A record without part borders, which includes the committed one, keeps its lines as their own findings until the
     Mac re-record.
-  - Whether that difference stays is OWNER DECISION G1 on #3408.
+  - The owner settled the difference as G1 A on #3408: a real difference, counted once per bordered part. The
+    systemic fix, Figma's builder including the stroke in layout, is #4599 on main.
 
 **KPI 2 row.** It was `138 of 809 comparisons differ, in 11 findings` on the committed Figma record. Now it's
 `122 of 809, in 9`. After the re-record the projection is 4 findings, if the plugin's strokes sit out of layout as its

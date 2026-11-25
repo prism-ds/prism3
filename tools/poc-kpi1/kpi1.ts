@@ -33,8 +33,8 @@
  * run that would need one fails instead); the errors (a command that exits non-zero ends the run, so a passing run has
  * 0 and was right first time). A person's run (B2 on #3408) is separate: this is the floor it is compared with.
  *
- * OWNER DECISION K1 (#3408, pending): whether the from-scratch time includes `npm ci`. The value is A, timed; the line
- * names the install's own seconds and the decision, so either reading is on the card. `K1` below.
+ * OWNER DECISION K1 (#3408, A, 2026-11-25): the from-scratch time includes `npm ci`, timed from the warm cache. The line
+ * also names the install's own seconds. `K1` below.
  *
  * A measurement, not a CI gate: it needs the npm registry (a warm cache serves it) and Chromium. It exits 1 on any
  * failure, with a FAIL line, so the scorecard's cell reads FAIL, never a time.
@@ -83,8 +83,8 @@ export const EDIT: { what: string; from: string; to: string }[] = [
 /** K2 on #3408 (owner decision 2026-11-24, A): the from-scratch start state both arms share, the code on disk (untimed) with the
  *  npm cache warm. Also named in the arm input contract (`apps/storybook/ARM-CONTRACT.md`), so arm 2 runs from the same state. */
 export const K2: { start: string; state: 'pending' | 'answered' } = { start: 'the code on disk, untimed; npm cache warm (K2 A', state: 'answered' };
-/** K1 on #3408: is `npm ci` inside the from-scratch time? A (timed) until the owner answers. */
-export const K1: { timed: boolean; state: 'pending' | 'answered' } = { timed: true, state: 'pending' };
+/** K1 on #3408: is `npm ci` inside the from-scratch time? A, timed (owner decision, 2026-11-25). */
+export const K1: { timed: boolean; state: 'pending' | 'answered' } = { timed: true, state: 'answered' };
 
 export type Run = 'scratch' | 'update';
 type Step = { kind: 'command' | 'edit'; what: string; seconds: number };
@@ -332,6 +332,11 @@ export const SELF: { name: string; check: () => string | null }[] = [
       const got = [...a, b];
       return got.join() === '20,3.5,14' ? null : `headline gave ${got.join(', ')}, expected 20, 3.5 (K1 A) and 14 (K1 B)`;
     } finally { K1.timed = was; } } },
+  { name: 'the headline time includes the install, as K1 A decides', check: () => {
+    // K1 as committed, not set here: 20,000ms timed with a 6,050ms install reads 20, never 14 (the time less the install)
+    if (!K1.timed || K1.state !== 'answered') return `K1 is ${JSON.stringify(K1)}, not A answered (timed: true)`;
+    const got = headline(20_000, 6_050);
+    return got === 20 ? null : `headline gave ${got} for 20,000ms with a 6,050ms install, expected 20: it leaves the install out`; } },
   { name: 'a failure line carries the failures listed under it, capped, not just their count', check: () => {
     const out = 'noise\nFAIL storybook: 7 failure(s), 1066 passed\n  - a: x\n  - b: y\n  - c\n  - d\n  - e\n  - f\n  - g\nOK other';
     const got = firstError(out);
@@ -351,7 +356,8 @@ export const SELF: { name: string; check: () => string | null }[] = [
     const base = { seconds: 21.4, installSeconds: 6.1, probes: 0, failure: null, copy: '' };
     const s = summary({ ...base, run: 'scratch', steps: SCRATCH.map((x) => ({ kind: 'command' as const, what: x.what, seconds: 1 })) });
     const u = summary({ ...base, run: 'update', seconds: 6.2, steps: [{ kind: 'edit', what: 'e', seconds: 0 }, ...UPDATE.map((x) => ({ kind: 'command' as const, what: x.what, seconds: 1 }))] });
-    const want = [`OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed${K1.state === 'pending' ? ', pending' : ''}); start: the code on disk, untimed; npm cache warm (K2 A${K2.state === 'pending' ? ', pending' : ''})`,
+    // typed as the owner decided both (K1 A, K2 A): no "pending" mark on either
+    const want = ['OK kpi1 (scratch): 21.4 seconds; 5 commands, 0 hand edits, 0 fixes, 0 errors, first try; install 6.1s (K1 A: timed); start: the code on disk, untimed; npm cache warm (K2 A)',
       'OK kpi1 (update): 6.2 seconds; 2 commands, 1 hand edit (the update), 0 fixes, 0 errors, first try'];
     return s === want[0] && u === want[1] ? null : `${s}\n${u}`; } },
 ];
