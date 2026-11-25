@@ -315,9 +315,9 @@
         "order": "alphabetical",
         "pages": [
           {
-            "name": "↳ Image Placeholder",
+            "name": "↳ Image",
             "components": [
-              "image-placeholder"
+              "image"
             ]
           },
           {
@@ -2056,13 +2056,13 @@
         "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/veil.md"
       },
       {
-        "id": "image-placeholder",
-        "name": "ImagePlaceholder",
-        "figmaName": "image-placeholder",
+        "id": "image",
+        "name": "Image",
+        "figmaName": "image",
         "kind": "component set",
-        "page": "↳ Image Placeholder",
+        "page": "↳ Image",
         "section": "Subcomponents",
-        "members": 7,
+        "members": 28,
         "variantProperties": [
           {
             "name": "ratio",
@@ -2075,15 +2075,19 @@
               "3:2",
               "16:9"
             ]
-          }
-        ],
-        "properties": [
+          },
           {
-            "name": "marker",
-            "type": "BOOLEAN"
+            "name": "status",
+            "values": [
+              "empty",
+              "loading",
+              "loaded",
+              "error"
+            ]
           }
         ],
-        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/image-placeholder.md"
+        "properties": [],
+        "doc": "https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/image.md"
       },
       {
         "id": "spinner",
@@ -4409,7 +4413,7 @@
       "switch-row",
       "select",
       "veil",
-      "image-placeholder",
+      "image",
       "badge",
       "avatar",
       "tag",

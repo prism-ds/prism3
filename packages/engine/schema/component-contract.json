@@ -1,5 +1,5 @@
 {
-  "componentContractVersion": "2.6.0",
+  "componentContractVersion": "3.0.0",
   "componentSchemaVersion": "1.8.0",
   "note": "Written by packages/engine/component-contract.ts --accept alone; do not hand-edit, and never regenerate it. `components` is the component-contract surface: per component, its name and status, its props (type, required, default, values), states, variant axes and values, and slots. `schema.shape` is the component schema: the shape of one published entry, read from the JSON schema named in `schema.source`, with its prose left out. Removing or renaming a name is a MAJOR change, adding one is MINOR, and moving a default is a PATCH; docs/30 has the full table.",
   "schema": {
@@ -3370,10 +3370,52 @@
         "icon"
       ]
     },
-    "image-placeholder": {
-      "name": "ImagePlaceholder",
+    "image": {
+      "name": "Image",
       "status": "draft",
       "props": {
+        "alt": {
+          "type": "string",
+          "required": true
+        },
+        "fetchPriority": {
+          "type": "enum",
+          "default": "auto",
+          "values": [
+            "auto",
+            "high",
+            "low"
+          ]
+        },
+        "fit": {
+          "type": "enum",
+          "default": "cover",
+          "values": [
+            "contain",
+            "cover"
+          ]
+        },
+        "height": {
+          "type": "number"
+        },
+        "loading": {
+          "type": "enum",
+          "default": "eager",
+          "values": [
+            "eager",
+            "lazy"
+          ]
+        },
+        "onError": {
+          "type": "function"
+        },
+        "onLoad": {
+          "type": "function"
+        },
+        "position": {
+          "type": "string",
+          "default": "center"
+        },
         "ratio": {
           "type": "enum",
           "default": "4:3",
@@ -3386,6 +3428,18 @@
             "4:3",
             "4:5"
           ]
+        },
+        "sizes": {
+          "type": "string"
+        },
+        "src": {
+          "type": "string"
+        },
+        "srcSet": {
+          "type": "string"
+        },
+        "width": {
+          "type": "number"
         }
       },
       "states": [],
@@ -3398,6 +3452,12 @@
           "3:4",
           "4:3",
           "4:5"
+        ],
+        "status": [
+          "empty",
+          "error",
+          "loaded",
+          "loading"
         ]
       },
       "slots": []

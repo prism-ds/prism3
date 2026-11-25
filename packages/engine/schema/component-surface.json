@@ -539,12 +539,10 @@
       "sha256": "9ec72c8b779ffd29fb811acea3af4005675f3e00a98835125a2061afef57ea5b",
       "properties": []
     },
-    "image-placeholder": {
-      "members": 7,
-      "sha256": "7510af235c0da771ede4b89d55903c20ec1ac6f46555f66dc3d9e31d70b9a773",
-      "properties": [
-        "marker:BOOLEAN"
-      ]
+    "image": {
+      "members": 28,
+      "sha256": "8b0877aaa5c547c725568a808fd2a52eb37756bb83e069f40bb59ed347d21e16",
+      "properties": []
     },
     "spinner": {
       "members": 4,

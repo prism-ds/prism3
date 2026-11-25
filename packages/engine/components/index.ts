@@ -67,7 +67,7 @@ import { switchControl } from './switch-control';
 import { switchRow } from './switch-row';
 import { select } from './select';
 import { veil } from './veil';
-import { imagePlaceholder } from './image-placeholder';
+import { image } from './image';
 import { spinner } from './spinner';
 import { skeleton } from './skeleton';
 import { badge } from './badge';
@@ -112,7 +112,7 @@ import { menuItem, menuGroup, menu } from './menu';
  *  be a worse call site, not a better one — a lookup that can return `undefined` standing in for a
  *  binding that cannot. The set is for iteration; these are for the assertions that are ABOUT one
  *  component. */
-export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, toggleButton, toggleIconButton, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, imagePlaceholder, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, avatar, skeleton, popover, stepItem, steps, menuItem, menuGroup, menu, tooltip };
+export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, toggleButton, toggleIconButton, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, image, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, avatar, skeleton, popover, stepItem, steps, menuItem, menuGroup, menu, tooltip };
 
 /** Every component def the engine defines. The one thing a projection should iterate. */
 export const componentDefs: readonly ComponentDef[] = [
@@ -209,11 +209,11 @@ export const componentDefs: readonly ComponentDef[] = [
   // (`value` × `intensity`) are neither the button family's nor the selection family's — a media
   // component, not a form control.
   veil,
-  // `image-placeholder` (#1316) — the empty-state media frame. Like `veil` it nests nothing and is
-  // nested by nothing, so it sits at the end: a standalone box sharing no factory or `inherits` chain.
+  // `image` (#4113, renamed from `image-placeholder`, #1316) — content imagery in an aspect-locked frame. It nests
+  // Skeleton for its loading state and is nested by nothing: a standalone box sharing no factory or `inherits` chain.
   // It is the first def to carry an aspect-ratio LOCK (its `ratio` axis derives the lock) and the first
   // to opt into `clipsContent`. A media component, not a form control.
-  imagePlaceholder,
+  image,
   // `spinner` (#1670) — the indeterminate loading indicator. Nests nothing; the button's pending state swaps
   // it into the icon slot by name, like the `icon` it sits beside in the slot.
   spinner,

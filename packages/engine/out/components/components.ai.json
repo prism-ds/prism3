@@ -249,7 +249,8 @@
         "composesWith": [],
         "alternativeTo": [
           "provider-logo",
-          "avatar"
+          "avatar",
+          "image"
         ],
         "supersedes": [],
         "supersededBy": [],
@@ -7397,7 +7398,7 @@
         "commonPartners": [
           "icon",
           "button",
-          "image-placeholder"
+          "image"
         ],
         "triggerKeywords": [
           "veil",
@@ -7442,21 +7443,37 @@
         }
       ]
     },
-    "image-placeholder": {
-      "id": "image-placeholder",
-      "name": "ImagePlaceholder",
+    "image": {
+      "id": "image",
+      "name": "Image",
       "aliases": [
         "media-frame",
         "image-frame",
         "photo-placeholder",
         "empty-image",
-        "image-slot"
+        "image-slot",
+        "img",
+        "picture",
+        "thumbnail",
+        "figure"
       ],
       "category": "foundations",
       "status": "draft",
-      "summary": "Empty media frame locked to a ratio, from 2:3 portrait to 16:9. Drop an image fill onto it.",
-      "description": "An empty-state media frame that holds a photograph at a fixed aspect ratio. Pick a ratio (portrait 2:3, 3:4 or 4:5; square 1:1; landscape 4:3, 3:2 or 16:9) and the frame keeps that proportion while its size flexes to its container; a designer drops an image fill onto it (not a modeled slot). Before an image arrives it shows a neutral fill and a centered \"no image\" marker that scales with the frame, and it clips its content so a mismatched photo cannot overflow the frame. Turn the marker off once an image is in.",
+      "summary": "Image in a frame locked to a ratio, with empty, loading, loaded and error states.",
+      "description": "Content imagery, such as a photograph, an illustration, a product shot or a logo, in a frame whose box is known before the file loads, so nothing shifts when it arrives. Pick a ratio (portrait 2:3, 3:4 or 4:5; square 1:1; landscape 4:3, 3:2 or 16:9) and the frame keeps that proportion while its size flexes to its container. It shows one of four states: empty, with a neutral fill and a \"no image\" marker; loading, with a skeleton; loaded, with the image; and error, with an \"image unavailable\" marker and no text. Every image needs a decision about its alt text: describe an informative image, and give a decorative one an empty alt.",
       "props": [
+        {
+          "name": "src",
+          "type": "string",
+          "required": false,
+          "description": "The image file. With no source the frame shows its empty state."
+        },
+        {
+          "name": "alt",
+          "type": "string",
+          "required": true,
+          "description": "The text alternative. Describe what the image does, not what it shows; inside a link, name the destination. An empty string marks the image as decorative and hides it from assistive technology. Leaving it out is an error, because a screen reader may read the file name instead."
+        },
         {
           "name": "ratio",
           "type": "enum: '2:3' | '3:4' | '4:5' | '1:1' | '4:3' | '3:2' | '16:9'",
@@ -7471,7 +7488,84 @@
             "3:2",
             "16:9"
           ],
-          "description": "The width-to-height proportion the frame holds while its actual size flexes — portrait (2:3, 3:4 for apparel tiles, 4:5), a square (1:1), or landscape (the classic photo ratio 4:3, 3:2, widescreen 16:9). It is an aspect-ratio lock, not a pair of fixed dimensions: the frame derives its height from its width (or the reverse) so the shape survives being resized. Pick it from the media the frame will hold."
+          "description": "The width-to-height proportion the frame holds while its size flexes: portrait (2:3, 3:4, 4:5), square (1:1) or landscape (4:3, 3:2, 16:9). Pick it from the media the frame will hold."
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "required": false,
+          "description": "The image file's intrinsic width, passed to the image element when it is known, so the browser reserves the box before the file loads."
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "required": false,
+          "description": "The image file's intrinsic height, passed to the image element with the width."
+        },
+        {
+          "name": "fit",
+          "type": "enum: 'cover' | 'contain'",
+          "default": "cover",
+          "required": false,
+          "values": [
+            "cover",
+            "contain"
+          ],
+          "description": "How the image fills the frame. Cover fills it and crops what falls outside; contain shows the whole image and leaves the fill around it."
+        },
+        {
+          "name": "position",
+          "type": "string",
+          "default": "center",
+          "required": false,
+          "description": "The focal point a cropped image keeps in view, as a CSS object position."
+        },
+        {
+          "name": "loading",
+          "type": "enum: 'eager' | 'lazy'",
+          "default": "eager",
+          "required": false,
+          "values": [
+            "eager",
+            "lazy"
+          ],
+          "description": "When the browser fetches the file. Lazy-load an image below the fold; leave the largest image at the top of the page eager."
+        },
+        {
+          "name": "fetchPriority",
+          "type": "enum: 'high' | 'low' | 'auto'",
+          "default": "auto",
+          "required": false,
+          "values": [
+            "high",
+            "low",
+            "auto"
+          ],
+          "description": "How urgently the browser fetches the file. Give the page's hero image high."
+        },
+        {
+          "name": "srcSet",
+          "type": "string",
+          "required": false,
+          "description": "Candidate files at other widths or densities, passed through to the image element."
+        },
+        {
+          "name": "sizes",
+          "type": "string",
+          "required": false,
+          "description": "The width the image takes at each breakpoint, passed through with the candidate files."
+        },
+        {
+          "name": "onLoad",
+          "type": "function",
+          "required": false,
+          "description": "Called when the image has loaded."
+        },
+        {
+          "name": "onError",
+          "type": "function",
+          "required": false,
+          "description": "Called when the image fails to load, after the frame has switched to its error state."
         }
       ],
       "states": [],
@@ -7487,51 +7581,80 @@
             "16:9"
           ],
           "kind": "authoring"
+        },
+        "status": {
+          "values": [
+            "empty",
+            "loading",
+            "loaded",
+            "error"
+          ],
+          "kind": "runtime"
         }
       },
       "accessibility": {
-        "role": "img once it holds an image: with a descriptive accessible name when the image is informative, or an empty `alt` (`alt=\"\"`) when it is decorative, which removes it from the accessibility tree. The empty frame is presentational. The \"no image\" marker inside it is decorative and `aria-hidden`; it is a visual affordance, not the accessible content.",
+        "role": "img: an informative image takes an accessible name from its alt, and a decorative one an empty alt (`alt=\"\"`), which removes it from the accessibility tree. The markers and the loading skeleton are decorative and hidden.",
         "wcag": [
-          "1.1.1 Non-text Content — an image placeholder that ships as a real image needs a text alternative describing it, or an empty alt=\"\" when the image is decorative (an omitted alt and an empty one behave oppositely); the empty-state marker is decorative and is hidden from assistive tech",
-          "1.4.11 Non-text Contrast — where the frame edge is a meaningful boundary, verify it against the surface behind it; the neutral fill is a background, not a UI boundary carrying meaning",
-          "1.4.1 Use of Color — the marker signals \"no image\" by shape and position, not by color alone"
+          "1.1.1 Non-text Content (targets: every image carries a decision about its text alternative, and a failed informative image keeps its name)",
+          "1.4.5 Images of Text (targets: text in an image only for a logo)",
+          "1.4.1 Use of Color (an image is never the only carrier of a status; each marker signals by shape)",
+          "2.3.3 Animation from Interactions (targets: no zoom or parallax on load; the fade is opacity only)",
+          "1.4.11 Non-text Contrast (only where the frame edge is a meaningful boundary)"
         ],
-        "focus": "None of its own — the frame is not focusable as an empty placeholder. If it becomes an interactive media element (a button that opens a picker), that control carries its own focus; the placeholder frame does not invent one.",
-        "aria": "Once the frame holds a real image, decide whether the image is informative or decorative. Informative: an img role and an accessible name that describes its function, not the picture. Decorative: an empty alt (alt=\"\"), never an omitted one — some screen readers announce the file name when alt is missing. Mark the \"no image\" marker aria-hidden — it is a decorative affordance, and announcing it would add nothing. Do not rely on the marker as the accessible description of the eventual image."
+        "focus": "None of its own. An image that is a link takes the link's focus.",
+        "aria": "Informative: an `<img>` whose alt describes the function, not the picture; inside a link, the alt names the destination. Never start it with \"image of\". Decorative: `alt=\"\"`, which also hides the broken-image icon if it fails. On error, an informative image keeps its name on the fallback (`role=\"img\"` with `aria-label` set to the alt); a decorative one stays hidden. Set `aria-hidden=\"true\"` on both markers and on the loading skeleton. One image loading announces nothing; a region of many images loading carries its own status message. A chart or a diagram needs a long description beside it, not a longer alt. The alt is translatable text."
       },
       "content": {
-        "labelPattern": "An image placeholder carries no text of its own. Where its ratio variants surface in a UI, name the proportion plainly — \"16:9\", \"Square\" — rather than a pixel dimension, because the frame holds a ratio and not a fixed size."
+        "labelPattern": "Image carries no visible text. Its alt text describes what the image does in context, in a short phrase: \"Red running shoe, side view\" for a product, the destination for a link. Leave out \"image of\" and \"photo of\".",
+        "errorPattern": "The error state draws no text: the \"image unavailable\" marker is the visible cue, and an informative image keeps its alt as its accessible name.",
+        "emptyPattern": "The empty state draws the \"no image\" marker and no text."
       },
       "docs": {
-        "usage": "Use an image placeholder wherever a layout reserves space for a photograph before one is chosen — a card's media slot, a hero, a gallery cell. Pick the ratio from the media it will hold (3:4, 4:5 or 2:3 for portrait product and apparel shots, 1:1 for square thumbnails, 4:3 or 3:2 for standard photography, 16:9 for video stills and wide banners); the frame keeps that proportion while it flexes to its container, so a row of cards stays aligned even as their widths change. Drop a photograph onto the frame as an image fill. Turn the marker property off so the \"no image\" marker does not sit on the photo. The marker scales with the frame, so a small thumbnail shows a small marker. The frame clips its content, so a mismatched image stays inside the ratio rather than overflowing.",
+        "usage": "Use Image for content imagery: a card's media, a product shot, a hero, a gallery cell. Pick the ratio from the media it will hold (3:4, 4:5 or 2:3 for portrait product shots, 1:1 for square thumbnails, 4:3 or 3:2 for standard photography, 16:9 for video stills and wide banners); the frame keeps that proportion while it flexes to its container, so a row of cards stays aligned and nothing shifts when the files load. A thumbnail is a small Image, not a different component. Pick the state the mockup shows: empty before an image is chosen, loading while it arrives, loaded with the photo, and error when it fails. For the loaded state, drop the photo on the frame as an image fill. Decide the alt text for every image: describe an informative image and mark a decorative one empty.",
         "do": [
           "Pick the ratio from the media the frame will hold, and let the lock keep it while the size flexes",
-          "Drop the photograph on as an image fill — the frame is the container, not a swappable slot — and turn the marker property off once it is in",
-          "Give an informative image an accessible name and a decorative one an empty `alt`; keep the empty-state marker decorative and `aria-hidden`",
-          "Let the frame clip — a photo cropped to the ratio reads better than one that overflows the layout"
+          "Show the loaded state with the photo dropped on the frame as an image fill",
+          "Show the error state in a design that covers failures, so the frame is not left blank",
+          "Write alt text that says what the image does in context; give a decorative image an empty alt",
+          "Put a long description beside a chart or a diagram, not into the alt"
         ],
         "dont": [
-          "Hard-code a width and a height to fake a ratio — the frame holds the ratio and derives the second dimension, so two fixed sizes fight the lock and break on resize",
-          "Treat the \"no image\" marker as the image's description — it is a placeholder affordance, turned off when a photograph arrives",
-          "Leave the marker on over a supplied image — the frame cannot tell that a fill is a photo, so the marker property is how the marker goes away",
-          "Reach for an image placeholder as a decorative wash over a photo — that is the veil component (a follow-up may compose the two)",
-          "Expect a play overlay yet — that is not built yet; this is the core empty-state frame (a legibility scrim over media is the veil component)"
+          "Hard-code a width and a height to fake a ratio: two fixed sizes fight the lock and break on resize",
+          "Put text that matters inside an image, other than a logo",
+          "Mirror a photo for a right-to-left layout; supply a mirrored file only for directional artwork",
+          "Use Image for an icon (Icon), a person's picture (Avatar) or a decorative background",
+          "Expect a play overlay or a scrim over the image yet; a legibility scrim over media is Veil"
         ],
-        "implementation": [],
-        "contentGuidelines": "The frame holds no copy. Where its ratio surfaces in a UI, name the proportion (\"16:9\", \"Square\"), not a pixel size — the frame holds a ratio, not a fixed dimension."
+        "implementation": [
+          "Render an `<img>` inside a frame that sets `aspect-ratio` to the ratio and clips what overflows it, and set `object-fit` from the fit prop; pass the intrinsic width and height through when they are known",
+          "Make `alt` a required string prop that may be empty; never fall back to the file name",
+          "Derive the status from the source and the load and error events; it is not a prop",
+          "On error, keep an informative image's name with `role=\"img\"` and `aria-label` on the fallback, and keep a decorative one hidden",
+          "Set `aria-hidden=\"true\"` on both markers and on the loading skeleton",
+          "Fade the image in over the skeleton on `motion.duration.fast`, with opacity only",
+          "Leave delivery (candidate files, sizes, `<picture>`, formats) to the framework's image component, which Image wraps"
+        ],
+        "contentGuidelines": "The frame holds no copy. Alt text describes the function, not the picture: a short phrase, no \"image of\", and the destination when the image is a link. Text baked into an image fails readers who zoom or translate, except for a logo."
       },
       "ai": {
-        "primaryPurpose": "Reserve space for a photograph at a fixed aspect ratio, holding the proportion while the frame flexes to its container, and show a neutral empty state until an image is dropped in.",
-        "whenToUse": "A layout needs a media slot at a known proportion before the image is chosen — a card's photo area, a hero, a gallery cell. Pick a ratio from the media it will hold (2:3, 3:4 or 4:5 portrait, 1:1, 4:3, 3:2 or 16:9 landscape); the frame keeps that ratio as it resizes and clips whatever image is dropped onto it.",
-        "avoidWhen": "The surface is a decorative wash over an existing photo (that is the veil component), the image is already present and fixed (place it directly), or the space needs a play button over the media (not built yet — this is the core empty-state frame only) or a legibility scrim over it (the veil component).",
+        "primaryPurpose": "Show content imagery in a frame locked to a ratio, so the layout holds its box before the file loads, with empty, loading, loaded and error states and a required alt decision.",
+        "whenToUse": "A layout shows a photograph, an illustration, a product shot or a logo: a card's media, a hero, a gallery cell, a thumbnail. Pick the ratio from the media (2:3, 3:4 or 4:5 portrait, 1:1, 4:3, 3:2 or 16:9 landscape) and the state the screen shows.",
+        "avoidWhen": "The picture is a symbol for an action or a concept (use Icon), it stands for a person or an organization (use Avatar), it is a decorative background (a CSS background, not a component), it is a wash over a photo for legibility (use Veil), or the space is a loading placeholder for content other than an image (use Skeleton).",
         "commonPartners": [
-          "icon",
-          "veil"
+          "veil",
+          "list-item"
         ],
         "triggerKeywords": [
-          "image placeholder",
+          "image",
+          "img",
+          "picture",
+          "photo",
+          "thumbnail",
+          "figure",
+          "product image",
+          "hero image",
           "media frame",
-          "photo frame",
+          "image placeholder",
           "aspect ratio",
           "16:9",
           "4:3",
@@ -7539,26 +7662,38 @@
           "3:4",
           "4:5",
           "2:3",
-          "portrait image",
-          "product image",
           "square image",
           "empty image",
           "image slot",
           "no image",
-          "media slot"
+          "broken image",
+          "image error",
+          "image loading"
         ],
         "generationPriority": 3
       },
+      "motion": {
+        "enter": "On load the image fades in over the skeleton on `motion.duration.fast` with `motion.easing-role.enter`. No scale, zoom or parallax.",
+        "exit": "None of its own: the image stays until the frame is removed.",
+        "reduceMotion": "The fade stays, on `motion.duration-reduced.fast`: it is opacity only, not vestibular motion. The skeleton's pulse stops, as Skeleton does everywhere."
+      },
       "composition": {
-        "composesWith": [],
+        "composesWith": [
+          "skeleton"
+        ],
         "alternativeTo": [
+          "icon",
           "avatar"
         ],
         "supersedes": [],
         "supersededBy": [],
-        "planned": [],
+        "planned": [
+          "card"
+        ],
         "replacesPatterns": [
-          "a hand-drawn rectangle with a fixed width and height standing in for an image, which breaks its ratio the moment it is resized"
+          "a bare `<img>` with no reserved box, which shifts the layout when the file loads",
+          "a hand-drawn rectangle with a fixed width and height standing in for an image, which breaks its ratio the moment it is resized",
+          "an image that fails to a blank box or a browser broken-image icon"
         ]
       },
       "syncBoundary": [
@@ -7571,12 +7706,28 @@
           "disposition": "LOWERED"
         },
         {
-          "class": "deferred",
+          "class": "static-placeholder",
+          "disposition": "UNSUPPORTED"
+        },
+        {
+          "class": "motion",
           "disposition": "REFUSED"
         },
         {
-          "class": "static-placeholder",
+          "class": "semantics",
+          "disposition": "REFUSED"
+        },
+        {
+          "class": "runtime-behavior",
+          "disposition": "REFUSED"
+        },
+        {
+          "class": "right-to-left",
           "disposition": "UNSUPPORTED"
+        },
+        {
+          "class": "deferred",
+          "disposition": "REFUSED"
         },
         {
           "class": "live-geometry",
@@ -8170,7 +8321,7 @@
       "ai": {
         "primaryPurpose": "Show which person or organization something belongs to, as a photo, initials or a generic glyph.",
         "whenToUse": "A specific person or organization needs a picture: a comment author, a list row, a card owner, the signed-in user in a header, a team or app in a switcher. Add presence when the task depends on whether the person is available.",
-        "avoidWhen": "The picture stands for an action or a concept rather than a specific person, such as a profile link or a settings icon (use Icon), the picture is content media with no identity (use ImagePlaceholder), or the avatar is a control that opens something (put it in a Button or an IconButton).",
+        "avoidWhen": "The picture stands for an action or a concept rather than a specific person, such as a profile link or a settings icon (use Icon), the picture is content media with no identity (use Image), or the avatar is a control that opens something (put it in a Button or an IconButton).",
         "commonPartners": [
           "badge",
           "button",
@@ -8204,14 +8355,13 @@
         ],
         "alternativeTo": [
           "icon",
-          "image-placeholder"
+          "image"
         ],
         "supersedes": [],
         "supersededBy": [],
         "planned": [
           "avatar-group",
-          "card",
-          "image"
+          "card"
         ],
         "replacesPatterns": [
           "a circular image with no fallback, which shows a broken image when the photo fails to load",
@@ -15978,7 +16128,7 @@
         "commonPartners": [
           "spinner",
           "progress",
-          "image-placeholder",
+          "image",
           "list-item",
           "avatar"
         ],

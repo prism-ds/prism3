@@ -199,7 +199,7 @@ export const TAXONOMY: Taxonomy = {
       // no longer the page order.
       alphabetical: true,
       leaves: [
-        { page: 'Image Placeholder', defs: ['image-placeholder'] },
+        { page: 'Image', defs: ['image'] },
         { page: 'Focus Ring', defs: ['focus-ring'] },
         { page: 'Field Label', defs: ['field-label'] },
         { page: 'Field Message', defs: ['field-message'] },
@@ -244,6 +244,9 @@ export const STANDALONE_NESTED: Readonly<Record<string, string>> = {
   // the rule does not reach it. It stays on its own page under Components (S8 scope, O1).
   // Text field: its own page under Components. Slider (#2669) nests it for the value input; a designer places it anywhere.
   'text-field': 'Text field page; nested by Slider since #2669',
+  // Skeleton: its own page (#4109, provisional and held for the owner). Image nests it for its loading state (#4113,
+  // OD-I4 A); a designer places skeletons in any layout.
+  skeleton: 'Skeleton page (#4109); nested by Image for its loading state since #4113',
 };
 
 /**
@@ -257,6 +260,8 @@ export const FORMER_PAGES: readonly { readonly page: string; readonly defs: read
   { page: 'Code Cell', defs: ['code-input-cell'], by: '#2989' },
   // The provider logos' own page (#2343) until they joined the icons on Icons & assets (#3148). The page stays.
   { page: 'Brand marks', defs: ['provider-logo'], by: '#3148' },
+  // Image placeholder's page until it became Image (#4113, OD-I1 A): the set moves to the Image page, and the old one stays.
+  { page: 'Image Placeholder', defs: ['image'], by: '#4113' },
 ];
 
 /**
