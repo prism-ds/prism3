@@ -27,7 +27,8 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | successGlyph | `check-circle` | icon set | drawn | status: success |
 |  | warningGlyph | `error-circle` | icon set | drawn | status: warning |
 | icon | glyph | `{name}` | any (prop) | drawn | always |
-| image-placeholder | markerGlyph | `image` | icon set | drawn | always |
+| image | errorGlyph | `image-unavailable` | component-owned | drawn | status: error |
+|  | markerGlyph | `image` | icon set | drawn | status: empty |
 | list-item | icon | `check` | icon set | swap default | type: icon |
 | menu-item | checkGlyph | `check` | icon set | drawn | always |
 |  | chevronGlyph | `chevron-right` | icon set | drawn | type: submenu |
@@ -98,7 +99,8 @@ Parts that take any icon from the set. The file nominates the default unless the
 | `close` | switch-control, tag |
 | `close-filled` | search-field |
 | `error-circle` | banner, field-message, step-item |
-| `image` | image-placeholder |
+| `image` | image |
+| `image-unavailable` | image |
 | `info-circle` | banner |
 | `minus` | _accordion-indicator, checkbox-control |
 | `more-horizontal-filled` | pagination-item |

@@ -74,9 +74,9 @@
  *                  `copy/not a drop`; the stamp's shape not checked → `malformed/not a drop`; any differing id read as
  *                  a copy → `copy/reassigned`.
  *   differ/…       a member that differs from its plan is reported by part, field, plan value and file value, in
- *                  the dry run and in the capture (#2295); and a fresh image-placeholder build records clean, its
+ *                  the dry run and in the capture (#2295); and a fresh image build records clean, its
  *                  aspect lock read as Figma's `{x, y}`. Mutations: the read-back's number-only aspect check →
- *                  `differ/image-placeholder`; the named lines dropped → `differ/dry run`, `differ/capture`.
+ *                  `differ/image`; the named lines dropped → `differ/dry run`, `differ/capture`.
  *   single/…       an icon or spinner def, built as single components (#2296, owner decision Q109), is read as one
  *                  set: found anywhere in the file, captured, and a hand edit on one reported. A hand-made icon, even
  *                  one carrying a Prism3 glyph's exact name, is never written and holds its coordinate (Q109 A); a
@@ -891,13 +891,13 @@ section('adopt — a set the dry run refuses is refused whole; a held coordinate
 /* ── differ ──────────────────────────────────────────────────────────────────────────────────────────── */
 section('differ — a member that differs from its plan is reported by part and field, plan against file (#2295)');
 {
-  // #2295's reproduction: image-placeholder's aspect lock reads back as Figma's `{x, y}` Vector. Read as a number,
+  // #2295's reproduction: Image's (then Image placeholder's) aspect lock reads back as Figma's `{x, y}` Vector. Read as a number,
   // every member of a fresh build "differs from what Prism3 expects in 1 place", which is what the NB master showed.
-  const IMG = 'image-placeholder';
+  const IMG = 'image';
   const b = await build(IMG);
   for (const m of membersOf(b.set)) (m.setSharedPluginData as (ns: string, k: string, v: string) => void)(NS, BASELINE_KEY, '');
   const cap = (await captureBaselines(b.shim, [{ def: IMG, plans: b.plans }])).sets[0];
-  ok(cap.recorded === 7 && cap.skipped.length === 0, `differ/image-placeholder: a fresh build's 7 members (#2345) are recorded, none read as differing (${cap.recorded}, ${JSON.stringify(cap.skipped).slice(0, 200)})`);
+  ok(cap.recorded === 28 && cap.skipped.length === 0, `differ/image: a fresh build's 28 members (7 ratios × 4 statuses, #4113) are recorded, none read as differing (${cap.recorded}, ${JSON.stringify(cap.skipped).slice(0, 200)})`);
 }
 {
   const b = await build(TAG);

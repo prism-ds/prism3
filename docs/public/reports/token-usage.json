@@ -1107,13 +1107,13 @@
             }
           }
         },
-        "image-placeholder": {
+        "image": {
           "keys": [
             "fill"
           ],
           "parts": {
             "frame": {
-              "members": 7,
+              "members": 28,
               "where": {}
             }
           }
@@ -6739,14 +6739,26 @@
           ],
           "parts": {}
         },
-        "image-placeholder": {
+        "image": {
           "keys": [
             "icon"
           ],
           "parts": {
+            "errorGlyph": {
+              "members": 7,
+              "where": {
+                "status": [
+                  "error"
+                ]
+              }
+            },
             "markerGlyph": {
               "members": 7,
-              "where": {}
+              "where": {
+                "status": [
+                  "empty"
+                ]
+              }
             }
           }
         }
@@ -18365,13 +18377,13 @@
             }
           }
         },
-        "image-placeholder": {
+        "image": {
           "keys": [
             "nominal-side"
           ],
           "parts": {
             "frame": {
-              "members": 7,
+              "members": 28,
               "where": {}
             }
           }
@@ -23411,6 +23423,12 @@
           ],
           "parts": {}
         },
+        "image": {
+          "keys": [
+            "motion.reveal-reduced"
+          ],
+          "parts": {}
+        },
         "skeleton": {
           "keys": [
             "motion.swap-reduced"
@@ -23469,6 +23487,12 @@
           "keys": [
             "motion.press",
             "motion.state"
+          ],
+          "parts": {}
+        },
+        "image": {
+          "keys": [
+            "motion.reveal"
           ],
           "parts": {}
         },
@@ -23571,6 +23595,12 @@
     "motion.easing-role.enter": {
       "type": "cubicBezier",
       "components": {
+        "image": {
+          "keys": [
+            "motion.reveal-easing"
+          ],
+          "parts": {}
+        },
         "skeleton": {
           "keys": [
             "motion.swap-easing"
@@ -24018,6 +24048,17 @@
                   "flush"
                 ]
               }
+            }
+          }
+        },
+        "image": {
+          "keys": [
+            "frame-radius"
+          ],
+          "parts": {
+            "frame": {
+              "members": 28,
+              "where": {}
             }
           }
         }
@@ -35456,8 +35497,8 @@
         "color.inverse.interactive.neutral.overlay.pressed"
       ]
     },
-    "image-placeholder": {
-      "members": 7,
+    "image": {
+      "members": 28,
       "axes": {
         "ratio": [
           "16:9",
@@ -35467,14 +35508,28 @@
           "3:4",
           "4:3",
           "4:5"
+        ],
+        "status": [
+          "empty",
+          "error",
+          "loaded",
+          "loading"
         ]
       },
       "tokens": [
         "color.background.secondary",
         "color.icon.tertiary",
-        "container.narrow"
+        "container.narrow",
+        "motion.duration-reduced.fast",
+        "motion.duration.fast",
+        "motion.easing-role.enter",
+        "radius.none"
       ],
-      "declaredNotDrawn": [],
+      "declaredNotDrawn": [
+        "motion.duration-reduced.fast",
+        "motion.duration.fast",
+        "motion.easing-role.enter"
+      ],
       "drawnNotDeclared": []
     },
     "link": {

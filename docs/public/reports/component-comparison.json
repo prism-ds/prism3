@@ -2800,8 +2800,8 @@
       "sizeDefault": "medium"
     },
     {
-      "id": "image-placeholder",
-      "name": "ImagePlaceholder",
+      "id": "image",
+      "name": "Image",
       "category": "foundations",
       "states": [],
       "projectedStates": [],
@@ -2814,9 +2814,21 @@
           "1:1",
           "3:2",
           "16:9"
+        ],
+        "status": [
+          "empty",
+          "loading",
+          "loaded",
+          "error"
         ]
       },
       "props": [
+        {
+          "name": "src"
+        },
+        {
+          "name": "alt"
+        },
         {
           "name": "ratio",
           "default": "4:3",
@@ -2829,6 +2841,53 @@
             "3:2",
             "16:9"
           ]
+        },
+        {
+          "name": "width"
+        },
+        {
+          "name": "height"
+        },
+        {
+          "name": "fit",
+          "default": "cover",
+          "values": [
+            "cover",
+            "contain"
+          ]
+        },
+        {
+          "name": "position",
+          "default": "center"
+        },
+        {
+          "name": "loading",
+          "default": "eager",
+          "values": [
+            "eager",
+            "lazy"
+          ]
+        },
+        {
+          "name": "fetchPriority",
+          "default": "auto",
+          "values": [
+            "high",
+            "low",
+            "auto"
+          ]
+        },
+        {
+          "name": "srcSet"
+        },
+        {
+          "name": "sizes"
+        },
+        {
+          "name": "onLoad"
+        },
+        {
+          "name": "onError"
         }
       ],
       "sizes": []
@@ -6943,7 +7002,7 @@
           "4:5"
         ],
         "components": [
-          "image-placeholder"
+          "image"
         ]
       }
     ],
@@ -7211,6 +7270,17 @@
         ],
         "components": [
           "step-item"
+        ]
+      },
+      {
+        "values": [
+          "empty",
+          "error",
+          "loaded",
+          "loading"
+        ],
+        "components": [
+          "image"
         ]
       }
     ],
@@ -7552,6 +7622,11 @@
           "start",
           "center"
         ]
+      }
+    ],
+    "alt": [
+      {
+        "id": "image"
       }
     ],
     "animation": [
@@ -8245,6 +8320,27 @@
         "id": "avatar"
       }
     ],
+    "fetchPriority": [
+      {
+        "id": "image",
+        "default": "auto",
+        "values": [
+          "high",
+          "low",
+          "auto"
+        ]
+      }
+    ],
+    "fit": [
+      {
+        "id": "image",
+        "default": "cover",
+        "values": [
+          "cover",
+          "contain"
+        ]
+      }
+    ],
     "footer": [
       {
         "id": "dialog",
@@ -8328,6 +8424,9 @@
       }
     ],
     "height": [
+      {
+        "id": "image"
+      },
       {
         "id": "skeleton"
       }
@@ -9023,6 +9122,16 @@
         "id": "banner"
       }
     ],
+    "loading": [
+      {
+        "id": "image",
+        "default": "eager",
+        "values": [
+          "eager",
+          "lazy"
+        ]
+      }
+    ],
     "loop": [
       {
         "id": "menu",
@@ -9415,6 +9524,16 @@
         "id": "toast"
       }
     ],
+    "onError": [
+      {
+        "id": "image"
+      }
+    ],
+    "onLoad": [
+      {
+        "id": "image"
+      }
+    ],
     "onOpenChange": [
       {
         "id": "dialog"
@@ -9588,6 +9707,12 @@
         ]
       }
     ],
+    "position": [
+      {
+        "id": "image",
+        "default": "center"
+      }
+    ],
     "prefix": [
       {
         "id": "text-field"
@@ -9631,7 +9756,7 @@
     ],
     "ratio": [
       {
-        "id": "image-placeholder",
+        "id": "image",
         "default": "4:3",
         "values": [
           "2:3",
@@ -10563,6 +10688,11 @@
         ]
       }
     ],
+    "sizes": [
+      {
+        "id": "image"
+      }
+    ],
     "spellCheck": [
       {
         "id": "textarea"
@@ -10571,11 +10701,17 @@
     "src": [
       {
         "id": "avatar"
+      },
+      {
+        "id": "image"
       }
     ],
     "srcSet": [
       {
         "id": "avatar"
+      },
+      {
+        "id": "image"
       }
     ],
     "start": [
@@ -11348,6 +11484,9 @@
         ]
       },
       {
+        "id": "image"
+      },
+      {
         "id": "segmented-control",
         "default": "auto",
         "values": [
@@ -11800,6 +11939,7 @@
         "code-input",
         "code-input-cell",
         "field-message",
+        "image",
         "password-field",
         "progress",
         "radio-control",
@@ -11813,7 +11953,7 @@
         "text-field",
         "textarea"
       ],
-      "detail": "the status axis takes 4 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item"
+      "detail": "the status axis takes 5 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item; [empty, error, loaded, loading] in image"
     },
     {
       "kind": "axis values",
@@ -12519,6 +12659,14 @@
         "divider"
       ],
       "detail": "divider has the variant axis labeled and no prop of that name"
+    },
+    {
+      "kind": "axis without prop",
+      "subject": "image",
+      "components": [
+        "image"
+      ],
+      "detail": "image has the variant axis status and no prop of that name"
     },
     {
       "kind": "axis without prop",

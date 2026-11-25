@@ -122,7 +122,7 @@ export const COMPONENT_RENAMES: readonly ComponentRename[] = [
   { def: 'field-message', kind: 'part', from: 'text', to: 'label', issue: 2759 },
   { def: 'textarea', kind: 'part', from: 'grip', to: 'gripGlyph', issue: 2759 },
   { def: 'select', kind: 'part', from: 'chevron', to: 'chevronGlyph', issue: 2759 },
-  { def: 'image-placeholder', kind: 'part', from: 'marker', to: 'markerGlyph', issue: 2759 },
+  { def: 'image', kind: 'part', from: 'marker', to: 'markerGlyph', issue: 2759 },
   { def: 'spinner', kind: 'part', from: 'ring', to: 'ringGlyph', issue: 2759 },
   { def: 'tag', kind: 'part', from: 'check', to: 'checkGlyph', issue: 2759 },
   { def: '_accordion-indicator', kind: 'part', from: 'chevronDown', to: 'chevronDownGlyph', issue: 2759 },
@@ -140,6 +140,14 @@ export const COMPONENT_RENAMES: readonly ComponentRename[] = [
   // to `provider-logo/<kind>/<name>` in place, every component keeping its id. The #2343 entries below were written
   // under the old id and name the new one, as entries after a def rename do.
   { def: 'brand-mark', kind: 'def', to: 'provider-logo', issue: 3148 },
+  // #4113 (owner decision OD-I1 A): Image placeholder became Image. Its #2759 part entry names the new id, as entries
+  // after a def rename do, so a file built before #2759 still has its marker layer renamed in place. The `marker`
+  // boolean retired for the `status` axis (OD-I2 A), so both its spellings are dropped: `marker`, and `Marker` from
+  // before #2759 (whose `property-rename` into `marker` would now name a property the set no longer declares). An old
+  // member lands on `status=empty`, the axis default, and looks as it did.
+  { def: 'image-placeholder', kind: 'def', to: 'image', issue: 4113 },
+  { def: 'image', kind: 'property', property: 'marker', issue: 4113 },
+  { def: 'image', kind: 'property', property: 'Marker', issue: 4113 },
   // #2343 PR 3 — the provider logos' kinds renamed, `card/` → `payment/` (Q780 A) and `wallet/` → `logo/` (Q783 A), as the
   // owner's artwork replaced the placeholders. Each mark is a single component, `provider-logo/<kind>/<name>`, so an update
   // renames the component in place and every instance keeps it. A wallet lockup was the logo in one ink; its black
@@ -155,7 +163,6 @@ export const COMPONENT_RENAMES: readonly ComponentRename[] = [
   { def: 'provider-logo', kind: 'drop', axis: 'name', value: 'provider/apple-white', issue: 2343 },
   // #2759 PR 2 — Figma property names are lowercase (owner decision Q345 A).
   { def: 'switch-control', kind: 'property-rename', from: 'State icon', to: 'state icon', issue: 2759 },
-  { def: 'image-placeholder', kind: 'property-rename', from: 'Marker', to: 'marker', issue: 2759 },
   { def: 'tag', kind: 'property-rename', from: 'Check icon', to: 'check icon', issue: 2759 },
   { def: 'segmented-control', kind: 'property-rename', from: 'Label', to: 'label', issue: 2759 },
   // #3225 (owner decisions 2026-11-01, Q-BN2.1 A and Q-BN2.2 A) — Banner's body. The sentence moves out of the slot into

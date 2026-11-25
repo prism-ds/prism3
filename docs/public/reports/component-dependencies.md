@@ -34,6 +34,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | radio-control | radio-row | radio-group, radio-row |
 | radio-row | radio-group | radio-group |
 | segmented-control-segment | segmented-control | segmented-control |
+| skeleton | image | image |
 | spinner | button, button-destructive, button-neutral, icon-button, icon-button-destructive, icon-button-neutral | banner, button, button-destructive, button-group, button-neutral, dialog, icon-button, icon-button-destructive, icon-button-neutral, password-field, popover, toast |
 | step-item | steps | steps |
 | switch-control | switch-row | switch-row |
@@ -79,7 +80,7 @@ A component not in this table is nested by nothing; a change to it reaches only 
 | icon-button | 1 | focus-ring, spinner | focus-ring, spinner |
 | icon-button-destructive | 1 | focus-ring, spinner | focus-ring, spinner |
 | icon-button-neutral | 1 | focus-ring, spinner | focus-ring, spinner |
-| image-placeholder | 0 | — | — |
+| image | 1 | skeleton | skeleton |
 | link | 1 | focus-ring | focus-ring |
 | list | 1 | list-item | list-item |
 | list-item | 0 | — | — |
@@ -194,6 +195,7 @@ Depth is 0 for a component that nests nothing, and one more than its deepest chi
 | icon-button-destructive | spinner | overlay | spinner | swap | — | — | — |
 | icon-button-neutral | focusRing | absolute | focus-ring | nest-fixed | surface=default | surface | — |
 | icon-button-neutral | spinner | overlay | spinner | swap | — | — | — |
+| image | loadingLayer | nest | skeleton | nest-fixed | shape=rect, size=medium | — | — |
 | link | focusRing | absolute | focus-ring | nest-fixed | surface=default | surface | — |
 | list | item1 | nest | list-item | nest-fixed | type=unordered, size=medium | type, size | — |
 | list | item2 | nest | list-item | nest-fixed | type=unordered, size=medium | type, size | — |

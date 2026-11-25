@@ -270,9 +270,9 @@ export const veil: ComponentDef = {
     primaryPurpose: 'Place a designer-selected wash over a photograph or video so text set on top of it stays legible, choosing the wash\'s polarity and magnitude per image.',
     whenToUse: 'Text or controls sit over a photograph or video and need to stay readable against a varied image. Pick a dark wash under light text or a light wash under dark text, then the intensity for how much the image needs muting, then the direction — full for text anywhere, or a fade from the edge the text sits on — and verify contrast against the real photo where the text sits.',
     avoidWhen: 'The overlay is the backdrop behind a modal or dialog (that is scrim.default, a mode-varying fill referenced directly, not this component), the surface behind the text is a solid color rather than an image (bind a semantic background or text role directly and the contrast is known), or the text sits in the clear half of a directional wash (move it to the named edge or use full).',
-    // What sits ON a veil (text, an icon, a button) and what it sits over (`image-placeholder`'s frame).
+    // What sits ON a veil (text, an icon, a button) and what it sits over (Image's frame).
     // None is nested, so all are partners (#1700).
-    commonPartners: ['icon', 'button', 'image-placeholder'],
+    commonPartners: ['icon', 'button', 'image'],
     triggerKeywords: ['veil', 'wash', 'photo wash', 'image overlay', 'image scrim', 'photo overlay', 'text over image', 'darken image', 'media wash', 'gradient scrim', 'gradient overlay', 'fade overlay'],
     generationPriority: 3,
   },

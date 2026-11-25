@@ -19911,36 +19911,36 @@ arm: {
         "minHeight's key must be a slot in tokens — it rides the same binding-key check as height");
     }
 
-    // ---- #1340: image-placeholder's marker sizes off a LITERAL glyphPx, not an icon rung ----
+    // ---- #1340: image's marker sizes off a LITERAL glyphPx, not an icon rung ----
     // The empty-state marker was a bound `icon.size.lg` (32px) that read as a stray small icon against the
     // 720px frame (#1340). It is now a def-local literal 180px — Prism 2's centered-glyph proportion for
     // this frame family (`playCircleLine` 160/480 = 1/3 of the 4:3 shorter side; 1/3 of prism3's 540px 4:3
     // nominal shorter side = 180). EXPECTED is the grounded literal; ACTUAL is read off the emitted plan,
     // independent of the projector, so a value move fails HERE and not only in the round-trip.
-    const imgPlaceholder = componentDefs.find((d) => d.id === 'image-placeholder')!;
+    const imgPlaceholder = componentDefs.find((d) => d.id === 'image')!;
     const markerOf = (d: ComponentDef): FigmaNodePlan => {
-      const root = figmaAnatomyPlan(d, undefined, { ratio: '4:3' } as never).root;
+      const root = figmaAnatomyPlan(d, undefined, { ratio: '4:3', status: 'empty' } as never).root;
       // By NAME since #2380: the marker is an instance of `icon/image` now, not a GLYPH.
       const m = (root.children ?? []).find((c) => c.name === 'markerGlyph');
-      if (!m) throw new Error(`image-placeholder projection has no marker (got [${(root.children ?? []).map((c) => `${c.name}:${c.type}`).join(', ')}])`);
+      if (!m) throw new Error(`image projection has no marker (got [${(root.children ?? []).map((c) => `${c.name}:${c.type}`).join(', ')}])`);
       return m;
     };
     // (a) the plan carries the literal, and it is a REAL enlargement past every icon rung (xl = 40) — a
     // rung binding could never reach it, which is why it is a literal and not a token.
     ok(markerOf(imgPlaceholder).glyphPx === 180,
-      `#1340 image-placeholder marker carries the 180px literal glyph size (got ${String(markerOf(imgPlaceholder).glyphPx)})`);
+      `#1340 image marker carries the 180px literal glyph size (got ${String(markerOf(imgPlaceholder).glyphPx)})`);
     ok((markerOf(imgPlaceholder).glyphPx ?? 0) > 40 && Object.keys(markerOf(imgPlaceholder).bound).length === 0,
       `#1340 the marker's size is a LITERAL past every icon rung (>40) and binds NO dimension variable (bound ${JSON.stringify(markerOf(imgPlaceholder).bound)}) — a rung could not reach 180`);
     //   MUTATION #1340 — revert to the old rung. Restore the `size: 'glyph-size'` token binding and drop
     //   `glyphPx`, exactly as before this PR: the marker re-binds width/height to the 32px icon variable and
-    //   carries NO glyphPx, flipping '#1340 image-placeholder marker carries the 180px literal glyph size'
+    //   carries NO glyphPx, flipping '#1340 image marker carries the 180px literal glyph size'
     //   BY NAME.
     const marker = imgPlaceholder.anatomy.parts.markerGlyph;
     const revertedMarker = { ...marker, glyphPx: undefined, size: 'glyph-size' };
     const reverted = { ...imgPlaceholder, tokens: { ...imgPlaceholder.tokens, 'glyph-size': 'icon.size.lg' }, anatomy: { ...imgPlaceholder.anatomy, parts: { ...imgPlaceholder.anatomy.parts, markerGlyph: revertedMarker } } };
     const revertedMarkerPlan = markerOf(reverted as ComponentDef);
     ok(revertedMarkerPlan.glyphPx === undefined && !!revertedMarkerPlan.bound.width,
-      `#1340 MUTATION: reverting to the icon.size.lg binding drops glyphPx (got ${String(revertedMarkerPlan.glyphPx)}) and re-binds the size variable (bound.width ${String(revertedMarkerPlan.bound.width)}), flipping '#1340 image-placeholder marker carries the 180px literal glyph size' to failing`);
+      `#1340 MUTATION: reverting to the icon.size.lg binding drops glyphPx (got ${String(revertedMarkerPlan.glyphPx)}) and re-binds the size variable (bound.width ${String(revertedMarkerPlan.bound.width)}), flipping '#1340 image marker carries the 180px literal glyph size' to failing`);
 
     // ---- #1340: the three REFUSAL arms `PartDef.glyphPx` adds, each pinned BY NAME (docs/34) ----
     // A PR's own new refusal owes its own by-name mutation, or an arm could be deleted from `anatomyErrors`
@@ -20014,14 +20014,15 @@ arm: {
     {
       // (a) the real def declares the exemption over its one axis.
       ok((imgPlaceholder.figmaProperties?.footprintVaries ?? []).join(',') === 'ratio',
-        `#1515 image-placeholder declares footprintVaries: ['ratio'] (got [${(imgPlaceholder.figmaProperties?.footprintVaries ?? []).join(', ')}]) — the aspect lock moves the box per ratio, so the cohort must partition it`);
+        `#1515 image declares footprintVaries: ['ratio'] (got [${(imgPlaceholder.figmaProperties?.footprintVaries ?? []).join(', ')}]) — the aspect lock moves the box per ratio, so the cohort must partition it`);
       // (b) THE EXEMPTION REACHES THE COHORT KEY — every ratio is its own cohort, so the footprint read-back
       // (`write-components.ts`, exercised by `test-roundtrip.ts`) only ever compares members that share a
       // group and the two QA misses cannot recur. The same assertion shape field-message's #1010 block makes.
       const ipGroups = planSetLayout(figmaAnatomySet(imgPlaceholder, {}), 'test').cells.map((c) => c.group).join(' | ');
       // #2345: seven ratios, tallest to widest, after a leading 4:3 (#2752, Q347 A) — typed here, not read from the def.
-      ok(ipGroups === 'ratio=4:3 | ratio=2:3 | ratio=3:4 | ratio=4:5 | ratio=1:1 | ratio=3:2 | ratio=16:9',
-        `#1515 image-placeholder: the declared exemption reaches the engine's cohort key — every ratio is its own cohort, so the footprint read-back no longer compares 720×540 against 720×720 (got '${ipGroups}')`);
+      // #4113: four status members per ratio, all in that ratio's cohort: `status` is a runtime axis held to one footprint.
+      ok(ipGroups === ['4:3', '2:3', '3:4', '4:5', '1:1', '3:2', '16:9'].flatMap((r) => Array(4).fill(`ratio=${r}`)).join(' | '),
+        `#1515 image: the declared exemption reaches the engine's cohort key — every ratio is its own cohort, so the footprint read-back no longer compares 720×540 against 720×720 (got '${ipGroups}')`);
       // (c) MUTATION — DROP THE ASPECT LOCK. `ratio` still projects and still carries `footprintVaries`, but
       // with no `aspectRatio` deriving from it and no `presentWhen` gating it, nothing about the box varies,
       // so the exemption is a blanket the validator must refuse BY NAME. Deleting the `|| p.aspectRatio ===
@@ -20039,8 +20040,9 @@ arm: {
     // each fails a line below by name.
     {
       const RATIOS: [string, number][] = [['2:3', 2 / 3], ['3:4', 3 / 4], ['4:5', 4 / 5], ['1:1', 1], ['4:3', 4 / 3], ['3:2', 3 / 2], ['16:9', 16 / 9]];
-      const ipSet = figmaAnatomySet(imgPlaceholder, {});
-      ok(ipSet.length === RATIOS.length, `#2345 image-placeholder projects ${RATIOS.length} members, one per ratio (got ${ipSet.length})`);
+      // #4113: the set is ratio × status now; the ratio and marker arms read the `empty` members, the old placeholder.
+      const ipSet = figmaAnatomySet(imgPlaceholder, {}).filter((p) => p.coord.status === 'empty');
+      ok(ipSet.length === RATIOS.length, `#2345 image projects ${RATIOS.length} empty members, one per ratio (got ${ipSet.length})`);
       for (const [ratio, want] of RATIOS) {
         const plan = ipSet.find((p) => p.coord.ratio === ratio);
         const got = plan?.root.aspectRatio;
@@ -20054,17 +20056,15 @@ arm: {
       // would hold against the SCALE constraint).
       ok(markers.every(([, m]) => m?.glyphPx === 180 && Object.keys(m.bound).length === 0),
         `#2345 the scaling marker keeps the 180px literal and binds no dimension (got ${JSON.stringify(markers.map(([r, m]) => [r, m?.glyphPx, m && Object.keys(m.bound)]))})`);
-      // THE MARKER BOOLEAN — declared on the set, default on, and wired to the marker on every member.
-      const props = planSetProperties(ipSet);
-      ok(JSON.stringify(props) === JSON.stringify([{ name: 'marker', type: 'BOOLEAN', default: true }]),
-        `#2345 the set declares one property, the BOOLEAN 'marker', default on (got ${JSON.stringify(props)})`);
-      const unwired = markers.filter(([, m]) => m?.visibleProp !== 'marker' || m?.visible === false).map(([r]) => r);
-      ok(unwired.length === 0, `#2345 every member's marker is driven by 'marker' and built visible (unwired or hidden on ${JSON.stringify(unwired)})`);
-      // FIGMA-ONLY (owner decision Q163.4b A): no code prop drives it, because in code the marker follows whether an
-      // image is supplied. The boolean is declared figmaOnly, and no prop by either name exists.
-      const mb = Object.values(imgPlaceholder.figmaProperties?.booleans ?? {}).find((v) => typeof v !== 'string' && v.figmaName === 'marker');
-      ok(typeof mb === 'object' && mb.figmaOnly === true && !imgPlaceholder.props.some((p) => /^(showMarker|marker)$/i.test(p.name)),
-        `#2345/Q163.4b the Marker boolean is Figma-only and no code prop drives it (figmaOnly ${String(typeof mb === 'object' && mb.figmaOnly)}; props ${imgPlaceholder.props.map((p) => p.name).join(', ')})`);
+      // THE MARKER BOOLEAN RETIRED (#4113, OD-I2 A): the `status` axis shows the marker at `empty` and nowhere else, so
+      // the set declares no component property, the marker is built visible and no boolean drives it. No code prop by
+      // either name exists (owner decision Q163.4b A, carried over: in code the status is derived).
+      const props = planSetProperties(figmaAnatomySet(imgPlaceholder, {}));
+      ok(JSON.stringify(props) === '[]', `#4113 the Image set declares no component property: the marker boolean retired for the status axis (got ${JSON.stringify(props)})`);
+      const unwired = markers.filter(([, m]) => m?.visibleProp !== undefined || m?.visible === false).map(([r]) => r);
+      ok(unwired.length === 0, `#4113 every empty member's marker is built visible and driven by no boolean (wired or hidden on ${JSON.stringify(unwired)})`);
+      ok(!imgPlaceholder.props.some((p) => /^(showMarker|marker|status)$/i.test(p.name)),
+        `#4113/Q163.4b no code prop drives the marker or the status (props ${imgPlaceholder.props.map((p) => p.name).join(', ')})`);
 
       // THE REFUSAL ARMS `PartDef.scaleWithParent` adds, each pinned BY NAME (docs/34).
       const frame = imgPlaceholder.anatomy.parts.frame;
@@ -20075,10 +20075,10 @@ arm: {
       const unlocked = errs(mk({ frame: { ...frame, aspectRatio: undefined, height: 'nominal-side' } }));
       ok(unlocked.some((e) => /carries no 'aspectRatio' lock/.test(e)), `#2345 scaleWithParent under a parent with no aspect lock is refused BY NAME (got ${JSON.stringify(unlocked)})`);
       // (b) no glyphPx — a bound size holds against the constraint.
-      const sized = errs(mk({ marker: { ...marker, glyphPx: undefined, size: 'nominal-side' } }));
+      const sized = errs(mk({ markerGlyph: { ...marker, glyphPx: undefined, size: 'nominal-side' } }));
       ok(sized.some((e) => /declares 'scaleWithParent' but no 'glyphPx'/.test(e)), `#2345 scaleWithParent without glyphPx is refused BY NAME (got ${JSON.stringify(sized)})`);
       // (c) beside a corner pin — two placements for one node.
-      const cornered = errs(mk({ marker: { ...marker, corner: 'bottom-right', inset: 'nominal-side' } }));
+      const cornered = errs(mk({ markerGlyph: { ...marker, corner: 'bottom-right', inset: 'nominal-side' } }));
       ok(cornered.some((e) => /BOTH 'scaleWithParent' and 'corner'/.test(e)), `#2345 scaleWithParent beside corner is refused BY NAME (got ${JSON.stringify(cornered)})`);
       // (d) on a non-vector — the projector reads it only on a vector.
       const onBox = errs(mk({ frame: { ...frame, scaleWithParent: true } }));
@@ -20087,11 +20087,72 @@ arm: {
       const noLayout = errs(mk({ frame: { ...frame, layout: undefined } }));
       ok(noLayout.some((e) => /which is not an auto-layout 'box'/.test(e)), `#2345 scaleWithParent under a parent with no auto-layout is refused BY NAME (got ${JSON.stringify(noLayout)})`);
       // (f) `false` authored — a switch that is on or absent.
-      const off = errs(mk({ marker: { ...marker, scaleWithParent: false } }));
+      const off = errs(mk({ markerGlyph: { ...marker, scaleWithParent: false } }));
       ok(off.some((e) => /declares scaleWithParent false/.test(e)), `#2345 scaleWithParent: false is refused BY NAME (got ${JSON.stringify(off)})`);
       // (g) on the ROOT — no parent to scale with.
       const rootGlyph = { ...(rootGlyphDef as unknown as ComponentDef), anatomy: { root: 'g', parts: { g: { kind: 'vector' as const, role: 'target' as const, glyph: 'image', glyphPx: 180, scaleWithParent: true } } } } as unknown as ComponentDef;
       ok(errs(rootGlyph).some((e) => /is the anatomy ROOT and declares 'scaleWithParent'/.test(e)), `#2345 scaleWithParent on the ROOT is refused BY NAME (got ${JSON.stringify(errs(rootGlyph))})`);
+    }
+
+    // ---- #4113: Image — the placeholder upgraded with four load states (owner decisions OD-I1 to OD-I9, all A) ----
+    // EXPECTED is typed here from the issue's decisions, never read from the def: the status values and their order
+    // (OD-I2 A, `empty` leading), what each status draws (OD-I3 A, OD-I4 A), the nested Skeleton rect, the frame radius
+    // (OD-I9 A), the required alt (OD-I5 A), and the rename (OD-I1 A). ACTUAL is the projected plan set, read per member.
+    {
+      const img = componentDefs.find((d) => d.id === 'image')!;
+      ok(!!img && !componentDefs.some((d) => d.id === 'image-placeholder'), '#4113 OD-I1 A: Image is registered and Image placeholder is not (renamed, not kept beside it)');
+      const ledgerRename = COMPONENT_RENAMES.some((r) => r.kind === 'def' && r.def === 'image-placeholder' && r.to === 'image');
+      const ledgerDrop = COMPONENT_RENAMES.some((r) => r.kind === 'property' && r.def === 'image' && r.property === 'marker');
+      ok(ledgerRename && ledgerDrop, `#4113 OD-I1 A: the rename register carries image-placeholder → image and the retired marker property (rename ${ledgerRename}, drop ${ledgerDrop})`);
+      ok(JSON.stringify(img.variants.status) === JSON.stringify(['empty', 'loading', 'loaded', 'error']) && img.axisKinds?.status === 'runtime',
+        `#4113 OD-I2 A: status is [empty, loading, loaded, error], empty leading, a runtime axis (got ${JSON.stringify(img.variants.status)}, ${String(img.axisKinds?.status)})`);
+      const WANT_KIDS: Record<string, string> = { empty: 'markerGlyph', loading: 'loadingLayer', loaded: '', error: 'errorGlyph' };
+      const kidsAt = (d: ComponentDef): string[] => {
+        const set = figmaAnatomySet(d, {});
+        const bad: string[] = [];
+        if (set.length !== 28) bad.push(`${set.length} members, not 7 ratios × 4 statuses`);
+        for (const p of set) {
+          const got = (p.root.children ?? []).map((c) => c.name).join(',');
+          if (got !== WANT_KIDS[p.coord.status as string]) bad.push(`ratio=${p.coord.ratio}, status=${p.coord.status}: [${got}]`);
+        }
+        return bad;
+      };
+      ok(kidsAt(img).length === 0, `#4113 OD-I2/I3/I4 A: each status draws only its own layer — empty the marker, loading the skeleton, loaded nothing, error the error glyph (wrong: ${kidsAt(img).join(' | ')})`);
+      // MUTATION — ungate the marker, as the retired boolean left it: it then draws on every status, and the arm above names it.
+      const ungated = { ...img, anatomy: { ...img.anatomy, parts: { ...img.anatomy.parts, markerGlyph: { ...img.anatomy.parts.markerGlyph, presentWhen: undefined } } } } as ComponentDef;
+      ok(kidsAt(ungated).some((l) => /status=loaded: \[markerGlyph\]/.test(l)), `#4113 MUTATION: an ungated marker draws on the loaded member, failing the per-status arm by name (got ${kidsAt(ungated).slice(0, 2).join(' | ')})`);
+      const at = (st: string) => figmaAnatomySet(img, {}).find((p) => p.coord.ratio === '4:3' && p.coord.status === st)!;
+      // OD-I3 A: a distinct glyph, the component-owned "image unavailable" (the `image` picture and a slash), at the marker's size and scaling.
+      const eg = at('error').root.children[0];
+      ok(eg?.type === 'GLYPH' && /id="picture"/.test(eg.glyphSvg ?? '') && /id="slash"/.test(eg.glyphSvg ?? '') && eg.glyphPx === 180 && eg.absoluteScale === true && eg.absoluteCenter === true && eg.descendantFills === 'color/icon/tertiary',
+        `#4113 OD-I3 A: the error glyph is the picture with a slash, 180px, centered, scaling with the frame, in icon.tertiary (got ${JSON.stringify({ type: eg?.type, px: eg?.glyphPx, scale: eg?.absoluteScale, fill: eg?.descendantFills })})`);
+      ok(at('empty').root.children[0]?.nestTarget === 'icon/image', `#4113 the empty marker is still the icon set's image glyph (got ${String(at('empty').root.children[0]?.nestTarget)})`);
+      // OD-I4 A: Skeleton's rect, filling the frame (grow along the row, stretch across it).
+      const ll = at('loading').root.children[0];
+      ok(ll?.nestTarget === 'skeleton' && JSON.stringify(ll.nestVariant) === JSON.stringify({ shape: 'rect', size: 'medium' }) && ll.layoutGrow === 1 && ll.layoutAlign === 'STRETCH',
+        `#4113 OD-I4 A: the loading layer is Skeleton's rect, filling the frame (got ${JSON.stringify({ t: ll?.nestTarget, v: ll?.nestVariant, g: ll?.layoutGrow, a: ll?.layoutAlign })})`);
+      ok(JSON.stringify(img.composition.composesWith) === '["skeleton"]', `#4113 Image composes with Skeleton and nothing else (got ${JSON.stringify(img.composition.composesWith)})`);
+      // OD-I9 A: square corners, through `radius.none` on every corner.
+      const rb = at('loaded').root.bound;
+      ok(['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'].every((k) => rb[k as keyof typeof rb] === 'radius/none'),
+        `#4113 OD-I9 A: the frame's four corners bind radius/none (got ${JSON.stringify(rb)})`);
+      // OD-I5 A: alt is a required string, with no default (an empty string is the decorative case, decided per use).
+      const alt = img.props.find((p) => p.name === 'alt');
+      ok(alt?.type === 'string' && alt.required === true && alt.default === undefined, `#4113 OD-I5 A: alt is a required string with no default (got ${JSON.stringify(alt)})`);
+      // OD-I6 A, OD-I7 A: fit is cover or contain, default cover; loading is eager or lazy, default eager (no lazy default).
+      const fit = img.props.find((p) => p.name === 'fit');
+      const loading = img.props.find((p) => p.name === 'loading');
+      ok(JSON.stringify(fit?.values) === '["cover","contain"]' && fit?.default === 'cover' && loading?.default === 'eager' && JSON.stringify(loading?.values) === '["eager","lazy"]',
+        `#4113 OD-I6/I7 A: fit [cover, contain] defaulting to cover, loading [eager, lazy] defaulting to eager (got ${JSON.stringify({ fit: fit?.values, fd: fit?.default, l: loading?.values, ld: loading?.default })})`);
+      // OD-I6 A: fit is code only, so it projects no axis.
+      ok(!(img.figmaProperties?.variantAxes ?? []).includes('fit') && JSON.stringify(img.figmaProperties?.variantAxes) === '["ratio","status"]',
+        `#4113 the set's axes are ratio and status only (got ${JSON.stringify(img.figmaProperties?.variantAxes)})`);
+      // Right to left (the proposal's "mirror: false, with that rule in docs"; #4113 review): Image does not mirror, so
+      // both glyphs say `never` in their own fields, and the docs' "In RTL" note, generated only from those fields, says
+      // so. The sentence is typed here, never read off `rtl-mirror.ts`.
+      const ip = img.anatomy?.parts ?? {};
+      ok(ip.markerGlyph?.mirror === 'never' && ip.errorGlyph?.mirror === 'never' && rtlNote(img) === 'The marker and error glyphs do not mirror.',
+        `#4113 right to left: the marker and error glyphs state mirror: 'never', and the docs say "The marker and error glyphs do not mirror." (got ${JSON.stringify({ marker: ip.markerGlyph?.mirror ?? null, error: ip.errorGlyph?.mirror ?? null, note: rtlNote(img) ?? null })})`);
     }
 
     // ---- #2344 → #2649 (owner decision Q307 A): the groups hold their rows in a native `items` slot ----
@@ -21947,7 +22008,7 @@ arm: {
       'button-destructive': 2, 'button-neutral': 2, 'wallet-button': 2, 'sign-in-button': 2, 'icon-button': 2, 'icon-button-neutral': 2, icon: 2,
       'text-field': 2, textarea: 2, 'password-field': 2, 'code-input': 2, 'search-field': 2, 'card-number-field': 2, select: 2, 'checkbox-row': 2, 'checkbox-group': 2, 'tag-group': 2,
       'radio-group': 2, 'switch-row': 2, counter: 2, 'button-group': 2, tabs: 2, accordion: 2, list: 2, link: 2, dialog: 2, popover: 2, menu: 2, 'menu-item': 9, 'menu-group': 3, banner: 2, toast: 2, pagination: 2, slider: 2,
-      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, skeleton: 3, veil: 3, 'image-placeholder': 3,
+      'icon-button-destructive': 3, 'segmented-control': 3, badge: 3, tag: 3, divider: 3, spinner: 3, progress: 3, skeleton: 3, veil: 3, image: 3,
       // Tooltip (#4009, generation priority 3, decided in Q-FL2): supports another component, as Badge does.
       tooltip: 3,
       'flush-icon-button-neutral': 4, 'flush-icon-button': 5, 'flush-icon-button-destructive': 5,
@@ -22707,6 +22768,8 @@ arm: {
       // #3055: a step's `error` status shows a glyph in the danger icon role in place of its disc, with no stroke.
       'step-item': 'a step in a Steps indicator: no state axis and no stroked boundary at error; its error status swaps the disc for the danger error glyph and keeps the name, and the #3055 block holds that glyph to 3:1 against the page',
       progress: 'a progress bar or ring: no state axis and no stroked boundary; its error status colors the fill and shows in the nested FieldMessage\'s text and glyph, and its contrast is held by the #2670 block',
+      // #4113 (OD-I3 A): Image's `error` is a load status, not validation: it swaps the marker glyph, with no stroke.
+      image: 'an image frame: no state axis and no stroked boundary; its error status is a failed load, drawn as the decorative "image unavailable" glyph on the same fill, held by the #4113 block',
     };
     const SH_STATUSES = ['error', 'warning', 'success'];
     const roleOfVar = (v: string): string => v.replace(/^color\//, '').replace(/\//g, '.');
@@ -27036,13 +27099,13 @@ arm: {
         `#3360 field-message caption holds still: the caption starts at the same height in every status, so a validation result moves no text${moved.length ? ` — MOVED: ${moved.slice(0, 4).join('; ')}` : ''}`);
     }
 
-    // ---- #2345: the image-placeholder marker is built OUT OF FLOW, CENTERED and SCALE/SCALE, on BOTH legs ----
+    // ---- #2345: the image marker is built OUT OF FLOW, CENTERED and SCALE/SCALE, on BOTH legs ----
     // The plan-level arm proves the plan says so; this proves each EXECUTOR writes it. The expected
     // constraints are the literal 'SCALE' typed here, and the centering is measured against the PARENT'S
     // OWN live box as the stub reports it — not against a number either executor computed.
     {
-      const ipDef = componentDefs.find((d) => d.id === 'image-placeholder')!;
-      const ip = figmaAnatomySet(ipDef, {}).find((q) => q.coord.ratio === '4:3')!;
+      const ipDef = componentDefs.find((d) => d.id === 'image')!;
+      const ip = figmaAnatomySet(ipDef, {}).find((q) => q.coord.ratio === '4:3' && q.coord.status === 'empty')!;
       // Since #2389 the marker is an instance of `icon/image`, so the file holds that icon component, as a real one
       // would (the plugin builds icons first).
       const nested = (n: AnatomyPlan['root']): string[] => [...(n.nestTarget ? [n.nestTarget] : []), ...(n.children ?? []).flatMap(nested)];
@@ -27062,12 +27125,12 @@ arm: {
       const pastePage: StubPage = { children: [] };
       const pasted = await runPayload(planToPluginJs(ip), { ...ipOpts, page: pastePage });
       ok(markerFacts(pastePage) === WANT_MARKER && pasted.misses.length === 0,
-        `#2345 paste leg: the image-placeholder marker is ${WANT_MARKER} (got '${markerFacts(pastePage)}'; misses ${JSON.stringify(pasted.misses)})`);
+        `#2345 paste leg: the image marker is ${WANT_MARKER} (got '${markerFacts(pastePage)}'; misses ${JSON.stringify(pasted.misses)})`);
       const plugPage: StubPage = { children: [] };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- structural: the stub satisfies ComponentsApi
       const plugged = await applyComponentPlan([ip], makeFigmaStub({ ...ipOpts, page: plugPage }) as any);
       ok(markerFacts(plugPage) === WANT_MARKER && plugged.misses.length === 0,
-        `#2345 plugin leg: the image-placeholder marker is ${WANT_MARKER} (got '${markerFacts(plugPage)}'; misses ${JSON.stringify(plugged.misses)})`);
+        `#2345 plugin leg: the image marker is ${WANT_MARKER} (got '${markerFacts(plugPage)}'; misses ${JSON.stringify(plugged.misses)})`);
       // POSITIVE CONTROL on the constraint's other branch: an overlay centered WITHOUT `absoluteScale` (the
       // spinner's shape) still takes CENTER/CENTER, so the switch is the field and not an unconditional SCALE.
       const centerOnly: AnatomyPlan = { ...ip, root: { ...ip.root, children: ip.root.children.map((c) => (c.name === 'markerGlyph' ? { ...c, absoluteScale: undefined } : c)) } };
@@ -35221,7 +35284,7 @@ arm: {
   // `checkbox-group` and `radio-group` since #2751: each gates its nested message on `status=error`.
   // `pagination-item` joins (#2665, Q381, Q404 A): its number and its ellipsis icon are gated on `type`, its underline on
   // `selection` and `style`.
-  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'avatar', 'step-item', 'menu-item', 'tooltip'];
+  const GATED_EXPECTED = ['skeleton', 'field-message', 'text-field', 'textarea', 'checkbox-control', 'checkbox-group', 'radio-control', 'radio-group', 'switch-control', 'select', 'badge', 'tag', '_accordion-indicator', 'accordion', 'list-item', 'link', 'button-group', 'dialog', 'password-field', 'progress', 'search-field', 'card-number-field', 'banner', 'toast', '_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs', 'code-input-cell', 'pagination-item', 'pagination', 'slider', 'divider', 'counter', 'avatar', 'step-item', 'menu-item', 'tooltip', 'image'];
   ok(GATED_EXPECTED.every((n) => gatedDefs.some((d) => d.id === n)) && gatedDefs.length === GATED_EXPECTED.length,
     `#910 the presentWhen projection rule below covers exactly [${GATED_EXPECTED.join(', ')}] — a def gaining a variant-gated part must be represented here, and a def losing one is a stale claim (found: ${gatedDefs.map((d) => d.id).join(', ') || 'none'})`);
   for (const def of gatedDefs) {
@@ -35357,7 +35420,7 @@ arm: {
   // A RATIO box's `width` is NOT a 2:1 track (#1316): it is the SINGLE nominal dimension the aspect lock
   // derives the other axis from, so it binds width and NO height — the opposite of what the arms below
   // assert (two different bound axes). Excluded by `!p.aspectRatio`, both in the cohort filter and the
-  // per-part loop, so `image-placeholder` is not dragged in and asked for a height it deliberately omits.
+  // per-part loop, so `image` is not dragged in and asked for a height it deliberately omits.
   const widthDefs = componentDefs.filter((d) =>
     d.anatomy && d.figmaProperties && Object.values(d.anatomy.parts).some((p) => p.width && !p.aspectRatio));
   // #1354 moved the non-square track to `switch-control`, so the def binding `width` is the atom now.
@@ -35670,7 +35733,7 @@ arm: {
   // ignores it, or spells it wrong — the two derivations agree about a segment neither one emits. So a def
   // that DOES declare an exemption is asserted here, and it is not coverage for its own sake: it is the only
   // place the new segment exists to disagree about. `field-message` (`['status']`) is the one used because it
-  // also exercises the CHUNKED payload; `image-placeholder` (`['ratio']`, #1515) is the second such def, its
+  // also exercises the CHUNKED payload; `image` (`['ratio']`, #1515) is the second such def, its
   // cohort-key partition pinned in its own block above.
   const fmLayout = planSetLayout(figmaAnatomySet(fieldMessage, { swapTarget: 'FPO-default-icon' }), 'test');
   const fmGroups = fmLayout.cells.map((c) => c.group).join(' | ');
@@ -37531,7 +37594,9 @@ const NB_MASTER: BrandInput = {"id": "nb-redesign", "root": "nbds", "modes": ["l
   const WITH = ['_slider-thumb', 'banner', 'button', 'button-destructive', 'button-neutral', 'card-number-field', 'checkbox-control', 'checkbox-group', 'checkbox-row',
     'code-input', 'counter', 'dialog', 'field-message', 'flush-icon-button', 'flush-icon-button-destructive', 'flush-icon-button-neutral', 'focus-ring', 'icon-button',
     'icon-button-destructive', 'icon-button-neutral', 'page-nav', 'pagination', 'pagination-item', 'password-field', 'radio-control', 'radio-group', 'radio-row',
-    'search-field', 'segmented-control', 'select', 'slider', 'spinner', 'switch-control', 'switch-row', 'tab-item', 'tag', 'text-field', 'textarea', 'veil'];
+    'search-field', 'segmented-control', 'select', 'slider', 'spinner', 'switch-control', 'switch-row', 'tab-item', 'tag', 'text-field', 'textarea', 'veil',
+    // #4113: Image's build rules (the alt contract, the derived status, the reveal) ship as implementation from the start.
+    'image'];
   const got = componentDefs.filter((d) => (d.docs.implementation ?? []).length).map((d) => d.id).sort();
   ok(JSON.stringify(got) === JSON.stringify([...WITH].sort()), `#2778 the defs carrying docs.implementation are the ${WITH.length} the move named (got ${got.length}: ${JSON.stringify(got.filter((x) => !WITH.includes(x)))} extra, ${JSON.stringify(WITH.filter((x) => !got.includes(x)))} missing)`);
   const both = componentDefs.flatMap((d) => (d.docs.implementation ?? []).filter((l) => (d.docs.do ?? []).includes(l)).map((l) => `${d.id}: ${l.slice(0, 50)}`));
@@ -42040,6 +42105,8 @@ arm: {
     // #4007 (held for the owner): one member, so the group carries a one-value `type` the engine needs to project a set.
     // Code has no type prop: every group is a section, with or without its heading, and a radio set is a section too.
     'menu-group.type': { prop: 'heading', map: { undefined: 'section' }, reason: 'code has no type prop; a group is a section whether or not it sets `heading` (#4007: the one-value axis is how the engine projects one member)' },
+    // #4113 (OD-I2 A, Q163.4b A): code derives the status, so no prop holds it; with no `src` the image is empty.
+    'image.status': { prop: 'src', map: { undefined: 'empty' }, reason: 'the status is derived in code, never a prop: with no src the frame is empty, the first member' },
     'accordion.expansion': { prop: 'defaultExpanded', map: off('collapsed', 'expanded'), reason: 'an accordion opens by `defaultExpanded`' },
     // #2666 (owner call 11 A): code has no path prop. `responsive` (default true) swaps the trail for the parent link
     // below 480px by a container query, and either value renders the trail at every wider width, so the code default
@@ -42123,7 +42190,7 @@ arm: {
   // slots (Q2 A), read on every def that carries them.
   const MUST: [string, string][] = [
     ['icon-button', 'appearance'], ['icon-button-destructive', 'appearance'], ['icon-button-neutral', 'appearance'],
-    ['veil', 'intensity'], ['image-placeholder', 'ratio'],
+    ['veil', 'intensity'], ['image', 'ratio'],
     ...SIZED.map((id) => [id, 'size'] as [string, string]),
     ...['button', 'button-destructive', 'button-neutral'].flatMap((id) => [[id, 'leading'], [id, 'trailing']] as [string, string][]),
   ];
@@ -43873,6 +43940,19 @@ arm: {
   const flipped = withMirrors(breadcrumbSep, { slashGlyph: 'mirrors' });
   const unbacked = withMirrors(breadcrumbSep, { chevronGlyph: 'never' });
   const toRow = withMirrors(breadcrumbSep, { frame: 'reverses' });
+  // OWN PARTS (#4113 review): `deepClaims` lets a nested def's field back a def's prose, which is right where the prose is
+  // about the nested part (a Breadcrumbs trail's slash). Where the prose is about the def's OWN parts, a nested field
+  // hides a missing one: Image's "Image does not mirror" passed on Skeleton's `mirror: 'never'` while Image's own glyphs
+  // stated nothing, so its docs carried no "In RTL" note. Each def named here must state each claim in its own parts.
+  // Typed here, never derived (docs/34).
+  const OWN_PARTS: Record<string, Claim[]> = { image: ['hold'] };
+  const ownOff = Object.entries(OWN_PARTS).flatMap(([id, claims]) => {
+    const d = rtlById.get(id);
+    if (!d) return [`${id}: not a def`];
+    const oc = ownClaims(d);
+    return claims.filter((c) => !oc.has(c)).map((c) => `${id}: the prose states ${c}, and no part of its own does (own: [${[...oc].join(', ')}]; what it nests does not count)`);
+  });
+  ok(ownOff.length === 0, `#3986 own parts: each listed def states its right-to-left claims in its own parts (${Object.keys(OWN_PARTS).join(', ')})${ownOff.length ? ` — ${ownOff.join('; ')}` : ''}`);
   ok(disagreements(breadcrumbSep).length === 0 && disagreements(toRow).some((b) => /states row/.test(b))
     && disagreements(unbacked).some((b) => /prose states flip/.test(b)) && disagreements(flipped).some((b) => /prose states hold/.test(b)),
     '#3986: the arm names a part stating what the prose does not (row) and prose no part states (flip; hold)');

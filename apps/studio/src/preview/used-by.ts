@@ -37,6 +37,7 @@ export const USED_BY = {
       ],
       "radius.none": [
         "FlushIconButton",
+        "Image",
         "Badge",
         "Dialog",
         "Banner"
@@ -102,6 +103,7 @@ export const USED_BY = {
       ],
       "radius.none": [
         "FlushIconButton",
+        "Image",
         "Badge",
         "Dialog",
         "Banner"
@@ -170,6 +172,7 @@ export const USED_BY = {
         "Textarea",
         "Checkbox.Control",
         "Select",
+        "Image",
         "Badge",
         "Dialog",
         "PasswordField",
@@ -241,6 +244,7 @@ export const USED_BY = {
       ],
       "radius.none": [
         "FlushIconButton",
+        "Image",
         "Badge",
         "Dialog",
         "Banner"
