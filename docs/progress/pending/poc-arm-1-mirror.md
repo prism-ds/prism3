@@ -28,3 +28,14 @@ on an inline `<svg>` in either form.
 
 **Trap.** `check-rtl`'s left-to-right lines carry no direction suffix, only right-to-left ones end in ` (rtl)`. A
 `mustName` written with `(ltr)` matches nothing and reports the mutant as uncaught.
+
+### After review (CHANGES at `ac131713`)
+
+- **The fields' mirror rule can now fail.** `fields.ts` writes the rule for the text field's and the password field's
+  glyph slots, but no field story draws a glyph that points, so removing the rule passed every check (the review's
+  mutation: `OK rtl: 802 checks`). `check-rtl` now marks each field's leading glyph itself in `WithIcons`, as an author
+  would, reads it, and takes the mark off again. It must flip right to left and stay as drawn left to right, in each
+  form: 8 more checks (810).
+- **Mutations, by name:** the review's (the fields' `add(…mirror…)` removed, regenerated, rebuilt) now fails 4, both
+  fields in each form, `… leading glyph, marked data-mirror, does not flip right to left (#4052 A, the fields' rule)`;
+  a new self-test mutant overrides the fields' rule and must be named.

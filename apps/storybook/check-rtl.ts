@@ -30,7 +30,9 @@
  *  4. GLYPHS (the button's `WithVisuals`, add then a right arrow). Neither slot is transformed (no blanket flip), and
  *     the add glyph, which points nowhere, is never flipped. The arrow points, so its author marks it on the glyph
  *     itself, `<svg data-mirror>` (#4052 A, owner 2026-11-24): it is marked, it flips right to left, and it is drawn
- *     as authored left to right. `@prism3/css` flips a marked glyph with a `[dir="rtl"]` rule, in both forms.
+ *     as authored left to right. `@prism3/css` flips a marked glyph with a `[dir="rtl"]` rule, in both forms. No field
+ *     story draws a glyph that points, so the check marks each field's leading glyph itself (`WithIcons`), and holds
+ *     it the same way: flipped right to left, as drawn left to right.
  *  5. CONTENT DIRECTION (#4051). The text field's input carries `dir="auto"`, its def's `accessibility.aria` line
  *     ("so content direction can differ from UI direction"), and a left-to-right value in it computes `direction:
  *     ltr` on a right-to-left page. The password field's input carries no `dir` (#4051 A, owner 2026-11-24), so it
@@ -171,6 +173,26 @@ export const run = async (browser: unknown, origin: string, plant: RtlPlant = {}
         if (dir === 'ltr') r.ok(!flipped, `${where}: the trailing arrow is flipped left to right; a marked glyph is drawn as authored there`);
         else r.ok(flipped, `${where}: the trailing arrow (marked data-mirror) does not flip right to left (#4052 A)`);
       }
+      // 4b. a field's marked glyph (#4052 A, review of #4591). No field story draws a glyph that points (search, info and
+      // the status glyphs don't), so the fields' rule (`fields.ts`) has nothing to flip. The check marks the leading glyph
+      // itself, as an author would, reads it, and takes the mark off again so nothing after this sees it.
+      if ((s.component === 'text-field' || s.component === 'password-field') && s.case === 'with-icons') {
+        const name = s.component === 'text-field' ? 'text field' : 'password field';
+        const glyph = `.p3-${s.component}__leading-visual svg`;
+        const marked: boolean = await page.evaluate((q: string) => {
+          const g = document.querySelector(`#storybook-root ${q}`);
+          if (!g) return false;
+          g.setAttribute('data-mirror', '');
+          return true;
+        }, glyph);
+        if (!marked) r.failures.push(`${where}: the ${name}'s leading glyph is not drawn, so its mirror rule can't be held (#4052 A)`);
+        else {
+          const flipped = flips(await transform(page, glyph));
+          await page.evaluate((q: string) => document.querySelector(`#storybook-root ${q}`)?.removeAttribute('data-mirror'), glyph);
+          if (dir === 'ltr') r.ok(!flipped, `${where}: the ${name}'s leading glyph, marked data-mirror, is flipped left to right; a marked glyph is drawn as authored there`);
+          else r.ok(flipped, `${where}: the ${name}'s leading glyph, marked data-mirror, does not flip right to left (#4052 A, the fields' rule)`);
+        }
+      }
       // 5. content direction (last: it writes a value into the input). The password field's input: no dir (#4051 A).
       if (s.component === 'password-field') {
         const pw: { dir: string | null; direction: string } | null = await page.evaluate(() => {
@@ -229,6 +251,12 @@ const MUTANTS = [
     plant: { css: rtl('.p3-button__trailing-visual svg { transform: none !important; }') },
     only: is('button', 'with-visuals'),
     mustName: /components-button-(element|html)--with-visuals \(rtl\): the trailing arrow \(marked data-mirror\) does not flip right to left/,
+  },
+  {
+    name: "the fields' mirror rule overridden (a marked field glyph left unflipped)",
+    plant: { css: rtl('.p3-text-field__leading-visual svg { transform: none !important; } .p3-password-field__leading-visual svg { transform: none !important; }') },
+    only: (s: Story) => (s.component === 'text-field' || s.component === 'password-field') && s.case === 'with-icons',
+    mustName: /components-(text|password)-field-(element|html)--with-icons \(rtl\): the (text|password) field's leading glyph, marked data-mirror, does not flip right to left/,
   },
   {
     name: "the arrow's data-mirror mark dropped",
