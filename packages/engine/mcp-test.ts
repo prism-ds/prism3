@@ -548,6 +548,35 @@ await new Promise((r) => setTimeout(r, 3000));
     `#2209 control: well-formed score_consumption input still scores, every kind accepted, an unknown role reported as unresolved (got ${c.seen})`);
 }
 
+// ------------------------------- #4125: score_consumption reports coverage, and measures palette colors in pairs
+// Owner decisions A and A (2026-11-20): `coverage` beside `rate`, and a pair naming a raw palette color is measured and
+// listed in `leaks`. Driven through the server, so the published result is what is held, not `eval.ts` alone.
+// EXPECTED is typed from the input and from contrast arithmetic, never read from eval.ts or the tree:
+//   - every pair but the invented one resolves in every mode, so coverage is 3/4 whatever the mode count;
+//   - white on white is 1:1 in every mode, so it fails each mode at its floor of 4.5; black on white is 21:1 and passes;
+//     so rate is 2/3, again whatever the mode count.
+// BY-NAME MUTATIONS: `coverage: 1` in eval.ts → the mixed and all-unresolved arms; the palette lookup dropped (roles
+// only) → the palette arm, both palette pairs then read as unresolved.
+{
+  const B = { id: 'x', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } };
+  const ROLE = { fg: 'color.text.primary', bg: 'color.background.primary' };
+  const WHITE_ON_WHITE = { fg: 'core.palette.white', bg: 'core.palette.white' };
+  const BLACK_ON_WHITE = { fg: '{prism.core.palette.black}', bg: 'core.palette.white' };
+  const INVENTED = { fg: 'color.text.nope', bg: 'color.background.primary' };
+  const mixed = (await server.callJson('score_consumption', { brand: B, refs: [], pairs: [ROLE, WHITE_ON_WHITE, BLACK_ON_WHITE, INVENTED] })).payload?.contracts;
+  const seen = JSON.stringify(mixed).slice(0, 400);
+  ok(mixed?.coverage === 3 / 4 && mixed.vacuous === false && JSON.stringify(mixed.unresolved) === '["color.text.nope on color.background.primary"]',
+    `#4125 a mixed run reports coverage 3/4 beside the rate: one pair of four never resolved (got ${seen})`);
+  const ww = (mixed?.failures ?? []).filter((f: any) => f.pair === 'core.palette.white on core.palette.white');
+  ok(JSON.stringify(mixed?.leaks) === JSON.stringify(['core.palette.white on core.palette.white', '{prism.core.palette.black} on core.palette.white'])
+    && mixed.checked > 0 && mixed.checked % 3 === 0 && ww.length === mixed.checked / 3 && ww.every((f: any) => f.ratio === 1 && f.min === 4.5)
+    && mixed.failures.length === ww.length && Math.abs(mixed.rate - 2 / 3) < 1e-12,
+    `#4125 palette colors in pairs are measured and listed as leaks: white on white fails 1:1 in every mode, black on white passes, rate 2/3 (got ${seen})`);
+  const none = (await server.callJson('score_consumption', { brand: B, refs: [], pairs: [INVENTED] })).payload?.contracts;
+  ok(none?.coverage === 0 && none.vacuous === true && none.checked === 0,
+    `#4125 an all-unresolved run reports coverage 0, and vacuous (got ${JSON.stringify(none)})`);
+}
+
 // ------------------------------- #3109: every MCP server in the repo is driven with the handshake probes
 {
   // The bridge kept its own copy of the pre-#1867 fallback because nothing probed it. So find every
