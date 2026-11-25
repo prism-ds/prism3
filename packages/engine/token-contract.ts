@@ -123,6 +123,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './entry-point';
 import { brandTheme, BrandInput, Theme } from './theme';
 import { nbTheme } from './nb-fixture';
 import { buildTree } from './tree';
@@ -432,4 +433,4 @@ const main = (): void => {
   process.exit(1);
 };
 
-if (process.argv[1] && /token-contract\.ts$/.test(process.argv[1])) main();
+if (isEntry(import.meta.url)) main();

@@ -14,8 +14,8 @@
  * both sides, so a symlink anywhere in either path no longer decides the answer.
  *
  * It never answers "no" for a run that is the entry point: when `argv[1]` names this module's own file by its real
- * path, it is. When `argv[1]` is missing, or names a file that does not exist (an import from a REPL, `node -e`), it
- * is not. And when `argv[1]` has this module's file name but is a DIFFERENT real file, it throws by name rather than
+ * path, or names it with the extension left off, it is. When `argv[1]` is missing, or names a file that does not exist
+ * even with this module's extension (an import from a REPL, `node -e`), it is not. And when `argv[1]` has this module's file name but is a DIFFERENT real file, it throws by name rather than
  * skip the check: that is the shape of the bug this replaces, and a guess either way would hide it.
  *
  * THE TEMP ROOT (#4586). `tmpdir()` returns the root as the environment spells it, unresolved. A path made under it and
@@ -24,7 +24,7 @@
  */
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, resolve } from 'node:path';
+import { basename, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** The real path of a file, or null when it does not exist. */
@@ -32,12 +32,19 @@ const real = (p: string): string | null => {
   try { return realpathSync(p); } catch { return null; }
 };
 
-/** True when the module at `metaUrl` (pass `import.meta.url`) is the file node was started with. */
+/** True when the module at `metaUrl` (pass `import.meta.url`) is the file node was started with.
+ *
+ *  A run with the extension left off (`npx tsx packages/engine/regen --check`) is loaded as `regen.ts`, but `argv[1]`
+ *  stays the extensionless path, which names no file. Read as "a file that does not exist", it skipped the check and
+ *  exited 0 having printed nothing (#4602 review). So a missing `argv[1]` is tried again with this module's own
+ *  extension, and is then held like any other run: the entry point, or a different file of this name, which throws. */
 export const isEntry = (metaUrl: string, argv1: string | undefined = process.argv[1]): boolean => {
   if (!argv1) return false;
   const self = real(fileURLToPath(metaUrl));
-  const started = real(resolve(argv1));
-  if (self === null || started === null) return false;
+  if (self === null) return false;
+  const typed = resolve(argv1);
+  const started = real(typed) ?? (extname(typed) === extname(self) ? null : real(typed + extname(self)));
+  if (started === null) return false;
   if (self === started) return true;
   if (basename(self) === basename(started)) {
     throw new Error(`entry guard (#4583): node was started with ${started}, which has this module's name but is not this module (${self}); refusing to guess whether to run the check`);

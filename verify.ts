@@ -118,6 +118,7 @@ import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './packages/engine/entry-point';
 // The chrome suite's shard map (#2898, #3216): the file CI's shards read through `test-chrome.mjs`. Read here, not
 // copied, so a local run and CI run the same shards; `shardMapProblems` holds it to CI's matrix.
 import { SHARDS as CHROME_SHARDS } from './apps/studio/chrome-shards.mjs';
@@ -1863,10 +1864,7 @@ if (selfFails.length) {
 // ---- THE RUN -------------------------------------------------------------------------------------
 // Guarded, so `lint-doc-gates.ts` can import GATES to compare it against `ci.yml` without running ~30
 // gates as a side effect of a doc check.
-const isMain = (() => {
-  try { return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]); }
-  catch { return false; }
-})();
+const isMain = isEntry(import.meta.url);
 
 if (isMain) {
   const argv = process.argv.slice(2);

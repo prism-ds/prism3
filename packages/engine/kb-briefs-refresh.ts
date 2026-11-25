@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './entry-point';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const KB_BRIEFS_PATH = resolve(HERE, 'schema', 'kb-briefs.json');
@@ -44,7 +45,7 @@ const frontMatter = (src: string): Record<string, string> => {
 const list = (v: string | undefined): string[] =>
   !v ? [] : v.replace(/^\[|\]$/g, '').split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
 
-if (process.argv[1] && /kb-briefs-refresh\.ts$/.test(process.argv[1])) {
+if (isEntry(import.meta.url)) {
   const kb = process.argv[2];
   if (!kb) die('usage: npx tsx packages/engine/kb-briefs-refresh.ts <path to a knowledge-base checkout>');
   const dir = join(resolve(kb), 'components');

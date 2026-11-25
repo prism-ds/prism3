@@ -10509,16 +10509,29 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
       writeFileSync(join(otherDir, 'guarded.ts'), 'export {};\n');
       const url = pathToFileURL(self).href;
       const viaLink = join(linkDir, 'guarded.ts');
+      // Each in-process probe is wrapped (#4602 review nit): a guard that throws where it should answer records as THIS
+      // arm's failure, by name, instead of aborting the suite and taking every later assertion with it.
+      const probe = (argv1: string | undefined): boolean | string => {
+        try { return isEntry(url, argv1); } catch (e) { return `threw: ${(e as Error).message.slice(0, 120)}`; }
+      };
       // the old guard, as it was written, on the same two paths: the oracle for "this is the case that used to skip"
       const oldGuard = resolve(viaLink) === fileURLToPath(url);
-      ok(isEntry(url, viaLink) && !oldGuard,
-        `#4583: isEntry reads a run through a symlinked directory as the entry point, where the old guard read it as not and skipped the check (isEntry ${isEntry(url, viaLink)}, old guard ${oldGuard})`);
-      ok(isEntry(url, self) && !isEntry(url, undefined) && !isEntry(url, join(root, 'missing.ts')) && !isEntry(url, join(repo4583, 'package.json')),
-        '#4583: isEntry is true for the file by its own path, and false with no argv[1], for a file that does not exist, and for another file');
+      ok(probe(viaLink) === true && !oldGuard,
+        `#4583: isEntry reads a run through a symlinked directory as the entry point, where the old guard read it as not and skipped the check (isEntry ${probe(viaLink)}, old guard ${oldGuard})`);
+      ok(probe(self) === true && probe(undefined) === false && probe(join(root, 'missing.ts')) === false && probe(join(repo4583, 'package.json')) === false,
+        `#4583: isEntry is true for the file by its own path, and false with no argv[1], for a file that does not exist, and for another file (${JSON.stringify([probe(self), probe(undefined), probe(join(root, 'missing.ts')), probe(join(repo4583, 'package.json'))])})`);
+      // #4602 review: the extension left off. node and tsx load `guarded` as `guarded.ts`, but argv[1] stays the
+      // extensionless path, which names no file; read as "does not exist", it skipped the check and exited 0.
+      const bare = join(realDir, 'guarded'), bareViaLink = join(linkDir, 'guarded');
+      ok(probe(bare) === true && probe(bareViaLink) === true && probe(join(root, 'missing')) === false,
+        `#4602: isEntry reads a run with the extension left off as the entry point, directly and through a symlink, and still false for a name with no file (${JSON.stringify([probe(bare), probe(bareViaLink), probe(join(root, 'missing'))])})`);
       let threw = '';
       try { isEntry(url, join(otherDir, 'guarded.ts')); } catch (e) { threw = (e as Error).message; }
-      ok(/^entry guard \(#4583\): node was started with .*, which has this module's name but is not this module/.test(threw),
-        `#4583: a run of a DIFFERENT file with this module's name throws by name rather than skip the check (threw ${JSON.stringify(threw.slice(0, 90))})`);
+      let threwBare = '';
+      try { isEntry(url, join(otherDir, 'guarded')); } catch (e) { threwBare = (e as Error).message; }
+      const NAMED = /^entry guard \(#4583\): node was started with .*, which has this module's name but is not this module/;
+      ok(NAMED.test(threw) && NAMED.test(threwBare),
+        `#4583: a run of a DIFFERENT file with this module's name throws by name rather than skip the check, with or without its extension (threw ${JSON.stringify(threw.slice(0, 90))}; extensionless ${JSON.stringify(threwBare.slice(0, 90))})`);
       // the whole path, in a child: V8 loads the real file while argv[1] is the link's path
       const child = spawnSync(process.execPath, [...process.execArgv, viaLink], { cwd: repo4583, encoding: 'utf8' });
       ok(child.status === 0 && child.stdout.includes('BODY RAN'),
@@ -10529,6 +10542,11 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
       const gate = spawnSync(process.execPath, [...process.execArgv, join(repoLink, 'packages/engine/shadcn-vars.ts'), '--check'], { cwd: repo4583, encoding: 'utf8' });
       ok(gate.status === 0 && /✓ projection variable sets/.test(gate.stdout),
         `#4583: shadcn-vars.ts --check, run through a symlink to the repo, runs its check rather than exit 0 having run nothing (exit ${gate.status}, ${gate.stdout.trim() ? 'printed its result' : 'PRINTED NOTHING'})`);
+      // #4602 review: a REAL gate with its extension left off, the reviewer's own replay. `token-contract` decided by a
+      // `/token-contract\.ts$/` test of argv[1] and printed nothing; it now decides by `isEntry`.
+      const bareGate = spawnSync(process.execPath, [...process.execArgv, join(repo4583, 'packages/engine/token-contract'), '--check'], { cwd: repo4583, encoding: 'utf8' });
+      ok(bareGate.status === 0 && /✓ token contract unchanged/.test(bareGate.stdout),
+        `#4602: token-contract --check, run with its extension left off, runs its check rather than exit 0 having run nothing (exit ${bareGate.status}, ${bareGate.stdout.trim() ? 'printed its result' : 'PRINTED NOTHING'}${bareGate.stderr ? `, stderr ${JSON.stringify(bareGate.stderr.trim().slice(0, 120))}` : ''})`);
     } finally { rmSync(root, { recursive: true, force: true }); }
 
     // THE SCAN: no copy of the old guard and no unresolved temp root comes back. Over every script git tracks under
@@ -10536,20 +10554,55 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
     // checks, and are left out by name).
     const tracked = spawnSync('git', ['ls-files', 'packages', 'apps', 'tools', 'verify.ts'], { cwd: repo4583, encoding: 'utf8' }).stdout
       .split('\n').filter((f) => /\.(ts|mts|mjs|js|cjs)$/.test(f) && !/(^|\/)(node_modules|dist|release|release-offline)\//.test(f));
+    // THE GUARD RULE (#4602 review). A `.ts` entry point decides by `isEntry` alone, so outside `entry-point.ts` a `.ts`
+    // line that reads `process.argv[1]` is its own guard, whatever its shape: the old comparison, the same comparison
+    // split over two lines (the URL on the line above), or a `/name\.ts$/` test, which a run with the extension left
+    // off never matches. A plain-node `.mjs` or `.js` cannot import the `.ts` helper; its guard must compare real paths
+    // on the line that reads argv[1] (and such a file run without its extension fails to load, loudly). This file is
+    // left out by name: it quotes the old shapes as data, and nothing guards it.
+    // THE TEMP-ROOT RULE: any `tmpdir()` call, bare or namespace-qualified (`os.tmpdir()`), unless it is the argument of
+    // `realpathSync(`.
+    const scanSource = (f: string, src: string) => {
+      const out = { badGuards: [] as string[], badTmp: [] as string[], guards: 0, roots: 0 };
+      if (f === 'packages/engine/test.ts') return out;
+      const ts = /\.(ts|mts|cts)$/.test(f);
+      src.split('\n').forEach((line, i) => {
+        if (/^\s*(\*|\/\/|\/\*)/.test(line)) return;
+        if (/\bisEntry\((?:import\.meta\.url)?\)/.test(line) && !/(?:const|function) isEntry\b/.test(line)) out.guards++;
+        if (/process\.argv\[1\]/.test(line) && f !== 'packages/engine/entry-point.ts'
+          && (ts || !/realpathSync\(process\.argv\[1\]\)[^;]*===[^;]*realpathSync\(|realpathSync\([^;]*===[^;]*realpathSync\(process\.argv\[1\]\)/.test(line))) out.badGuards.push(`${f}:${i + 1}`);
+        for (const m of line.matchAll(/(?<![\w$'"`.])(?:[A-Za-z_$][\w$]*\.)?tmpdir\(\)/g)) {
+          if ((line.slice(0, m.index).match(/['`]/g) ?? []).length % 2) continue;
+          if (line.slice(Math.max(0, m.index! - 'realpathSync('.length), m.index) === 'realpathSync(') out.roots++;
+          else out.badTmp.push(`${f}:${i + 1}`);
+        }
+      });
+      return out;
+    };
+    // The scan judges planted sources first, with verdicts typed here (docs/34): the reviewer's two blind spots (M2, a
+    // namespace-qualified temp root; M3, the old guard over two lines) and the regex guard must be named, and the
+    // shapes that are right must not be.
+    const planted: [string, string, string, 'guard' | 'tmp' | 'clean'][] = [
+      ['M2: os.tmpdir(), namespace-qualified', 'x.ts', "import * as os from 'node:os';\nconst d = mkdtempSync(join(os.tmpdir(), 'p-'));", 'tmp'],
+      ['M3: the old guard split over two lines', 'x.ts', "const SELF = fileURLToPath(import.meta.url);\nif (process.argv[1] && resolve(process.argv[1]) === SELF) main();", 'guard'],
+      ['a name test of argv[1]', 'x.ts', "if (process.argv[1] && /x\\.ts$/.test(process.argv[1])) main();", 'guard'],
+      ['a bare tmpdir()', 'x.ts', "const d = join(tmpdir(), 'p-');", 'tmp'],
+      ['an .mjs guard comparing unresolved paths', 'x.mjs', "const isMain = process.argv[1] === fileURLToPath(import.meta.url);", 'guard'],
+      ['isEntry, and a resolved os.tmpdir()', 'x.ts', "if (isEntry(import.meta.url)) main();\nconst d = join(realpathSync(os.tmpdir()), 'p-');", 'clean'],
+      ['an .mjs guard comparing real paths', 'x.mjs', "try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }", 'clean'],
+    ];
+    const plantedOff = planted.filter(([, f, src, want]) => {
+      const r = scanSource(f, src);
+      const got = r.badGuards.length ? 'guard' : r.badTmp.length ? 'tmp' : 'clean';
+      return got !== want;
+    }).map(([label, , , want]) => `${label} (want ${want})`);
+    ok(plantedOff.length === 0,
+      `#4602: the scan names each planted old shape, the namespace-qualified temp root and the split guard among them, and passes the right ones${plantedOff.length ? ` — wrong: ${plantedOff.join('; ')}` : ''}`);
     const badGuards: string[] = [], badTmp: string[] = [];
     let guards = 0, roots = 0;
     for (const f of tracked) {
-      const src = readFileSync(join(repo4583, f), 'utf8');
-      src.split('\n').forEach((line, i) => {
-        if (/^\s*(\*|\/\/|\/\*)/.test(line)) return;
-        if (/\bisEntry\((?:import\.meta\.url)?\)/.test(line) && !/(?:const|function) isEntry\b/.test(line)) guards++;
-        if (/process\.argv\[1\]/.test(line) && /[!=]==/.test(line) && /import\.meta|fileURLToPath|__filename/.test(line) && !/realpathSync/.test(line)) badGuards.push(`${f}:${i + 1}`);
-        for (const m of line.matchAll(/(?<![\w.'"`])tmpdir\(\)/g)) {
-          if ((line.slice(0, m.index).match(/['`]/g) ?? []).length % 2) continue;
-          if (line.slice(Math.max(0, m.index! - 'realpathSync('.length), m.index) === 'realpathSync(') roots++;
-          else badTmp.push(`${f}:${i + 1}`);
-        }
-      });
+      const r = scanSource(f, readFileSync(join(repo4583, f), 'utf8'));
+      badGuards.push(...r.badGuards); badTmp.push(...r.badTmp); guards += r.guards; roots += r.roots;
     }
     ok(badGuards.length === 0,
       `#4583: every entry guard compares real paths (isEntry, or realpathSync on both sides), none the typed argv[1] with the loaded URL${badGuards.length ? ` — ${badGuards.slice(0, 6).join(', ')}${badGuards.length > 6 ? ` and ${badGuards.length - 6} more` : ''}` : ''}`);

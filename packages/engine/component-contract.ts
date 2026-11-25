@@ -66,6 +66,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './entry-point';
 import type { ComponentDef } from './component-schema';
 import { componentDefs } from './components';
 import { COMPONENT_DEFS_FORMAT } from './component-defs-export';
@@ -389,4 +390,4 @@ const main = (): void => {
   process.exit(1);
 };
 
-if (process.argv[1] && /component-contract\.ts$/.test(process.argv[1])) main();
+if (isEntry(import.meta.url)) main();
