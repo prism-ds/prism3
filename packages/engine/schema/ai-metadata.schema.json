@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "prism3-ai-metadata/0.8",
+  "$id": "prism3-ai-metadata/0.9",
   "title": "Prism3 agent metadata sidecar (<brand>.ai.json)",
   "description": "Agent-readable metadata for one generated brand, companion to its DTCG token tree (<brand>.tokens.json). Every token in the tree has exactly one entry, keyed by its path below the brand root. Every field is generated from the token data on each build. The sidecar's own `$schema` value equals this schema's `$id`; both change together when a field is added, renamed or removed.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "brand", "generated", "note", "color_fields", "typography_fields", "layout_fields", "motion_fields", "primitive_fields", "color", "typography", "layout", "motion", "motion_presets", "primitives"],
+  "required": ["$schema", "brand", "generated", "note", "color_fields", "typography_fields", "layout_fields", "motion_fields", "primitive_fields", "color", "typography", "layout", "motion", "motion_presets", "motion_patterns", "primitives"],
   "properties": {
-    "$schema": { "const": "prism3-ai-metadata/0.8", "description": "The schema version this file follows. Equal to this schema's `$id`." },
+    "$schema": { "const": "prism3-ai-metadata/0.9", "description": "The schema version this file follows. Equal to this schema's `$id`." },
     "brand": { "$ref": "#/$defs/path", "description": "The brand id, as in the token tree's file name." },
     "generated": { "const": true, "description": "Always true: no field is hand-authored." },
     "note": { "type": "string", "minLength": 1, "description": "A one-paragraph guide to the tiers and fields, for a reader without this schema." },
@@ -46,6 +46,12 @@
       "description": "Motion presets (`surface`, `crossfade`), keyed by preset name (#2857, Q-MS1 A). Each names the brand's `motion.preset.<name>` tokens, the published alias tier an agent binds, and in `resolves_to` what each of the preset's slots points at for this brand",
       "additionalProperties": false,
       "patternProperties": { "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)?$": { "$ref": "#/$defs/presetEntry" } }
+    },
+    "motion_patterns": {
+      "type": "object",
+      "description": "Motion patterns (`dialog/enter`, `toast/exit`), keyed by name (#2857 phase 2, Q-PT1 A). Each lists the tracks a component half moves, each binding one preset's tokens, with this brand's track overrides applied. A pattern holds no timing of its own.",
+      "additionalProperties": false,
+      "patternProperties": { "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*$": { "$ref": "#/$defs/patternEntry" } }
     },
     "icons": {
       "type": "object",
@@ -93,7 +99,47 @@
             "delay": { "type": "string", "pattern": "^motion\\.(delay|duration-ms)\\.[a-z0-9-]+$", "description": "A delay step, or the 0ms primitive when the preset starts at once." },
             "duration_reduced": { "type": "string", "pattern": "^motion\\.(duration-reduced|duration-ms)\\.[a-z0-9-]+$", "description": "A step's reduced twin, or a millisecond primitive for a spring's short fade." }
           }
-        }
+        },
+        "exit": { "$ref": "#/$defs/exitEntry" }
+      }
+    },
+    "exitEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An arriving preset's exit half (#2857, Q-PT3 A): the same slots at motion.preset.<name>.exit.*, one step shorter on the exit role by default.",
+      "required": ["token", "duration", "easing", "delay", "duration_reduced", "resolves_to"],
+      "properties": {
+        "token": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.transition$", "description": "The exit half's transition composite, motion.preset.<name>.exit.transition." },
+        "duration": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.duration$", "description": "The exit half's duration slot." },
+        "easing": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.easing$", "description": "The exit half's easing slot." },
+        "delay": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.delay$", "description": "The exit half's delay slot." },
+        "duration_reduced": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.duration-reduced$", "description": "The exit half's reduced-motion duration, derived from its duration slot." },
+        "resolves_to": { "$ref": "#/$defs/presetEntry/properties/resolves_to" }
+      }
+    },
+    "patternEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One motion pattern (#2857 phase 2): a component half that moves, as tracks. Each track binds one preset's tokens.",
+      "required": ["half", "tracks"],
+      "properties": {
+        "half": { "enum": ["enter", "exit", "change"], "description": "enter and exit are a component arriving and leaving; change is a change in place." },
+        "tracks": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/trackEntry" } }
+      }
+    },
+    "trackEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["element", "property", "preset", "reduced"],
+      "properties": {
+        "element": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "The element the track moves." },
+        "property": { "enum": ["opacity", "transform", "size", "color"], "description": "The property group it moves." },
+        "transform": { "enum": ["scale", "slide", "turn", "travel"], "description": "With a transform, what it does." },
+        "preset": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+(\\.exit)?$", "description": "The preset whose tokens time the track: motion.preset.<name>, or motion.preset.<name>.exit for a closing half." },
+        "distance": { "oneOf": [{ "type": "string", "pattern": "^(motion\\.distance\\.[a-z0-9-]+|space\\.[0-9]+|self)$" }, { "type": "number", "exclusiveMinimum": 0 }], "description": "A slide's distance: a token path, the element's own size (self), or px from a brand override." },
+        "from": { "enum": ["bottom", "end", "below"], "description": "Where a slide comes from." },
+        "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "A scale's start scale." },
+        "reduced": { "enum": ["fade", "keep", "off"], "description": "What the track does under reduced motion: keep plays on the preset's reduced duration, off jumps to its end, fade swaps the movement for a fade." }
       }
     },
     "path": {
