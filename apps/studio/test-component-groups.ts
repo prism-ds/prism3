@@ -56,6 +56,7 @@
  * gaining Field style without joining the section (or the other way round) fails by name. A subcomponent Field style
  * draws (the Code cell, #2428) is held as the component that nests it (owner decision Q-2789.3 A).
  */
+import { readFileSync } from 'node:fs';
 import { COMPONENT_CATALOG_DATA as catalog } from './src/state/component-catalog-data';
 import type { Catalog, CatalogEntry } from './src/state/component-catalog';
 import { addableOf, alsoBuilds, boxOfSets, costOf, deselectAllOf, displayNameOf, familiesToOpen, groupsOf, heldBy, inFileOf, neededOf, rootsOf, splitsOf, inListOrder, rowMatches, rowOfFocus, selectAllOf, sentenceCase, setFocusKey, tiersOf, toggleSets, GROUPS_COPY, SECTION_BLOCKS } from './src/state/component-groups';
@@ -203,8 +204,15 @@ ok(JSON.stringify(drawn('components')) === JSON.stringify(WIRE_COMPONENTS) && JS
   `note 2: a family's sets are alphabetical by component name, and call 12: a part set stays in its family (${JSON.stringify(drawn('components').filter((r) => r[1].length > 1).map((r) => r[1].join('/')))})`);
 ok(groups.find((g) => g.kind === 'subcomponents')?.rows.some((r) => r.ids.includes('icon') && r.page === 'Icons & assets') === true,
   'call 11: Icon lists under Subcomponents, and still lands on ↳ Icons & assets');
-ok(groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length === catalog.length && catalog.length === 74,
-  `every set is listed once: ${groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length} rows' sets over ${catalog.length} in the catalog (the wireframe's 41, Button.Group since #2661, Counter since #2427, Code input and its cell since #2428, Pagination's 2 since #2665, Progress since #2670, Search field since #2888, Slider with its Thumb since #2669, Toast since #2668, Banner since #2579, the three Breadcrumbs sets since #2666, Provider logo since #2343, Wallet button since #2343 PR 4, Card number field since #2343 PR 4, Sign-in button since #2343 PR 5, Page navigation with its item since #3345, Tag.Group since #1739, Avatar since #4110, Skeleton since #4109, Popover since #4008, Steps with its item since #3055, Menu with its group and item since #4007, Tooltip since #4009, and ToggleButton and ToggleIconButton since #4112)`);
+// EVERY SET, BY ID, NOT A COUNT (#4510). This held `catalog.length === <n>`, a number every new def raised by hand, so two
+// PRs that each added one merged to n+1 when n+2 was true (#4260's shape). The expected ids are the authored surface
+// baseline's default projections (keys with no `@`), which only `lint-component-surface.ts --accept` writes; the
+// catalog is generated from the defs, so neither side is derived from the other (docs/34), and a merge keeps both keys.
+const baselineIds = Object.keys(JSON.parse(readFileSync(new URL('../../packages/engine/schema/component-surface.json', import.meta.url), 'utf8')).defs as Record<string, unknown>).filter((id) => !id.includes('@'));
+const unlisted = baselineIds.filter((id) => !catalog.some((e) => e.id === id));
+const unrecorded = catalog.map((e) => e.id).filter((id) => !baselineIds.includes(id));
+ok(groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length === catalog.length && baselineIds.length > 0 && !unlisted.length && !unrecorded.length,
+  `every set is listed once: ${groups.flatMap((g) => g.rows).flatMap((r) => r.ids).length} rows' sets over ${catalog.length} in the catalog, the same ids the surface baseline records (not in the catalog: ${JSON.stringify(unlisted)}; not in the baseline: ${JSON.stringify(unrecorded)}) (the wireframe's 41, Button.Group since #2661, Counter since #2427, Code input and its cell since #2428, Pagination's 2 since #2665, Progress since #2670, Search field since #2888, Slider with its Thumb since #2669, Toast since #2668, Banner since #2579, the three Breadcrumbs sets since #2666, Provider logo since #2343, Wallet button since #2343 PR 4, Card number field since #2343 PR 4, Sign-in button since #2343 PR 5, Page navigation with its item since #3345, Tag.Group since #1739, Avatar since #4110, Skeleton since #4109, Popover since #4008, Steps with its item since #3055, Menu with its group and item since #4007, Tooltip since #4009, and ToggleButton and ToggleIconButton since #4112)`);
 ok(sentenceCase('Field Label') === 'Field label' && sentenceCase('Text field') === 'Text field' && sentenceCase('Icons & assets') === 'Icons & assets',
   'call 14: a page name reads in sentence case ("Field Label" → "Field label")');
 ok(GROUPS_COPY.sectionCount('components', 19, 32) === '19 families and sets · 32 sets' && GROUPS_COPY.sectionCount('subcomponents', 7, 9) === '7 entries · 9 sets'
