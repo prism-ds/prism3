@@ -328,6 +328,17 @@ export const MATERIALIZATION_DELETIONS: MaterializationDeletion[] = [
     domain: (collection, name, root) =>
       collection === 'size' && new RegExp(`^${root}/size/(xs|sm|md|lg|xl)/(padding-x|padding-x-visual|padding-y|gap)$`).test(name),
   },
+  {
+    id: 'motion-50ms-reduced-floor-2857',
+    since: '{{ENGINE_VERSION}}',
+    why:
+      'Reduced motion is min(full, 100ms) on every step (owner decision Q-MP17 A, #2857, closing #3484 and #3493). '
+      + 'The old rule floored every brand\'s reduced `normal` to 50ms, so the 50ms duration primitive was reached '
+      + 'by every brand; a snappy brand reaches no other 50ms value, so its `motion/duration-ms/50` primitive has '
+      + 'nothing left to alias it. Nothing replaces it. CONTRACT 16.0.0 records the same change on the token side, '
+      + 'as a demotion to brand-dependent.',
+    domain: (collection, name) => collection === 'motion' && name === 'ads/motion/duration-ms/50',
+  },
 ];
 
 // ---- the accounting ---------------------------------------------------------------------------

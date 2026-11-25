@@ -9976,7 +9976,7 @@ for (const reduced of [false, true]) {
     await openDepth(page);
     const tag = reduced ? 'under reduced motion' : 'without reduced motion';
     const mount = await dotAnims(page);
-    ok(mount.length === 4 && mount.every((a) => !a), `D9: ${tag}, the four traces are at rest when the page opens (${JSON.stringify(mount)})`);
+    ok(mount.length === 10 && mount.every((a) => !a), `D9: ${tag}, the ten preset traces (#2857) are at rest when the page opens (${JSON.stringify(mount)})`);
     await slide(page, 'shadow-softness', 0.4);
     const elev = await dotAnims(page);
     ok(elev.every((a) => !a), `D9: ${tag}, an Elevation edit plays nothing (${JSON.stringify(elev)})`);
@@ -9987,16 +9987,17 @@ for (const reduced of [false, true]) {
     const after = await dotAnims(page);
     const label = await page.evaluate(() => document.querySelector('[data-p3="motion-play"]')?.textContent ?? null);
     if (reduced) ok(after.every((a) => !a) && label === 'Play', `D9: under reduced motion, a Motion edit plays nothing, and the button still says Play (${JSON.stringify(after)}, "${label}")`);
-    else ok(after.length === 4 && after.every((a) => /mo-trace-y/.test(a) && /\d+ms cubic-bezier/.test(a)) && label === 'Replay', `D9: without reduced motion, a Motion edit plays the four traces once, and the button says Replay (${JSON.stringify(after)}, "${label}")`);
-    // Real speed: the emphasized trace runs its relaxed duration (moderate 300 × 1.3 = 390ms) at Off.
+    else ok(after.length === 10 && after.every((a) => /mo-trace-y/.test(a) && /\d+ms cubic-bezier/.test(a)) && label === 'Replay', `D9: without reduced motion, a Motion edit plays the ten preset traces once, and the button says Replay (${JSON.stringify(after)}, "${label}")`);
+    // Real speed: the surface preset's trace runs its relaxed duration (moderate 300 × 1.3 = 390ms) at Off, on its enter
+    // role's curve, decelerate (0, 0, 0.2, 1). #2857: the presets replaced the transitions, and none is on emphasized.
     const brand0 = JSON.stringify(await persisted(page));
     await hooks.click(page.locator('[data-p3="motion-play"]'));
     const played = await dotAnims(page);
-    ok(played.every((a) => /mo-trace-y/.test(a)) && played.some((a) => /\b390ms cubic-bezier\(0\.4, 0\.14/.test(a)), `D9: ${tag}, Play plays every trace once, at real speed (${JSON.stringify(played)})`);
+    ok(played.every((a) => /mo-trace-y/.test(a)) && played.some((a) => /\b390ms cubic-bezier\(0, 0, 0\.2, 1\)/.test(a)), `D9: ${tag}, Play plays every trace once, at real speed (${JSON.stringify(played)})`);
     await page.locator('[data-p3="motion-slowmo"]').selectOption('4');
     await hooks.click(page.locator('[data-p3="motion-play"]'));
     const slow = await dotAnims(page);
-    ok(slow.some((a) => /\b1560ms cubic-bezier\(0\.4, 0\.14/.test(a)), `D9: ${tag}, Slow motion 1/4 plays the same trace four times slower (${JSON.stringify(slow)})`);
+    ok(slow.some((a) => /\b1560ms cubic-bezier\(0, 0, 0\.2, 1\)/.test(a)), `D9: ${tag}, Slow motion 1/4 plays the same trace four times slower (${JSON.stringify(slow)})`);
     ok(JSON.stringify(await persisted(page)) === brand0, `#574: ${tag}, Play and Slow motion write nothing to the brand`);
     ok(errors.length === 0, `D9 ${tag}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
   } catch (e) {

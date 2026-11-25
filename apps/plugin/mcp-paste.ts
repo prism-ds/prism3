@@ -296,12 +296,23 @@ export const themeScripts = (input: BrandInput, opts: ThemeOpts = {}): Script[] 
   if (fontJs.length + NUMBER_SLACK > SCRIPT_CEILING) throw new Error(`font variables: the one font script is ${fontJs.length} characters, over the ${SCRIPT_CEILING} ceiling, and it cannot be split (its aliases cross its two collections)`);
   out.push({ phase: 'theme', kind: 'font', label: 'font variables', purpose: 'Writes the font family/size/weight variables (`core` font group) and the fluid type sets.', expect: '{ ok: true, misses: [], refused: [] }', js: fontJs });
 
-  // MOTION (#2412) — one script: the durations (TIMING) and easing curves, roles and springs (EASING) in the one
-  // `motion` collection, the roles aliasing curves in the same collection, so it does not split either.
-  const motionData = { ...common('motion variables'), fonts, plans: p.motionPlan };
-  const motionJs = assemble('runMotion', motionData);
-  if (motionJs.length + NUMBER_SLACK > SCRIPT_CEILING) throw new Error(`motion variables: the one motion script is ${motionJs.length} characters, over the ${SCRIPT_CEILING} ceiling, and it cannot be split (its roles alias its curves)`);
-  out.push({ phase: 'theme', kind: 'motion', label: 'motion variables', purpose: 'Writes the motion durations and the easing curves, easing roles and springs.', expect: '{ ok: true, misses: [], refused: [] }', js: motionJs });
+  // MOTION (#2412) — two scripts, in order, over the one `motion` collection. The first writes the durations, delays
+  // and settle times (TIMING) and the curves, roles and springs (EASING); its roles alias its curves, so it does not
+  // split further. The second writes the presets (#2857), which alias only what the first wrote: the executor reads
+  // every variable already in the collection (`upsertCollection`), so its aliases bind across the two scripts.
+  // The presets made the one script too long for the ceiling.
+  const isPreset = (name: string): boolean => /\/motion\/preset\//.test(name);
+  const motionSteps: Array<[string, string, (name: string) => boolean]> = [
+    ['motion variables', 'Writes the motion durations, delays and settle times and the easing curves, easing roles and springs.', (n) => !isPreset(n)],
+    ['motion presets', 'Writes each motion preset\'s slots, aliased to the durations, roles and springs the step before wrote.', isPreset],
+  ];
+  for (const [label, purpose, keep] of motionSteps) {
+    const plans = (p.motionPlan as VarCollectionPlan[]).map((pl) => ({ ...pl, rows: pl.rows.filter((r) => keep(r.name)) })).filter((pl) => pl.rows.length);
+    if (!plans.length) continue;
+    const js = assemble('runMotion', { ...common(label), fonts, plans });
+    if (js.length + NUMBER_SLACK > SCRIPT_CEILING) throw new Error(`${label}: the motion script is ${js.length} characters, over the ${SCRIPT_CEILING} ceiling, and it cannot be split further (its roles alias its curves)`);
+    out.push({ phase: 'theme', kind: 'motion', label, purpose, expect: '{ ok: true, misses: [], refused: [] }', js });
+  }
 
   // TEXT styles.
   const tSlices = slice(p.textPlan, (s) => assemble('runText', { ...common('text'), fonts, plan: s, bindIn }), 'text styles');

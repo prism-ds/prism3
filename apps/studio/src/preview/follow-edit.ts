@@ -32,7 +32,7 @@
  * EASED, ON THE STUDIO'S OWN MOTION TOKENS (QA-B9, QA-B17). `scrollTo({ behavior: 'smooth' })` takes neither a
  * duration nor a curve, so the scroll is stepped here, one position per animation frame, along the chrome's
  * default transition: `--p3-scroll-dur` and `--p3-scroll-ease`, which `chrome.css` sets on the two panes from
- * `--p3-transition-dur` and `--p3-transition-ease` (the default theme's `motion.transition.default`, its duration and
+ * `--p3-transition-dur` and `--p3-transition-ease` (the default theme's `motion.preset.crossfade.transition`, its duration and
  * timing function, read from the one composite so the two cannot drift apart). A value this cannot read
  * jumps, rather than inventing a curve of its own. The jump links scroll the same way (`scrollToStart`).
  *

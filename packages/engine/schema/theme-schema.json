@@ -72,9 +72,9 @@
           "radius": { "type": "number", "minimum": 0, "maximum": 2, "description": "OPTIONAL. Per-mode radius scale (0=sharp corners … 1=system default … 2=very soft). Re-derives this mode's radius ramp via the same radiusScale(value, baseMd) the global lever uses; only rungs whose px differs from light carry a per-mode override." },
           "easings": {
             "type": "object",
-            "additionalProperties": { "type": "string", "enum": ["linear", "standard", "decelerate", "accelerate", "expressive", "calm"] },
+            "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
             "propertyNames": { "enum": ["default", "enter", "exit", "emphasized"] },
-            "description": "OPTIONAL. Per-mode EASING RE-POINT — maps a motion ROLE to another CURVE (e.g. { \"emphasized\": \"calm\" }). Same re-point contract as the per-mode lineHeights (names an existing curve, never a bezier; only a role whose curve differs overrides motion.easing-role.<role>, and motion.transition.* inherits via alias; a self-map is dropped). Deep-validated by brandTheme() (role and curve must both exist)."
+            "description": "OPTIONAL. Per-mode EASING RE-POINT — maps a motion ROLE to another CURVE (e.g. { \"emphasized\": \"calm\" }). Same re-point contract as the per-mode lineHeights (names an existing curve, one of the six or a brand curve from motionPersonality.curves, never a bezier; only a role whose curve differs overrides motion.easing-role.<role>, and every preset slot on that role inherits via alias; a self-map is dropped). Deep-validated by brandTheme() (role and curve must both exist, and a brand curve must fit the role)."
           },
           "families": {
             "type": "object",
@@ -383,7 +383,7 @@
     "motionPersonality": {
       "type": "object",
       "additionalProperties": false,
-      "description": "OPTIONAL — the disciplined 6th input. Brand motion character. `tempo` scales the generated duration ramp; reduce-motion variants are always derived (informational preserved, vestibular → 0).",
+      "description": "OPTIONAL — the disciplined 6th input. Brand motion character. `tempo` scales the generated duration ramp; each reduce-motion twin is always derived, a short fade of min(full, 100ms).",
       "properties": {
         "tempo": {
           "type": "string",
@@ -393,15 +393,29 @@
         },
         "easingRoles": {
           "type": "object",
-          "additionalProperties": { "type": "string", "enum": ["linear", "standard", "decelerate", "accelerate", "expressive", "calm"] },
+          "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
           "propertyNames": { "enum": ["default", "enter", "exit", "emphasized"] },
-          "description": "OPTIONAL. Which CURVE each motion role resolves to, brand-wide. The per-mode re-point in modeLevers.<mode>.easings deviates from THIS, so without it a mode could override a baseline nobody could set. Absent entries keep the engine default (default→standard, enter→decelerate, exit→accelerate, emphasized→expressive). Deep-validated by brandTheme()."
+          "description": "OPTIONAL. Which CURVE each motion role resolves to, brand-wide: one of the six (linear, standard, decelerate, accelerate, expressive, calm) or a brand curve from `curves`. The per-mode re-point in modeLevers.<mode>.easings deviates from THIS, so without it a mode could override a baseline nobody could set. Absent entries keep the engine default (default→standard, enter→decelerate, exit→accelerate, emphasized→expressive). Deep-validated by brandTheme()."
+        },
+        "curves": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+          "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$", "not": { "enum": ["linear", "standard", "decelerate", "accelerate", "expressive", "calm"] } },
+          "description": "OPTIONAL (#2857, Q-MP3 D). The brand's own named curves, added beside the six as a brand adds colors: each [x1, y1, x2, y2], emitted as motion.easing.<name> for a role or a preset to use. Guardrails, deep-validated by brandTheme(): both x and both y between 0 and 1 (a curve that overshoots is a spring's job), a name that is not one of the six, and a shape that fits a role using it (the enter role's curve is at least halfway at half its time, the exit role's at most)."
         },
         "presets": {
           "type": "object",
-          "additionalProperties": { "type": "string", "enum": ["instant", "fast", "normal", "moderate", "slow", "slower", "long", "longer", "longest"] },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "duration": { "type": "string", "pattern": "^(duration|spring-duration)\\.[a-z0-9-]+$", "description": "duration.<step>, or spring-duration.<spring> when the easing is that spring." },
+              "easing": { "type": "string", "pattern": "^(easing-role|easing|spring)\\.[a-z0-9-]+$", "description": "easing-role.<role> (the default kind), easing.<curve> (a brand curve included), or spring.<spring>." },
+              "delay": { "type": "string", "pattern": "^delay\\.[a-z0-9-]+$", "description": "delay.<step>. Absent, the preset starts at once." }
+            }
+          },
           "propertyNames": { "enum": ["state", "fade", "crossfade", "move", "reveal", "draw", "surface", "expand", "step", "settle"] },
-          "description": "OPTIONAL (#2857). Which step of the duration scale each motion preset plays on, brand-wide. A preset binds the step (motion.duration.<step>), never its own duration token. Absent entries keep the engine's default mapping. An unknown preset or step is refused by name. Deep-validated by brandTheme()."
+          "description": "OPTIONAL (#2857, Q-MS1 A, Q-MS3 A). Re-points a preset's slots, brand-wide. Each slot names a motion path, never a number, so the preset snaps to the shared scale. A preset eased by a spring plays for that spring's settle time: its duration is spring-duration.<the same spring>, and is filled in when absent. The reduced duration follows the duration and cannot be set. Absent slots keep the default. An unknown preset, slot or target is refused by name. Deep-validated by brandTheme()."
         },
         "brandOnly": {
           "type": "object",

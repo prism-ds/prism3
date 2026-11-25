@@ -301,7 +301,7 @@ export const accordion: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'the height animation — the panel eases open and closed (motion.transition.enter / exit); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion.',
+          'the height animation — the panel eases open and closed (the motion.preset.expand preset, both ways); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion.',
       },
       {
         class: 'right-to-left',
@@ -396,8 +396,8 @@ export const accordion: ComponentDef = {
   },
 
   motion: {
-    enter: 'The panel eases open to its content height (motion.transition.enter), and the indicator turns to its open glyph.',
-    exit: 'The panel eases closed (motion.transition.exit), and the indicator turns back.',
+    enter: 'The panel eases open to its content height (motion.preset.expand), and the indicator turns to its open glyph.',
+    exit: 'The panel eases closed (motion.preset.expand), and the indicator turns back.',
     reduceMotion: 'Under prefers-reduced-motion the height changes at once, and the panel\'s fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed.',
   },
 

@@ -1,4 +1,4 @@
-/** Prism3 engine — Motion: durations, easings, springs and transitions, generated from the tempo lever.
+/** Prism3 engine — Motion: durations, easings, springs, delays and presets, generated from the tempo lever.
  *
  *  Split out of `theme.ts` (#3698 R5), which re-exports its public names unchanged.
  */
@@ -11,7 +11,15 @@
 // Atlassian-style composite transitions; and reduce-motion as a DERIVED output
 // (Apple "substitute, don't delete": small informational motion preserved/floored,
 // large/vestibular motion eliminated) — not a hand-maintained second list.
+import { springSettleMs } from './spring';
+
 export type Bezier = [number, number, number, number];
+/** One preset's slots as a brand re-points them (#2857, Q-MS3 A), each a `motion` path. Absent slots keep the default.
+ *  - `duration`: `duration.<step>`, or `spring-duration.<spring>` when the easing is that spring (the two go together).
+ *  - `easing`: `easing-role.<role>` (the default kind), `easing.<curve>`, a brand curve included, or `spring.<spring>`.
+ *  - `delay`: `delay.<step>`. Absent, the preset starts at once.
+ *  The reduced duration is derived from the duration slot (Q-MS6 A) and cannot be set. */
+export type MotionPresetInput = { duration?: string; easing?: string; delay?: string };
 export type MotionPersonality = {
   tempo?: 'snappy' | 'standard' | 'relaxed';   // scales the base duration ramp
   // Which CURVE each motion role resolves to, brand-wide (#522 follow-up). The per-mode re-point in
@@ -19,11 +27,16 @@ export type MotionPersonality = {
   // nobody could set — you could change Dark but not Light, which is backwards. Same shape as the
   // per-mode map; absent entries keep the engine default.
   easingRoles?: Partial<Record<string, string>>;
-  // Which duration STEP each motion preset plays on, brand-wide (#2857, owner Q-MP7 option 3). A preset binds a
-  // semantic step of the one shared scale (`motion.duration.<step>`), never a per-preset duration token, so a
-  // brand's own timing snaps to the scale. Absent entries keep the engine's default mapping
-  // (`MOTION_PRESET_DEFAULTS`). An unknown preset or step is refused by name.
-  presets?: Partial<Record<string, string>>;
+  // The brand's own named curves (#2857, Q-MP3 D), added beside the six as a brand adds colors. Each is a
+  // `cubicBezier` primitive, `motion.easing.<name>`, that a role or a preset may use. Guardrails: a valid curve that
+  // does not overshoot, a name that is not one of the six, and a shape that fits a role that uses it
+  // (`checkCurveForRole`).
+  curves?: Record<string, Bezier>;
+  // Each preset's slots, re-pointed brand-wide (#2857, Q-MS1 A, Q-MS3 A). A slot is always a path to a step,
+  // role, curve or spring of the shared scale, never a number (Q-MS2 A), so a brand's timing snaps to the scale.
+  // Absent entries keep the engine's default (`MOTION_PRESET_DEFAULTS`). An unknown preset, slot or target is
+  // refused by name.
+  presets?: Partial<Record<string, MotionPresetInput>>;
   // The brand-only motion group (#2857, Q-MP7 option 3 item 3): true one-offs that are not part of the guaranteed
   // contract. Each entry is emitted under `motion.brand.<name>` for this brand only. Omitted, nothing is emitted.
   brandOnly?: Record<string, MotionBrandOnly>;
@@ -34,30 +47,41 @@ export type MotionBrandOnly =
   | { kind: 'spring'; damping: number; stiffness: number }
   | { kind: 'distance'; baseMs: number; msPerPx: number; minMs?: number; maxMs?: number }
   | { kind: 'gesture'; coastTauMs?: number; rubberBand?: number; parallax?: number };
-/** A motion preset resolved through the brand's mapping (#2857): the step it plays on, the easing role it names and
- *  the step its reduced-motion sibling plays on (`motion.duration-reduced.<reduced>`). */
-export type MotionPreset = { preset: string; duration: string; easing: string; reduced: string };
+/** What a preset's duration slot aliases: a step of the scale, or a spring's settle time. */
+export type PresetDuration = { step: string } | { spring: string };
+/** What a preset's easing slot aliases: an easing role, a curve (a brand curve included), or a spring. */
+export type PresetEasing = { role: string } | { curve: string } | { spring: string };
+/** What a preset's reduced duration aliases, derived from its duration (Q-MS6 A, Q-MP17 A): a step's reduced twin,
+ *  or, for a spring, the short fade `min(settle, 100ms)` (G3 B) as a millisecond primitive. */
+export type PresetReduced = { step: string } | { ms: number };
+/** A motion preset resolved through the brand's mapping (#2857, Q-MS1 A): what each of its slots aliases. A `delay`
+ *  of null starts at once (0ms). */
+export type MotionPreset = { preset: string; duration: PresetDuration; easing: PresetEasing; delay: string | null; reduced: PresetReduced };
 export type MotionAxis = {
   tempo: 'snappy' | 'standard' | 'relaxed';
   duration: Record<string, number>;            // ms, semantic roles (tempo-scaled)
   durationReduced: Record<string, number>;     // ms, reduce-motion variants (derived)
   easing: Record<string, Bezier>;
+  // The brand's own curves (Q-MP3 D), by name. Each is also in `easing`; this says which ones are the brand's.
+  brandCurves: string[];
   spring: Record<string, { damping: number; stiffness: number }>;
+  // Each spring's settle time in ms (`spring.ts`), the duration a preset eased by that spring plays for.
+  springSettle: Record<string, number>;
   stagger: number;                             // ms between staggered siblings
-  transitions: { name: string; duration: string; easing: string; desc: string }[];
+  // Show and minimum-show delays (G6 B), in ms. Perception thresholds, not pace, so fixed across tempo.
+  delay: Record<string, number>;
   // Per-mode tempo (Phase D) — only modes whose `modeLevers.tempo` differs from the baseline tempo. Each
-  // carries the RE-DERIVED duration ramp (+ reduce-motion + stagger) at that mode's tempo; easing/spring/
-  // transitions are tempo-invariant, so they're not duplicated. Composites (motion.transition.*) reference
-  // motion.duration.<role> by alias, so they inherit per-mode. Absent ⇒ byte-identical.
+  // carries the RE-DERIVED duration ramp (+ reduce-motion + stagger) at that mode's tempo; easing and springs are
+  // tempo-invariant, so they're not duplicated. Presets reference `motion.duration.<step>` by alias, so they
+  // inherit per-mode. Absent ⇒ byte-identical.
   motionByMode?: Record<string, { tempo: string; duration: Record<string, number>; durationReduced: Record<string, number>; stagger: number }>;
-  // The ROLE tier (#522): which curve each motion intent uses. Derived from `transitions` so the two
-  // cannot disagree — a transition names its role, the role names the curve. Exists so a mode has a
-  // semantic to re-point WITHOUT redefining `motion.easing.*`, the same job `font.weight-role.*` does
-  // for `font.weight.*`.
+  // The ROLE tier (#522): which curve each motion intent uses. Exists so a mode has a semantic to re-point WITHOUT
+  // redefining `motion.easing.*`, the same job `font.weight-role.*` does for `font.weight.*`.
   easingRoles: { role: string; curve: string }[];
   // Only modes that actually re-point get an entry; absent ⇒ byte-identical emit.
   easingRolesByMode?: Record<string, Record<string, string>>;
-  // Every default preset (the ten of Q-MP1), resolved through the brand's mapping (#2857). Emitted to the agent sidecar, not the tree.
+  // Every preset (the ten of Q-MP2 A), resolved through the brand's mapping (#2857). Emitted to the tree as the
+  // `motion.preset.<name>.*` alias tier (Q-MS1 A, Q-MS8 A), to Figma as published variables, and named in the sidecar.
   presets: MotionPreset[];
   // The brand-only group, validated, in input order. Absent when the brand sets none.
   brandOnly?: Record<string, MotionBrandOnly>;
@@ -72,45 +96,66 @@ export const EASING_ROLE_DEFAULTS = [
   { role: 'emphasized', curve: 'expressive' },
 ] as const;
 // The semantic duration scale, shortest to longest. `long`, `longer` and `longest` (#2857, Q-MP7 option 3) extend
-// it past `slower` for surface and choreographed moves, near where a reference brand's long motions cluster. Their
-// names and values are DRAFT for the owner. Every step scales with tempo, and the reduce-motion rule below sets
-// each of the three to 0, as it does every step above 200ms.
+// it past `slower` for surface and choreographed moves, near where a reference brand's long motions cluster. Every
+// step scales with tempo, and each has a reduced twin at `min(full, 100ms)` (Q-MP17 A).
 const DURATION_BASE: Record<string, number> = { instant: 50, fast: 100, normal: 200, moderate: 300, slow: 500, slower: 800, long: 900, longer: 1100, longest: 1300 };
 /** The steps of the semantic duration scale, shortest to longest: what a preset may map to. Loop periods are not steps. */
 export const DURATION_STEPS: readonly string[] = Object.keys(DURATION_BASE);
+/** Reduced motion (Q-MP17 A, closing #3484 and #3493): every step's reduced twin is `min(full, REDUCED_CAP_MS)`, a
+ *  short fade that always shows. Ordered at every tempo, and never 0, so a reduced transition still fires its end. */
+export const REDUCED_CAP_MS = 100;
+/** The six curves, named for their shape. A brand adds its own beside them (`motionPersonality.curves`). */
+export const BUILTIN_CURVES: Readonly<Record<string, Bezier>> = {
+  // Curves are named for their SHAPE, roles for their USE. They used to share names — `easing.enter`
+  // and `easing-role.enter` — which made the role table read `enter → enter` and gave a reader no way
+  // to tell which axis they were on (#527).
+  linear: [0, 0, 1, 1],
+  standard: [0.2, 0, 0, 1],           // symmetric in-place (M3 standard)
+  decelerate: [0, 0, 0.2, 1],         // ease-out — fast, then settles into place
+  accelerate: [0.4, 0, 1, 1],         // ease-in — eases off, then leaves
+  expressive: [0.4, 0.14, 0.3, 1],    // the S-curve (Carbon expressive-standard)
+  calm: [0.4, 0, 0.6, 1],             // a11y: soft onset for long/involuntary motion
+};
+/** The springs, by perceptual outcome. `effects` (Q-MP4 A, G1 A) moves opacity and color and never overshoots:
+ *  critically damped, the M3 effects-default pair. Its Figma bounce is 0. */
+export const SPRINGS: Readonly<Record<string, { damping: number; stiffness: number }>> = {
+  snappy: { damping: 0.9, stiffness: 700 },   // M3 standard spatial — fast settle, no overshoot
+  gentle: { damping: 0.8, stiffness: 380 },   // M3 expressive spatial — natural settle
+  bouncy: { damping: 0.6, stiffness: 800 },   // M3 expressive fast — overshoot (expressive layer)
+  effects: { damping: 1, stiffness: 1600 },   // M3 effects default — opacity and color, no overshoot (G1 A)
+};
+/** The delay steps (G6 B): how long a tooltip or a busy indicator waits before it shows, and the least time a shown
+ *  one stays, so a fast result flashes nothing. Perception thresholds, not pace: the same at every tempo. */
+export const MOTION_DELAYS: Readonly<Record<string, number>> = { show: 400, 'min-show': 500 };
 /**
- * The default preset → step mapping (#2857, owner Q-MP7 option 3 item 2): the ten presets of owner decision Q-MP1 A
- * (2026-11-19), each on a step of the shared scale. A brand overrides `duration` per preset with
- * `motionPersonality.presets`; the easing role and the reduced step are the preset's own. The names are DRAFT (Q-MP2
- * is open), and every step, easing role and reduced step below is a DRAFT default for the owner, read against the
- * 2026-11-19 field benchmark on #2857:
- * - state: a micro state change or press, 50–150ms in the field → `fast`, in place.
- * - fade: an opacity change, 110–300ms → `normal`, arriving.
+ * The default preset slots (#2857): the ten presets of Q-MP2 A on the rows approved in Q-MP8 A, each slot aliasing
+ * the role it plays on (Q-MS1 A). A brand re-points any slot with `motionPersonality.presets`. Every preset starts at
+ * once (no delay), and its reduced duration follows its duration slot (Q-MS6 A).
+ * - state: a micro state change or press → `fast`, in place.
+ * - fade: an opacity change → `normal`, arriving.
  * - crossfade: one thing replaced by another in place → `normal`.
- * - move: a change of position within the layout; dialog-sized moves run 200–300ms → `moderate`, in place.
- * - reveal: content arriving on view. No field figure → `slow`, arriving.
- * - draw: a line drawn on. No field figure → `slow`, in place. Under reduced motion it fades in rather than
- *   disappearing (owner decision, 2026-11-20): the drawn line is content, so it reduces like the others.
- * - surface: a dialog, sheet or drawer arriving, 200–300ms → `moderate`, arriving.
- * - expand: a height change, 100–200ms → `normal`, in place: the content grows where it already is (owner
- *   decision, 2026-11-20, of the field's in-place and arriving curves).
- * - step: a carousel advancing one item. Only spring data exists → `moderate`, in place.
- * - settle: a moved thing coming to rest. Only spring data exists → `slow`, arriving.
- * Every preset but `state` reduces to a short fade on `motion.duration-reduced.normal`; `state` keeps its own step,
- * since a state change is not movement.
+ * - move: a change of position within the layout → `moderate`, in place.
+ * - reveal: content arriving on view → `slow`, arriving.
+ * - draw: a line drawn on → `slow`, in place. Under reduced motion it fades in (owner decision, 2026-11-20).
+ * - surface: a dialog, sheet or drawer arriving → `moderate`, arriving.
+ * - expand: a height change → `normal`, in place (owner decision, 2026-11-20).
+ * - step: a carousel advancing one item → `moderate`, in place.
+ * - settle: a moved thing coming to rest → `slow`, arriving.
  */
-export const MOTION_PRESET_DEFAULTS: readonly MotionPreset[] = [
-  { preset: 'state', duration: 'fast', easing: 'default', reduced: 'fast' },
-  { preset: 'fade', duration: 'normal', easing: 'enter', reduced: 'normal' },
-  { preset: 'crossfade', duration: 'normal', easing: 'default', reduced: 'normal' },
-  { preset: 'move', duration: 'moderate', easing: 'default', reduced: 'normal' },
-  { preset: 'reveal', duration: 'slow', easing: 'enter', reduced: 'normal' },
-  { preset: 'draw', duration: 'slow', easing: 'default', reduced: 'normal' },
-  { preset: 'surface', duration: 'moderate', easing: 'enter', reduced: 'normal' },
-  { preset: 'expand', duration: 'normal', easing: 'default', reduced: 'normal' },
-  { preset: 'step', duration: 'moderate', easing: 'default', reduced: 'normal' },
-  { preset: 'settle', duration: 'slow', easing: 'enter', reduced: 'normal' },
+export const MOTION_PRESET_DEFAULTS: readonly { preset: string; step: string; role: string }[] = [
+  { preset: 'state', step: 'fast', role: 'default' },
+  { preset: 'fade', step: 'normal', role: 'enter' },
+  { preset: 'crossfade', step: 'normal', role: 'default' },
+  { preset: 'move', step: 'moderate', role: 'default' },
+  { preset: 'reveal', step: 'slow', role: 'enter' },
+  { preset: 'draw', step: 'slow', role: 'default' },
+  { preset: 'surface', step: 'moderate', role: 'enter' },
+  { preset: 'expand', step: 'normal', role: 'default' },
+  { preset: 'step', step: 'moderate', role: 'default' },
+  { preset: 'settle', step: 'slow', role: 'enter' },
 ];
+/** The slots a brand may set on a preset. The reduced duration is derived, never set (Q-MS6 A). */
+export const PRESET_SLOTS = ['duration', 'easing', 'delay'] as const;
 /** The fields each brand-only kind takes, and which are required. */
 const BRAND_ONLY_FIELDS: Record<MotionBrandOnly['kind'], { required: string[]; optional: string[] }> = {
   spring: { required: ['damping', 'stiffness'], optional: [] },
@@ -149,6 +194,89 @@ export const SWEEP_REDUCED_MS = 2600;
 export const LOOP_ROLES: readonly string[] = [SPIN_ROLE, SWEEP_ROLE];
 const round5 = (n: number) => Math.round(n / 5) * 5;
 
+/** A curve's progress at half its time: `y` where the curve's `x` is 0.5, found by bisection on the curve's own
+ *  parameter. Above 0.5 the curve has done most of its travel early (it decelerates); below, late (it accelerates). */
+export const curveProgressAtHalf = (b: readonly number[]): number => {
+  const [x1 = 0, y1 = 0, x2 = 1, y2 = 1] = b;
+  const at = (p1: number, p2: number, t: number): number => 3 * (1 - t) * (1 - t) * t * p1 + 3 * (1 - t) * t * t * p2 + t * t * t;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (at(x1, x2, mid) < 0.5) lo = mid; else hi = mid; }
+  return at(y1, y2, (lo + hi) / 2);
+};
+/** The brand's own curves, checked (Q-MP3 D's guardrails): a token-key name that is not one of the six, four finite
+ *  numbers, both x in [0, 1] (CSS refuses any other), and both y in [0, 1]. A curve that overshoots is refused:
+ *  overshoot is a spring's job, and a reduced-motion substitute removes it from springs only (G3 B). */
+const checkBrandCurves = (curves: Record<string, Bezier>): Record<string, Bezier> => {
+  for (const [name, b] of Object.entries(curves)) {
+    const at = `motionPersonality.curves.${name}`;
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error(`${at}: a curve name is lowercase letters, digits and hyphens`);
+    if (name in BUILTIN_CURVES) throw new Error(`${at}: '${name}' is one of Prism3's own curves; a brand curve takes a name of its own (have: ${Object.keys(BUILTIN_CURVES).join(', ')})`);
+    if (!Array.isArray(b) || b.length !== 4 || !b.every((n) => Number.isFinite(n))) throw new Error(`${at}: a curve is four numbers, [x1, y1, x2, y2]`);
+    if (b[0] < 0 || b[0] > 1 || b[2] < 0 || b[2] > 1) throw new Error(`${at}: x1 and x2 must be between 0 and 1`);
+    if (b[1] < 0 || b[1] > 1 || b[3] < 0 || b[3] > 1) throw new Error(`${at}: y1 and y2 must be between 0 and 1; a curve that overshoots is a spring's job`);
+  }
+  return curves;
+};
+/** The roles a curve's shape has to fit (Q-MP3 D's role guardrail): `enter` decelerates and `exit` accelerates, so a
+ *  brand curve on `enter` may not do less than half its travel by half its time, and one on `exit` no more. `default`
+ *  and `emphasized` take any shape. Prism3's six are not held to it, so a role can still be re-pointed at `calm`. */
+export const checkCurveForRole = (role: string, curve: string, easing: Record<string, readonly number[]>, brandCurves: readonly string[], at: string): void => {
+  if (!brandCurves.includes(curve)) return;
+  const b = easing[curve];
+  if (!b) return;
+  const half = curveProgressAtHalf(b);
+  if (role === 'enter' && half < 0.5) throw new Error(`${at}: the brand curve '${curve}' accelerates (it is ${Math.round(half * 100)}% of the way at half its time), and the enter role decelerates`);
+  if (role === 'exit' && half > 0.5) throw new Error(`${at}: the brand curve '${curve}' decelerates (it is ${Math.round(half * 100)}% of the way at half its time), and the exit role accelerates`);
+};
+/** A preset's slots, resolved: the default row, then the brand's re-points, each checked by name (Q-MS3 A), and the
+ *  spring rule held: a preset eased by a spring plays for that spring's settle time, so the two slots go together. */
+const resolvePreset = (d: { preset: string; step: string; role: string }, given: unknown, easing: Record<string, Bezier>,
+  springs: Record<string, { damping: number; stiffness: number }>, roles: readonly string[]): MotionPreset => {
+  const at = `motionPersonality.presets.${d.preset}`;
+  if (given !== undefined && (typeof given !== 'object' || given === null || Array.isArray(given)))
+    throw new Error(`${at}: a preset is an object of slots, { ${PRESET_SLOTS.join(', ')} }, each a motion path (got ${JSON.stringify(given)})`);
+  const g = (given ?? {}) as Record<string, unknown>;
+  for (const k of Object.keys(g)) if (!(PRESET_SLOTS as readonly string[]).includes(k))
+    throw new Error(`${at}: unknown slot '${k}' (have: ${PRESET_SLOTS.join(', ')}; the reduced duration follows the duration)`);
+  const path = (slot: string): string | undefined => {
+    const v = g[slot];
+    if (v === undefined) return undefined;
+    if (typeof v !== 'string') throw new Error(`${at}.${slot}: a slot names a motion path, never a number (got ${JSON.stringify(v)})`);
+    return v;
+  };
+  const e = path('easing');
+  let ease: PresetEasing = { role: d.role };
+  if (e !== undefined) {
+    const [kind, name] = [e.slice(0, e.indexOf('.')), e.slice(e.indexOf('.') + 1)];
+    if (kind === 'easing-role' && roles.includes(name)) ease = { role: name };
+    else if (kind === 'easing' && name in easing) ease = { curve: name };
+    else if (kind === 'spring' && name in springs) ease = { spring: name };
+    else throw new Error(`${at}.easing: unknown easing '${e}' (have: ${[...roles.map((r) => `easing-role.${r}`), ...Object.keys(easing).map((c) => `easing.${c}`), ...Object.keys(springs).map((n) => `spring.${n}`)].join(', ')})`);
+  }
+  const du = path('duration');
+  let duration: PresetDuration = { step: d.step };
+  if (du !== undefined) {
+    const [kind, name] = [du.slice(0, du.indexOf('.')), du.slice(du.indexOf('.') + 1)];
+    if (kind === 'duration' && DURATION_STEPS.includes(name)) duration = { step: name };
+    else if (kind === 'spring-duration' && name in springs) duration = { spring: name };
+    else throw new Error(`${at}.duration: unknown duration '${du}' (have: ${[...DURATION_STEPS.map((x) => `duration.${x}`), ...Object.keys(springs).map((n) => `spring-duration.${n}`)].join(', ')})`);
+  }
+  // THE SPRING RULE: a spring has no duration of its own to scale; it lasts as long as it takes to settle.
+  if ('spring' in ease) {
+    if (du === undefined) duration = { spring: ease.spring };
+    else if (!('spring' in duration) || duration.spring !== ease.spring)
+      throw new Error(`${at}.duration: a preset eased by the spring '${ease.spring}' plays for its settle time, so its duration is 'spring-duration.${ease.spring}' (got '${du}')`);
+  } else if ('spring' in duration)
+    throw new Error(`${at}.duration: 'spring-duration.${duration.spring}' is the settle time of the spring '${duration.spring}', and goes with easing 'spring.${duration.spring}'`);
+  const de = path('delay');
+  if (de !== undefined && !(de.startsWith('delay.') && de.slice(6) in MOTION_DELAYS))
+    throw new Error(`${at}.delay: unknown delay '${de}' (have: ${Object.keys(MOTION_DELAYS).map((k) => `delay.${k}`).join(', ')}; absent, the preset starts at once)`);
+  // The reduced duration follows the duration slot (Q-MS6 A): a step's own reduced twin, or for a spring the short
+  // fade it becomes under reduced motion (G3 B), `min(settle, 100ms)`.
+  const reduced: PresetReduced = 'step' in duration ? { step: duration.step } : { ms: Math.min(springSettleMs(springs[duration.spring]!), REDUCED_CAP_MS) };
+  return { preset: d.preset, duration, easing: ease, delay: de === undefined ? null : de.slice(6), reduced };
+};
+
 export const buildMotion = (p: MotionPersonality = {}): MotionAxis => {
   const known = new Set(MOTION_PRESET_DEFAULTS.map((d) => d.preset));
   for (const name of Object.keys(p.presets ?? {}))
@@ -157,10 +285,10 @@ export const buildMotion = (p: MotionPersonality = {}): MotionAxis => {
   const f = TEMPO_FACTOR[tempo];
   const duration: Record<string, number> = {};
   for (const [k, v] of Object.entries(DURATION_BASE)) duration[k] = round5(v * f);
-  // reduce-motion: ≤100ms (informational) preserved; ≤200ms floored to 50; larger
-  // (vestibular/decorative) → 0 (substituted by an instant cross-fade downstream).
+  // Reduced motion (Q-MP17 A): every step plays a short fade of at most 100ms, never 0. What moves is substituted
+  // downstream (a movement becomes a fade, Apple's "substitute, don't delete"); only the length is set here.
   const durationReduced: Record<string, number> = {};
-  for (const [k, v] of Object.entries(duration)) durationReduced[k] = v <= 100 ? v : v <= 200 ? 50 : 0;
+  for (const [k, v] of Object.entries(duration)) durationReduced[k] = Math.min(v, REDUCED_CAP_MS);
   // ONE TURN OF A SPINNER (#1670, owner spec 2026-09-26) — a loop PERIOD, not a transition, so it sits
   // outside the tempo-scaled ramp and outside the reduce-motion rule above: 0.8s per turn at every tempo,
   // and under reduced motion a SLOW turn (2.6s) rather than a shorter or eliminated one. The spinner is
@@ -172,47 +300,23 @@ export const buildMotion = (p: MotionPersonality = {}): MotionAxis => {
   // under reduced motion, never removed, because the moving segment is the only busy cue an indeterminate bar has.
   duration[SWEEP_ROLE] = SWEEP_MS;
   durationReduced[SWEEP_ROLE] = SWEEP_REDUCED_MS;
-  const easing: Record<string, Bezier> = {
-    // Curves are named for their SHAPE, roles for their USE. They used to share names — `easing.enter`
-    // and `easing-role.enter` — which made the role table read `enter → enter` and gave a reader no way
-    // to tell which axis they were on. That was fine while the shape name did double duty as the use
-    // name; adding the role tier (#527) split the two meanings apart and left the shape tier wearing
-    // the use tier's names. `default → standard` was the only row that said anything, and it is the
-    // only one that never collided.
-    linear: [0, 0, 1, 1],
-    standard: [0.2, 0, 0, 1],           // symmetric in-place (M3 standard)
-    decelerate: [0, 0, 0.2, 1],         // ease-out — fast, then settles into place
-    accelerate: [0.4, 0, 1, 1],         // ease-in — eases off, then leaves
-    expressive: [0.4, 0.14, 0.3, 1],    // the S-curve (Carbon expressive-standard); the comment already said so
-    calm: [0.4, 0, 0.6, 1],             // a11y: soft onset for long/involuntary motion
-  };
-  const spring = {
-    snappy: { damping: 0.9, stiffness: 700 },   // M3 standard spatial — fast settle, no overshoot
-    gentle: { damping: 0.8, stiffness: 380 },   // M3 expressive spatial — natural settle
-    bouncy: { damping: 0.6, stiffness: 800 },   // M3 expressive fast — overshoot (expressive layer)
-  };
+  const brand = checkBrandCurves(p.curves ?? {});
+  const easing: Record<string, Bezier> = { ...BUILTIN_CURVES, ...brand } as Record<string, Bezier>;
+  const brandCurves = Object.keys(brand);
+  const spring = { ...SPRINGS };
+  const easingRoles = EASING_ROLE_DEFAULTS.map((r) => {
+    const picked = p.easingRoles?.[r.role];
+    if (picked !== undefined && !(picked in easing))
+      throw new Error(`motionPersonality.easingRoles.${r.role}: unknown easing curve '${picked}' (have: ${Object.keys(easing).join(', ')})`);
+    if (picked !== undefined) checkCurveForRole(r.role, picked, easing, brandCurves, `motionPersonality.easingRoles.${r.role}`);
+    return { role: r.role, curve: picked ?? r.curve };
+  });
+  const roles = EASING_ROLE_DEFAULTS.map((r) => r.role);
   return {
-    tempo, duration, durationReduced, easing, spring, stagger: round5(40 * f),
-    // One source: the roles ARE the transition intents, so adding a transition adds its role and the
-    // two can never drift apart.
-    easingRoles: EASING_ROLE_DEFAULTS.map((r) => {
-      const picked = p.easingRoles?.[r.role];
-      if (picked !== undefined && !(picked in easing))
-        throw new Error(`motionPersonality.easingRoles.${r.role}: unknown easing curve '${picked}' (have: ${Object.keys(easing).join(', ')})`);
-      return { role: r.role, curve: picked ?? r.curve };
-    }),
-    presets: MOTION_PRESET_DEFAULTS.map((d) => {
-      const picked = p.presets?.[d.preset];
-      if (picked !== undefined && !DURATION_STEPS.includes(picked))
-        throw new Error(`motionPersonality.presets.${d.preset}: unknown duration step '${picked}' (have: ${DURATION_STEPS.join(', ')})`);
-      return { ...d, duration: picked ?? d.duration };
-    }),
+    tempo, duration, durationReduced, easing, brandCurves, spring,
+    springSettle: Object.fromEntries(Object.entries(spring).map(([k, v]) => [k, springSettleMs(v)])), stagger: round5(40 * f), delay: { ...MOTION_DELAYS },
+    easingRoles,
+    presets: MOTION_PRESET_DEFAULTS.map((d) => resolvePreset(d, p.presets?.[d.preset], easing, spring, roles)),
     ...(p.brandOnly && Object.keys(p.brandOnly).length ? { brandOnly: checkBrandOnly(p.brandOnly) } : {}),
-    transitions: [
-      { name: 'default', duration: 'normal', easing: 'standard', desc: 'standard in-place transition' },
-      { name: 'enter', duration: 'normal', easing: 'decelerate', desc: 'element settles in' },
-      { name: 'exit', duration: 'fast', easing: 'accelerate', desc: 'element accelerates out' },
-      { name: 'emphasized', duration: 'moderate', easing: 'expressive', desc: 'expressive / hero moment' },
-    ],
   };
 };

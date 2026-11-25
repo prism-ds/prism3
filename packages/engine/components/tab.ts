@@ -244,7 +244,7 @@ export const tab: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'The underline slide — in code the selected underline is one element owned by the tab list that moves and resizes to the selected tab, on `motion.transition.default`. Figma draws it per tab. Under prefers-reduced-motion it snaps.',
+          'The underline slide — in code the selected underline is one element owned by the tab list that moves and resizes to the selected tab, on `motion.duration.normal` with `motion.easing-role.default`. Figma draws it per tab. Under prefers-reduced-motion it snaps.',
       },
       {
         class: 'semantics',
@@ -329,7 +329,7 @@ export const tab: ComponentDef = {
   },
 
   motion: {
-    enter: 'None. On selection the underline slides from the previous tab to this one, on motion.transition.default.',
+    enter: 'None. On selection the underline slides from the previous tab to this one, on motion.duration.normal with motion.easing-role.default.',
     exit: 'None.',
     reduceMotion: 'Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast.',
   },

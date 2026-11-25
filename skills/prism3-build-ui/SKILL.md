@@ -93,8 +93,8 @@ Binding a raw primitive throws all of that away and is the #1 source of drift.
 *Exception:* `opacity.*`, `shadow.*`, the easing shapes (`motion.easing.*`) and the springs
 (`motion.spring.*`) are consumable directly — their semantic layer is thin (the `.ai.json` marks
 them `consume: "Consumable …"`). Reach for a shape or a spring only where no motion role fits: the
-motion roles (`motion.duration.*`, `motion.easing-role.*`, `motion.transition.*`) are the semantic
-layer. A duration step (`motion.duration-ms.*`) is not consumable: bind a `motion.duration.*` role,
+motion presets (`motion.preset.*`) and roles (`motion.duration.*`, `motion.easing-role.*`) are the
+semantic layer; `prism3-motion` says which to bind. A duration step (`motion.duration-ms.*`) is not consumable: bind a `motion.duration.*` role,
 or its `motion.duration-reduced.*` twin.
 For how things move (which duration, easing role, spring or transition each change takes, and what
 reduced motion substitutes), read `prism3-motion`.
