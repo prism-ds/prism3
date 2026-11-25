@@ -1,6 +1,6 @@
 ## (2026-11-25) — Motion phase 2: the pattern file, exit halves, pop and press (#2857)
 
-Built to the owner's phase 2 decisions (Q-PT1–Q-PT17, all A). The name of the quick-arrival preset (Q-PT4) is still open, so it's built as `pop`, held in one constant, `QUICK_ARRIVAL_PRESET`.
+Built to the owner's phase 2 decisions (Q-PT1–Q-PT17, all A). The quick-arrival preset is `pop` (Q-PT4, owner comment 7169386288), held in one constant, `QUICK_ARRIVAL_PRESET`.
 
 - **Exit halves (Q-PT3 A).** Each arriving preset carries `motion.preset.<name>.exit.*`, one step shorter on the exit role. Every committed brand's reduced exit is no longer than its reduced entrance; `test.ts` holds that against the emitted milliseconds. The reduced twins aren't ordered in general, so this needed checking.
 - **The pattern file (Q-PT1 A) is engine data, `motion-patterns.ts`, not tokens.** It imports the preset defaults from `theme-motion.ts`, so `buildMotion` can't import it back. The patterns are resolved in `theme-brand.ts` and `theme-nb.ts`, and `theme-motion.ts` imports only the type.
