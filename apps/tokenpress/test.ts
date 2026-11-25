@@ -133,7 +133,17 @@ const ADDED: Record<string, number> = {
   'tests/unit/wash-over-wash.test.ts': 9,
   // prism3 #3885 — a paint style layering a gradient with other paints is skipped, and its name only reached the dev
   // console. The sandbox now posts it with the export result, and the panel's footer names it beside the blur skips.
-  'tests/unit/skipped-gradient-summary.test.ts': 5,
+  // prism3 3.0.3 grows the export-summary test: the solid paint styles (#3884) and the tokens left out of the CSS file
+  // (#3886) reach the footer, through the sandbox and the panel, as the layered gradients do.
+  'tests/unit/skipped-gradient-summary.test.ts': 11,
+  // prism3 #3884 — a paint style whose visible paints are all solid is named as skipped, not dropped silently.
+  'tests/unit/solid-paint-styles.test.ts': 4,
+  // prism3 #3886 — the CSS format writes easing as cubic-bezier() and durations in ms, and leaves out (and names)
+  // any other value it has no CSS form for, where it wrote JSON.
+  'tests/unit/css-motion-values.test.ts': 7,
+  // prism3 #4366 — a composite sub-property bound to a team-library variable is its resolved value, with an
+  // externalAlias marker per sub-property (#4490's fields).
+  'tests/unit/composite-external-alias.test.ts': 8,
 };
 
 // ---- the harness checks itself first -------------------------------------------------------

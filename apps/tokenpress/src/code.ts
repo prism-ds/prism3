@@ -332,6 +332,8 @@ async function handleExport(options: ExportOptions): Promise<void> {
     let fileCount: number;
     let skippedBlurStyles: string[] = [];
     let skippedGradientStyles: string[] = [];
+    let skippedSolidPaintStyles: string[] = [];
+    let skippedCssValues: string[] = [];
 
     if (additionalFormats.length > 0) {
       const multiFormatOptions: MultiFormatExportOptions = Object.assign({}, options, {
@@ -346,6 +348,8 @@ async function handleExport(options: ExportOptions): Promise<void> {
       fileCount = multiExporter.getFileCount();
       skippedBlurStyles = multiExporter.getSkippedBlurStyles();
       skippedGradientStyles = multiExporter.getSkippedGradientStyles();
+      skippedSolidPaintStyles = multiExporter.getSkippedSolidPaintStyles();
+      skippedCssValues = multiExporter.getSkippedCssValues();
     } else {
       // Use standard exporter for DTCG only
       const exporter = new TokenExporter(options);
@@ -355,6 +359,8 @@ async function handleExport(options: ExportOptions): Promise<void> {
       fileCount = exporter.getFileCount();
       skippedBlurStyles = exporter.getSkippedBlurStyles();
       skippedGradientStyles = exporter.getSkippedGradientStyles();
+      skippedSolidPaintStyles = exporter.getSkippedSolidPaintStyles();
+      skippedCssValues = exporter.getSkippedCssValues();
     }
 
     sendExportProgress(95, 'Finalizing export...');
@@ -377,6 +383,10 @@ async function handleExport(options: ExportOptions): Promise<void> {
         skippedBlurStyles: skippedBlurStyles,
         // prism3 #3885: a paint style that layers a gradient with other paints is skipped; the panel names it.
         skippedGradientStyles: skippedGradientStyles,
+        // prism3 #3884: a solid paint style is not exported yet; the panel names it.
+        skippedSolidPaintStyles: skippedSolidPaintStyles,
+        // prism3 #3886: a token the CSS format has no form for is left out of the CSS file; the panel names it.
+        skippedCssValues: skippedCssValues,
       },
     });
   } catch (error) {
