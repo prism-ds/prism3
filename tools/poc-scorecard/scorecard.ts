@@ -169,6 +169,10 @@ export const SELF: { name: string; check: () => string | null }[] = [
     if (!/\| 0 references back into the repo or workspace; scored: count \(a\), per D1 A.*upstream: x \\\| y; count \(b\).* \(abcdef01/.test(good)) return good;
     if (!/\| \*\*FAIL\*\*: FAIL eject \(source\): count \(a\) is 13 /.test(bad) || bad.includes('scored: count')) return bad;
     return null; } },
+  { name: 'the KPI 2 Figma geometry row says transforms are set aside, for both arms (KPI 2 press A)', check: () => {
+    // Typed here, not read from measures.ts: the card a reader sees must say how the press is measured.
+    const line = render({}).split('\n').find((l) => l.startsWith('| KPI 2 | Geometry against Figma'));
+    return line?.includes('layout only, transforms set aside (the press is motion)') ? null : `the row reads: ${line ?? '(no row)'}`; } },
   { name: 'every arm 1 row is measured or names why not', check: () => {
     const arm = ARMS['arm-1'];
     const gaps = ROWS.filter((x) => !arm.measures.some((m) => m.id === x.id) && !arm.pending[x.id]);

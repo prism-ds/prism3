@@ -28,20 +28,22 @@
  *  3. EDGE. The password field's Show/Hide button sits at the label row's right end left to right, its left end right
  *     to left.
  *  4. GLYPHS (the button's `WithVisuals`, add then a right arrow). Neither slot is transformed (no blanket flip), and
- *     the add glyph, which points nowhere, is never flipped.
+ *     the add glyph, which points nowhere, is never flipped. The arrow points, so its author marks it on the glyph
+ *     itself, `<svg data-mirror>` (#4052 A, owner 2026-11-24): it is marked, it flips right to left, and it is drawn
+ *     as authored left to right. `@prism3/css` flips a marked glyph with a `[dir="rtl"]` rule, in both forms. No field
+ *     story draws a glyph that points, so the check marks each field's leading glyph itself (`WithIcons`), and holds
+ *     it the same way: flipped right to left, as drawn left to right.
  *  5. CONTENT DIRECTION (#4051). The text field's input carries `dir="auto"`, its def's `accessibility.aria` line
  *     ("so content direction can differ from UI direction"), and a left-to-right value in it computes `direction:
- *     ltr` on a right-to-left page. The password field's input is not held either way: its def doesn't repeat the
- *     line, and whether it should is an open owner decision on #4051.
+ *     ltr` on a right-to-left page. The password field's input carries no `dir` (#4051 A, owner 2026-11-24), so it
+ *     follows the page's direction: a masked value's direction doesn't hint at what was typed.
  *  6. NO REWRITTEN SELECTOR (#4098, once per run). Vite 8 minifies CSS with lightningcss at its default target
  *     (`baseline-widely-available`, Chrome 111), which predates `:dir()` (Chrome 120), so the build lowers
  *     `x:dir(rtl)` to `x:is(:lang(ar),…)`. That never matches a `dir="rtl"` frame without a `lang`, and every check
  *     here then passes the rule silently. So `@prism3/css`'s shipped CSS may not use `:dir()` (a client's Vite at its
  *     default target lowers it the same way; write `[dir="rtl"] …` or a logical property), and the built CSS may hold
  *     no `:lang()` its source doesn't. Each fails by name, with the file.
- * KNOWN, each a named exception that fails once it no longer holds, so fixing it means deleting it:
- *  - #4052: the right arrow is a directional glyph and should flip right to left; per-icon mirroring is unbuilt,
- *    and how a glyph is marked to mirror is an open owner decision on #4052.
+ * No known exception is left: #4052's (the arrow that didn't flip) was deleted when the marked glyph was built.
  *
  * SELF-TEST: fifteen mutants, each must fail by name, plus the three represented-story mutants every check carries.
  */
@@ -91,11 +93,6 @@ const transform = (page: Page, sel: string): Promise<string | null> => page.eval
 const flips = (t: string | null) => !!t && t !== 'none' && Number(/matrix\(([^,]+)/.exec(t)?.[1] ?? '1') < 0;
 const px = (b: Box) => `${Math.round(b.left)}–${Math.round(b.right)}px`;
 const SIDE: Record<Dir, string> = { ltr: 'left', rtl: 'right' };
-
-/** #4052: today's state where it differs from the prose. It must still hold, or the check fails. */
-const KNOWN = {
-  arrow: { issue: '#4052', applies: (s: Story) => s.component === 'button' && s.case === 'with-visuals' },
-};
 
 /** The CSS a client loads from `@prism3/css` (the files `.storybook/preview.js` imports), and the CSS the build wrote. */
 const CSS_SOURCE = resolve(dirname(fileURLToPath(import.meta.url)), '../../packages/css');
@@ -170,14 +167,44 @@ export const run = async (browser: unknown, origin: string, plant: RtlPlant = {}
           r.ok(t === 'none', `${where}: the ${slot} visual's slot is transformed (${t}); only a directional glyph flips, per icon, never the slot`);
         }
         r.ok(!flips(await transform(page, '.p3-button__leading-visual svg')), `${where}: the leading glyph (add) is flipped; a glyph that points nowhere stays as drawn`);
-        if (KNOWN.arrow.applies(s)) {
-          const flipped = flips(await transform(page, '.p3-button__trailing-visual svg'));
-          if (dir === 'ltr') r.ok(!flipped, `${where}: the trailing arrow is flipped left to right`);
-          else if (flipped) r.failures.push(`${where}: the trailing arrow now flips right to left, so the known exception ${KNOWN.arrow.issue} no longer holds: remove KNOWN.arrow`);
-          else { r.passed++; r.notes.push(`${where}: the trailing arrow does not flip (known exception ${KNOWN.arrow.issue})`); }
+        const marked: boolean = await page.evaluate(() => !!document.querySelector('#storybook-root .p3-button__trailing-visual svg[data-mirror]'));
+        r.ok(marked, `${where}: the trailing arrow is not marked data-mirror; a glyph that points is marked by its author on the glyph itself (#4052 A)`);
+        const flipped = flips(await transform(page, '.p3-button__trailing-visual svg'));
+        if (dir === 'ltr') r.ok(!flipped, `${where}: the trailing arrow is flipped left to right; a marked glyph is drawn as authored there`);
+        else r.ok(flipped, `${where}: the trailing arrow (marked data-mirror) does not flip right to left (#4052 A)`);
+      }
+      // 4b. a field's marked glyph (#4052 A, review of #4591). No field story draws a glyph that points (search, info and
+      // the status glyphs don't), so the fields' rule (`fields.ts`) has nothing to flip. The check marks the leading glyph
+      // itself, as an author would, reads it, and takes the mark off again so nothing after this sees it.
+      if ((s.component === 'text-field' || s.component === 'password-field') && s.case === 'with-icons') {
+        const name = s.component === 'text-field' ? 'text field' : 'password field';
+        const glyph = `.p3-${s.component}__leading-visual svg`;
+        const marked: boolean = await page.evaluate((q: string) => {
+          const g = document.querySelector(`#storybook-root ${q}`);
+          if (!g) return false;
+          g.setAttribute('data-mirror', '');
+          return true;
+        }, glyph);
+        if (!marked) r.failures.push(`${where}: the ${name}'s leading glyph is not drawn, so its mirror rule can't be held (#4052 A)`);
+        else {
+          const flipped = flips(await transform(page, glyph));
+          await page.evaluate((q: string) => document.querySelector(`#storybook-root ${q}`)?.removeAttribute('data-mirror'), glyph);
+          if (dir === 'ltr') r.ok(!flipped, `${where}: the ${name}'s leading glyph, marked data-mirror, is flipped left to right; a marked glyph is drawn as authored there`);
+          else r.ok(flipped, `${where}: the ${name}'s leading glyph, marked data-mirror, does not flip right to left (#4052 A, the fields' rule)`);
         }
       }
-      // 5. content direction (last: it writes a value into the input)
+      // 5. content direction (last: it writes a value into the input). The password field's input: no dir (#4051 A).
+      if (s.component === 'password-field') {
+        const pw: { dir: string | null; direction: string } | null = await page.evaluate(() => {
+          const i = document.querySelector('#storybook-root input');
+          return i ? { dir: i.getAttribute('dir'), direction: getComputedStyle(i).direction } : null;
+        });
+        if (!pw) r.failures.push(`${where}: the password field's input is not drawn`);
+        else {
+          r.ok(pw.dir === null, `${where}: the password field's input carries dir="${pw.dir}"; it carries no dir, so it follows the page's direction (#4051 A)`);
+          r.ok(pw.direction === dir, `${where}: the password field's input computes direction ${pw.direction}, not the page's ${dir} (#4051 A)`);
+        }
+      }
       if (s.component === 'text-field') {
         const d: string | null = await page.evaluate(() => document.querySelector('#storybook-root input')?.getAttribute('dir') ?? null);
         r.ok(d === 'auto', `${where}: the input carries ${d === null ? 'no dir' : `dir="${d}"`}, not dir="auto"; the text field's def asks for dir="auto" so content direction can differ from UI direction (#4051)`);
@@ -220,10 +247,28 @@ const MUTANTS = [
     mustName: /components-button-(element|html)--with-visuals \(rtl\): the leading glyph \(add\) is flipped/,
   },
   {
-    name: 'the arrow flipped (as if #4052 were built)',
-    plant: { css: rtl('.p3-button__trailing-visual svg { transform: scaleX(-1); }') },
+    name: 'the marked arrow left unflipped (the #4052 rule lost)',
+    plant: { css: rtl('.p3-button__trailing-visual svg { transform: none !important; }') },
     only: is('button', 'with-visuals'),
-    mustName: /components-button-(element|html)--with-visuals \(rtl\): the trailing arrow now flips right to left, so the known exception #4052 no longer holds/,
+    mustName: /components-button-(element|html)--with-visuals \(rtl\): the trailing arrow \(marked data-mirror\) does not flip right to left/,
+  },
+  {
+    name: "the fields' mirror rule overridden (a marked field glyph left unflipped)",
+    plant: { css: rtl('.p3-text-field__leading-visual svg { transform: none !important; } .p3-password-field__leading-visual svg { transform: none !important; }') },
+    only: (s: Story) => (s.component === 'text-field' || s.component === 'password-field') && s.case === 'with-icons',
+    mustName: /components-(text|password)-field-(element|html)--with-icons \(rtl\): the (text|password) field's leading glyph, marked data-mirror, does not flip right to left/,
+  },
+  {
+    name: "the arrow's data-mirror mark dropped",
+    plant: { after: 'document.querySelectorAll("#storybook-root svg[data-mirror]").forEach((g) => g.removeAttribute("data-mirror"))' },
+    only: is('button', 'with-visuals'),
+    mustName: /components-button-(element|html)--with-visuals( \(rtl\))?: the trailing arrow is not marked data-mirror/,
+  },
+  {
+    name: "the password field's input given dir=\"auto\"",
+    plant: { after: 'document.querySelectorAll("#storybook-root .p3-password-field input").forEach((i) => i.setAttribute("dir", "auto"))' },
+    only: is('password-field', 'rest'),
+    mustName: /components-password-field-(element|html)--rest( \(rtl\))?: the password field's input carries dir="auto"; it carries no dir/,
   },
   {
     name: "the text field's box pinned left to right",

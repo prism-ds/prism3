@@ -10,7 +10,7 @@ const ICON = {
   // Remix Icon (https://remixicon.com), licensed under the Remix Icon License v1.0: add-line, arrow-right-line,
   // copied from packages/engine/icons/ (see its NOTICE.md).
   leading: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/></svg>',
-  trailing: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z"/></svg>',
+  trailing: '<svg data-mirror viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.1716 10.9999L10.8076 5.63589L12.2218 4.22168L20 11.9999L12.2218 19.778L10.8076 18.3638L16.1716 12.9999H4V10.9999H16.1716Z"/></svg>',
 };
 /** The spinner drawing, as the spinner def's codeOnly `visual-treatment` entry states it: track and a 33% arc at r=10. */
 const SPINNER = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">'
