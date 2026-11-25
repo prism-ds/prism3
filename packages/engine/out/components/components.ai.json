@@ -7684,7 +7684,9 @@
         ],
         "supersedes": [],
         "supersededBy": [],
-        "planned": [],
+        "planned": [
+          "card"
+        ],
         "replacesPatterns": [
           "a bare `<img>` with no reserved box, which shifts the layout when the file loads",
           "a hand-drawn rectangle with a fixed width and height standing in for an image, which breaks its ratio the moment it is resized",

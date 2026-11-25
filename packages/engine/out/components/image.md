@@ -35,6 +35,8 @@ Shown on the default member: ratio `4:3`, status `empty`.
 
 Use Image for content imagery: a card's media, a product shot, a hero, a gallery cell. Pick the ratio from the media it will hold (3:4, 4:5 or 2:3 for portrait product shots, 1:1 for square thumbnails, 4:3 or 3:2 for standard photography, 16:9 for video stills and wide banners); the frame keeps that proportion while it flexes to its container, so a row of cards stays aligned and nothing shifts when the files load. A thumbnail is a small Image, not a different component. Pick the state the mockup shows: empty before an image is chosen, loading while it arrives, loaded with the photo, and error when it fails. For the loaded state, drop the photo on the frame as an image fill. Decide the alt text for every image: describe an informative image and mark a decorative one empty.
 
+**In RTL.** The marker and error glyphs do not mirror.
+
 ### Do
 
 - Pick the ratio from the media the frame will hold, and let the lock keep it while the size flexes

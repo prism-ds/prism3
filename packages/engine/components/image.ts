@@ -143,6 +143,9 @@ export const image: ComponentDef = {
         // literal, so no token is minted. It scales from it on resize (`scaleWithParent`, #2345).
         glyphPx: 180,
         scaleWithParent: true,
+        // Image does not mirror (its right-to-left `codeOnly`), and neither does its marker: the docs' "In RTL" note
+        // is generated from this field (#3986).
+        mirror: 'never',
         note: 'The centered "no image" marker, a muted glyph shown while the frame has no image. It scales with the frame, so it reads as the same proportion at any size.',
       },
       errorGlyph: {
@@ -153,6 +156,7 @@ export const image: ComponentDef = {
         // The marker's size and scaling, so the two states read as one frame with a different mark.
         glyphPx: 180,
         scaleWithParent: true,
+        mirror: 'never',
         note: 'The centered "image unavailable" marker, the "no image" picture with a slash across it, shown when the image failed to load. It scales with the frame like the "no image" marker. The frame shows no text.',
       },
       loadingLayer: {
@@ -298,6 +302,8 @@ export const image: ComponentDef = {
     // The loading layer nests Skeleton; the markers are glyphs drawn in place, not nested Icons.
     composesWith: ['skeleton'],
     alternativeTo: ['icon', 'avatar'],
+    // The proposal's card partner, kept until a Card def lands (as Avatar lists it).
+    planned: ['card'],
     replacesPatterns: [
       'a bare `<img>` with no reserved box, which shifts the layout when the file loads',
       'a hand-drawn rectangle with a fixed width and height standing in for an image, which breaks its ratio the moment it is resized',
