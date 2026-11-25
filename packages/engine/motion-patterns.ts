@@ -188,7 +188,16 @@ export const resolvePatterns = (overrides: Record<string, Record<string, MotionT
     }) };
   });
   const bad = patternProblems(out, presets);
-  if (bad.length) throw new Error(`motionPersonality.patterns: ${bad.join('; ')}`);
+  if (bad.length) {
+    // Name the owner: a problem in a pattern the brand overrode is the brand's input; one in a pattern it didn't touch
+    // is the engine's own data (a brand with no overrides cannot cause it).
+    const owned = bad.filter((m) => Object.keys(overrides).some((n) => m.startsWith(`pattern '${n}'`)));
+    const engine = bad.filter((m) => !owned.includes(m));
+    throw new Error([
+      ...(owned.length ? [`motionPersonality.patterns: ${owned.join('; ')}`] : []),
+      ...(engine.length ? [`the engine's motion patterns (MOTION_PATTERNS in motion-patterns.ts): ${engine.join('; ')}`] : []),
+    ].join('; '));
+  }
   return out;
 };
 
