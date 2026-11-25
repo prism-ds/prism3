@@ -2285,7 +2285,10 @@ export type ComponentDef = {
   /** The component's motion (#2857 phase 2, Q-PT2 A). A def that names its `patterns` (`motion-patterns.ts`) writes
    *  `motion: motionOf([...])`, and its prose is generated from them; `notes` holds its own sentences after the
    *  generated ones. A def with no pattern yet writes its prose by hand. */
-  motion?: { patterns?: string[]; enter?: string; exit?: string; reduceMotion?: string; notes?: { enter?: string; exit?: string; reduceMotion?: string } };
+  /** `patterns` (#2857 phase 2): the motion patterns it plays, by name (`dialog/enter`), each in `MOTION_PATTERNS`
+   *  (`motion-patterns.ts`). A def that names patterns writes this field with `motionOf`, so its prose is generated from
+   *  them and cannot disagree. */
+  motion?: { patterns?: string[]; enter?: string; exit?: string; reduceMotion?: string };
   /** Field-research residue, kept beside the def rather than in a doc so it travels with the thing it
    *  is about: `contested` (the practice disagrees), `unverified` (asserted here, not yet gated),
    *  `evolution` (a finding a later revision RESOLVED — kept because "why is it like this now" is the

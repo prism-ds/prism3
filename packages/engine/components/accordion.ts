@@ -302,7 +302,7 @@ export const accordion: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'the height animation — the panel eases open and closed (the motion.preset.expand preset, both ways); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion.',
+          'the height animation — the `accordion/expand` and `accordion/collapse` patterns: the panel eases open and closed on motion.preset.expand, both ways; under prefers-reduced-motion the height changes at once and the panel fades, on motion.preset.expand.duration-reduced to open and to close. Figma variants carry no motion.',
       },
       {
         class: 'right-to-left',

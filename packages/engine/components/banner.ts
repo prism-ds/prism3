@@ -326,7 +326,7 @@ export const banner: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — appears with an opacity fade; a dismiss collapses the height and fades, on `motion.duration.fast` with `motion.easing-role.exit`, so the content below does not jump. Under `prefers-reduced-motion` both fade only, on `motion.duration-reduced.normal`, and the height changes at once. A banner inserted at the top of a page later reserves its space. Figma shows the banner at rest.',
+          'motion — appears with an opacity fade, on `motion.preset.fade`; a dismiss collapses the height and fades, on `motion.preset.fade.exit`, so the content below does not jump. Under `prefers-reduced-motion` both fade only, on `motion.preset.fade.duration-reduced` and `motion.preset.fade.exit.duration-reduced`, and the height changes at once. A banner inserted at the top of a page later reserves its space. Figma shows the banner at rest.',
       },
       {
         class: 'right-to-left',
@@ -477,7 +477,7 @@ export const banner: ComponentDef = {
   motion: {
     enter: 'Fades in. A banner inserted at the top of a page reserves its space, so the content below does not jump.',
     exit: 'Collapses its height and fades on motion.duration.fast with motion.easing-role.exit, so the content below moves up smoothly.',
-    reduceMotion: 'Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal to appear and to go, and its height changes at once when it is dismissed.',
+    reduceMotion: 'Under prefers-reduced-motion it fades only, on motion.preset.fade.duration-reduced to appear and motion.preset.fade.exit.duration-reduced to go, and its height changes at once when it is dismissed.',
   },
 
   notes: {

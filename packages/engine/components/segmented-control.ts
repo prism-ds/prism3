@@ -326,7 +326,7 @@ export const segmentedControlSegment: ComponentDef = {
   motion: {
     enter: 'None. On selection the pill travels to this option on motion.preset.move, or cross-fades.',
     exit: 'None.',
-    reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.',
+    reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.preset.move.duration-reduced.',
   },
 
   notes: {

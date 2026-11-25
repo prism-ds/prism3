@@ -254,7 +254,7 @@ export const toast: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — enter: an 8px slide up and a fade on `motion.preset.fade` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.duration.fast` with `motion.easing-role.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest.',
+          'motion — the `toast/enter` and `toast/exit` patterns. Enter: a slide up by `motion.distance.nudge` and a fade on `motion.preset.fade`. Exit: a fade on `motion.preset.fade.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.preset.fade.duration-reduced` and `motion.preset.fade.exit.duration-reduced`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest.',
       },
       {
         class: 'right-to-left',

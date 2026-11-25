@@ -72,9 +72,10 @@ Use tabs to switch between peer sections of related content in one place, one at
 
 ### Motion
 
-- **Enter:** None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.duration.normal with motion.easing-role.default.
-- **Exit:** The outgoing panel fades out under the incoming one. Panels never slide sideways.
-- **Reduced motion:** Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast.
+- **Patterns:** `tabs/select`
+- **Enter:** None. On a change, the underline travels to its new place on motion.preset.move; the panel cross-fades on motion.preset.crossfade.
+- **Exit:** None. The outgoing panel fades out under the incoming one. Panels never slide sideways.
+- **Reduced motion:** Under prefers-reduced-motion, the underline takes its new place at once; the panel cross-fades on motion.preset.crossfade.duration-reduced.
 
 ## Content guidelines
 

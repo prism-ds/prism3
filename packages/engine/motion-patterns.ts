@@ -234,19 +234,46 @@ const patternSays = (p: MotionPattern, labelled: boolean): string => {
   const body = runs.map((r) => `${list(clausesOf(r.tracks, (tr) => verbOf(tr, p.half)))} on ${presetToken(r.preset)}`).join('; ');
   return sentence(`${labelled && p.label ? `for ${p.label}, ` : ''}${body}`);
 };
-/** What a track does under reduced motion. */
-const reducedSays = (tr: MotionTrack, p: MotionPattern): string => {
-  const kind = reducedKindOf(tr, p);
-  const on = `on ${presetToken(tr.preset)}.duration-reduced`;
-  if (kind === 'off') return tr.property === 'size' ? `the ${tr.element}'s size changes at once` : `the ${tr.element} takes its new place at once, with no ${tr.transform ?? 'movement'}`;
-  if (kind === 'fade') return `the ${tr.element} fades instead of ${tr.transform === 'slide' ? 'sliding' : tr.transform === 'scale' ? 'scaling' : 'moving'}, ${on}`;
-  return `the ${tr.element} ${verbOf(tr, p.half)} ${on}`;
+/** What one element does under reduced motion, its tracks together: what still plays, on which reduced duration, and
+ *  what doesn't ("the panel fades in on motion.preset.surface.duration-reduced, with no scale"). */
+const OFF_SAYS: Record<TransformKind, string> = { scale: 'scale', slide: 'slide', turn: 'turn', travel: 'travel' };
+const reducedOfElement = (element: string, tracks: readonly MotionTrack[], p: MotionPattern): string => {
+  const plays: string[] = [];
+  const stills: string[] = [];
+  let sized = false, travels = false;
+  for (const tr of tracks) {
+    const kind = reducedKindOf(tr, p);
+    const on = `on ${presetToken(tr.preset)}.duration-reduced`;
+    if (kind === 'keep') plays.push(tr.property === 'color' ? `fades to its new color ${on}` : `${verbOf(tr, p.half)} ${on}`);
+    else if (kind === 'fade') plays.push(`fades ${p.half === 'exit' ? 'out' : 'in'} ${on}, instead of ${tr.transform === 'slide' ? 'sliding' : tr.transform === 'scale' ? 'scaling' : 'moving'}`);
+    else if (tr.property === 'size') sized = true;
+    else if (tr.transform === 'travel') travels = true;
+    else stills.push(OFF_SAYS[tr.transform ?? 'travel']);
+  }
+  const once = [...(sized ? [`its size changes at once`] : []), ...(travels ? [`it takes its new place at once`] : [])];
+  if (!plays.length) {
+    if (sized) return `the ${element}'s size changes at once`;
+    if (travels) return `the ${element} takes its new place at once`;
+    return `the ${element} doesn't ${list(stills)}`;
+  }
+  return `the ${element} ${list(plays)}${once.length ? `, and ${list(once)}` : ''}${stills.length ? `, with no ${list(stills)}` : ''}`;
+};
+/** A pattern under reduced motion, element by element in track order. */
+const reducedSays = (p: MotionPattern): string => {
+  const order: string[] = [];
+  const by = new Map<string, MotionTrack[]>();
+  for (const tr of p.tracks) {
+    if (!by.has(tr.element)) { by.set(tr.element, []); order.push(tr.element); }
+    by.get(tr.element)!.push(tr);
+  }
+  return order.map((el) => reducedOfElement(el, by.get(el)!, p)).join('; ');
 };
 
 /** A component's `motion` field, generated from the patterns it names (Q-PT2 A), so its prose and its data cannot
  *  disagree. `notes` adds the component's own sentences after the generated ones. */
-export type ComponentMotion = { patterns: string[]; enter: string; exit: string; reduceMotion: string; notes?: { enter?: string; exit?: string; reduceMotion?: string } };
-export const motionProse = (names: readonly string[], notes: ComponentMotion['notes'] = {}, patterns: readonly MotionPattern[] = MOTION_PATTERNS): Omit<ComponentMotion, 'patterns' | 'notes'> => {
+export type MotionNotes = { enter?: string; exit?: string; reduceMotion?: string };
+export type ComponentMotion = { patterns: string[]; enter: string; exit: string; reduceMotion: string };
+export const motionProse = (names: readonly string[], notes: MotionNotes = {}, patterns: readonly MotionPattern[] = MOTION_PATTERNS): Omit<ComponentMotion, 'patterns'> => {
   const byName = new Map(patterns.map((p) => [p.name, p]));
   const ps = names.map((n) => {
     const p = byName.get(n);
@@ -263,13 +290,12 @@ export const motionProse = (names: readonly string[], notes: ComponentMotion['no
   const exit = exits.length ? join(exits.map((p) => patternSays(p, many(exits))), notes.exit) : join(['None.'], notes.exit);
   const reduced = ps.map((p, i) => {
     const lead = many(ps) && p.label ? `for ${p.label} ${p.half === 'exit' ? 'closing' : 'opening'}, ` : '';
-    const body = `${lead}${p.tracks.map((tr) => reducedSays(tr, p)).join('; ')}`;
+    const body = `${lead}${reducedSays(p)}`;
     return i === 0 ? `Under prefers-reduced-motion, ${body}.` : sentence(body);
   });
   const reduceMotion = join(reduced, notes.reduceMotion);
   return { enter, exit, reduceMotion };
 };
-/** What a def writes for its `motion` field: the pattern names, and its prose generated from them. */
-export const motionOf = (names: readonly string[], notes?: ComponentMotion['notes']): ComponentMotion => ({
-  patterns: [...names], ...motionProse(names, notes), ...(notes && Object.keys(notes).length ? { notes } : {}),
-});
+/** What a def writes for its `motion` field: the pattern names, and its prose generated from them, each of the def's
+ *  own `notes` appended after the generated sentences of its field. */
+export const motionOf = (names: readonly string[], notes?: MotionNotes): ComponentMotion => ({ patterns: [...names], ...motionProse(names, notes) });

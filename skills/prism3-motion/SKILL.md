@@ -5,9 +5,9 @@ description: >-
   which motion preset, duration, easing role or spring each change uses, how
   exits differ from entrances, and what reduced motion substitutes. Every rule
   binds to the brand's emitted motion tokens, never to a number, because the
-  numbers move with the brand's tempo. Nine recipes cover dialog, accordion,
+  numbers move with the brand's tempo. Ten recipes cover dialog, accordion,
   tabs, toast and banner, the spinner's delayed show, progress, badge, the
-  selection controls, and focus; every other component follows the rules
+  selection controls, the switch and segmented control, and focus; every other component follows the rules
   directly.
 when_to_use: >-
   When adding a transition, an animation, a spring or a reduced-motion rule to UI
@@ -194,8 +194,10 @@ Patterns `dialog/enter` and `dialog/exit`, and `dialog/bottom/*` and `dialog/end
 
 The backdrop always plays on its panel's preset, so the two never drift apart.
 
-**Reduced:** the backdrop and every panel placement fade only, on their preset's `.duration-reduced`,
-with no slide and no scale.
+**Reduced:** the backdrop and every panel placement fade only, with no slide and no scale, on
+`motion.preset.surface.duration-reduced` opening and `motion.preset.surface.exit.duration-reduced`
+closing; the content fades on `motion.preset.fade.duration-reduced` and
+`motion.preset.fade.exit.duration-reduced`.
 
 Move focus into the dialog when it opens, without waiting for the enter to finish.
 
@@ -213,9 +215,8 @@ the in-place curve (R2). Bind `motion.preset.expand.duration` and `motion.preset
 `motion.preset.expand.transition` for both. A brand can re-point the preset at another step, curve
 or spring, and the panel follows. By default it plays on the `normal` step with the `default` role.
 
-**Reduced:** the height changes at once; the panel's fade stays, on `motion.duration-reduced.normal`
-both ways (R3), which is what `motion.preset.expand.duration-reduced` resolves to by default. The
-indicator swaps without turning.
+**Reduced:** the height changes at once; the panel's fade stays, on
+`motion.preset.expand.duration-reduced` both ways (R3). The indicator swaps without turning.
 
 ### Tabs indicator
 
@@ -231,7 +232,7 @@ Pattern `tabs/select`.
 
 ### Toast and banner
 
-Patterns `toast/enter` and `toast/exit`; a banner plays `fade/in` and `fade/out`.
+Patterns `toast/enter` and `toast/exit`.
 
 | Track | Enter | Exit |
 |---|---|---|
@@ -240,8 +241,8 @@ Patterns `toast/enter` and `toast/exit`; a banner plays `fade/in` and `fade/out`
 
 A replacement toast plays the exit, then the enter.
 
-**Reduced:** fades only, on `motion.duration-reduced.normal` both ways (R3). The banner's height
-changes at once.
+**Reduced:** fades only, on `motion.preset.fade.duration-reduced` arriving and
+`motion.preset.fade.exit.duration-reduced` leaving (R3). The banner's height changes at once.
 
 ### Spinner, delayed show
 
@@ -287,14 +288,24 @@ ways (R3); a changed count's number fades on the same role.
 |---|---|---|
 | Checkbox | the check glyph draws in as a stroke while the fill crossfades | `motion.duration.fast`, `motion.easing-role.default` (R6) |
 | Radio | the dot scales in from a little under full size (R10), the previous choice's dot scales out, and the ring's color crossfades | `motion.duration.fast`, `motion.easing-role.default` (R6) |
-| Switch (`switch/toggle`) | the thumb travels across the track as a transform, and the track's color crossfades with it | `motion.preset.move` |
-| Segmented control (`segmented/select`) | the pill travels to the new option as a transform, as the tabs underline does, and the labels change color with it | `motion.preset.move` |
 
-The focus ring on each of them follows the focus recipe below.
+The focus ring on each of them, and on the switch and the segmented control, follows the focus
+recipe below.
 
 **Reduced:** nothing draws, scales or travels. The glyph, the dot, the thumb and the pill take their
-new place at once, and the color change fades on its preset's `.duration-reduced` (for the switch
-and the segmented control, `motion.preset.move.duration-reduced`).
+new place at once, and the color change fades on `motion.duration-reduced.fast`.
+
+### Switch and segmented control
+
+Patterns `switch/toggle` and `segmented/select`.
+
+| Control | Track | On a change |
+|---|---|---|
+| Switch | the thumb travels across the track as a transform, and the track's color crossfades with it | `motion.preset.move` |
+| Segmented control | the pill travels to the new option as a transform, as the tabs underline does, and the labels change color with it | `motion.preset.move` |
+
+**Reduced:** the thumb and the pill take their new place at once, and the color change fades on
+`motion.preset.move.duration-reduced`.
 
 ### Focus
 

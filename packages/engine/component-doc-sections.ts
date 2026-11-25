@@ -75,7 +75,8 @@ export const NAMES_A_TOOL = /\b(?:figma|figjam|dev\s+mode|code\s+connect|style\s
 export type DocPart = { id: string; name: string; optional: boolean; caption?: string };
 export type DocAxis = { axis: string; values: string[]; kind: 'runtime' | 'authoring'; description?: string };
 /** A labeled row. `text` is one paragraph per source field: Screen readers draws `role`, then `aria`. */
-export type DocField = { label: string; text: string[] };
+/** `list`: the texts are names, drawn on one line as code (the motion patterns, #2857 phase 2). */
+export type DocField = { label: string; text: string[]; list?: true };
 
 export type DocSection =
   | { id: 'overview'; title: string; description: string; fields: DocField[] }
@@ -175,11 +176,14 @@ export const docSections = (def: ComponentDef, ctx: DocContext = {}): { sections
     ]);
     const wcag = [...(a.wcag ?? [])];
     if (!wcag.length) gap('accessibility', 'accessibility.wcag');
-    const motion = fields('accessibility', [
+    const motion = [
+      // #2857 phase 2: the patterns first, when the def names any; the prose below is generated from them.
+      ...(def.motion?.patterns?.length ? [{ label: 'Patterns', text: [...def.motion.patterns], list: true as const }] : []),
+      ...fields('accessibility', [
       ['Enter', ['motion.enter', def.motion?.enter]],
       ['Exit', ['motion.exit', def.motion?.exit]],
       ['Reduced motion', ['motion.reduceMotion', def.motion?.reduceMotion]],
-    ]);
+    ])];
     all.push(f.length || wcag.length || motion.length ? { id: 'accessibility', title: title('accessibility'), fields: f, wcag, motion } : undefined);
   }
 

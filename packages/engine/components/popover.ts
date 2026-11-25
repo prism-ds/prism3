@@ -240,7 +240,7 @@ export const popover: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — the Popover / open and Popover / close pattern, shared with Menu: opening fades in and scales up from a little under full size, with the transform origin on the trigger\'s side (following a flip), on `motion.duration.fast` and `motion.easing-role.enter`; closing fades out on `motion.duration.instant` and `motion.easing-role.exit`. Under `prefers-reduced-motion` it fades only, with no scale, on `motion.duration-reduced.fast` to open and to close. Figma shows the panel at rest.',
+          'motion — the `popover/open` and `popover/close` patterns, shared with Menu: opening fades in and scales up from 95%, with the transform origin on the trigger\'s side (following a flip), on `motion.preset.pop`; closing fades out on `motion.preset.pop.exit`. Under `prefers-reduced-motion` it fades only, with no scale, on each preset\'s `.duration-reduced`. Figma shows the panel at rest.',
       },
       {
         class: 'right-to-left',
@@ -333,7 +333,7 @@ export const popover: ComponentDef = {
     contested: [],
     unverified: [
       'That the header row collapses when both the title and close toggles are off (no gap left above the body). The plan hides both nodes; no live file has read the header\'s height back.',
-      'The Popover / open and Popover / close motion preset is described here but not built: the #2857 starter set exists only as a wireframe, so there is no preset to bind yet.',
+      'The `popover/open` and `popover/close` motion patterns are built since #2857 phase 2, on `motion.preset.pop` and its exit half; the Figma style per pattern waits on phase 3.',
     ],
     evolution: [
       'Owner decisions (2026-11-19, on #4252), all as recommended: (1) the set is one member on a one-value axis, placement=bottom, the default side, because the engine projects no set without an axis; (2) the member is built 320px wide, between the proposal\'s 240px floor and 360px cap; (3) the brief\'s trapFocus and modal are not props, because a trapped or modal popover is a Dialog (OD-P1 A), and restoreFocus is always on; (4) the motion keeps motion.duration.fast, 100ms on the reference brand, which the tempo lever moves per brand; (5) Popover has its own page under Components; (6) the copy is approved.',

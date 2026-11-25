@@ -90,7 +90,7 @@ Use a Banner for an important message the user should see and may need to act on
 
 - **Enter:** Fades in. A banner inserted at the top of a page reserves its space, so the content below does not jump.
 - **Exit:** Collapses its height and fades on motion.duration.fast with motion.easing-role.exit, so the content below moves up smoothly.
-- **Reduced motion:** Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal to appear and to go, and its height changes at once when it is dismissed.
+- **Reduced motion:** Under prefers-reduced-motion it fades only, on motion.preset.fade.duration-reduced to appear and motion.preset.fade.exit.duration-reduced to go, and its height changes at once when it is dismissed.
 
 ## Content guidelines
 

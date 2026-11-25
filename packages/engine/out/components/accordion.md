@@ -88,9 +88,10 @@ Use an Accordion to compress a set of independent sections into scannable header
 
 ### Motion
 
-- **Enter:** The panel eases open to its content height (motion.preset.expand), and the indicator turns to its open glyph.
-- **Exit:** The panel eases closed (motion.preset.expand), and the indicator turns back.
-- **Reduced motion:** Under prefers-reduced-motion the height changes at once, and the panel's fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed.
+- **Patterns:** `accordion/expand`, `accordion/collapse`
+- **Enter:** The panel eases open to its content height and fades in on motion.preset.expand; the indicator turns to its open position on motion.preset.move.
+- **Exit:** The panel eases closed and fades out on motion.preset.expand; the indicator turns back on motion.preset.move.
+- **Reduced motion:** Under prefers-reduced-motion, the panel fades in on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. The panel fades out on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. A fade is not movement, and it keeps the cue that the panel opened or closed.
 
 ## Content guidelines
 

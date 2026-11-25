@@ -69,9 +69,10 @@ Do not place this on its own. It is the track-and-thumb Switch.Row nests, so a f
 
 ### Motion
 
-- **Enter:** none (present on mount)
-- **Exit:** none
-- **Reduced motion:** The thumb travels across the track on motion.duration.normal with motion.easing-role.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back.
+- **Patterns:** `switch/toggle`
+- **Enter:** None. On a change, the thumb travels to its new place and the track changes color on motion.preset.move. The thumb travel is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it.
+- **Exit:** None.
+- **Reduced motion:** Under prefers-reduced-motion, the thumb takes its new place at once; the track fades to its new color on motion.preset.move.duration-reduced. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back.
 
 ## Content guidelines
 

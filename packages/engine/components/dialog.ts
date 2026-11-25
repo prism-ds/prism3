@@ -381,7 +381,7 @@ export const dialog: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — opening: a centered panel fades in and scales up a little; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge; the backdrop fades. On `motion.duration.moderate` with `motion.easing-role.enter`, and `motion.easing-role.exit` to close. Under `prefers-reduced-motion`, every placement and the backdrop fade only, with no slide and no scale, on `motion.duration-reduced.normal` to open and to close. Figma shows the panel at rest.',
+          'motion — the `dialog/enter` and `dialog/exit` patterns, and `dialog/bottom/*` and `dialog/end/*` for the other placements: a centered panel fades in and scales up from 96%; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge; the backdrop fades on its panel\'s preset. On `motion.preset.surface` to open and `motion.preset.surface.exit` to close, the content on `motion.preset.fade` and `motion.preset.fade.exit`. Under `prefers-reduced-motion`, every placement and the backdrop fade only, with no slide and no scale, on each preset\'s `.duration-reduced`. Figma shows the panel at rest.',
       },
       {
         class: 'visual-treatment',
