@@ -1,7 +1,7 @@
 ## (2026-11-25) — A symlinked path decides nothing: real paths for the entry guard and the temp root (#4586, #4583)
 
 **What was wrong.** On macOS the temp root sits behind a symlink (`/var` → `/private/var`, and `/tmp` → `/private/tmp`). Linux's doesn't, so CI never saw either defect:
-- **#4583, the entry guard.** 41 scripts decided "am I being run, or imported?" with `resolve(process.argv[1]) === fileURLToPath(import.meta.url)` or a close variant. `argv[1]` is the path as typed or spawned; `import.meta.url` is the real path V8 loaded. Through a symlink they differ, so the script skipped its whole check and **exited 0, a silent pass**. `lint-push-base`'s replay spawns gates from clones under the temp root, so four of its `shadcn-vars` cases read a pass on a Mac, and any gate run from a symlinked checkout (`/tmp/<worktree>` on a Mac) ran nothing.
+- **#4583, the entry guard.** 37 scripts decided "am I being run, or imported?" with `resolve(process.argv[1]) === fileURLToPath(import.meta.url)` or a close variant. `argv[1]` is the path as typed or spawned; `import.meta.url` is the real path V8 loaded. Through a symlink they differ, so the script skipped its whole check and **exited 0, a silent pass**. `lint-push-base`'s replay spawns gates from clones under the temp root, so four of its `shadcn-vars` cases read a pass on a Mac, and any gate run from a symlinked checkout (`/tmp/<worktree>` on a Mac) ran nothing.
 - **#4586, the temp root.** `tmpdir()` returns the root unresolved. The `#1870` coverage fixture in `test.ts` looked up its own coverage entry by `pathToFileURL`, which never matched V8's real path, and `check-package.mjs` checked that the resolved CSS `startsWith` its unresolved temp folder.
 
 **The fix, at the source.**
