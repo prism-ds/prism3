@@ -58,6 +58,7 @@ import { ENGINE_VERSION } from './version';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
 import { BUILD_IDENTITY } from './build-identity';
+import { isEntry } from './entry-point';
 
 // Reads the shared constant rather than restating it: a hardcoded duplicate is exactly how a
 // server ends up reporting a version the artifacts it emits do not agree with.
@@ -991,7 +992,7 @@ export const handleRpc = (req: RpcRequest, brandSchema: unknown, io?: ExportIo):
 // --------------------------------------------------------------------------- I/O shell
 // stdio transport: newline-delimited JSON-RPC (MCP messages carry no embedded newlines).
 // Read stdin, dispatch each line, write single-line responses to stdout; stderr is the log.
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const here = dirname(fileURLToPath(import.meta.url));
   const brandSchema = JSON.parse(readFileSync(resolve(here, './schema/theme-schema.json'), 'utf8'));

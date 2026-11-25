@@ -82,6 +82,7 @@ import { buildWritePlan, floatPlanFor, fontVarPlanFrom, motionVarPlanFrom, style
 import type { WritePlan, FloatCollectionPlan, VarCollectionPlan, StylesPlan, TextStylePlan } from './write-plan';
 import type { FigmaEffectStylesFile, FigmaPaintStylesFile } from './emit-figma-styles';
 import type { FigmaTextStylesFile } from './emit-figma-font';
+import { isEntry } from './entry-point';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -1223,4 +1224,4 @@ const runCli = (): void => {
 };
 
 // Run the CLI only when invoked directly — not when test.ts imports `aliasRows`.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) runCli();
+if (isEntry(import.meta.url)) runCli();

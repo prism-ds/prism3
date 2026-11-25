@@ -62,11 +62,12 @@
  *    The class is right; the pairing is not drawn.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { localeFreeCompare } from './locale-free-order';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(here, '../..');
@@ -179,7 +180,7 @@ export type Snapshot = { axes: Axes; surface: Surface; components: Components; c
 const ledgerAt = async (ref: string | null): Promise<Rename[]> => {
   const src = readAt(ref, LEDGER);
   if (!src) return [];
-  const dir = mkdtempSync(join(tmpdir(), 'p3-release-ledger-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-release-ledger-'));
   try {
     const f = join(dir, 'component-renames.ts');
     writeFileSync(f, src);
@@ -482,7 +483,7 @@ export const releaseFromHistory = async (version: string, folds = foldCommits())
 
 // ---- the CLI -------------------------------------------------------------------------------------
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const arg = (flag: string): string | undefined => { const i = process.argv.indexOf(flag); return i >= 0 ? process.argv[i + 1] : undefined; };
   const fail = (msg: string): never => { console.error(`✗ release-notes: ${msg}`); process.exit(1); };

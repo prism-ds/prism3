@@ -78,6 +78,7 @@ import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
 import { CLIENT_NONCE_RE, CODE_ALPHABET, CODE_LENGTH, CLOSE, HELLO_LABEL, PAIR_LABEL, PAIRED_LABEL, TOKEN_LABEL, WELCOME_LABEL, formatCode } from '../../apps/plugin/src/bridge-auth';
 import type { AgentCommand, AgentResult, AgentLinkState, AgentProgress } from '../../apps/plugin/src/agent-protocol';
 import { ENGINE_VERSION } from '@prism3/engine/version';
+import { isEntry } from '../../packages/engine/entry-point';
 
 /** The plugin connects here — read from the relay, which the manifest's `allowedDomains` entry matches (#3147). */
 export const DEFAULT_PORT = BRIDGE_PORT;
@@ -815,7 +816,7 @@ export const handleRpc = async (req: Rpc, bridge: Bridge, notify: (method: strin
 
 /* ── I/O shell ──────────────────────────────────────────────────────────────────────────────────────── */
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const argv = process.argv.slice(2);
   const i = argv.indexOf('--port');

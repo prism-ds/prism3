@@ -1735,7 +1735,7 @@ export const timeoutSelfCheck = async (): Promise<string[]> => {
   const LIMIT_MS = 2500;
   const GRACE_MS = 500;
   const OUTER_GUARD_MS = 15_000;
-  const dir = mkdtempSync(join(tmpdir(), 'verify-2537-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'verify-2537-'));
   const pidFile = join(dir, 'pids.json');
   const fixture = join(dir, 'hang-fixture.mjs');
   writeFileSync(fixture, [

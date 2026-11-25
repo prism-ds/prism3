@@ -56,7 +56,7 @@
  * #3595: `kindOf`'s bold threshold back to `px >= 18.66` → `R4/bold-below-14pt`; made `px >= 18.67` →
  * `R4/bold-at-14pt` (1 of 105 each). 105 assertions run.
  */
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -384,7 +384,7 @@ console.log('\ncapture, record and contamination — orchestrate.ts');
   ok(fenced['index.html'] === GOOD_HTML, 'capture/fence: a code fence inside the markers is dropped');
   ok(Object.keys(extractFiles('no markers here')).length === 0, 'capture/none: a message without markers yields no files');
 
-  const dir = mkdtempSync(resolve(tmpdir(), 'p3-adherence-'));
+  const dir = mkdtempSync(resolve(realpathSync(tmpdir()), 'p3-adherence-'));
   const pin = loadPin().commit;
   const plant = (id: string, rec: Record<string, unknown> | null, html = GOOD_HTML) => {
     mkdirSync(resolve(dir, id, 'out'), { recursive: true });

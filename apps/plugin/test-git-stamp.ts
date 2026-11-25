@@ -32,7 +32,7 @@
  */
 import { behindCheck, behindStamp, commitStamp, composeBuildId, releaseCheck, NO_GIT } from './git-stamp.mjs';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -155,7 +155,7 @@ console.log('\n3b. the build skips the fetch when git cannot run, and under --wa
   // A STAND-IN GIT THAT FAILS: a real executable named `git`, first on PATH, that logs each call and refuses every
   // one as the license prompt did on 2026-10-31. The build's sequence (stamp, then the behind check) runs against it
   // through a real process, so the arm holds what reaches git, not what a stub was told.
-  const dir = mkdtempSync(join(tmpdir(), 'p3-standin-git-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-standin-git-'));
   const log = join(dir, 'calls.log');
   writeFileSync(join(dir, 'git'), `#!/bin/sh\necho "$*" >> "${log}"\necho "You have not agreed to the license agreements." >&2\nexit 69\n`);
   chmodSync(join(dir, 'git'), 0o755);
@@ -183,7 +183,7 @@ console.log('\n3c. the real `node build.mjs`, with a stand-in git first on PATH 
   const here = dirname(fileURLToPath(import.meta.url));
   const dist = join(here, 'dist');
   const aside = join(here, `.dist-git-stamp-test-${process.pid}`);
-  const dir = mkdtempSync(join(tmpdir(), 'p3-standin-build-git-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-standin-build-git-'));
   const log = join(dir, 'calls.log');
   writeFileSync(join(dir, 'git'), [
     '#!/bin/sh',
@@ -294,7 +294,7 @@ console.log('\n5. a release build refuses a dirty, unknown or behind checkout (#
   // chosen per arm by `STANDIN`: `dirty` (a changed file at the tip of origin/main), `behind` (clean, 2 behind) and
   // `nogit` (every call refused, as a broken git or an unaccepted license does). The stand-in logs each call.
   const here = dirname(fileURLToPath(import.meta.url));
-  const bin = mkdtempSync(join(tmpdir(), 'p3-fake-git-'));
+  const bin = mkdtempSync(join(realpathSync(tmpdir()), 'p3-fake-git-'));
   const log = join(bin, 'calls.log');
   writeFileSync(join(bin, 'git'), [
     '#!/bin/sh',

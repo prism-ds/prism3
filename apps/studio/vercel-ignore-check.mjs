@@ -34,7 +34,7 @@ import { build } from 'esbuild';
 import { chromeCss } from './chrome/esbuild-plugin.mjs';
 import { webEntryPoints, specsChunkExternal, maintainerProsePlugin, SPECS_CHUNK_FILE } from './component-specs-build.mjs';
 import { SOURCE_ROOTS as GLYPH_SOURCE_ROOTS } from './chrome/glyphs.mjs';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, basename, join, matchesGlob } from 'node:path';
@@ -298,7 +298,7 @@ console.log(`  ✓ every web bundle input sits under a trigger path (${web.files
 // The scratch repo's git runs with a scrubbed environment: an inherited GIT_DIR or GIT_INDEX_FILE (set by
 // git hooks) would otherwise point these commits at the real repository, and a global signing or hooks
 // config would make the gate depend on the developer's machine.
-const scratch = mkdtempSync(join(tmpdir(), 'p3-ignore-'));
+const scratch = mkdtempSync(join(realpathSync(tmpdir()), 'p3-ignore-'));
 const cleanEnv = (extra = {}) => ({
   PATH: process.env.PATH, HOME: scratch, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', ...extra,
 });
