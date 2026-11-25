@@ -73,9 +73,10 @@ Use a Tooltip to name an icon-only control or to add a short description to a co
 
 ### Motion
 
-- **Enter:** A fade (motion.duration.fast, motion.easing-role.enter). Moving from one tooltip to the next soon after, it appears with no animation.
-- **Exit:** A fade (motion.duration.instant, motion.easing-role.exit).
-- **Reduced motion:** Under prefers-reduced-motion, the same fade, at motion.duration-reduced.fast both ways.
+- **Patterns:** `tooltip/show`, `tooltip/hide`
+- **Enter:** The tooltip fades in on motion.preset.pop. It shows after motion.delay.show on pointer hover, at once on keyboard focus, and at once with no animation when the pointer moves on from another tooltip within motion.delay.skip.
+- **Exit:** The tooltip fades out on motion.preset.pop.exit. It stays motion.delay.hide after the pointer leaves, so the pointer can move onto it.
+- **Reduced motion:** Under prefers-reduced-motion, the tooltip fades in on motion.preset.pop.duration-reduced. The tooltip fades out on motion.preset.pop.exit.duration-reduced.
 
 ## Content guidelines
 
@@ -103,8 +104,8 @@ Short and plain: the name of the action or one fact about it. No punctuation at 
 | `align` | enum: 'start' \| 'center' \| 'end' | `center` | no | Where the tooltip lines up along its side of the control. The arrow stays pointed at the control's center. |
 | `arrow` | boolean | `true` | no | Shows the arrow that points at the control. On by default. |
 | `kind` | enum: 'description' \| 'label' | `description` | no | description adds a description to a control that already has a name. label makes the tooltip the control's name, for an icon-only control, so the name is announced once. |
-| `delay` | number | — | no | How long the pointer rests on the control before the tooltip shows, in milliseconds. Keyboard focus shows it at once. |
-| `closeDelay` | number | — | no | How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it. |
+| `delay` | number | — | no | How long the pointer rests on the control before the tooltip shows, in milliseconds. Defaults to motion.delay.show. Keyboard focus shows it at once. |
+| `closeDelay` | number | — | no | How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it. Defaults to motion.delay.hide. |
 | `open` | boolean | — | no | Whether the tooltip shows, when the app controls it. Leave it unset and the tooltip shows and hides by itself. |
 | `defaultOpen` | boolean | `false` | no | Whether the tooltip shows at first, when the app does not control it. |
 | `onOpenChange` | function | — | no | Called with true when the tooltip shows and false when it hides, for any reason. |

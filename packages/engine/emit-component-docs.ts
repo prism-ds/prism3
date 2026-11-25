@@ -76,7 +76,8 @@ import { projectDef } from './project-def';
 import { exportComponentDefs, toSpecsComponents, componentDefsFileNames } from './component-defs-export';
 
 /** The sidecar's schema id. `schema/component-docs.schema.json` carries the same `$id`; both move together. */
-export const COMPONENT_DOCS_SCHEMA = 'prism3-component-docs/1.2';
+// 1.3 (#2857 phase 2): `motion.patterns`, the motion patterns a def plays, by name.
+export const COMPONENT_DOCS_SCHEMA = 'prism3-component-docs/1.3';
 
 // `projectDef` moved to its own I/O-free module (#3425) so a surface can bundle it; re-exported for existing readers.
 export { projectDef };
@@ -146,6 +147,7 @@ export const renderMarkdown = (def: ComponentDef): string => {
   // A row's later paragraphs are indented under its bullet, so they stay part of that row.
   const fields = (fs: readonly DocField[]) => {
     for (const f of fs) {
+      if (f.list) { out.push(`- **${f.label}:** ${f.text.map((t) => `\`${t}\``).join(', ')}`); continue; }
       out.push(`- **${f.label}:** ${mdEscape(f.text[0])}`);
       for (const t of f.text.slice(1)) out.push('', `  ${mdEscape(t)}`);
     }

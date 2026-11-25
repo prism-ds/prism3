@@ -4431,6 +4431,16 @@
           "$type": "duration",
           "$value": "{nbds.motion.duration-ms.500}",
           "$description": "delay min-show — 500ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo"
+        },
+        "hide": {
+          "$type": "duration",
+          "$value": "{nbds.motion.duration-ms.300}",
+          "$description": "delay hide — 300ms a tooltip stays after the pointer leaves, so the pointer can move onto it; the same at every tempo"
+        },
+        "skip": {
+          "$type": "duration",
+          "$value": "{nbds.motion.duration-ms.300}",
+          "$description": "delay skip — 300ms after one tooltip closes in which the next shows at once, with no delay or animation; the same at every tempo"
         }
       },
       "easing": {
@@ -4600,6 +4610,37 @@
               "delay": "{nbds.motion.preset.fade.delay}"
             },
             "$description": "preset fade — the normal step on the enter role (decelerate), at once"
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.fast}",
+              "$description": "preset fade exit duration — the fast step"
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset fade exit easing — the exit role (accelerate)"
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset fade exit delay — none, it starts at once"
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.fast}",
+              "$description": "preset fade exit reduced duration — the fast step's reduced twin, derived from the duration"
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.fade.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.fade.exit.easing}",
+                "delay": "{nbds.motion.preset.fade.exit.delay}"
+              },
+              "$description": "preset fade exit — the fast step on the exit role (accelerate), at once"
+            }
           }
         },
         "crossfade": {
@@ -4636,8 +4677,8 @@
         "move": {
           "duration": {
             "$type": "duration",
-            "$value": "{nbds.motion.duration.moderate}",
-            "$description": "preset move duration — the moderate step"
+            "$value": "{nbds.motion.duration.normal}",
+            "$description": "preset move duration — the normal step"
           },
           "easing": {
             "$type": "cubicBezier",
@@ -4651,8 +4692,8 @@
           },
           "duration-reduced": {
             "$type": "duration",
-            "$value": "{nbds.motion.duration-reduced.moderate}",
-            "$description": "preset move reduced duration — the moderate step's reduced twin, derived from the duration"
+            "$value": "{nbds.motion.duration-reduced.normal}",
+            "$description": "preset move reduced duration — the normal step's reduced twin, derived from the duration"
           },
           "transition": {
             "$type": "transition",
@@ -4661,7 +4702,7 @@
               "timingFunction": "{nbds.motion.preset.move.easing}",
               "delay": "{nbds.motion.preset.move.delay}"
             },
-            "$description": "preset move — the moderate step on the default role (standard), at once"
+            "$description": "preset move — the normal step on the default role (standard), at once"
           }
         },
         "reveal": {
@@ -4693,6 +4734,37 @@
               "delay": "{nbds.motion.preset.reveal.delay}"
             },
             "$description": "preset reveal — the slow step on the enter role (decelerate), at once"
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.moderate}",
+              "$description": "preset reveal exit duration — the moderate step"
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset reveal exit easing — the exit role (accelerate)"
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset reveal exit delay — none, it starts at once"
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.moderate}",
+              "$description": "preset reveal exit reduced duration — the moderate step's reduced twin, derived from the duration"
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.reveal.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.reveal.exit.easing}",
+                "delay": "{nbds.motion.preset.reveal.exit.delay}"
+              },
+              "$description": "preset reveal exit — the moderate step on the exit role (accelerate), at once"
+            }
           }
         },
         "draw": {
@@ -4755,6 +4827,37 @@
               "delay": "{nbds.motion.preset.surface.delay}"
             },
             "$description": "preset surface — the moderate step on the enter role (decelerate), at once"
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.normal}",
+              "$description": "preset surface exit duration — the normal step"
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset surface exit easing — the exit role (accelerate)"
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset surface exit delay — none, it starts at once"
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.normal}",
+              "$description": "preset surface exit reduced duration — the normal step's reduced twin, derived from the duration"
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.surface.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.surface.exit.easing}",
+                "delay": "{nbds.motion.preset.surface.exit.delay}"
+              },
+              "$description": "preset surface exit — the normal step on the exit role (accelerate), at once"
+            }
           }
         },
         "expand": {
@@ -4848,6 +4951,130 @@
               "delay": "{nbds.motion.preset.settle.delay}"
             },
             "$description": "preset settle — the slow step on the enter role (decelerate), at once"
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.moderate}",
+              "$description": "preset settle exit duration — the moderate step"
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset settle exit easing — the exit role (accelerate)"
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset settle exit delay — none, it starts at once"
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.moderate}",
+              "$description": "preset settle exit reduced duration — the moderate step's reduced twin, derived from the duration"
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.settle.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.settle.exit.easing}",
+                "delay": "{nbds.motion.preset.settle.exit.delay}"
+              },
+              "$description": "preset settle exit — the moderate step on the exit role (accelerate), at once"
+            }
+          }
+        },
+        "pop": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration.fast}",
+            "$description": "preset pop duration — the fast step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{nbds.motion.easing-role.enter}",
+            "$description": "preset pop easing — the enter role (decelerate)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-ms.0}",
+            "$description": "preset pop delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-reduced.fast}",
+            "$description": "preset pop reduced duration — the fast step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{nbds.motion.preset.pop.duration}",
+              "timingFunction": "{nbds.motion.preset.pop.easing}",
+              "delay": "{nbds.motion.preset.pop.delay}"
+            },
+            "$description": "preset pop — the fast step on the enter role (decelerate), at once"
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.instant}",
+              "$description": "preset pop exit duration — the instant step"
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset pop exit easing — the exit role (accelerate)"
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset pop exit delay — none, it starts at once"
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.instant}",
+              "$description": "preset pop exit reduced duration — the instant step's reduced twin, derived from the duration"
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.pop.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.pop.exit.easing}",
+                "delay": "{nbds.motion.preset.pop.exit.delay}"
+              },
+              "$description": "preset pop exit — the instant step on the exit role (accelerate), at once"
+            }
+          }
+        },
+        "press": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration.instant}",
+            "$description": "preset press duration — the instant step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{nbds.motion.easing-role.default}",
+            "$description": "preset press easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-ms.0}",
+            "$description": "preset press delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-reduced.instant}",
+            "$description": "preset press reduced duration — the instant step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{nbds.motion.preset.press.duration}",
+              "timingFunction": "{nbds.motion.preset.press.easing}",
+              "delay": "{nbds.motion.preset.press.delay}"
+            },
+            "$description": "preset press — the instant step on the default role (standard), at once"
           }
         }
       },

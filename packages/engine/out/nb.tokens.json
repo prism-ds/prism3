@@ -18815,6 +18815,30 @@
               "ms": 500
             }
           }
+        },
+        "hide": {
+          "$type": "duration",
+          "$value": "{nbds.motion.duration-ms.300}",
+          "$description": "delay hide — 300ms a tooltip stays after the pointer leaves, so the pointer can move onto it; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "nbds.motion.duration-ms.300",
+              "ms": 300
+            }
+          }
+        },
+        "skip": {
+          "$type": "duration",
+          "$value": "{nbds.motion.duration-ms.300}",
+          "$description": "delay skip — 300ms after one tooltip closes in which the next shows at once, with no delay or animation; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "nbds.motion.duration-ms.300",
+              "ms": 300
+            }
+          }
         }
       },
       "easing": {
@@ -19226,6 +19250,67 @@
                 "role": "composite"
               }
             }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.fast}",
+              "$description": "preset fade exit duration — the fast step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration.fast"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset fade exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset fade exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.fast}",
+              "$description": "preset fade exit reduced duration — the fast step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-reduced.fast",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.fade.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.fade.exit.easing}",
+                "delay": "{nbds.motion.preset.fade.exit.delay}"
+              },
+              "$description": "preset fade exit — the fast step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
           }
         },
         "crossfade": {
@@ -19292,12 +19377,12 @@
         "move": {
           "duration": {
             "$type": "duration",
-            "$value": "{nbds.motion.duration.moderate}",
-            "$description": "preset move duration — the moderate step",
+            "$value": "{nbds.motion.duration.normal}",
+            "$description": "preset move duration — the normal step",
             "$extensions": {
               "prism3": {
                 "role": "preset",
-                "aliasOf": "nbds.motion.duration.moderate"
+                "aliasOf": "nbds.motion.duration.normal"
               }
             }
           },
@@ -19325,12 +19410,12 @@
           },
           "duration-reduced": {
             "$type": "duration",
-            "$value": "{nbds.motion.duration-reduced.moderate}",
-            "$description": "preset move reduced duration — the moderate step's reduced twin, derived from the duration",
+            "$value": "{nbds.motion.duration-reduced.normal}",
+            "$description": "preset move reduced duration — the normal step's reduced twin, derived from the duration",
             "$extensions": {
               "prism3": {
                 "role": "preset",
-                "aliasOf": "nbds.motion.duration-reduced.moderate",
+                "aliasOf": "nbds.motion.duration-reduced.normal",
                 "derived": true
               }
             }
@@ -19342,7 +19427,7 @@
               "timingFunction": "{nbds.motion.preset.move.easing}",
               "delay": "{nbds.motion.preset.move.delay}"
             },
-            "$description": "preset move — the moderate step on the default role (standard), at once",
+            "$description": "preset move — the normal step on the default role (standard), at once",
             "$extensions": {
               "prism3": {
                 "role": "composite"
@@ -19407,6 +19492,67 @@
             "$extensions": {
               "prism3": {
                 "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.moderate}",
+              "$description": "preset reveal exit duration — the moderate step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration.moderate"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset reveal exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset reveal exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.moderate}",
+              "$description": "preset reveal exit reduced duration — the moderate step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-reduced.moderate",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.reveal.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.reveal.exit.easing}",
+                "delay": "{nbds.motion.preset.reveal.exit.delay}"
+              },
+              "$description": "preset reveal exit — the moderate step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
               }
             }
           }
@@ -19529,6 +19675,67 @@
             "$extensions": {
               "prism3": {
                 "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.normal}",
+              "$description": "preset surface exit duration — the normal step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration.normal"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset surface exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset surface exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.normal}",
+              "$description": "preset surface exit reduced duration — the normal step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-reduced.normal",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.surface.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.surface.exit.easing}",
+                "delay": "{nbds.motion.preset.surface.exit.delay}"
+              },
+              "$description": "preset surface exit — the normal step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
               }
             }
           }
@@ -19709,6 +19916,250 @@
               "delay": "{nbds.motion.preset.settle.delay}"
             },
             "$description": "preset settle — the slow step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.moderate}",
+              "$description": "preset settle exit duration — the moderate step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration.moderate"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset settle exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset settle exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.moderate}",
+              "$description": "preset settle exit reduced duration — the moderate step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-reduced.moderate",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.settle.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.settle.exit.easing}",
+                "delay": "{nbds.motion.preset.settle.exit.delay}"
+              },
+              "$description": "preset settle exit — the moderate step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "pop": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration.fast}",
+            "$description": "preset pop duration — the fast step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.duration.fast"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{nbds.motion.easing-role.enter}",
+            "$description": "preset pop easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-ms.0}",
+            "$description": "preset pop delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-reduced.fast}",
+            "$description": "preset pop reduced duration — the fast step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.duration-reduced.fast",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{nbds.motion.preset.pop.duration}",
+              "timingFunction": "{nbds.motion.preset.pop.easing}",
+              "delay": "{nbds.motion.preset.pop.delay}"
+            },
+            "$description": "preset pop — the fast step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration.instant}",
+              "$description": "preset pop exit duration — the instant step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration.instant"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{nbds.motion.easing-role.exit}",
+              "$description": "preset pop exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-ms.0}",
+              "$description": "preset pop exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{nbds.motion.duration-reduced.instant}",
+              "$description": "preset pop exit reduced duration — the instant step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "nbds.motion.duration-reduced.instant",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{nbds.motion.preset.pop.exit.duration}",
+                "timingFunction": "{nbds.motion.preset.pop.exit.easing}",
+                "delay": "{nbds.motion.preset.pop.exit.delay}"
+              },
+              "$description": "preset pop exit — the instant step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "press": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration.instant}",
+            "$description": "preset press duration — the instant step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.duration.instant"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{nbds.motion.easing-role.default}",
+            "$description": "preset press easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-ms.0}",
+            "$description": "preset press delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{nbds.motion.duration-reduced.instant}",
+            "$description": "preset press reduced duration — the instant step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "nbds.motion.duration-reduced.instant",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{nbds.motion.preset.press.duration}",
+              "timingFunction": "{nbds.motion.preset.press.easing}",
+              "delay": "{nbds.motion.preset.press.delay}"
+            },
+            "$description": "preset press — the instant step on the default role (standard), at once",
             "$extensions": {
               "prism3": {
                 "role": "composite"

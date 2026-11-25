@@ -344,6 +344,8 @@ const prism3SpringPaths = (brand: string): Set<string> => {
  * `motion.preset.<name>` composite, and its four slots as prism3-only paths. The exempt set is read from prism3's OWN
  * Figma emission (`motion*.json`, never from TokenPress) and held as a BIJECTION in both arms: each preset prism3 emits
  * must come back folded, and nothing else is exempted. The day TokenPress stops folding, both arms fail by name.
+ * Since #2857 phase 2 an arriving preset also nests its exit half, `motion.preset.<name>.exit.*`. The fold drops that
+ * nested group with the preset, so the exit slots count as the preset's own folded slots, held in the same bijection.
  */
 const prism3PresetFolds = (brand: string): Map<string, string[]> => {
   const dir = join(FIGMA_OUT, brand);
@@ -352,11 +354,12 @@ const prism3PresetFolds = (brand: string): Map<string, string[]> => {
   for (const f of readdirSync(dir).filter((n) => /^motion(\.[^.]+)?\.json$/.test(n))) {
     const doc = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { variables?: Array<{ name?: string }> };
     for (const v of doc.variables ?? []) {
-      const m = /^[^/]+\/motion\/preset\/([a-z0-9-]+)\/([a-z-]+)$/.exec(v.name ?? '');
+      const m = /^[^/]+\/motion\/preset\/([a-z0-9-]+)\/((?:exit\/)?[a-z-]+)$/.exec(v.name ?? '');
       if (!m) continue;
       const g = `motion.preset.${m[1]}`;
+      const slot = `${g}.${m[2].replace('/', '.')}`;
       const slots = out.get(g) ?? [];
-      if (!slots.includes(`${g}.${m[2]}`)) slots.push(`${g}.${m[2]}`);
+      if (!slots.includes(slot)) slots.push(slot);
       out.set(g, slots);
     }
   }

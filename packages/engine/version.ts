@@ -738,8 +738,13 @@ export const ENGINE_VERSION = '0.240.0';
  * `linearEasing` type, since DTCG has none for it), and `motion.spring-duration.{snappy,gentle,bouncy}`, the time
  * the spring takes to settle, a DTCG `duration`. Both come from `spring.ts`. Six added paths; an added path cannot
  * break a reference. Nothing is removed or retyped: `motion.spring.*` keeps its damping and stiffness.
+ * 16.1.0 (#2857 phase 2, owner Q-PT3/4/7/13/14 A, 2026-11-25): MINOR. Two presets join, `motion.preset.pop` and
+ * `motion.preset.press`, each with its five slots; each arriving preset (fade, reveal, surface, settle, pop) gains its
+ * exit half, `motion.preset.<name>.exit.{duration,easing,delay,duration-reduced,transition}`; and `motion.delay.hide`
+ * and `motion.delay.skip` join, at 300ms, with the `motion.duration-ms.300` primitive under them. Added paths only;
+ * `move`'s default step moving to normal changes a value, not a name.
  */
-export const CONTRACT_VERSION = '16.0.0';
+export const CONTRACT_VERSION = '16.1.0';
 
 /**
  * THE COMPONENT VERSIONS (#1325 Option 3, #1326 decision 3, owner decision Q-CC1 A, 2026-11-18). Two more numbers,
@@ -783,8 +788,9 @@ export const CONTRACT_VERSION = '16.0.0';
  * 2.6.0 (the contract, MINOR): `toggle-button` and `toggle-icon-button` added (#4353).
  * 3.0.0 (the contract, MAJOR): `image-placeholder` renamed `image` (#4113, OD-I1 A), with a `status` variant axis and the
  *   props of an image; the old id is a removed name, and the rename register carries a built set across in place.
+ * 1.8.0 (the schema, MINOR): #2857 phase 2's `prism3-component-defs/1.8`, the optional `motion.patterns` list added.
  */
-export const COMPONENT_SCHEMA_VERSION = '1.7.0';
+export const COMPONENT_SCHEMA_VERSION = '1.8.0';
 export const COMPONENT_CONTRACT_VERSION = '3.0.0';
 
 /** A guaranteed path that was removed, and where its consumers should point instead. */

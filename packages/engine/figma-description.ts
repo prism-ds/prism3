@@ -295,7 +295,8 @@ export const figmaSpringDescription = (name: string, bounce: number): string =>
 export const figmaSpringDurationDescription = (name: string, ms: number): string => `${ms}ms — the ${name} spring's settle time`;
 /** A delay step (G6 B), the same at every tempo. */
 export const figmaDelayDescription = (step: string, ms: number): string =>
-  step === 'show' ? `${ms}ms — wait before showing, so a fast result shows nothing` : step === 'min-show' ? `${ms}ms — least time a shown indicator stays` : `${ms}ms — ${step} delay`;
+  step === 'show' ? `${ms}ms — wait before showing, so a fast result shows nothing` : step === 'min-show' ? `${ms}ms — least time a shown indicator stays`
+    : step === 'hide' ? `${ms}ms — a tooltip stays this long after the pointer leaves` : step === 'skip' ? `${ms}ms — the next tooltip shows at once within this` : `${ms}ms — ${step} delay`;
 /** A preset slot (#2857, Q-MS1 A): what it aliases, read off the DTCG target path, so the line names the role,
  *  curve, spring or step a designer re-points. */
 export const figmaPresetDescription = (preset: string, slot: 'duration' | 'easing' | 'delay' | 'duration-reduced', target: string): string => {

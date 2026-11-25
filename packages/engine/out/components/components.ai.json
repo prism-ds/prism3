@@ -1,5 +1,5 @@
 {
-  "$schema": "prism3-component-docs/1.2",
+  "$schema": "prism3-component-docs/1.3",
   "generated": true,
   "engineVersion": "0.240.0",
   "note": "Documentation for every registered component, projected from its definition — the same source the design-file component and a coded component are built from. Brand-independent: a definition binds token names, and each brand's `<brand>.ai.json` resolves them. Field names mirror the definition schema. `ai` is the decision surface for choosing a component; the other fields are usage guidance and the code API. `syncBoundary` lists what the design file does not fully carry, each item a class and a disposition.",
@@ -6677,9 +6677,12 @@
         "generationPriority": 6
       },
       "motion": {
-        "enter": "none (present on mount)",
-        "exit": "none",
-        "reduceMotion": "The thumb travels across the track on motion.duration.normal with motion.easing-role.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back."
+        "patterns": [
+          "switch/toggle"
+        ],
+        "enter": "None. On a change, the thumb travels to its new place and the track changes color on motion.preset.move. The thumb travel is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it.",
+        "exit": "None.",
+        "reduceMotion": "Under prefers-reduced-motion, the thumb takes its new place at once; the track fades to its new color on motion.preset.move.duration-reduced. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back."
       },
       "composition": {
         "composesWith": [
@@ -6908,7 +6911,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "The nested control carries the thumb travel (motion.duration.normal with motion.easing-role.default; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears."
+        "reduceMotion": "The nested control carries the thumb travel (motion.preset.move; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears."
       },
       "composition": {
         "composesWith": [
@@ -9035,9 +9038,9 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "None. On selection the underline slides from the previous tab to this one, on motion.duration.normal with motion.easing-role.default.",
+        "enter": "None. On selection the underline slides from the previous tab to this one, on motion.preset.move.",
         "exit": "None.",
-        "reduceMotion": "Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast."
+        "reduceMotion": "Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.preset.crossfade.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -9247,9 +9250,12 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.duration.normal with motion.easing-role.default.",
-        "exit": "The outgoing panel fades out under the incoming one. Panels never slide sideways.",
-        "reduceMotion": "Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast."
+        "patterns": [
+          "tabs/select"
+        ],
+        "enter": "None. On a change, the underline travels to its new place on motion.preset.move; the panel cross-fades on motion.preset.crossfade.",
+        "exit": "None. The outgoing panel fades out under the incoming one. Panels never slide sideways.",
+        "reduceMotion": "Under prefers-reduced-motion, the underline takes its new place at once; the panel cross-fades on motion.preset.crossfade.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -9631,8 +9637,8 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "On open, a chevron turns to its open position on motion.duration.normal with motion.easing-role.default; a plus and minus swap glyphs.",
-        "exit": "On close, the chevron turns back on motion.duration.normal with motion.easing-role.default; a plus and minus swap back.",
+        "enter": "On open, a chevron turns to its open position on motion.preset.move; a plus and minus swap glyphs.",
+        "exit": "On close, the chevron turns back on motion.preset.move; a plus and minus swap back.",
         "reduceMotion": "Under prefers-reduced-motion the indicator swaps to its open or closed glyph without turning."
       },
       "composition": {
@@ -9853,9 +9859,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "The panel eases open to its content height (motion.preset.expand), and the indicator turns to its open glyph.",
-        "exit": "The panel eases closed (motion.preset.expand), and the indicator turns back.",
-        "reduceMotion": "Under prefers-reduced-motion the height changes at once, and the panel's fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed."
+        "patterns": [
+          "accordion/expand",
+          "accordion/collapse"
+        ],
+        "enter": "The panel eases open to its content height and fades in on motion.preset.expand; the indicator turns to its open position on motion.preset.move.",
+        "exit": "The panel eases closed and fades out on motion.preset.expand; the indicator turns back on motion.preset.move.",
+        "reduceMotion": "Under prefers-reduced-motion, the panel fades in on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. The panel fades out on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. A fade is not movement, and it keeps the cue that the panel opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -10397,9 +10407,9 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "None. On selection the pill travels to this option on motion.duration.normal with motion.easing-role.default, or cross-fades.",
+        "enter": "None. On selection the pill travels to this option on motion.preset.move, or cross-fades.",
         "exit": "None.",
-        "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast."
+        "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.preset.move.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -10615,9 +10625,12 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "None. On selection the pill travels to the new option on motion.duration.normal with motion.easing-role.default, or cross-fades.",
+        "patterns": [
+          "segmented/select"
+        ],
+        "enter": "None. On a change, the pill travels to its new place and the label changes color on motion.preset.move.",
         "exit": "None.",
-        "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast."
+        "reduceMotion": "Under prefers-reduced-motion, the pill takes its new place at once; the label fades to its new color on motion.preset.move.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -11330,9 +11343,17 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "A centered panel fades in and scales up a little; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge (motion.duration.moderate, motion.easing-role.enter). The backdrop fades in.",
-        "exit": "The reverse, on motion.easing-role.exit.",
-        "reduceMotion": "Under prefers-reduced-motion every placement and the backdrop fade only, with no slide and no scale, on motion.duration-reduced.normal to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed."
+        "patterns": [
+          "dialog/enter",
+          "dialog/exit",
+          "dialog/bottom/enter",
+          "dialog/bottom/exit",
+          "dialog/end/enter",
+          "dialog/end/exit"
+        ],
+        "enter": "For a centered dialog, the scrim fades in and the panel fades in and scales up from 96% on motion.preset.surface; the content fades in on motion.preset.fade. For a bottom sheet or a full-screen dialog, the scrim fades in and the panel slides up from the bottom edge on motion.preset.surface; the content fades in on motion.preset.fade. For an end panel, the scrim fades in and the panel slides in from the end edge on motion.preset.surface.",
+        "exit": "For a centered dialog, the scrim fades out and the panel fades out and scales down to 96% on motion.preset.surface.exit; the content fades out on motion.preset.fade.exit. For a bottom sheet or a full-screen dialog, the scrim fades out and the panel slides back down on motion.preset.surface.exit; the content fades out on motion.preset.fade.exit. For an end panel, the scrim fades out and the panel slides back out on motion.preset.surface.exit.",
+        "reduceMotion": "Under prefers-reduced-motion, for a centered dialog opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, with no scale; the content fades in on motion.preset.fade.duration-reduced. For a centered dialog closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, with no scale; the content fades out on motion.preset.fade.exit.duration-reduced. For a bottom sheet or a full-screen dialog opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, instead of sliding; the content fades in on motion.preset.fade.duration-reduced. For a bottom sheet or a full-screen dialog closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, instead of sliding; the content fades out on motion.preset.fade.exit.duration-reduced. For an end panel opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, instead of sliding. For an end panel closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, instead of sliding. A fade is not movement, and it keeps the cue that a layer opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -11881,9 +11902,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "An 8px slide up and a fade (motion.preset.fade: motion.duration.normal, motion.easing-role.enter).",
-        "exit": "A fade (motion.duration.fast with motion.easing-role.exit). A replacement plays the exit, then the enter.",
-        "reduceMotion": "Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal."
+        "patterns": [
+          "toast/enter",
+          "toast/exit"
+        ],
+        "enter": "The toast fades in and slides up by motion.distance.nudge on motion.preset.fade.",
+        "exit": "The toast fades out on motion.preset.fade.exit. A replacement plays the exit, then the enter.",
+        "reduceMotion": "Under prefers-reduced-motion, the toast fades in on motion.preset.fade.duration-reduced, with no slide. The toast fades out on motion.preset.fade.exit.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -14518,7 +14543,7 @@
       "motion": {
         "enter": "Fades in. A banner inserted at the top of a page reserves its space, so the content below does not jump.",
         "exit": "Collapses its height and fades on motion.duration.fast with motion.easing-role.exit, so the content below moves up smoothly.",
-        "reduceMotion": "Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal to appear and to go, and its height changes at once when it is dismissed."
+        "reduceMotion": "Under prefers-reduced-motion it fades only, on motion.preset.fade.duration-reduced to appear and motion.preset.fade.exit.duration-reduced to go, and its height changes at once when it is dismissed."
       },
       "composition": {
         "composesWith": [
@@ -16363,9 +16388,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "Fades in and scales up from a little under full size, from the trigger's side (motion.duration.fast, motion.easing-role.enter). The origin follows the side it opens on.",
-        "exit": "Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.",
-        "reduceMotion": "Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed."
+        "patterns": [
+          "popover/open",
+          "popover/close"
+        ],
+        "enter": "The popover fades in and scales up from 95% on motion.preset.pop. It scales from the trigger's side, and the origin follows the side it opens on.",
+        "exit": "The popover fades out on motion.preset.pop.exit.",
+        "reduceMotion": "Under prefers-reduced-motion, the popover fades in on motion.preset.pop.duration-reduced, with no scale. The popover fades out on motion.preset.pop.exit.duration-reduced. A fade is not movement, and it keeps the cue that a layer opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -17340,9 +17369,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "Fades in and scales up from a little under full size, from the trigger's side (motion.duration.fast, motion.easing-role.enter). A submenu fades only.",
-        "exit": "Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.",
-        "reduceMotion": "Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that the menu opened or closed."
+        "patterns": [
+          "popover/open",
+          "popover/close"
+        ],
+        "enter": "The popover fades in and scales up from 95% on motion.preset.pop. It scales from the trigger's side. A submenu fades only.",
+        "exit": "The popover fades out on motion.preset.pop.exit.",
+        "reduceMotion": "Under prefers-reduced-motion, the popover fades in on motion.preset.pop.duration-reduced, with no scale. The popover fades out on motion.preset.pop.exit.duration-reduced. A fade is not movement, and it keeps the cue that the menu opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -17468,13 +17501,13 @@
           "name": "delay",
           "type": "number",
           "required": false,
-          "description": "How long the pointer rests on the control before the tooltip shows, in milliseconds. Keyboard focus shows it at once."
+          "description": "How long the pointer rests on the control before the tooltip shows, in milliseconds. Defaults to motion.delay.show. Keyboard focus shows it at once."
         },
         {
           "name": "closeDelay",
           "type": "number",
           "required": false,
-          "description": "How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it."
+          "description": "How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it. Defaults to motion.delay.hide."
         },
         {
           "name": "open",
@@ -17576,9 +17609,13 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "A fade (motion.duration.fast, motion.easing-role.enter). Moving from one tooltip to the next soon after, it appears with no animation.",
-        "exit": "A fade (motion.duration.instant, motion.easing-role.exit).",
-        "reduceMotion": "Under prefers-reduced-motion, the same fade, at motion.duration-reduced.fast both ways."
+        "patterns": [
+          "tooltip/show",
+          "tooltip/hide"
+        ],
+        "enter": "The tooltip fades in on motion.preset.pop. It shows after motion.delay.show on pointer hover, at once on keyboard focus, and at once with no animation when the pointer moves on from another tooltip within motion.delay.skip.",
+        "exit": "The tooltip fades out on motion.preset.pop.exit. It stays motion.delay.hide after the pointer leaves, so the pointer can move onto it.",
+        "reduceMotion": "Under prefers-reduced-motion, the tooltip fades in on motion.preset.pop.duration-reduced. The tooltip fades out on motion.preset.pop.exit.duration-reduced."
       },
       "composition": {
         "composesWith": [],

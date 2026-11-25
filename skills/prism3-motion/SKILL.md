@@ -5,9 +5,9 @@ description: >-
   which motion preset, duration, easing role or spring each change uses, how
   exits differ from entrances, and what reduced motion substitutes. Every rule
   binds to the brand's emitted motion tokens, never to a number, because the
-  numbers move with the brand's tempo. Nine recipes cover dialog, accordion,
+  numbers move with the brand's tempo. Ten recipes cover dialog, accordion,
   tabs, toast and banner, the spinner's delayed show, progress, badge, the
-  selection controls, and focus; every other component follows the rules
+  selection controls, the switch and segmented control, and focus; every other component follows the rules
   directly.
 when_to_use: >-
   When adding a transition, an animation, a spring or a reduced-motion rule to UI
@@ -18,7 +18,7 @@ when_to_use: >-
 # prism3-motion — moving things with Prism3's motion tokens
 
 You're animating UI that sits on a generated Prism3 token system. The brand's motion lives in its
-`motion.*` tokens: ten presets (`motion.preset.<name>`), and under them a duration ramp, easing roles,
+`motion.*` tokens: twelve presets (`motion.preset.<name>`), the patterns that name them, and under them a duration ramp, easing roles,
 curves, springs, delays, a distance and a stagger interval. **The values behind those names change per
 brand**: the brand's tempo (`motionPersonality.tempo`) scales the duration ramp, all but the two loop
 periods, and a brand can re-point any preset at another step, role, curve or spring. So a number you
@@ -39,7 +39,8 @@ shape or step behind it. The preset or role says why; the brand picks the value.
 
 | Family | Roles | Use it for |
 |---|---|---|
-| `motion.preset.<name>` | `state`, `fade`, `crossfade`, `move`, `reveal`, `draw`, `surface`, `expand`, `step`, `settle` | One kind of change, timed as a whole. Each preset has `.duration`, `.easing`, `.delay` and `.duration-reduced`, and `.transition` bundles the first three. Bind these first. |
+| `motion.preset.<name>` | `state`, `fade`, `crossfade`, `move`, `reveal`, `draw`, `surface`, `expand`, `step`, `settle`, `pop`, `press` | One kind of change, timed as a whole. Each preset has `.duration`, `.easing`, `.delay` and `.duration-reduced`, and `.transition` bundles the first three. Bind these first. |
+| `motion.preset.<name>.exit` | on `fade`, `reveal`, `surface`, `settle`, `pop` | The closing half of an arriving preset, with the same five slots: one step shorter, on the exit role. Bind it for the leave, so a brand that re-times the leave changes it in one place. |
 | `motion.duration.*` | `instant`, `fast`, `normal`, `moderate`, `slow`, `slower`, `long`, `longer`, `longest` | How long a change takes, shortest to longest. Scaled by the brand's tempo. |
 | | `spin`, `sweep` | Loop periods: one spinner turn, one pass of an indeterminate progress bar. Not tempo-scaled. |
 | `motion.duration-reduced.*` | the same role names | The twin of each duration under `prefers-reduced-motion`: a short fade that always shows. |
@@ -48,13 +49,36 @@ shape or step behind it. The preset or role says why; the brand picks the value.
 | `motion.spring.*` | `snappy`, `gentle`, `bouncy`, `effects` | Physical motion for things a person drags, flicks or releases. `effects` moves opacity and color and never overshoots. |
 | `motion.spring-easing.*` | the same spring names | A spring as a CSS curve, for code that can't run a spring. |
 | `motion.spring-duration.*` | the same spring names | How long that spring takes to settle. Play the curve over it. |
-| `motion.delay.*` | `show`, `min-show` | How long a tooltip or a busy indicator waits before it shows, and the least time a shown one stays. Not tempo-scaled. |
+| `motion.delay.*` | `show`, `min-show`, `hide`, `skip` | How long a tooltip or a busy indicator waits before it shows, the least time a shown one stays, how long a tooltip waits before it hides, and the window in which the next tooltip shows at once. Not tempo-scaled. |
 | `motion.distance.*` | `nudge` | The small offset an element travels as it enters or leaves, such as a toast sliding in. |
 | `motion.stagger` | — | The interval between siblings that arrive in sequence. |
 
 The `.ai.json` sidecar has one entry per motion token, with what it's for. Its `motion_presets` block
-names each preset's tokens and, in `resolves_to`, what each slot points at for this brand. Read it when
-the table above doesn't settle a choice.
+names each preset's tokens and, in `resolves_to`, what each slot points at for this brand, exit half
+included. Read it when the table above doesn't settle a choice.
+
+## Patterns: what a component's motion moves
+
+A **pattern** is one component half that moves, such as `dialog/enter`. It lists its **tracks**: each
+moves one element through one property group (opacity, transform, size or color) on a named preset,
+with the element's own distance or start scale, and says what the track does under reduced motion.
+A pattern holds no timing of its own, so the brand's presets still decide every value.
+
+Read the patterns from the `.ai.json` sidecar's `motion_patterns` block, which carries the brand's
+own: a brand can re-point a track's preset, distance, start scale or reduced kind, but never add or
+drop a track. A component's docs list the patterns it plays. When you animate a component that has a
+pattern, play its tracks as listed, on their presets; the recipes below are those patterns in words.
+
+| Patterns | For |
+|---|---|
+| `dialog/enter`, `dialog/exit`, `dialog/bottom/enter`, `dialog/bottom/exit`, `dialog/end/enter`, `dialog/end/exit` | Dialog, per placement |
+| `toast/enter`, `toast/exit` | Toast |
+| `tooltip/show`, `tooltip/hide` | Tooltip |
+| `popover/open`, `popover/close` | Popover and menu |
+| `accordion/expand`, `accordion/collapse` | Accordion |
+| `tabs/select`, `switch/toggle`, `segmented/select` | Tabs, switch, segmented control |
+| `fade/in`, `fade/out`, `hover`, `pressed`, `pressed/release` | Any element that fades, and any control's hover and press |
+
 
 ## The rules
 
@@ -73,10 +97,10 @@ exit accelerates away, so it reads as gone without being watched.
 *Grounding:* KB `18-motion-foundations`, easing tokens; the role table `EASING_ROLE_DEFAULTS` in
 `packages/engine/theme-motion.ts`.
 
-**R3. Leaving is faster than arriving.** An exit runs shorter than its entrance. The presets time an
-arrival; an exit pairs a shorter step with the exit role, such as `motion.duration.fast` on
-`motion.easing-role.exit` after a `fade` entrance on `motion.duration.normal`. Keep the exit at least
-one step shorter than the entrance. A person who dismissed something has already moved on. The
+**R3. Leaving is faster than arriving.** An exit runs shorter than its entrance. Each arriving preset
+carries its exit half, `motion.preset.<name>.exit`: by default one step shorter, on the exit role, so
+`motion.preset.fade.exit` follows a `fade` entrance. Bind the exit half, not a step and a role. Where a
+change has no arriving preset, keep the exit at least one step shorter than the entrance. A person who dismissed something has already moved on. The
 reduced twins are in order, so a reduced exit is never longer than its reduced entrance.
 *Grounding:* KB `18-motion-foundations`, Tier 2, "exit faster by default".
 
@@ -97,7 +121,7 @@ effects split.
 page. Animate size or layout only where the size change is the information: the accordion panel
 opening, a banner collapsing as it's dismissed, toasts closing ranks. The accordion panel takes the
 `expand` preset (its recipe below); the others enter on the `fade` preset and leave on
-`motion.duration.fast` with `motion.easing-role.exit`, like any other change.
+`motion.preset.fade.exit`, like any other change.
 *Grounding:* KB `18-motion-foundations`, "May this animate layout?".
 
 **R6. Chrome stays quick.** A state change on a control (hover, press, check, select) takes
@@ -158,55 +182,67 @@ rules above; where a recipe needs a value the tokens don't hold yet, it says whi
 
 ### Dialog
 
+Patterns `dialog/enter` and `dialog/exit`, and `dialog/bottom/*` and `dialog/end/*` for the other placements.
+
 | Track | Enter | Exit |
 |---|---|---|
-| Backdrop | opacity, the `surface` preset | opacity, `motion.duration.normal`, `motion.easing-role.exit` |
-| Panel, centered | opacity and a scale from a little under full size (R10), same timing as the backdrop | the reverse, same timing as the backdrop |
-| Panel, bottom sheet or full screen | slides up from the bottom edge, same timing | slides back down, same timing |
-| Panel, end panel | slides in from the end edge, same timing | slides back out, same timing |
+| Backdrop | opacity, on `motion.preset.surface` | opacity, on `motion.preset.surface.exit` |
+| Panel, centered | opacity and a scale from a little under full size (R10), on the backdrop's preset | the reverse, on the backdrop's preset |
+| Panel, bottom sheet or full screen | slides up from the bottom edge, on the backdrop's preset | slides back down, on the backdrop's preset |
+| Panel, end panel | slides in from the end edge, on the backdrop's preset | slides back out, on the backdrop's preset |
+| Content | fades in, on `motion.preset.fade` | fades out, on `motion.preset.fade.exit` |
 
-**Reduced:** the backdrop and every panel placement fade only, on `motion.duration-reduced.normal`,
-with no slide and no scale.
+The backdrop always plays on its panel's preset, so the two never drift apart.
+
+**Reduced:** the backdrop and every panel placement fade only, with no slide and no scale, on
+`motion.preset.surface.duration-reduced` opening and `motion.preset.surface.exit.duration-reduced`
+closing; the content fades on `motion.preset.fade.duration-reduced` and
+`motion.preset.fade.exit.duration-reduced`.
 
 Move focus into the dialog when it opens, without waiting for the enter to finish.
 
 ### Accordion
 
+Patterns `accordion/expand` and `accordion/collapse`.
+
 | Track | Open | Close |
 |---|---|---|
 | Panel height (the R5 exception) and opacity | the `expand` preset | the `expand` preset |
-| Indicator glyph turn | `motion.duration.normal` with `motion.easing-role.default` | `motion.duration.normal` with `motion.easing-role.default` |
+| Indicator glyph turn | `motion.preset.move` | `motion.preset.move` |
 
 The panel grows and shrinks where it already is, so it opens and closes on one preset, `expand`, on
 the in-place curve (R2). Bind `motion.preset.expand.duration` and `motion.preset.expand.easing`, or
 `motion.preset.expand.transition` for both. A brand can re-point the preset at another step, curve
 or spring, and the panel follows. By default it plays on the `normal` step with the `default` role.
 
-**Reduced:** the height changes at once; the panel's fade stays, on `motion.duration-reduced.normal`
-both ways (R3), which is what `motion.preset.expand.duration-reduced` resolves to by default. The
-indicator swaps without turning.
+**Reduced:** the height changes at once; the panel's fade stays, on
+`motion.preset.expand.duration-reduced` both ways (R3). The indicator swaps without turning.
 
 ### Tabs indicator
 
+Pattern `tabs/select`.
+
 | Track | On a selection change |
 |---|---|
-| Underline | travels from the old tab to the new one, as a transform, on `motion.duration.normal` with `motion.easing-role.default` |
-| Panels | the outgoing panel fades out under the incoming one, on `motion.duration.normal` with `motion.easing-role.default`. Panels never slide sideways. |
+| Underline | travels from the old tab to the new one, as a transform, on `motion.preset.move` |
+| Panels | the outgoing panel fades out under the incoming one, on `motion.preset.crossfade`. Panels never slide sideways. |
 
 **Reduced:** the underline snaps to the new tab; the incoming panel fades in on
-`motion.duration-reduced.fast`.
+`motion.preset.crossfade.duration-reduced`.
 
 ### Toast and banner
 
+Patterns `toast/enter` and `toast/exit`.
+
 | Track | Enter | Exit |
 |---|---|---|
-| Toast | slides up by `motion.distance.nudge` and fades in, on the `fade` preset | fades out, on `motion.duration.fast` with `motion.easing-role.exit` |
-| Banner | fades in, on the `fade` preset; its space is reserved first, so nothing below jumps | collapses its height and fades, on `motion.duration.fast` with `motion.easing-role.exit` (the R5 exception) |
+| Toast | slides up by `motion.distance.nudge` and fades in, on the `fade` preset | fades out, on `motion.preset.fade.exit` |
+| Banner | fades in, on the `fade` preset; its space is reserved first, so nothing below jumps | collapses its height and fades, on `motion.preset.fade.exit` (the R5 exception) |
 
 A replacement toast plays the exit, then the enter.
 
-**Reduced:** fades only, on `motion.duration-reduced.normal` both ways (R3). The banner's height
-changes at once.
+**Reduced:** fades only, on `motion.preset.fade.duration-reduced` arriving and
+`motion.preset.fade.exit.duration-reduced` leaving (R3). The banner's height changes at once.
 
 ### Spinner, delayed show
 
@@ -252,13 +288,24 @@ ways (R3); a changed count's number fades on the same role.
 |---|---|---|
 | Checkbox | the check glyph draws in as a stroke while the fill crossfades | `motion.duration.fast`, `motion.easing-role.default` (R6) |
 | Radio | the dot scales in from a little under full size (R10), the previous choice's dot scales out, and the ring's color crossfades | `motion.duration.fast`, `motion.easing-role.default` (R6) |
-| Switch | the thumb travels across the track as a transform, and the track's color crossfades with it | `motion.duration.normal` with `motion.easing-role.default` |
-| Segmented control | the pill travels to the new option as a transform, as the tabs underline does | `motion.duration.normal` with `motion.easing-role.default` |
 
-The focus ring on each of them follows the focus recipe below.
+The focus ring on each of them, and on the switch and the segmented control, follows the focus
+recipe below.
 
 **Reduced:** nothing draws, scales or travels. The glyph, the dot, the thumb and the pill take their
 new place at once, and the color change fades on `motion.duration-reduced.fast`.
+
+### Switch and segmented control
+
+Patterns `switch/toggle` and `segmented/select`.
+
+| Control | Track | On a change |
+|---|---|---|
+| Switch | the thumb travels across the track as a transform, and the track's color crossfades with it | `motion.preset.move` |
+| Segmented control | the pill travels to the new option as a transform, as the tabs underline does, and the labels change color with it | `motion.preset.move` |
+
+**Reduced:** the thumb and the pill take their new place at once, and the color change fades on
+`motion.preset.move.duration-reduced`.
 
 ### Focus
 
@@ -271,7 +318,7 @@ them transitions. The control under the ring keeps its own state change (R6).
 
 | Gap | Issue | Until it's filled |
 |---|---|---|
-| No pattern file: a component's open and close aren't data yet, and an exit has no preset of its own | #2857 phase 2 | Time an entrance on its preset, and an exit on a shorter step with `motion.easing-role.exit` (R3). |
+| No Figma style per pattern: a designer can't apply a pattern on the canvas yet | #2857 phase 3 | Read the pattern from the `.ai.json` sidecar, or from the component's docs. |
 | Breakpoint-specific timing | #2857, Q-MS9 | One timing at every width; a brand's per-mode overrides follow color modes, not breakpoints. |
 
 Report a gap you hit; don't fill it with a number.
@@ -282,7 +329,8 @@ Report a gap you hit; don't fill it with a number.
    fits. No unit, no curve function, no spring constant typed in.
 2. Each moving thing has an easing role that matches its change: `enter`, `exit`, `default` or
    `emphasized`.
-3. Each exit is shorter than its entrance, and so is its reduced twin.
+3. Each exit is shorter than its entrance, and so is its reduced twin: an arriving preset's exit binds
+   its `.exit` half.
 4. Only transform and opacity animate, except the declared layout cases (R5).
 5. Under reduced motion, every movement became a fade on a `motion.duration-reduced.*` twin or a
    preset's `.duration-reduced`, every functional loop still runs, slower, and parallax, coasting,

@@ -3005,7 +3005,8 @@ const checkDepthMotion = (where, got, o) => {
   const offTrace = o.presets.map(([preset, want]) => ({ preset, want, t: got.traces.find((x) => x.name === preset) }))
     .filter(({ want, t }) => !t || !want || !sameBez(t.bez, want.bez) || !t.label.endsWith(want.name))
     .map(({ preset, want, t }) => `${preset} traces ${t ? `${JSON.stringify(t.bez)} "${t.label}"` : 'nothing'}, the emission's motion.preset.${preset}.easing resolves to ${want?.name} ${JSON.stringify(want?.bez)}`);
-  ok(o.presets.length === 10 && got.traces.length === o.presets.length && offTrace.length === 0,
+  // Twelve since #2857 phase 2 added pop and press; an exit half is a preset's own closing, not a trace of its own.
+  ok(o.presets.length === 12 && got.traces.length === o.presets.length && offTrace.length === 0,
     `#2046, #2857: ${where}: each preset traces the curve its easing resolves to in this mode's emission${offTrace.length ? ` — ${offTrace.slice(0, 2).join(' | ')}` : ` (${got.traces.length} traced)`}`);
   const offTags = got.cards.filter((c) => JSON.stringify([...c.roles].sort()) !== JSON.stringify(o.roles.filter((r) => o.curve(r)?.name === c.curve).sort()))
     .map((c) => `${c.curve} tags ${c.roles.join(', ') || 'none'}`);

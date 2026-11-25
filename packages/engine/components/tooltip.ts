@@ -40,6 +40,7 @@
  * the trigger, `space.100` to the arrow's tip, is code: Figma has no trigger.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const tooltip: ComponentDef = {
   id: 'tooltip',
@@ -57,8 +58,8 @@ export const tooltip: ComponentDef = {
     { name: 'align', type: "enum: 'start' | 'center' | 'end'", values: ['start', 'center', 'end'], default: 'center', required: false, description: 'Where the tooltip lines up along its side of the control. The arrow stays pointed at the control\'s center.' },
     { name: 'arrow', type: 'boolean', default: true, required: false, description: 'Shows the arrow that points at the control. On by default.' },
     { name: 'kind', type: "enum: 'description' | 'label'", values: ['description', 'label'], default: 'description', required: false, description: 'description adds a description to a control that already has a name. label makes the tooltip the control\'s name, for an icon-only control, so the name is announced once.' },
-    { name: 'delay', type: 'number', required: false, description: 'How long the pointer rests on the control before the tooltip shows, in milliseconds. Keyboard focus shows it at once.' },
-    { name: 'closeDelay', type: 'number', required: false, description: 'How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it.' },
+    { name: 'delay', type: 'number', required: false, description: 'How long the pointer rests on the control before the tooltip shows, in milliseconds. Defaults to motion.delay.show. Keyboard focus shows it at once.' },
+    { name: 'closeDelay', type: 'number', required: false, description: 'How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it. Defaults to motion.delay.hide.' },
     { name: 'open', type: 'boolean', required: false, description: 'Whether the tooltip shows, when the app controls it. Leave it unset and the tooltip shows and hides by itself.' },
     { name: 'defaultOpen', type: 'boolean', default: false, required: false, description: 'Whether the tooltip shows at first, when the app does not control it.' },
     { name: 'onOpenChange', type: 'function', required: false, description: 'Called with true when the tooltip shows and false when it hides, for any reason.' },
@@ -176,7 +177,7 @@ export const tooltip: ComponentDef = {
         class: 'runtime-behavior',
         disposition: 'refused',
         description:
-          'timing defaults — `delay`, `closeDelay` and the skip window are shared settings of a provider mounted once, so every tooltip on a page keeps the same rhythm. Their default values have no tokens yet; the ranges the field uses for them are with the motion gap batch (#3486).',
+          'timing defaults — `delay`, `closeDelay` and the skip window are shared settings of a provider mounted once, so every tooltip on a page keeps the same rhythm. They default to `motion.delay.show`, `motion.delay.hide` and `motion.delay.skip` (#2857, Q-PT13 A and Q-PT14 A).',
       },
       {
         class: 'responsive-layout',
@@ -200,7 +201,7 @@ export const tooltip: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — show: opacity 0 to 1, a fade alone with no scale, on `motion.duration.fast` and `motion.easing-role.enter`. Hide: a fade on `motion.duration.instant` and `motion.easing-role.exit`. Inside the skip window it appears with no animation. Under `prefers-reduced-motion` both ways fade on `motion.duration-reduced.fast`.',
+          'motion — the `tooltip/show` and `tooltip/hide` patterns. On show: opacity 0 to 1, a fade alone with no scale, on `motion.preset.pop`. On hide: a fade on `motion.preset.pop.exit`. Inside the skip window (`motion.delay.skip`) it appears with no animation. Under `prefers-reduced-motion` it fades on `motion.preset.pop.duration-reduced` to show and `motion.preset.pop.exit.duration-reduced` to hide.',
       },
       {
         class: 'right-to-left',
@@ -294,11 +295,8 @@ export const tooltip: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'A fade (motion.duration.fast, motion.easing-role.enter). Moving from one tooltip to the next soon after, it appears with no animation.',
-    exit: 'A fade (motion.duration.instant, motion.easing-role.exit).',
-    reduceMotion: 'Under prefers-reduced-motion, the same fade, at motion.duration-reduced.fast both ways.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['tooltip/show', 'tooltip/hide'], { enter: 'It shows after motion.delay.show on pointer hover, at once on keyboard focus, and at once with no animation when the pointer moves on from another tooltip within motion.delay.skip.', exit: 'It stays motion.delay.hide after the pointer leaves, so the pointer can move onto it.' }),
 
   notes: {
     contested: [],
