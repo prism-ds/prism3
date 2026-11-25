@@ -2957,6 +2957,13 @@ const motionOracle = (tree, mode) => {
     durations: Object.fromEntries(leaves(mo.duration).map(([k, l]) => [k, ms(l)])),
     reduced: Object.fromEntries(leaves(mo['duration-reduced']).map(([k, l]) => [k, ms(l)])),
     roles: leaves(mo['easing-role']).map(([k]) => k), curve,
+    // #2857: each preset and the curve its easing slot resolves to in this mode, read off the emitted alias (a role is
+    // followed through `curve` above; a curve is read directly). A spring-eased preset has no curve to trace (null).
+    presets: leaves(mo.preset).map(([name, p]) => {
+      const v = String(p.easing?.$value ?? '').slice(1, -1).split('.');
+      const kind = v[v.length - 2], key = v[v.length - 1];
+      return [name, kind === 'easing-role' ? curve(key) : kind === 'easing' ? { name: key, bez: mo.easing?.[key]?.$value ?? null } : null];
+    }),
   };
 };
 /** What the Depth & motion preview draws for motion: each duration row and the spin block, each transition with the
@@ -2995,11 +3002,11 @@ const checkDepthMotion = (where, got, o) => {
   ok(got.rows.length > 0 && offMs.length === 0, `${where}: every duration row is the emitted ms and reduced ms for this mode${offMs.length ? ` — ${offMs.slice(0, 3).join(' | ')}` : ''}`);
   ok(!got.spinInTable && !!got.spin && got.spin.pills.includes('motion.duration.spin') && got.spin.text.includes(`${o.durations.spin}ms`) && got.spin.text.includes(`${o.reduced.spin}ms`),
     `T9: ${where}: the spinner's turn is drawn apart from the duration steps, as a loop, at its emitted ${o.durations.spin}ms (reduced ${o.reduced.spin}ms) — in the table ${got.spinInTable}, apart ${JSON.stringify(got.spin)}`);
-  const offTrace = o.roles.map((role) => ({ role, want: o.curve(role), t: got.traces.find((x) => x.name === role) }))
+  const offTrace = o.presets.map(([preset, want]) => ({ preset, want, t: got.traces.find((x) => x.name === preset) }))
     .filter(({ want, t }) => !t || !want || !sameBez(t.bez, want.bez) || !t.label.endsWith(want.name))
-    .map(({ role, want, t }) => `${role} traces ${t ? `${JSON.stringify(t.bez)} "${t.label}"` : 'nothing'}, the emission's motion.easing-role.${role} is ${want?.name} ${JSON.stringify(want?.bez)}`);
-  ok(got.traces.length === o.roles.length && offTrace.length === 0,
-    `#2046: ${where}: each transition traces the curve its role resolves to in this mode's emission${offTrace.length ? ` — ${offTrace.slice(0, 2).join(' | ')}` : ` (${got.traces.length} traced)`}`);
+    .map(({ preset, want, t }) => `${preset} traces ${t ? `${JSON.stringify(t.bez)} "${t.label}"` : 'nothing'}, the emission's motion.preset.${preset}.easing resolves to ${want?.name} ${JSON.stringify(want?.bez)}`);
+  ok(o.presets.length === 10 && got.traces.length === o.presets.length && offTrace.length === 0,
+    `#2046, #2857: ${where}: each preset traces the curve its easing resolves to in this mode's emission${offTrace.length ? ` — ${offTrace.slice(0, 2).join(' | ')}` : ` (${got.traces.length} traced)`}`);
   const offTags = got.cards.filter((c) => JSON.stringify([...c.roles].sort()) !== JSON.stringify(o.roles.filter((r) => o.curve(r)?.name === c.curve).sort()))
     .map((c) => `${c.curve} tags ${c.roles.join(', ') || 'none'}`);
   ok(got.cards.length === 6 && offTags.length === 0, `${where}: each of the six curves is tagged with the roles the emission points at it in this mode${offTags.length ? ` — ${offTags.join(' | ')}` : ''}`);
@@ -4058,13 +4065,16 @@ const pickEasing = async (page, role, curve) => {
   await hooks.click(page.locator(`[data-p3="value-picker"] [data-p3="value-picker-value"][data-value="${v}"]`));
   await page.waitForFunction(([r, c]) => (document.querySelector(`[data-p3="easing-pick"][data-role="${r}"]`)?.textContent ?? '').includes(c), [role, curve], { timeout: 5000 }).catch(() => {});
 };
-const tracedCurve = async (page, role) => (await readDepthMotion(page)).traces.find((t) => t.name === role) ?? null;
+// #2857: the preview traces the presets, so a role is read off a preset on it (typed: `fade` is on enter, `state` on
+// default). No default preset is on emphasized, so the arms below re-point a role a preset uses.
+const PRESET_ON_ROLE = { enter: 'fade', default: 'state' };
+const tracedCurve = async (page, role) => (await readDepthMotion(page)).traces.find((t) => t.name === PRESET_ON_ROLE[role]) ?? null;
 let easingTrips = 0;
 {
   const brand = BRANDS[0];
   const { ctx, page, drain } = await openBrand(brand);
   await gotoDepth(page);
-  const role = 'emphasized', curve = 'calm';
+  const role = 'enter', curve = 'calm';
   const lightBefore = (await persistedBrand(page))?.motionPersonality?.easingRoles?.[role];
   await chooseMode(page, 'dark');
   await pickEasing(page, role, curve);
@@ -4077,15 +4087,15 @@ let easingTrips = 0;
     ok(dark.curve(role)?.name === curve && light.curve(role)?.name !== curve,
       `#2046: ${brand}: the exported motion.easing-role.${role} is ${curve} in dark only (dark ${dark.curve(role)?.name}, light ${light.curve(role)?.name})`);
     const t = await tracedCurve(page, role);
-    ok(!!t && sameBez(t.bez, dark.curve(role)?.bez), `#2046: ${brand}: previewing Dark, the traced ${role} transition draws the exported dark curve ${JSON.stringify(dark.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
+    ok(!!t && sameBez(t.bez, dark.curve(role)?.bez), `#2046: ${brand}: previewing Dark, the ${role} role's traced preset (${PRESET_ON_ROLE[role]}) draws the exported dark curve ${JSON.stringify(dark.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
     await chooseMode(page, 'light');
     const tl = await tracedCurve(page, role);
-    ok(!!tl && sameBez(tl.bez, light.curve(role)?.bez), `#2046: ${brand}: previewing Light, the traced ${role} transition draws the exported light curve ${JSON.stringify(light.curve(role)?.bez)} (draws ${JSON.stringify(tl?.bez)})`);
+    ok(!!tl && sameBez(tl.bez, light.curve(role)?.bez), `#2046: ${brand}: previewing Light, the ${role} role's traced preset (${PRESET_ON_ROLE[role]}) draws the exported light curve ${JSON.stringify(light.curve(role)?.bez)} (draws ${JSON.stringify(tl?.bez)})`);
     easingTrips++;
   }
   // Picking Light's own curve in Dark is Auto (the legacy table never offered the self-map): it clears the override.
   await chooseMode(page, 'dark');
-  const lightCurve = (tree && motionOracle(tree.light, 'light').curve(role)?.name) ?? 'expressive';
+  const lightCurve = (tree && motionOracle(tree.light, 'light').curve(role)?.name) ?? 'decelerate';
   await pickEasing(page, role, lightCurve);
   const b2 = await persistedBrand(page);
   ok(b2?.modeLevers?.dark?.easings?.[role] === undefined,
@@ -4117,7 +4127,7 @@ let easingTrips = 0;
     const o = motionOracle(tree.light, 'light');
     ok(o.curve(role)?.name === curve, `#2046: a one-mode brand's export carries motion.easing-role.${role} → ${curve} (exports ${o.curve(role)?.name})`);
     const t = await tracedCurve(page, role);
-    ok(!!t && sameBez(t.bez, o.curve(role)?.bez), `#2046: a one-mode brand's traced ${role} transition draws the exported curve ${JSON.stringify(o.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
+    ok(!!t && sameBez(t.bez, o.curve(role)?.bez), `#2046: a one-mode brand's ${role} preset trace (${PRESET_ON_ROLE[role]}) draws the exported curve ${JSON.stringify(o.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
     easingTrips++;
   }
   const errs = drain();

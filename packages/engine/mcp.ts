@@ -45,7 +45,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { brandTheme, BrandInput, type Theme } from './theme';
-import { buildTree, validateBrandInput } from './emit-dtcg';
+import { buildTree, validateBrandInput, windowsInvalidName } from './emit-dtcg';
 import { buildOverlaySet } from './emit-dtcg-overlay';
 import { buildAiMetadata } from './ai-metadata';
 import { buildLeverManifest, type Lever } from './levers';
@@ -783,6 +783,11 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
         files.push({ path: names.specs, content: specs });
       }
     }
+
+    // #4214 (owner decision, 2026-11-20): a brand id that names no file Windows can write is refused here, where the
+    // files are written, with the reason; the input schema stays as it is. Checked over every name before the first write.
+    const notWindows = files.map((f) => f.path.split('/').map(windowsInvalidName).find(Boolean)).find(Boolean);
+    if (notWindows) return text({ error: `${notWindows}; nothing was written.` }, true);
 
     const written: { path: string; bytes: number }[] = [];
     try {

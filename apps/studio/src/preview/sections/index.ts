@@ -29,7 +29,7 @@ import { shadowTintSection } from './shadow-tint';
 import { durationRampSection, type DurationsCopy } from './duration-ramp';
 import { curveOfRole, motionCurvesSection, motionStageSvg } from './motion-curves';
 import { springsSection } from './springs';
-import { motionTransitionsSection, MOTION_SLOWMO_OPTIONS, type TransitionsCopy } from './motion-transitions';
+import { motionTransitionsSection, presetCurveOf, MOTION_SLOWMO_OPTIONS, type TransitionsCopy } from './motion-transitions';
 import { radiusSection, USED_BY_NONE } from './radius';
 import { controlHeightsSection, buttonHeightLabel } from './control-heights';
 import { spacingSection, SPACING_PREVIEW } from './spacing';
@@ -64,7 +64,7 @@ export { breakpointsSection, gridSection, containersSection, containerReference,
  *  S9.2 redrew them for the one Depth & motion preview, their caller now): the shadow steps and the shadow color in
  *  Elevation; the curves, the durations (with the spinner's turn and the building blocks), springs and the traced
  *  transitions in Motion. Read-only. */
-export { shadowRampSection, shadowTintSection, durationRampSection, motionCurvesSection, motionStageSvg, curveOfRole, springsSection, motionTransitionsSection, MOTION_SLOWMO_OPTIONS };
+export { shadowRampSection, shadowTintSection, durationRampSection, motionCurvesSection, motionStageSvg, curveOfRole, springsSection, motionTransitionsSection, presetCurveOf, MOTION_SLOWMO_OPTIONS };
 export type { DurationsCopy, TransitionsCopy };
 /** The Shape preview's sections (UI redesign S7): Density's control heights, Radius, and the read-only Spacing and
  *  Building blocks. The radius sample is the Style guide's (owner decision D18 B). Read-only. */

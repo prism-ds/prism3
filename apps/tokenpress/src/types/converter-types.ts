@@ -52,6 +52,8 @@ export interface ConversionContext {
   fontWeightCache: Record<string, Variable>;
   /** Pre-built cache for O(1) line height lookups */
   lineHeightCache: Record<string, Variable>;
+  /** Team-library variable ids (prism3 #4366): a sub-property bound to one is its resolved value, never a cache match. */
+  externalIds?: Set<string>;
   /** Whether to use rem units instead of px */
   useRem: boolean;
   /** Base font size for rem calculations (default: 16) */

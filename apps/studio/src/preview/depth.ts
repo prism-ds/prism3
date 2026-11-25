@@ -29,7 +29,7 @@ import { h, hook } from '../shell/dom';
 import { DOMAINS, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import {
-  curveOfRole, durationRampSection, motionCurvesSection, motionTransitionsSection, shadowRampSection, shadowTintSection, springsSection,
+  durationRampSection, motionCurvesSection, motionTransitionsSection, presetCurveOf, shadowRampSection, shadowTintSection, springsSection,
   type DurationsCopy, type TransitionsCopy,
 } from './sections/index';
 import { SG_SURFACES, ground, oppositeOf, palSection, sgContext, type SgRole } from './sections/kit';
@@ -65,8 +65,8 @@ export const DEPTH_PREVIEW_COPY = {
   } satisfies DurationsCopy,
   springs: { title: 'Springs', desc: 'Physics presets for platforms that animate with springs. Read-only.' },
   transitions: {
-    title: 'Transitions',                                             // DRAFT
-    desc: 'Each transition traced at this tempo, along the curve its role uses.',   // DRAFT
+    title: 'Presets',                                                 // DRAFT (#2857, for the owner)
+    desc: 'Each motion preset traced at this tempo, along the curve its easing uses.',   // DRAFT (#2857, for the owner)
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
   } satisfies TransitionsCopy,
@@ -125,7 +125,7 @@ export const mountDepthPreview = (host: HTMLElement, cleanups: (() => void)[]): 
     card.replaceChildren(...secs.map((s) => ground(c, s, page)));
 
     // D9: a Motion edit plays the traces once, at the chosen speed, unless reduced motion is on.
-    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.transitions.map((t) => curveOfRole(mo, cur, t.name))]);
+    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.presets.map((p) => presetCurveOf(mo, cur, p))]);
     if (why === 'brand' && lastDrawn !== null && lastMode === cur && drawn !== lastDrawn && !reduced) {
       played = true;
       play();

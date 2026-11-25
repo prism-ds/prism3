@@ -552,6 +552,8 @@ const gated: string[] = [
   join(repo, 'packages/engine/schema/token-contract.json'),
   // The component-contract baseline (#1325) — kept out of `regen` for the same reason, named by hand the same way.
   join(repo, 'packages/engine/schema/component-contract.json'),
+  // The format-history record (#4458) — kept out of `regen` for the same reason, named by hand the same way.
+  join(repo, 'packages/engine/schema/format-history.json'),
   // The paint census (#758) — the second baseline kept out of `regen`, named by hand for the same reason.
   join(repo, 'packages/engine/schema/paint-census.json'),
   // The docs/34 shape-index baseline (#786) — the third, same reason. Its shape titles are quoted

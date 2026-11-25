@@ -457,6 +457,21 @@ conforming projection; the CSS build reads them from a CSS-only source (`package
 | only `brandDependent` moved | none | says something changed about the corpus, not the promise |
 | only values changed | none | that is the engine working — declare an engine bump in a change note (`fold.ts` assigns `ENGINE_VERSION`) |
 
+### The motion preset tier, and the transitions leave (16.0.0, #2857)
+
+Owner decisions Q-MS1 A and Q-MS8 A, and the clean break of 2026-11-24. The motion tokens are rebuilt as primitives →
+roles → presets. The owner confirmed that nothing consumed the motion variables.
+
+- The four guaranteed `motion.transition.*` composites are removed, with no replacement path: a preset composite times
+  one kind of change, not one easing role. No `DEPRECATIONS` entry, the 14.0.0 precedent.
+- `motion.duration-ms.50` is demoted to brand-dependent. Reduced motion is now `min(full, 100ms)` (Q-MP17 A), so the
+  50ms floor every brand's reduced `normal` used to reach is gone.
+- Added: each preset's `motion.preset.<name>.{duration,easing,delay,duration-reduced,transition}` (50 paths),
+  `motion.delay.{show,min-show}`, `motion.distance.nudge`, `motion.spring.effects` with its `spring-duration` and
+  `spring-easing`, and `motion.duration-ms.{100,400,500}`, now reached by every brand.
+
+`CONTRACT_VERSION` 15.4.0 → 16.0.0, accepted with `token-contract.ts --accept` after the bump.
+
 ## Deprecations
 
 `DEPRECATIONS` in `version.ts` maps a retired path to its replacement and the `CONTRACT_VERSION`

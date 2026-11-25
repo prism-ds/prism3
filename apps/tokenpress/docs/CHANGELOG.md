@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-11-25
+
+A patch release: library bindings inside composites say where they came from,
+the CSS format writes motion values, and two more skips reach the summary.
+
+### Fixed
+- **A composite names a library binding.** A text style, shadow or gradient
+  stop bound to a variable from another library exported the value with no
+  record of where it came from, and a font weight could come out as an alias
+  to an unrelated local variable that held the same weight. Each such
+  sub-property now exports its resolved value, with an `externalAlias` marker
+  per sub-property in `$extensions.figma` (the same fields a whole-token
+  library alias carries, keyed by the sub-property's path, such as
+  `fontWeight` or `0.color`).
+- **The CSS format writes easing and durations.** An easing curve read
+  `[0.2,0,0,1]` and a duration `{"value":100,"unit":"ms"}`. They are now
+  `cubic-bezier(0.2, 0, 0, 1)` and `100ms` (a duration in seconds is
+  converted). A value with no CSS form, such as a gradient or a spring, is
+  left out of `tokens.css` instead of written as JSON, and the footer names it.
+- **The export summary names skipped solid paint styles.** A paint style
+  whose visible paints are solid colors is not exported, and the export used
+  to leave it out without saying so. The footer now names it, beside the
+  other skips.
+
+## [3.0.2] - 2026-11-24
+
+A patch release: two exports that wrote a wrong or unusable color, and a skip
+the panel did not report.
+
+### Fixed
+- **The CSS format writes HSL colors.** With Color Space set to HSL, every
+  color in `tokens.css` read `[object Object]`, and a shadow with an HSL color
+  lost its color. Both are now written in HSL notation: `hsl(0, 100%, 50%)`,
+  or `hsla(0, 100%, 50%, 0.4)` below full opacity. sRGB output is unchanged.
+- **A wash over a wash keeps both opacities.** A color variable at an opacity
+  whose color is another variable at an opacity exported the bare reference,
+  and its own opacity was lost (in the dot-notation format, it read `null`).
+  Every format now exports the color they resolve to, with both opacities
+  multiplied into the alpha: 40% over 50% is an alpha of 0.2. Each resolves
+  in its own collection and mode, as Figma resolves it.
+- **The export summary names skipped layered-gradient styles.** A paint style
+  that stacks a gradient with other paints has no single-gradient form and is
+  left out. The panel's footer now names it, beside any skipped blur-only
+  effect styles, instead of only the developer console.
+
 ## [3.0.1] - 2026-11-23
 
 A patch release. Its headline fix is the first entry under Fixed: a color

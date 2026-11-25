@@ -420,6 +420,27 @@ await new Promise((r) => setTimeout(r, 3000));
   rmSync(resolve(HERE, '.mcp-test-4122-out'), { recursive: true, force: true });
 }
 
+// ---------------------------------- #4214: export_theme refuses a brand id Windows can't use as a file name
+// The owner kept the published schema as it is and moved the refusal to where a file is written (2026-11-20). The
+// MCP writes files too, so `export_theme` refuses `CON`, `nul` and `a?b` by name as an isError result, before any write;
+// the schema still accepts them (validate_brand stays valid). EXPECTED: isError naming the file and why, no directory.
+// BY-NAME MUTATION: drop the `windowsInvalidName` check from mcp.ts export_theme → each export arm fails.
+{
+  const B = { id: 'args', primary: { l: 0.5, c: 0.15, h: 250 }, neutral: { hue: 250, chroma: 0.01 } };
+  const out = 'packages/engine/.mcp-test-4214-out';
+  for (const id of ['CON', 'nul', 'a?b']) {
+    rmSync(resolve(HERE, '.mcp-test-4214-out'), { recursive: true, force: true });
+    const r = await server.callJson('export_theme', { brand: { ...B, id }, outDir: out, include: ['tokens'] });
+    const seen = JSON.stringify(r.payload ?? r).slice(0, 240);
+    ok(r.isError === true && String(r.payload?.error ?? '').includes(`'${id}.tokens.json' is not a file name Windows can write`)
+      && String(r.payload?.error ?? '').endsWith('nothing was written.') && !existsSync(resolve(HERE, '.mcp-test-4214-out')),
+      `#4214 export_theme refuses the id ${JSON.stringify(id)} by name, before writing anything (got ${seen})`);
+    const v = await server.callJson('validate_brand', { brand: { ...B, id } });
+    ok(v.isError !== true && v.payload?.valid === true, `#4214 validate_brand still accepts the id ${JSON.stringify(id)}: the schema is unchanged (got ${JSON.stringify(v.payload).slice(0, 200)})`);
+  }
+  rmSync(resolve(HERE, '.mcp-test-4214-out'), { recursive: true, force: true });
+}
+
 // ---------------------------------- #4151: a tool that returns structuredContent declares an outputSchema it meets
 // theme_brand and theme_from_brief returned structuredContent with no outputSchema, so the generated reference said
 // they had none. Every tool in tools/list is called once with a valid input (a tool missing from SAMPLES fails by

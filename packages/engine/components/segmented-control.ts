@@ -323,7 +323,7 @@ export const segmentedControlSegment: ComponentDef = {
   },
 
   motion: {
-    enter: 'None. On selection the pill travels to this option on motion.transition.default, or cross-fades.',
+    enter: 'None. On selection the pill travels to this option on motion.duration.normal with motion.easing-role.default, or cross-fades.',
     exit: 'None.',
     reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.',
   },
@@ -483,7 +483,7 @@ export const segmentedControl: ComponentDef = {
         class: 'implementation',
         disposition: 'refused',
         description:
-          'The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option\'s measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.transition.default. Under prefers-reduced-motion it moves without animation.',
+          'The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option\'s measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.duration.normal with motion.easing-role.default. Under prefers-reduced-motion it moves without animation.',
       },
       {
         class: 'responsive-layout',
@@ -572,7 +572,7 @@ export const segmentedControl: ComponentDef = {
   },
 
   motion: {
-    enter: 'None. On selection the pill travels to the new option on motion.transition.default, or cross-fades.',
+    enter: 'None. On selection the pill travels to the new option on motion.duration.normal with motion.easing-role.default, or cross-fades.',
     exit: 'None.',
     reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.',
   },

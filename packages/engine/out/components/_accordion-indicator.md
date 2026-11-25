@@ -62,8 +62,8 @@ Part of an Accordion. Choose chevron or plus-minus on the Accordion; the glyph f
 
 ### Motion
 
-- **Enter:** On open, a chevron turns to its open position on motion.transition.default; a plus and minus swap glyphs.
-- **Exit:** On close, the chevron turns back on motion.transition.default; a plus and minus swap back.
+- **Enter:** On open, a chevron turns to its open position on motion.duration.normal with motion.easing-role.default; a plus and minus swap glyphs.
+- **Exit:** On close, the chevron turns back on motion.duration.normal with motion.easing-role.default; a plus and minus swap back.
 - **Reduced motion:** Under prefers-reduced-motion the indicator swaps to its open or closed glyph without turning.
 
 ## Content guidelines
