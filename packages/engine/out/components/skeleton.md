@@ -88,7 +88,7 @@ The shapes hold no copy. The status message names what is loading, in sentence c
 ## Related components
 
 - **Instead, consider:** `spinner`, `progress`
-- **Often used with:** `image-placeholder`, `list-item`, `avatar`
+- **Often used with:** `image`, `list-item`, `avatar`
 - **Replaces:**
   - a page-sized loading illustration
   - a gray box with no relation to the content that arrives

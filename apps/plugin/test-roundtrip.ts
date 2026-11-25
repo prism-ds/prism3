@@ -803,8 +803,8 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
 {
   // #2345 added the portrait 2:3, 3:4, 4:5 and the landscape 3:2 (owner direction 2026-10-07).
   const CONTRACT: Record<string, number> = { '2:3': 2 / 3, '3:4': 3 / 4, '4:5': 4 / 5, '1:1': 1, '4:3': 4 / 3, '3:2': 3 / 2, '16:9': 16 / 9 };
-  const def = componentDefs.find((d) => d.id === 'image-placeholder');
-  ok(!!def, 'aspect-lock: the image-placeholder def is registered and projects');
+  const def = componentDefs.find((d) => d.id === 'image');
+  ok(!!def, 'aspect-lock: the image def is registered and projects');
   if (def) {
     const plans = figmaAnatomySet(def, { swapTarget: SWAP_TARGET });
     const page: Page = { children: [] };

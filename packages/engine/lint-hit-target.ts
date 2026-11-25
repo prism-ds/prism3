@@ -359,7 +359,7 @@ const EXCLUDED: Record<string, string> = {
   'list': 'a read list of text items, never interactive and never focusable; a link inside an item is its own control (#2319)',
   'list-item': 'one item of a read list, never interactive and never focusable; a link inside it is its own control (#2319)',
   '_accordion-indicator': 'a decorative glyph inside an Accordion header; the tap target is the header row, gated as accordion',
-  'image-placeholder': 'an empty-state media frame, not an interactive control',
+  'image': 'a media frame, not an interactive control; an image that is a link takes the link\'s target',
   'progress': 'a progress bar or ring shows system work and is never interactive (#2670) — a retry after an error is the host\'s own control, placed beside it, which is gated',
   'skeleton': 'a decorative loading placeholder hidden from assistive technology, never interactive; nothing in it takes a pointer or focus',
   'spinner': 'a decorative loading indicator on the icon ladder, never interactive — the tap target is the host control it sits in (a pending button), which is gated',

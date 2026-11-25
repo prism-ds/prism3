@@ -361,16 +361,16 @@
         "sha256": "ca36249b9cdf74284288a083e8d480205763fcccd10eea83655af66c4a25af52"
       }
     },
-    "image-placeholder": {
+    "image": {
       "set": {
-        "members": 7,
-        "assignments": 14,
-        "sha256": "799bc447eb8774bd1244c2666f2d6dc63460083c33d630d63dd3829a4fcf6366"
+        "members": 28,
+        "assignments": 42,
+        "sha256": "eecbc3ab037b75c04cafa11feeb36b26ded6c5ec433c65573f949eb6461c0230"
       },
       "grid": {
-        "members": 7,
-        "assignments": 14,
-        "sha256": "cf529e412d39713b497b349af997d4258f03cfa9a7bc027881d44bf6deb22c78"
+        "members": 28,
+        "assignments": 42,
+        "sha256": "3ed8e328eaf3b372968e314ba2eb3e6fa2a8f72fbc9a25dd0c77912a781dc233"
       }
     },
     "spinner": {

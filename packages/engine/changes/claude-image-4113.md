@@ -1,0 +1,4 @@
+---
+engine: minor
+---
+Image placeholder is now Image (#4113, owner decisions OD-I1 to OD-I9). The component keeps its frame, its seven ratios and its aspect lock, and gains a `status` axis with four members per ratio: empty (the fill and the "no image" marker, as before), loading (a Skeleton rectangle filling the frame), loaded (the frame alone, for a dropped photo) and error (an "image unavailable" marker, the picture with a slash, and no text). The status axis replaces the `marker` boolean, and empty comes first, so an update renames the set in place and every placed instance lands on the empty member looking as it did. The frame's corners now bind `radius.none`. In code, `alt` is a required string that may be empty, the status is derived from the source and the load events, `fit` is cover or contain, and loading stays eager unless the consumer asks for lazy. The component contract moves to 3.0.0, because the old id is gone.

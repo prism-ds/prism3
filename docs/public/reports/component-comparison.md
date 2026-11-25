@@ -10,7 +10,7 @@ Peers come from three groupings, each derived from the definitions:
 
 Generated from the component definitions and the emission by `packages/engine/emit-analysis-reports.ts`; `regen.ts --check` fails when this page is stale. The same data for agents: [component-comparison.json](component-comparison.json). All reports: [index](index.md).
 
-## Findings (143)
+## Findings (144)
 
 ### axis values
 
@@ -23,7 +23,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 - **axis selection** — the selection axis takes 4 value sets — [selected, unselected] in link, page-nav-item, pagination-item, segmented-control-segment, tab-item, tag, toggle-button, toggle-icon-button; [checked, indeterminate, unchecked] in checkbox-control; [checked, unchecked] in radio-control; [off, on] in switch-control
 - **axis shape** — the shape axis takes 4 value sets — [circular, square] in avatar, icon-button, icon-button-destructive, icon-button-neutral; [flush, round] in flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral; [circle, rect, text] in skeleton; [circular, linear] in progress
 - **axis size** — the size axis takes 5 value sets — [large, medium, small] in _accordion-indicator, _slider-thumb, accordion, button, button-destructive, button-neutral, card-number-field, checkbox-control, checkbox-group, checkbox-row, counter, field-label, flush-icon-button, flush-icon-button-destructive, flush-icon-button-neutral, icon-button, icon-button-destructive, icon-button-neutral, pagination, pagination-item, password-field, radio-control, radio-group, radio-row, search-field, segmented-control, segmented-control-segment, select, sign-in-button, slider, tab-item, tabs, tag, tag-group, text-field, textarea, toggle-button, toggle-icon-button, wallet-button; [medium, small] in badge, breadcrumb-item, breadcrumbs, page-nav, page-nav-item, progress, skeleton, step-item, steps, switch-control, switch-row; [large, medium, small, x-small] in link, list, list-item, spinner; [large, medium, small, x-large] in code-input, code-input-cell; [large, medium, small, x-large, x-small] in avatar
-- **axis status** — the status axis takes 4 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item
+- **axis status** — the status axis takes 5 value sets — [default, error] in checkbox-control, checkbox-group, checkbox-row, code-input, code-input-cell, radio-control, radio-group, radio-row, switch-control, switch-row; [default, error, success, warning] in card-number-field, field-message, password-field, search-field, select, text-field, textarea; [active, complete, error] in progress; [complete, current, error, upcoming] in step-item; [empty, error, loaded, loading] in image
 - **axis style** — the style axis takes 6 value sets — [outline] in card-number-field, code-input-cell, password-field, search-field, select, text-field, textarea; [border, underline] in pagination, pagination-item; [any, black, blue, gold, purple, silver, white, white-outline] in wallet-button; [black, blue, dark, light, neutral, outline, white] in sign-in-button; [contained, inline] in badge; [inline, standalone] in link
 - **axis tone** — the tone axis takes 2 value sets — [danger, info, neutral, success, warning] in badge, banner; [brand, danger, info, inherit, primary, secondary, success, tertiary, warning] in icon
 - **axis type** — the type axis takes 11 value sets — [icon, ordered, unordered] in list, list-item; [action, submenu] in menu-item; [chevron, slash] in _breadcrumb-separator; [compact, numbered, simple] in pagination; [count, dot, status] in badge; [determinate, indeterminate] in progress; [dismissible, select] in tag; [ellipsis, next, page, previous] in pagination-item; [icon, image, initials] in avatar; [range, single] in slider; [section] in menu-group
@@ -44,6 +44,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 - **code-input** — code-input has the variant axis status and no prop of that name
 - **code-input-cell** — code-input-cell has the variant axes style and status and no props of those names
 - **divider** — divider has the variant axis labeled and no prop of that name
+- **image** — image has the variant axis status and no prop of that name
 - **link** — link has the variant axis selection and no prop of that name
 - **menu-group** — menu-group has the variant axis type and no prop of that name
 - **page-nav-item** — page-nav-item has the variant axis selection and no prop of that name
@@ -233,7 +234,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 | icon-button | form | rest, hover, pressed, pending, focus-visible, disabled, inactive | rest, hover, pressed, pending, focus-visible, disabled |
 | icon-button-destructive | form | rest, hover, pressed, pending, focus-visible, disabled, inactive | rest, hover, pressed, pending, focus-visible, disabled |
 | icon-button-neutral | form | rest, hover, pressed, pending, focus-visible, disabled, inactive | rest, hover, pressed, pending, focus-visible, disabled |
-| image-placeholder | foundations | — | — |
+| image | foundations | — | — |
 | link | navigation | rest, hover, pressed, focus-visible | rest, hover, pressed, focus-visible |
 | list | data | — | — |
 | list-item | data | — | — |
@@ -326,7 +327,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | bottom, end, start, top | tooltip |
 | provider | apple, facebook, google | sign-in-button |
 |  | apple-pay, google-pay, paypal, shop-pay | wallet-button |
-| ratio | 16:9, 1:1, 2:3, 3:2, 3:4, 4:3, 4:5 | image-placeholder |
+| ratio | 16:9, 1:1, 2:3, 3:2, 3:4, 4:3, 4:5 | image |
 | selection | selected, unselected | link, page-nav-item, pagination-item, segmented-control-segment, tab-item, tag, toggle-button, toggle-icon-button |
 |  | checked, indeterminate, unchecked | checkbox-control |
 |  | checked, unchecked | radio-control |
@@ -345,6 +346,7 @@ Generated from the component definitions and the emission by `packages/engine/em
 |  | default, error, success, warning | card-number-field, field-message, password-field, search-field, select, text-field, textarea |
 |  | active, complete, error | progress |
 |  | complete, current, error, upcoming | step-item |
+|  | empty, error, loaded, loading | image |
 | style | outline | card-number-field, code-input-cell, password-field, search-field, select, text-field, textarea |
 |  | border, underline | pagination, pagination-item |
 |  | any, black, blue, gold, purple, silver, white, white-outline | wallet-button |
@@ -570,6 +572,8 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | sign-in-button | false | — |
 | headingLevel | accordion | 3 | 2, 3, 4, 5, 6 |
 |  | banner | 2 | 2, 3, 4, 5, 6 |
+| height | image | — | — |
+|  | skeleton | — | — |
 | helpText | card-number-field | — | — |
 |  | code-input | — | — |
 |  | counter | — | — |
@@ -914,6 +918,10 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 |  | toggle-button | medium | small, medium, large |
 |  | toggle-icon-button | medium | small, medium, large |
 |  | wallet-button | medium | small, medium, large |
+| src | avatar | — | — |
+|  | image | — | — |
+| srcSet | avatar | — | — |
+|  | image | — | — |
 | status | field-message | default | default, error, warning, success |
 |  | progress | active | active, complete, error |
 |  | step-item | upcoming | upcoming, current, complete, error |
@@ -1023,6 +1031,7 @@ Icon's `name` axis is the icon set itself and is covered by the [icon usage](ico
 | weight | field-label | regular | regular, bold |
 |  | link | emphasis | emphasis, default |
 | width | code-input | auto | auto, full |
+|  | image | — | — |
 |  | segmented-control | auto | auto, full |
 |  | skeleton | 100% | — |
 | wording | sign-in-button | continue | — |
