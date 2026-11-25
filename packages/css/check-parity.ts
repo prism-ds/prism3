@@ -37,6 +37,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
+import { ARM_1, load, tokenProperty } from '../../apps/storybook/arm-contract';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -92,7 +93,10 @@ const STATE: Record<string, { attrs?: Attrs; force?: string; prop?: [string, str
 
 // ------------------------------------------------------------------------------------------------ sentinels
 const ROOT = Object.keys(tree).filter((k) => !k.startsWith('$'))[0];
-const cssName = (path: string) => `--${ROOT}-${path.replace(/\./g, '-')}`;
+// The CSS custom property each token is read through: the arm's input contract's `tokens` (#4436), arm 1's stock
+// Style Dictionary names. A token the contract names no property for gets no sentinel, so a value bound through it
+// decodes to no token and fails by name.
+const cssName = tokenProperty(load(ARM_1).tokens, ROOT);
 const sentinel = new Map<string, string>(); // css var → sentinel value
 const decode = new Map<string, string>(); // computed value → token path
 {
@@ -103,11 +107,11 @@ const decode = new Map<string, string>(); // computed value → token path
     if (n.$value !== undefined) {
       const path = p.join('.');
       const k = i++;
-      if (t === 'color') { sentinel.set(cssName(path), `rgb(1, ${k >> 8}, ${k & 255})`); decode.set(`rgb(1, ${k >> 8}, ${k & 255})`, path); }
-      if (t === 'dimension') { sentinel.set(cssName(path), `${10000 + k}px`); decode.set(`${10000 + k}px`, path); }
+      if (t === 'color') { sentinel.set(cssName(path)!, `rgb(1, ${k >> 8}, ${k & 255})`); decode.set(`rgb(1, ${k >> 8}, ${k & 255})`, path); }
+      if (t === 'dimension') { sentinel.set(cssName(path)!, `${10000 + k}px`); decode.set(`${10000 + k}px`, path); }
       // Chromium clamps font-size at 10000px, so a font sentinel lives below it, in its own decode namespace.
-      if (t === 'typography') { sentinel.set(cssName(path), `400 ${1000 + k}px/1 serif`); decode.set(`font:${1000 + k}px`, path); }
-      if (t === 'number') { sentinel.set(cssName(path), `${k / 1000}`); decode.set(`ls:${k}`, path); }
+      if (t === 'typography') { sentinel.set(cssName(path)!, `400 ${1000 + k}px/1 serif`); decode.set(`font:${1000 + k}px`, path); }
+      if (t === 'number') { sentinel.set(cssName(path)!, `${k / 1000}`); decode.set(`ls:${k}`, path); }
       return;
     }
     for (const [key, v] of Object.entries(n)) if (!key.startsWith('$')) walk(v, [...p, key], t);
@@ -278,7 +282,7 @@ export const runParity = async (browser: any, css: string, markup: Markup, form:
     const st = STATE[pr.state];
     return form.write(pr, i, attrs, { ...pr.coord, ...(st.prop ? { [st.prop[0]]: st.prop[1] } : {}) });
   });
-  const root = `:root{${[...sentinel].map(([k, v]) => `${k}:${v};`).join('')}}`;
+  const root = `:root{${[...sentinel].filter(([k]) => k).map(([k, v]) => `${k}:${v};`).join('')}}`;
   await page.setContent(`<!doctype html><html><head><style>${root}</style><style>${css}</style></head><body>${built.join('\n')}</body></html>`);
   if (form.scripts.length) {
     for (const s of form.scripts) await page.addScriptTag({ content: s });

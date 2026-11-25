@@ -27,6 +27,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
+import { ARM_1, load, tokenProperty } from '../../apps/storybook/arm-contract';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -95,7 +96,10 @@ const DEFERRED: Record<string, Record<string, string>> = {
 
 // ------------------------------------------------------------------------------------------------ sentinels
 const ROOT = Object.keys(tree).filter((k) => !k.startsWith('$'))[0];
-const cssName = (path: string) => `--${ROOT}-${path.replace(/\./g, '-')}`;
+// The CSS custom property each token is read through: the arm's input contract's `tokens` (#4436), arm 1's stock
+// Style Dictionary names. A token the contract names no property for gets no sentinel, so a value bound through it
+// decodes to no token and fails by name.
+const cssName = tokenProperty(load(ARM_1).tokens, ROOT);
 const sentinel = new Map<string, string>();
 const decode = new Map<string, string>();
 {
@@ -106,11 +110,11 @@ const decode = new Map<string, string>();
     if (n.$value !== undefined) {
       const path = p.join('.');
       const k = i++;
-      if (t === 'color') { sentinel.set(cssName(path), `rgb(1, ${k >> 8}, ${k & 255})`); decode.set(`rgb(1, ${k >> 8}, ${k & 255})`, path); }
-      if (t === 'dimension') { sentinel.set(cssName(path), `${10000 + k}px`); decode.set(`${10000 + k}px`, path); }
-      if (t === 'typography') { sentinel.set(cssName(path), `400 ${1000 + k}px/1 serif`); decode.set(`font:${1000 + k}px`, path); }
-      if (t === 'number') { sentinel.set(cssName(path), `${k / 1000}`); decode.set(`ls:${k}`, path); }
-      if (t === 'strokeStyle') sentinel.set(cssName(path), 'solid');
+      if (t === 'color') { sentinel.set(cssName(path)!, `rgb(1, ${k >> 8}, ${k & 255})`); decode.set(`rgb(1, ${k >> 8}, ${k & 255})`, path); }
+      if (t === 'dimension') { sentinel.set(cssName(path)!, `${10000 + k}px`); decode.set(`${10000 + k}px`, path); }
+      if (t === 'typography') { sentinel.set(cssName(path)!, `400 ${1000 + k}px/1 serif`); decode.set(`font:${1000 + k}px`, path); }
+      if (t === 'number') { sentinel.set(cssName(path)!, `${k / 1000}`); decode.set(`ls:${k}`, path); }
+      if (t === 'strokeStyle') sentinel.set(cssName(path)!, 'solid');
       return;
     }
     for (const [key, v] of Object.entries(n)) if (!key.startsWith('$')) walk(v, [...p, key], t);
@@ -324,7 +328,7 @@ export const runParity = async (browser: any, css: Css, contracts: { field: Reco
   const failures = [...gaps];
   const page = await browser.newPage();
   const built = probes.map((pr, i) => { const missing: string[] = []; const h = form ? form.write(pr, i, { showMessage: 'true', ...pr.props }, missing) : html(pr, i, contracts, missing); for (const m of missing) failures.push(`${pr.where}: ${m} has no markup mapping`); return h; });
-  const root = `:root{${[...sentinel].map(([k, v]) => `${k}:${v};`).join('')}}`;
+  const root = `:root{${[...sentinel].filter(([k]) => k).map(([k, v]) => `${k}:${v};`).join('')}}`;
   await page.setContent(`<!doctype html><html><head><style>${root}</style>${FILES.map((f) => `<style>${css[f]}</style>`).join('')}</head><body>${built.map((b) => `<div>${b}</div>`).join('\n')}</body></html>`);
   if (form?.scripts.length) {
     for (const s of form.scripts) await page.addScriptTag({ content: s });

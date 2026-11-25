@@ -23,7 +23,9 @@ const tokens = leafPaths(JSON.parse(readFileSync(resolve(HERE, '../../packages/e
 const sbDir = resolve(arg('--storybook') ?? resolve(HERE, 'storybook-static'));
 const stories = readIndex(sbDir);
 if (!stories) { console.error(`FAIL setup: ${sbDir}/index.json is missing. Build the arm's Storybook first (arm 1: npm run -w @prism3/storybook build)`); process.exit(1); }
-const oracles: Oracles = { anatomy, tokens, stories };
+const ai = JSON.parse(readFileSync(resolve(HERE, '../../packages/engine/out/components/components.ai.json'), 'utf8')).components as Record<string, { props: { name: string }[] }>;
+const props = Object.fromEntries(Object.entries(ai).map(([id, x]) => [id, x.props.map((p) => p.name)]));
+const oracles: Oracles = { anatomy, props, tokens, stories };
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
 const MUTANTS: { name: string; plant: (c: ArmContract) => void; mustName: RegExp }[] = [
@@ -41,6 +43,10 @@ const MUTANTS: { name: string; plant: (c: ArmContract) => void; mustName: RegExp
     mustName: /^html: button pending has no story id$/ },
   { name: 'a token map naming a path the tree does not have', plant: (c) => { c.tokens = { scheme: 'map', map: { '--x-primary': 'pds3.color.text.primery' } }; },
     mustName: /^tokens: --x-primary maps to pds3\.color\.text\.primery, which is not a token in the emitted tree$/ },
+  { name: 'the text field\'s variant source left out', plant: (c) => { delete (c.components['text-field'] as Partial<ArmContract['components'][string]>).variant; },
+    mustName: /^text-field: variant must name attributes \(a prefix\) or cases$/ },
+  { name: 'a variant case setting a prop the def does not have', plant: (c) => { c.components.button.variant = { cases: { rest: { tone: 'brand' } } }; },
+    mustName: /^button: variant\.cases\.rest sets tone, which is not a prop of the def$/ },
   { name: 'the button\'s focus ring declared none, where its anatomy draws one', plant: (c) => { c.components.button.focusRing = { drawn: 'none', why: 'x' }; },
     mustName: /^button: focusRing is none, but the anatomy draws container\/focusRing$/ },
 ];

@@ -8,7 +8,11 @@
  *   - `parts`: each anatomy part path (`container/control/content`) mapped to a selector relative to the root (`''` is
  *     the root itself), or to `{ "unboxed": "<why>" }` when the part has no box of its own in code;
  *   - `focusRing`: how the focus ring is drawn: an `outline` on the root, a `part` with a selector, or `none`;
- *   - `forms`: each delivery form, and for each case the story id that shows it.
+ *   - `variant`: where a story's variant (the def's props it sets) is read: from the root's attributes under a prefix
+ *     (`{ "attributes": "data-prop-" }`), or written per case (`{ "cases": { "<case>": { "<prop>": "<value>" } } }`,
+ *     a case it doesn't list being every prop at its default);
+ *   - `forms`: each delivery form, and for each case the story id that shows it. The FIRST form is the reference: the
+ *     geometry record is written from it, and every other form is compared with it.
  * And once for the arm, `tokens`: how a CSS custom property names its token. `stock` is stock Style Dictionary's name
  * (`--` and the full path, each `.` a `-`); `map` names each property's token path.
  *
@@ -22,10 +26,12 @@ import { resolve } from 'node:path';
 
 export type PartTarget = string | { unboxed: string };
 export type FocusRing = { drawn: 'outline' } | { drawn: 'part'; selector: string } | { drawn: 'none'; why: string };
+export type Variant = { attributes: string } | { cases: Record<string, Record<string, string>> };
 export type ComponentContract = {
   root: string;
   parts: Record<string, PartTarget>;
   focusRing: FocusRing;
+  variant: Variant;
 };
 export type Stories = { template: string } | { cases: Record<string, Record<string, string>> };
 export type TokenNames = { scheme: 'stock' } | { scheme: 'map'; map: Record<string, string> };
@@ -67,6 +73,8 @@ export const leafPaths = (tree: Record<string, unknown>, at: string[] = [], out 
 export type Oracles = {
   /** `specs.json`'s `components[id].anatomy[].part`, per component. */
   anatomy: Record<string, string[]>;
+  /** `components.ai.json`'s prop names, per component, when at hand: a `variant.cases` prop must be one. */
+  props?: Record<string, string[]>;
   /** Every leaf path in the emitted token tree. */
   tokens: Set<string>;
   /** The arm's built `index.json` story ids, when the build is at hand. */
@@ -98,6 +106,12 @@ export const validate = (c: ArmContract, o: Oracles): string[] => {
     if (!fr || !['outline', 'part', 'none'].includes(fr.drawn)) out.push(`${id}: focusRing.drawn must be outline, part or none`);
     else if (fr.drawn === 'part' && !fr.selector?.trim()) out.push(`${id}: focusRing is a part with no selector`);
     else if (fr.drawn === 'none' && anatomy.includes('container/focusRing')) out.push(`${id}: focusRing is none, but the anatomy draws container/focusRing`);
+    const v = comp.variant;
+    if (!v || (!('attributes' in v) && !('cases' in v))) out.push(`${id}: variant must name attributes (a prefix) or cases`);
+    else if ('attributes' in v && !(typeof v.attributes === 'string' && v.attributes.trim())) out.push(`${id}: variant.attributes names no prefix`);
+    else if ('cases' in v) for (const [kase, props] of Object.entries(v.cases ?? {})) for (const prop of Object.keys(props)) {
+      if (o.props?.[id] && !o.props[id].includes(prop)) out.push(`${id}: variant.cases.${kase} sets ${prop}, which is not a prop of the def`);
+    }
   }
   const forms = Object.entries(c.forms ?? {});
   if (!forms.length) out.push('forms: the contract names no delivery form');
@@ -129,4 +143,42 @@ export const boxedParts = (c: ArmContract): Record<string, Record<string, string
 export const readIndex = (dir: string): Set<string> | undefined => {
   const f = resolve(dir, 'index.json');
   return existsSync(f) ? new Set(Object.keys(JSON.parse(readFileSync(f, 'utf8')).entries)) : undefined;
+};
+
+/** A form's template as a pattern over story ids, with `{case}` the one group. */
+const templateRe = (template: string, component: string, form: string) =>
+  new RegExp(`^${template.replace('{component}', component).replace('{form}', form).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{case\\}', '(.+)')}$`);
+
+export type ContractStory = { id: string; component: string; form: string; case: string };
+/**
+ * Every story a contract names, in its forms' order (#4436): a `template` form's are every built story id its pattern
+ * matches, a `cases` form's are the ids it lists. A listed id the build doesn't hold is kept, so a check opens it and
+ * fails by name; `validate` names it too.
+ */
+export const contractStories = (c: ArmContract, index: Set<string>): ContractStory[] => {
+  const out: ContractStory[] = [];
+  for (const [form, s] of Object.entries(c.forms)) for (const component of Object.keys(c.components)) {
+    if ('template' in s) {
+      const re = templateRe(s.template, component, form);
+      for (const id of index) { const m = re.exec(id); if (m) out.push({ id, component, form, case: m[1] }); }
+    } else for (const [kase, id] of Object.entries(s.cases[component] ?? {})) out.push({ id, component, form, case: kase });
+  }
+  return out;
+};
+/** The stories a run over a contract must have checked: each form's id for each KPI 2 state (`KPI_CASES`). */
+export const kpiStories = (c: ArmContract): ContractStory[] =>
+  Object.entries(c.forms).flatMap(([form, s]) => Object.keys(c.components).flatMap((component) => (KPI_CASES[component] ?? []).flatMap((kase) => {
+    const id = storyId(s, component, form, kase);
+    return id ? [{ id, component, form, case: kase }] : [];
+  })));
+
+/**
+ * The CSS custom property a token path is read through (#4436), by the contract's `tokens`: stock Style Dictionary's
+ * name, or the property the map names for it. `path` is under the tree's root (`color.text.primary`). Undefined when a
+ * map names no property for it.
+ */
+export const tokenProperty = (t: TokenNames, root: string) => {
+  if (t.scheme === 'stock') return (path: string): string | undefined => `--${root}-${path.replace(/\./g, '-')}`;
+  const byPath = new Map(Object.entries(t.map).map(([name, path]) => [path, name]));
+  return (path: string): string | undefined => byPath.get(`${root}.${path}`);
 };
