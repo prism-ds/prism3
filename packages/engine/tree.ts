@@ -16,6 +16,7 @@ import { bandPhrase } from './figma-description';
 import { RGB, contrast, floorRatio, hex, hexToRgb, emittedAlpha } from './color';
 import { Step } from './ramp';
 import { Theme, ShadowStep, ShadowLayer, ResolvedGradient, FacePin, ResolvedUnderline, typefaceSlug, lineHeightStepKey, letterSpacingStepKey, CORE_TIER, SPIN_ROLE, SWEEP_ROLE, BODY_XS_DESCRIPTION, gridGapLink, type MotionBrandOnly } from './theme';
+import type { MotionPresetHalf } from './theme-motion';
 import { SizeStep, ControlSizeStep, controlRadius, AAA_TARGET_PX, ICON_PAIRED } from './scale';
 import { resolveAllModes, ModeResult, OPACITY_STEPS } from './modes';
 import { orderedRoleKeys } from './color-order';
@@ -1189,9 +1190,9 @@ const buildTreeOnce = (theme: Theme): BuiltTree => {
   // The delays (G6 B) and what a preset's slots alias directly: a preset that starts at once aliases the 0ms
   // primitive, and a spring preset's reduced fade aliases the ms value `min(settle, 100ms)`.
   for (const v of Object.values(m.delay)) msValues.add(v);
-  for (const pr of m.presets) {
-    if (pr.delay === null) msValues.add(0);
-    if ('ms' in pr.reduced) msValues.add(pr.reduced.ms);
+  for (const pr of m.presets) for (const h of pr.exit ? [pr, pr.exit] : [pr]) {
+    if (h.delay === null) msValues.add(0);
+    if ('ms' in h.reduced) msValues.add(h.reduced.ms);
   }
 
   const motion: Record<string, any> = { 'duration-ms': {}, duration: {}, 'duration-reduced': {}, delay: {}, easing: {}, 'easing-role': {}, spring: {}, 'spring-duration': {}, 'spring-easing': {}, preset: {} };
@@ -1217,7 +1218,7 @@ const buildTreeOnce = (theme: Theme): BuiltTree => {
   for (const [k, v] of Object.entries(m.duration)) motion.duration[k] = durSemantic(v as number, k === SPIN_ROLE ? `motion duration spin — ${v}ms per full turn of a spinner, linear, the same at every tempo` : k === SWEEP_ROLE ? `motion duration sweep — ${v}ms per pass of an indeterminate progress bar's segment across its track, the same at every tempo` : `motion duration ${k} — ${v}ms (tempo: ${m.tempo})`, (mm) => mm.duration[k]);
   for (const [k, v] of Object.entries(m.durationReduced)) motion['duration-reduced'][k] = durSemantic(v as number, k === SPIN_ROLE ? `reduce-motion spin — ${v}ms per full turn: a slow turn, kept rather than removed, because the spinner is how a sighted user sees work continuing` : k === SWEEP_ROLE ? `reduce-motion sweep — ${v}ms per pass: a slow sweep, kept rather than removed, because the moving segment is how a sighted user sees the work continuing` : `reduce-motion ${k} — ${v}ms${v === 0 ? ' (eliminated — substitute a cross-fade)' : ''}`, (mm) => mm.durationReduced[k]);
   // The delays (G6 B): each aliases its ms primitive and is the same at every tempo, so no mode re-points it.
-  for (const [k, v] of Object.entries(m.delay)) motion.delay[k] = durSemantic(v, k === 'show' ? `delay show — ${v}ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo` : k === 'min-show' ? `delay min-show — ${v}ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo` : `delay ${k} — ${v}ms`, () => undefined);
+  for (const [k, v] of Object.entries(m.delay)) motion.delay[k] = durSemantic(v, k === 'show' ? `delay show — ${v}ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo` : k === 'min-show' ? `delay min-show — ${v}ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo` : k === 'hide' ? `delay hide — ${v}ms a tooltip stays after the pointer leaves, so the pointer can move onto it; the same at every tempo` : k === 'skip' ? `delay skip — ${v}ms after one tooltip closes in which the next shows at once, with no delay or animation; the same at every tempo` : `delay ${k} — ${v}ms`, () => undefined);
   for (const [k, v] of Object.entries(m.easing))
     motion.easing[k] = m.brandCurves.includes(k)
       ? { ...bezierLeaf(v, `easing ${k} — the brand's own curve, a primitive a role or a preset may use`), $extensions: { prism3: { generated: true, brandCurve: true } } }
@@ -1262,22 +1263,28 @@ const buildTreeOnce = (theme: Theme): BuiltTree => {
   // A role edit reaches every slot still on its default, and a brand re-points only the slots it needs.
   const roleCurveOf = new Map(m.easingRoles.map((r) => [r.role, r.curve]));
   const mp = `${root}.motion`;
+  // An arriving preset's closing half (#2857, Q-PT3 A) is the same five aliases one level down, at
+  // `motion.preset.<name>.exit.*`: one step shorter on the `exit` role by default, re-pointed like any slot.
+  const half = (base: string, label: string, h: MotionPresetHalf): Record<string, Token> => {
+    const spring = 'spring' in h.easing;
+    const dTarget = 'step' in h.duration ? `${mp}.duration.${h.duration.step}` : `${mp}.spring-duration.${h.duration.spring}`;
+    const eTarget = 'role' in h.easing ? `${mp}.easing-role.${h.easing.role}` : 'curve' in h.easing ? `${mp}.easing.${h.easing.curve}` : `${mp}.spring-easing.${h.easing.spring}`;
+    const delayTarget = h.delay === null ? msPath(0) : `${mp}.delay.${h.delay}`;
+    const rTarget = 'step' in h.reduced ? `${mp}.duration-reduced.${h.reduced.step}` : msPath(h.reduced.ms);
+    const durSays = 'step' in h.duration ? `the ${h.duration.step} step` : `the ${h.duration.spring} spring's settle time`;
+    const easeSays = 'role' in h.easing ? `the ${h.easing.role} role (${roleCurveOf.get(h.easing.role)})` : 'curve' in h.easing ? `the ${h.easing.curve} curve` : `the ${h.easing.spring} spring`;
+    return {
+      duration: presetSlot('duration', dTarget, `${label} duration — ${durSays}`),
+      easing: presetSlot(spring ? 'linearEasing' : 'cubicBezier', eTarget, `${label} easing — ${easeSays}`),
+      delay: presetSlot('duration', delayTarget, `${label} delay — ${h.delay === null ? 'none, it starts at once' : `the ${h.delay} delay`}`),
+      'duration-reduced': presetSlot('duration', rTarget, `${label} reduced duration — ${'step' in h.reduced ? `the ${h.reduced.step} step's reduced twin` : `a ${h.reduced.ms}ms fade, the short fade a spring becomes`}, derived from the duration`, { derived: true }),
+      transition: presetComposite(base, spring, `${label} — ${durSays} on ${easeSays}, ${h.delay === null ? 'at once' : `after the ${h.delay} delay`}`),
+    };
+  };
   for (const pr of m.presets) {
     const base = `${mp}.preset.${pr.preset}`;
-    const spring = 'spring' in pr.easing;
-    const dTarget = 'step' in pr.duration ? `${mp}.duration.${pr.duration.step}` : `${mp}.spring-duration.${pr.duration.spring}`;
-    const eTarget = 'role' in pr.easing ? `${mp}.easing-role.${pr.easing.role}` : 'curve' in pr.easing ? `${mp}.easing.${pr.easing.curve}` : `${mp}.spring-easing.${pr.easing.spring}`;
-    const delayTarget = pr.delay === null ? msPath(0) : `${mp}.delay.${pr.delay}`;
-    const rTarget = 'step' in pr.reduced ? `${mp}.duration-reduced.${pr.reduced.step}` : msPath(pr.reduced.ms);
-    const durSays = 'step' in pr.duration ? `the ${pr.duration.step} step` : `the ${pr.duration.spring} spring's settle time`;
-    const easeSays = 'role' in pr.easing ? `the ${pr.easing.role} role (${roleCurveOf.get(pr.easing.role)})` : 'curve' in pr.easing ? `the ${pr.easing.curve} curve` : `the ${pr.easing.spring} spring`;
-    motion.preset[pr.preset] = {
-      duration: presetSlot('duration', dTarget, `preset ${pr.preset} duration — ${durSays}`),
-      easing: presetSlot(spring ? 'linearEasing' : 'cubicBezier', eTarget, `preset ${pr.preset} easing — ${easeSays}`),
-      delay: presetSlot('duration', delayTarget, `preset ${pr.preset} delay — ${pr.delay === null ? 'none, it starts at once' : `the ${pr.delay} delay`}`),
-      'duration-reduced': presetSlot('duration', rTarget, `preset ${pr.preset} reduced duration — ${'step' in pr.reduced ? `the ${pr.reduced.step} step's reduced twin` : `a ${pr.reduced.ms}ms fade, the short fade a spring becomes`}, derived from the duration`, { derived: true }),
-      transition: presetComposite(base, spring, `preset ${pr.preset} — ${durSays} on ${easeSays}, ${pr.delay === null ? 'at once' : `after the ${pr.delay} delay`}`),
-    };
+    motion.preset[pr.preset] = half(base, `preset ${pr.preset}`, pr);
+    if (pr.exit) motion.preset[pr.preset].exit = half(`${base}.exit`, `preset ${pr.preset} exit`, pr.exit);
   }
   // The brand-only group (#2857): emitted only for a brand that sets one, so no corpus member emits it and it is in
   // neither the guaranteed nor the brand-dependent list (`token-contract.ts`).
