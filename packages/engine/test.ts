@@ -46239,6 +46239,18 @@ arm: {
     ok(allOff.length === 1 && /pattern 'planted\/enter': every track goes off under reduced motion.*\(R7\)/.test(allOff[0]), `#2857 R7: a pattern whose every track goes off fails by name (${allOff.join('; ')})`);
     const sound = patternProblems(planted([{ element: 'x', property: 'transform', transform: 'travel', preset: 'move', reduced: 'off' }, { element: 'x', property: 'color', preset: 'move' }]));
     ok(sound.length === 0, `#2857 R7: a pattern that keeps one track passes (${sound.join('; ')})`);
+    // OWNER DECISION A (#4601, comment 7174997407): a track may not name the opposite half's preset. An entrance on an
+    // exit half, and an exit on an arriving preset's entering half, each fail by name; an in-place preset, which has no
+    // exit half, plays either way.
+    const exitPlanted = (tracks: MotionPattern['tracks']): MotionPattern[] => [{ name: 'planted/exit', half: 'exit', tracks }];
+    const enterOnExit = patternProblems(planted([{ element: 'x', property: 'opacity', preset: 'fade.exit' }]));
+    ok(enterOnExit.length === 1 && /pattern 'planted\/enter' track 'x\.opacity': an entrance plays on an entering half, not 'fade\.exit'/.test(enterOnExit[0]),
+      `#4601 owner A: an entrance track on an exit half fails by name (${enterOnExit.join('; ')})`);
+    const exitOnEnter = patternProblems(exitPlanted([{ element: 'x', property: 'opacity', preset: 'surface' }]));
+    ok(exitOnEnter.length === 1 && /pattern 'planted\/exit' track 'x\.opacity': an exit plays on an exit half, 'surface\.exit', not 'surface'/.test(exitOnEnter[0]),
+      `#4601 owner A: an exit track on an arriving preset's entering half fails by name (${exitOnEnter.join('; ')})`);
+    const inPlace = [...patternProblems(planted([{ element: 'x', property: 'opacity', preset: 'expand' }])), ...patternProblems(exitPlanted([{ element: 'x', property: 'opacity', preset: 'expand' }]))];
+    ok(inPlace.length === 0, `#4601 owner A: an in-place preset plays on an entrance and on an exit (${inPlace.join('; ')})`);
     const misuse = patternProblems(planted([{ element: 'x', property: 'opacity', preset: 'fade', scale: 0.9 }, { element: 'x', property: 'opacity', preset: 'fade' }]));
     ok(misuse.some((m) => /a start scale belongs to a scale/.test(m)) && misuse.some((m) => /two tracks share this key/.test(m)), `#2857: a scale off a scale track and a repeated track key fail by name (${misuse.join('; ')})`);
   }
@@ -46263,11 +46275,21 @@ arm: {
       ['a distance that is a CSS length', { 'toast/enter': { 'toast.transform': { distance: '8px' } } }, /motionPersonality\.patterns\.toast\/enter\.toast\.transform\.distance: a distance is a token path/],
       ['a start scale above 1', { 'dialog/enter': { 'panel.transform': { scale: 1.2 } } }, /a start scale is above 0 and at most 1 \(got 1\.2\)/],
       ['every track off under reduced motion', { 'tabs/select': { 'panel.opacity': { reduced: 'off' } } }, /pattern 'tabs\/select': every track goes off under reduced motion.*\(R7\)/],
+      // #4601 review should-fix: a distance names a token that exists, or it would ship as a reference to nothing.
+      ['a distance that names no token', { 'toast/enter': { 'toast.transform': { distance: 'distance.huge' } } }, /motionPersonality\.patterns\.toast\/enter\.toast\.transform\.distance: unknown distance 'distance\.huge' \(have: distance\.nudge\)/],
+      ['a space step that does not exist', { 'toast/enter': { 'toast.transform': { distance: 'space.9999' } } }, /motionPersonality\.patterns\.toast\/enter\.toast\.transform\.distance: unknown space step 'space\.9999' \(have: space\.0, /],
+      // #4601 owner decision A: a track never names the opposite half's preset.
+      ['an entrance on an exit half', { 'toast/enter': { 'toast.opacity': { preset: 'preset.fade.exit' } } }, /motionPersonality\.patterns: pattern 'toast\/enter' track 'toast\.opacity': an entrance plays on an entering half, not 'fade\.exit'/],
+      ['an exit on an entering half', { 'toast/exit': { 'toast.opacity': { preset: 'preset.fade' } } }, /motionPersonality\.patterns: pattern 'toast\/exit' track 'toast\.opacity': an exit plays on an exit half, 'fade\.exit', not 'fade'/],
     ];
     for (const [label, patterns, want] of refusals) {
       const msg = refusal(() => brandTheme(withMotion({ patterns })));
       ok(want.test(msg), `#2857 Q-PT15 A: ${label} is refused by name (got ${JSON.stringify(msg.slice(0, 160))})`);
     }
+    // What stays allowed: an existing space step, a px distance, another entering preset on an entrance, and an in-place
+    // preset on an exit.
+    const fine = refusal(() => brandTheme(withMotion({ patterns: { 'toast/enter': { 'toast.transform': { distance: 'space.025' }, 'toast.opacity': { preset: 'preset.pop' } }, 'toast/exit': { 'toast.opacity': { preset: 'preset.crossfade' } }, 'dialog/bottom/enter': { 'panel.transform': { distance: 24 } } } })));
+    ok(fine === '', `#4601: an existing space step, a px distance, another entering preset and an in-place exit are accepted (${JSON.stringify(fine.slice(0, 160))})`);
     ok(validateBrandInput(withMotion({ patterns: { 'dialog/enter': { 'panel.transform': { scale: 1.2 } } } }) as never).length > 0
       && validateBrandInput(withMotion({ patterns: { 'dialog/enter': { 'panel.transform': { scale: 0.9, reduced: 'fade' } } } }) as never).length === 0,
       '#2857 Q-PT15 A: the brand-input schema takes a track override and refuses a start scale above 1');
