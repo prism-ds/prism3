@@ -7,7 +7,10 @@
  * it records what Figma actually lays out, from world coordinates (`absoluteBoundingBox`), not declared values:
  *   - the member's extent, padding (each side), stroke weight (each side) and corner radii;
  *   - each visible descendant's box, relative to the member's top left, keyed by its layer path (`container/label`;
- *     the member itself is `container`), with its node id, its type and its horizontal sizing (FIXED, HUG or FILL).
+ *     the member itself is `container`), with its node id, its type and its horizontal sizing (FIXED, HUG or FILL);
+ *     its `border`, the stroke weight (each side) that takes layout space, which is 0 unless the frame includes its
+ *     strokes in layout (`strokesIncludedInLayout`); and, where it is stroked, its `stroke`: the weights, the
+ *     alignment and whether they are in layout.
  * The variant is the member's own `variantProperties`.
  * Each BOOLEAN component property (`leading icon`, `message`) is recorded PER MEMBER, at its effective value (#4461):
  * the visibility of the member's node wired to it; where the member wires no node to it, the visibility of the node
@@ -56,7 +59,16 @@ return (async () => {
           if (c.visible === false) continue;
           const p = `${path}/${c.name}`;
           const b = c.absoluteBoundingBox;
-          if (b) parts[p] = { id: c.id, type: c.type, sizing: c.layoutSizingHorizontal || null, x: r2(b.x - o.x), y: r2(b.y - o.y), w: r2(b.width), h: r2(b.height), ...(c.type === 'TEXT' ? { text: c.characters } : {}) };
+          // its stroke (each side), and the part of it that takes layout space: none, unless the frame includes its
+          // strokes in layout (an INSIDE stroke draws over the padding; a CSS border is added to it)
+          const sw = typeof c.strokeWeight === 'number' ? c.strokeWeight : 0;
+          const stroke = c.strokes && c.strokes.length ? [c.strokeTopWeight, c.strokeRightWeight, c.strokeBottomWeight, c.strokeLeftWeight].map((v) => r2(typeof v === 'number' ? v : sw)) : [0, 0, 0, 0];
+          if (b) parts[p] = {
+            id: c.id, type: c.type, sizing: c.layoutSizingHorizontal || null, x: r2(b.x - o.x), y: r2(b.y - o.y), w: r2(b.width), h: r2(b.height),
+            border: c.strokesIncludedInLayout === true ? stroke : [0, 0, 0, 0],
+            ...(stroke.some((v) => v) ? { stroke: { weights: stroke, align: c.strokeAlign || null, inLayout: c.strokesIncludedInLayout === true } } : {}),
+            ...(c.type === 'TEXT' ? { text: c.characters } : {}),
+          };
           if (c.type !== 'TEXT') walk(c, p);
         }
       };

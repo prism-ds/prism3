@@ -21,7 +21,10 @@
  *   - the root's padding, border and corner radii, and its height: equal;
  *   - each part's y and height: equal (vertical is token-bound: padding, line height, icon size);
  *   - a part Figma sizes to FILL, or any part of a root of FIXED width: its left inset and its right inset, each against
- *     its own side's root (a field's width is its build width in Figma and its container's in code);
+ *     its own side's root (a field's width is its build width in Figma and its container's in code). A FILL part's
+ *     right inset is offset by the text width difference (code − Figma) of each hugging part after it in its row
+ *     whose one text Figma records, that text read in code as the hugging part's content box (its box less its padding
+ *     and border): the Show/Hide button after the password field's label cell (#3408 KPI 2 findings, 2026-11-25);
  *   - TEXT, and a part that hugs one: its x only; its width is the font's, not the layout's;
  *   - a Figma TEXT part whose code part records its font (`check-geometry.ts`): Figma sets a line box at whole pixels,
  *     H = round(L) for a line height L = font size × line height, where Chromium truncates it to its 1/64px layout
@@ -40,7 +43,13 @@
  * it, and so is every line whose residual equals that border's difference on its side exactly: a hugging root's width
  * (left + right), and a part's x or inset (that side's border). Otherwise, the same difference (the same part, the
  * same quantity, the same two values) in several cases of one component is one finding: one rule, drawn in every
- * state. Every other line is its own finding. The summary names both counts; the lines print under their finding.
+ * state. Every other line is its own finding.
+ * A PART's border is the same kind of cause (#3408 KPI 2 findings, 2026-11-25): a CSS border takes layout space, where
+ * Figma's stroke takes it only in a frame that includes strokes in layout. Where both records carry a part's layout
+ * border and they differ, that part is one cause per component, and a line joins it when its residual equals, exactly,
+ * the sum of what the borders explain on its side: the root's, each bordered ancestor's, and, for a FILL part's right
+ * inset, the whole border of each hugging part after it. A Figma record from before the part borders carries none, so
+ * its lines stay their own findings. The summary names both counts; the lines print under their finding.
  *
  * Fails by name: `<component> <case> (<figma node id>): <what> is <code> in code, <figma> in Figma`.
  * A missing Figma record FAILS, naming the Mac job: a comparison that did not run is not a pass.
@@ -68,8 +77,11 @@ export const scriptReturns = async (src: string): Promise<string | null> => {
   // #4461: a field whose message is wired to `message` (hidden) at status=default and pinned shown, wired to nothing,
   // at status=error. The record must read each member's EFFECTIVE value, not the set's one default.
   const msg = (id: string, visible: boolean, wired: boolean) => ({ id, name: 'message', type: 'INSTANCE', visible, absoluteBoundingBox: box(0, 70, 320, 20), children: [], ...(wired ? { componentPropertyReferences: { visible: 'message#7:0' } } : {}) });
-  const field = (id: string, status: string, m: ReturnType<typeof msg>) => ({ id, type: 'COMPONENT', variantProperties: { status }, absoluteBoundingBox: box(0, 0, 320, 90), children: [m], strokes: [] });
-  const fset = { id: '3:1', name: 'text-field', type: 'COMPONENT_SET', componentPropertyDefinitions: { 'message#7:0': { type: 'BOOLEAN', defaultValue: false } }, children: [field('3:2', 'default', msg('3:3', false, true)), field('3:4', 'error', msg('3:5', true, false))] };
+  // and a control stroked 1px INSIDE, its stroke out of layout at status=default and in it at error: its layout
+  // border must read 0 where the stroke is out of layout, and the weights where it is in
+  const ctl = (id: string, inLayout: boolean) => ({ id, name: 'control', type: 'FRAME', visible: true, absoluteBoundingBox: box(0, 20, 320, 44), children: [], strokes: [{ type: 'SOLID' }], strokeWeight: 1, strokeTopWeight: 1, strokeRightWeight: 1, strokeBottomWeight: 1, strokeLeftWeight: 1, strokeAlign: 'INSIDE', strokesIncludedInLayout: inLayout });
+  const field = (id: string, status: string, m: ReturnType<typeof msg>, c: ReturnType<typeof ctl>) => ({ id, type: 'COMPONENT', variantProperties: { status }, absoluteBoundingBox: box(0, 0, 320, 90), children: [c, m], strokes: [] });
+  const fset = { id: '3:1', name: 'text-field', type: 'COMPONENT_SET', componentPropertyDefinitions: { 'message#7:0': { type: 'BOOLEAN', defaultValue: false } }, children: [field('3:2', 'default', msg('3:3', false, true), ctl('3:6', false)), field('3:4', 'error', msg('3:5', true, false), ctl('3:7', true))] };
   const stub = { loadAllPagesAsync: async () => {}, root: { findAllWithCriteria: () => [set, fset] } };
   const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (figma: unknown) => Promise<unknown>;
   let got: unknown;
@@ -86,6 +98,10 @@ export const scriptReturns = async (src: string): Promise<string | null> => {
   const [d, e] = [eff('default'), eff('error')];
   if (rec.propertyRead !== 'effective' || d?.properties?.message !== 'false' || d?.unwired || e?.properties?.message !== 'true' || JSON.stringify(e?.unwired) !== '["message"]')
     return `figma-geometry.js does not record each member's effective message (#4461): the stub field's message is wired and hidden at status=default and pinned shown, wired to nothing, at error, so it must read message=false there and message=true, unwired, at error; it read ${JSON.stringify({ propertyRead: rec.propertyRead, default: [d?.properties?.message, d?.unwired], error: [e?.properties?.message, e?.unwired] })}`;
+  type SP = { border?: number[]; stroke?: { weights: number[]; inLayout: boolean } };
+  const [dc, ec] = [d as unknown as { parts?: Record<string, SP> }, e as unknown as { parts?: Record<string, SP> }].map((x) => x?.parts?.['container/control']);
+  if (JSON.stringify(dc?.border) !== '[0,0,0,0]' || JSON.stringify(dc?.stroke?.weights) !== '[1,1,1,1]' || JSON.stringify(ec?.border) !== '[1,1,1,1]' || JSON.stringify(part?.border) !== '[0,0,0,0]')
+    return `figma-geometry.js does not record each part's layout border (#3408 KPI 2 findings): the stub control's 1px INSIDE stroke is out of layout at status=default and in it at error, and the label has none, so the borders must read 0/0/0/0, 1/1/1/1 (its stroke 1/1/1/1) and 0/0/0/0; they read ${JSON.stringify({ default: [dc?.border, dc?.stroke?.weights], error: ec?.border, label: part?.border })}`;
   return null;
 };
 const CODE = resolve(HERE, 'storybook-static/geometry.code.json');
@@ -95,9 +111,9 @@ const ALIAS: Record<string, string> = { 'leading icon': 'leading', 'trailing ico
 const key_ = (figmaName: string) => ALIAS[figmaName] ?? figmaName;
 
 type Box = { x: number; y: number; w: number; h: number };
-type FPart = Box & { id: string; type: string; sizing: string | null; text?: string };
+type FPart = Box & { id: string; type: string; sizing: string | null; text?: string; border?: number[] };
 type FMember = { id: string; variant: Record<string, string>; properties?: Record<string, string>; unwired?: string[]; root: { w: number; h: number; sizing: string | null; minWidth: number | null; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, FPart> };
-type CCase = { story: string; where: Record<string, string>; root: { w: number; h: number; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, Box & { font?: { size: number; lineHeight: number | null } }>; text?: string };
+type CCase = { story: string; where: Record<string, string>; root: { w: number; h: number; padding: number[]; border: number[]; radius: number[] }; parts: Record<string, Box & { border?: number[]; padding?: number[]; font?: { size: number; lineHeight: number | null } }>; text?: string };
 export type FigmaRecord = { components: Record<string, { members: FMember[] }> };
 export type CodeRecord = { cases: Record<string, CCase> };
 
@@ -168,10 +184,54 @@ export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<st
     const [cb, fb] = [c.root.border, m.root.border];
     const borderCause = cb.some((v, i) => !near(v, fb[i])) ? `${component}: the root's border is ${cb.join('/')} in code, ${fb.join('/')} in Figma (top/right/bottom/left)` : null;
     const side = { top: cb[0] - fb[0], right: cb[1] - fb[1], bottom: cb[2] - fb[2], left: cb[3] - fb[3], width: cb[1] + cb[3] - fb[1] - fb[3] };
-    const fail = (what: string, got: number, want: number, explainedBy?: keyof typeof side) => {
+    // a PART's border, where it differs in layout: a CSS border takes layout space, and Figma's stroke only where the
+    // frame includes it in layout. Known only where both records carry the part's border (Figma's since the KPI 2
+    // findings of 2026-11-25). One cause per bordered part, like the root's.
+    const SIDE = { top: 0, right: 1, bottom: 2, left: 3 } as const;
+    const partBorder = new Map<string, { cause: string; d: number[] }>();
+    for (const [p, b] of Object.entries(c.parts)) {
+      const fbp = m.parts[p]?.border;
+      if (p === 'container' || !b.border || !fbp || b.border.every((v, i) => near(v, fbp[i]))) continue;
+      partBorder.set(p, { cause: `${component}: ${p}'s border is ${b.border.join('/')} in code, ${fbp.join('/')} in Figma's layout (top/right/bottom/left)`, d: b.border.map((v, i) => v - fbp[i]) });
+    }
+    /** The hugging parts to a part's right in its row, or in an ancestor's: siblings of the part or of an ancestor. */
+    const huggingAfter = (part: string): string[] => Object.keys(m.parts).filter((p) => {
+      const parent = p.slice(0, p.lastIndexOf('/'));
+      const f = m.parts[p];
+      const mine = part.split('/').map((_, i, a) => a.slice(0, i + 1).join('/')).filter((q) => q.startsWith(`${parent}/`) && q.slice(parent.length + 1).indexOf('/') === -1);
+      return f.sizing === 'HUG' && p !== part && !part.startsWith(`${p}/`) && mine.some((q) => q !== p && m.parts[q] && f.x >= m.parts[q].x + m.parts[q].w - EPS);
+    });
+    /** What a line's residual is explained by: the root's border on its side, each bordered ancestor's on its side, and,
+     *  for a FILL part's right inset, the whole border of each hugging part after it. All of them, or the line's own. */
+    type Why = { side: keyof typeof side; part?: string; after?: boolean };
+    const fail = (what: string, got: number, want: number, why?: Why) => {
       const line = `${at}: ${what} is ${n2(got)} in code, ${n2(want)} in Figma`;
       failures.push(line);
-      causeOf.set(line, borderCause && explainedBy && !near(side[explainedBy], 0) && near(got - want, side[explainedBy]) ? borderCause : `${component}: ${what} is ${n2(got)} in code, ${n2(want)} in Figma`);
+      const terms: [string, number][] = [];
+      if (why && borderCause) terms.push([borderCause, side[why.side]]);
+      if (why?.part && why.side !== 'width') {
+        for (const [p, pb] of partBorder) if (why.part.startsWith(`${p}/`)) terms.push([pb.cause, pb.d[SIDE[why.side]]]);
+        if (why.after) for (const p of huggingAfter(why.part)) { const pb = partBorder.get(p); if (pb) terms.push([pb.cause, pb.d[1] + pb.d[3]]); }
+      }
+      const live = terms.filter(([, v]) => !near(v, 0));
+      const sum = live.reduce((a, [, v]) => a + v, 0);
+      causeOf.set(line, live.length && near(got - want, sum) ? [...new Set(live.map(([k]) => k))].join(' and ') : `${component}: ${what} is ${n2(got)} in code, ${n2(want)} in Figma`);
+    };
+    /** A hugging part's content width in code: its box less its padding and border. */
+    const content = (b: CCase['parts'][string]) => b.padding && b.border ? b.w - b.padding[1] - b.padding[3] - b.border[1] - b.border[3] : null;
+    /** For a FILL part's right inset: the text width difference (code − Figma) of each hugging part after it whose one
+     *  text Figma records, read in code from that part's content box. */
+    const textAfter = (part: string): [number, string[]] => {
+      let d = 0;
+      const names: string[] = [];
+      for (const p of huggingAfter(part)) {
+        const texts = Object.entries(m.parts).filter(([q, fq]) => q.startsWith(`${p}/`) && fq.type === 'TEXT');
+        const cw = c.parts[p] ? content(c.parts[p]) : null;
+        if (texts.length !== 1 || cw === null) continue;
+        d += cw - texts[0][1].w;
+        names.push(p.slice(p.lastIndexOf('/') + 1));
+      }
+      return [d, names];
     };
     const SIDES = ['top', 'right', 'bottom', 'left'];
     const CORNERS = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
@@ -197,7 +257,7 @@ export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<st
     if (hug && !centered) {
       compared++;
       const want = Math.max(m.root.minWidth ?? 0, m.root.w + delta);
-      if (!near(c.root.w, want)) fail(`container width (Figma's ${n2(m.root.w)} + the text's ${n2(delta)})`, c.root.w, want, 'width');
+      if (!near(c.root.w, want)) fail(`container width (Figma's ${n2(m.root.w)} + the text's ${n2(delta)})`, c.root.w, want, { side: 'width' });
     }
     for (const [part, b] of Object.entries(c.parts)) {
       if (part === 'container') continue;
@@ -217,27 +277,34 @@ export const compare = (fig: FigmaRecord, code: CodeRecord, codeParts: Record<st
         if (!near(b.h, f.h - round)) fail(`${part} height (${why}, Figma's ${n2(f.h)} less ${n2(round)})`, b.h, f.h - round);
         compared++;
         const wantY = centeredText ? unit64(f.y + round / 2) : f.y;
-        if (!near(b.y, wantY)) fail(`${part} y${centeredText ? ` (${why}, centered: Figma's ${n2(f.y)} + ${n2(round / 2)})` : ''}`, b.y, wantY, 'top');
-      } else for (const k of ['y', 'h'] as const) { compared++; if (!near(b[k], f[k])) fail(`${part} ${k === 'y' ? 'y' : 'height'}`, b[k], f[k], k === 'y' ? 'top' : undefined); }
+        if (!near(b.y, wantY)) fail(`${part} y${centeredText ? ` (${why}, centered: Figma's ${n2(f.y)} + ${n2(round / 2)})` : ''}`, b.y, wantY, { side: 'top', part });
+      } else for (const k of ['y', 'h'] as const) { compared++; if (!near(b[k], f[k])) fail(`${part} ${k === 'y' ? 'y' : 'height'}`, b[k], f[k], k === 'y' ? { side: 'top', part } : undefined); }
       if (centered) continue;
       const hugsText = f.type === 'TEXT' || (f.sizing === 'HUG' && Object.entries(m.parts).some(([p, q]) => p.startsWith(`${part}/`) && q.type === 'TEXT'));
       const [cl, cr, fl, fr] = [b.x, c.root.w - b.x - b.w, f.x, m.root.w - f.x - f.w];
       if (f.sizing === 'FILL') {
         compared++;
-        if (!near(cl, fl)) fail(`${part} left inset`, cl, fl, 'left');
-        if (!hugsText) { compared++; if (!near(cr, fr)) fail(`${part} right inset`, cr, fr, 'right'); }
+        if (!near(cl, fl)) fail(`${part} left inset`, cl, fl, { side: 'left', part });
+        if (!hugsText) {
+          // a hugging part after it sets its own text: its width difference moves this right edge, as a hugging root's
+          // width moves with its text (the Show/Hide button after the password field's label cell)
+          const [td, by] = textAfter(part);
+          const wr = fr + td;
+          compared++;
+          if (!near(cr, wr)) fail(`${part} right inset${by.length ? ` (Figma's ${n2(fr)} + the ${by.join(' and ')}'s text ${n2(td)})` : ''}`, cr, wr, { side: 'right', part, after: true });
+        }
         continue;
       }
       if (m.root.sizing === 'FIXED') {
         // a root of another width: a part keeps the inset on the side Figma anchors it to, and its own width
         compared++;
-        if (fl <= fr) { if (!near(cl, fl)) fail(`${part} left inset`, cl, fl, 'left'); } else if (!near(cr, fr)) fail(`${part} right inset`, cr, fr, 'right');
+        if (fl <= fr) { if (!near(cl, fl)) fail(`${part} left inset`, cl, fl, { side: 'left', part }); } else if (!near(cr, fr)) fail(`${part} right inset`, cr, fr, { side: 'right', part });
         if (!hugsText) { compared++; if (!near(b.w, f.w)) fail(`${part} width`, b.w, f.w); }
         continue;
       }
       const want = f.x >= textEnd - EPS ? f.x + delta : f.x;
       compared++;
-      if (!near(b.x, want)) fail(`${part} x${want !== f.x ? ` (Figma's ${n2(f.x)} + the text's ${n2(delta)})` : ''}`, b.x, want, 'left');
+      if (!near(b.x, want)) fail(`${part} x${want !== f.x ? ` (Figma's ${n2(f.x)} + the text's ${n2(delta)})` : ''}`, b.x, want, { side: 'left', part });
       if (!hugsText) { compared++; if (!near(b.w, f.w)) fail(`${part} width`, b.w, f.w); }
     }
     for (const [part, f] of Object.entries(m.parts)) {
@@ -285,6 +352,7 @@ const DEFAULTS: Record<string, Record<string, string>> = Object.fromEntries(['bu
  *  records its font set as Figma sets it: a whole-pixel line box, centered in the root (Figma's numbers, not the code's
  *  minus the model, so the model is what makes the two agree). */
 const plantFigma = (code: CodeRecord): FigmaRecord => {
+  // (every part keeps the code's border, so the borders agree; the Show/Hide button's text is set narrower, below)
   const out: FigmaRecord = { components: {} };
   for (const [key, c] of Object.entries(code.cases)) {
     const component = key.split('--')[0];
@@ -292,21 +360,33 @@ const plantFigma = (code: CodeRecord): FigmaRecord => {
     const label = c.parts['container/label'];
     const shrink = !field && label ? 7.3 : 0;
     const narrow = field ? c.root.w - 320 : 0; // a field built at 320px in Figma, laid out wider in code
-    const FIXED_PARTS = /(leadingVisual|trailingVisual|toggle)$/;
+    const FIXED_PARTS = /(leadingVisual|trailingVisual)$/;
+    // the Show/Hide button hugs its "Show", set 4.66px narrower, as on the Mac: the button is that much narrower and
+    // further right, and the label cell, which fills the row up to it, that much wider
+    const TOGGLE = 'container/labelRow/toggle';
+    const toggle = c.parts[TOGGLE];
+    const tShrink = toggle ? 4.66 : 0;
     const parts: Record<string, FPart> = {};
     for (const [p, b] of Object.entries(c.parts)) {
       if (p === 'container') continue;
       const after = !field && label && b.x >= label.x + label.w - EPS;
-      const sizing = !field ? 'FIXED' : FIXED_PARTS.test(p) ? 'FIXED' : 'FILL';
+      const sizing = !field ? 'FIXED' : p === TOGGLE ? 'HUG' : FIXED_PARTS.test(p) ? 'FIXED' : 'FILL';
+      const cell = p.startsWith('container/labelRow/labelCell');
       const rightAnchored = field && sizing !== 'FILL' && b.x > c.root.w / 2;
       const L = !field && p === 'container/label' ? b.font?.lineHeight ?? null : null;
       const H = L === null ? b.h : Math.round(L);
       parts[p] = {
         id: `1:${Object.keys(parts).length}`, type: !field && p === 'container/label' ? 'TEXT' : 'FRAME', sizing,
-        x: after ? b.x - shrink : rightAnchored ? b.x - narrow : b.x, y: L === null ? b.y : (c.root.h - H) / 2,
-        w: p === 'container/label' && !field ? b.w - shrink : sizing === 'FILL' ? b.w - narrow : b.w, h: H,
+        x: after ? b.x - shrink : rightAnchored ? b.x - narrow + (p === TOGGLE ? tShrink : 0) : b.x, y: L === null ? b.y : (c.root.h - H) / 2,
+        w: p === 'container/label' && !field ? b.w - shrink : sizing === 'FILL' ? b.w - narrow + (cell ? tShrink : 0) : p === TOGGLE ? b.w - tShrink : b.w, h: H,
+        ...(b.border ? { border: [...b.border] } : {}),
         ...(p === 'container/label' && !field ? { text: c.text } : {}),
       };
+    }
+    if (toggle?.padding && toggle.border) {
+      const t = parts[TOGGLE];
+      parts[`${TOGGLE}/label`] = { id: `1:${Object.keys(parts).length}`, type: 'TEXT', sizing: 'HUG', text: 'Show', border: [0, 0, 0, 0],
+        x: t.x + toggle.border[3] + toggle.padding[3], y: t.y, w: t.w - toggle.padding[1] - toggle.padding[3] - toggle.border[1] - toggle.border[3], h: t.h };
     }
     const variant: Record<string, string> = {};
     for (const [k, v] of Object.entries(c.where)) variant[Object.entries(ALIAS).find(([, a]) => a === k)?.[0] ?? k] = v;
@@ -350,7 +430,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma
     let bad = 0;
     const script = await scriptReturns(readFileSync(SCRIPT, 'utf8'));
     if (script) { bad++; console.error(`FAIL self-test: ${script}`); }
-    else console.log('OK self-test: figma-geometry.js, run in an async function body as figma_execute runs it, returns the record (a stub set\'s label read back as container/label, and each stub field member\'s effective message: false where wired and hidden, true and unwired where pinned shown, #4461)');
+    else console.log('OK self-test: figma-geometry.js, run in an async function body as figma_execute runs it, returns the record (a stub set\'s label read back as container/label, each stub field member\'s effective message: false where wired and hidden, true and unwired where pinned shown, #4461, and each part\'s layout border: 0 for a stroke out of layout, its weights in it)');
     const base = plantFigma(code);
     const clean = compare(base, code, partList(code));
     for (const n of clean.notes) console.log(`  named: ${n}`);
@@ -360,6 +440,43 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma
     const rounded = Object.entries(code.cases).filter(([k, c]) => k.startsWith('button--') && c.parts['container/label']?.font && base.components.button.members.some((m) => m.id === `9:${k}` && !near(m.parts['container/label'].h, c.parts['container/label'].h)));
     if (rounded.length < 3) { bad++; console.error(`FAIL self-test: the planted record sets ${rounded.length} button labels at a whole-pixel line box other than the code's; the line-box arm needs the code record to carry each label's font (check-geometry.ts) and three sizes to round`); }
     else console.log(`OK self-test: ${rounded.length} planted labels sit at Figma's whole-pixel line box, not the code's (${rounded.map(([k]) => k.slice(8)).join(', ')})`);
+    // the text-width model reaches a FILL part through the hugging part after it: the planted button's "Show" is set
+    // narrower, so without the model the label cell's right inset would differ
+    const cellLines = Object.values(base.components['password-field'].members).filter((m) => m.parts['container/labelRow/toggle/label']).length;
+    if (cellLines < 4) { bad++; console.error(`FAIL self-test: the planted record sets ${cellLines} Show/Hide labels narrower than the code's; the sibling text arm needs the code record to carry the button's padding and border (check-geometry.ts)`); }
+    else console.log(`OK self-test: ${cellLines} planted Show/Hide labels are set narrower than the code's, and the label cell's right inset agrees through the hugging button's text`);
+    // PART BORDERS (#3408 KPI 2 findings, 2026-11-25): Figma's field controls and Show/Hide buttons with no stroke in
+    // layout, the code's content inside them and the label cell before them moved by it, and nothing else, is one
+    // finding per bordered part: three, each holding every line its border explains
+    const pb = clone(base);
+    for (const field of ['text-field', 'password-field']) for (const m of pb.components[field].members) {
+      const ctl = m.parts['container/control'];
+      const cb0 = ctl.border ?? [0, 0, 0, 0];
+      ctl.border = [0, 0, 0, 0];
+      for (const [p, fp] of Object.entries(m.parts)) {
+        if (!p.startsWith('container/control/')) continue;
+        if (fp.sizing === 'FILL') { fp.x -= cb0[3]; fp.w += cb0[3] + cb0[1]; } else if (fp.x > ctl.x + ctl.w / 2) fp.x += cb0[1]; else fp.x -= cb0[3];
+      }
+      const tg = m.parts['container/labelRow/toggle'];
+      if (!tg?.border) continue;
+      const [l, r] = [tg.border[3], tg.border[1]];
+      tg.border = [0, 0, 0, 0];
+      tg.x += l + r; tg.w -= l + r;
+      m.parts['container/labelRow/toggle/label'].x += r;
+      for (const p of ['container/labelRow/labelCell', 'container/labelRow/labelCell/label']) m.parts[p].w += l + r;
+    }
+    const pr = compare(pb, code, partList(code));
+    const byPart = (field: string, part: string) => pr.findings.find((f) => (f.cause ?? '').startsWith(`${field}: ${part}'s border is `));
+    const partWant = [
+      ['the text field\'s control border is one finding, holding its content\'s and entry\'s insets', byPart('text-field', 'container/control')?.lines.some((l) => /container\/control\/content left inset is/.test(l)) && byPart('text-field', 'container/control')?.lines.some((l) => /container\/control\/content\/entry left inset is/.test(l))],
+      ['the password field\'s control border is one finding', !!byPart('password-field', 'container/control')],
+      ['the Show/Hide button\'s border is one finding, holding the label cell\'s right inset', byPart('password-field', 'container/labelRow/toggle')?.lines.some((l) => /container\/labelRow\/labelCell right inset \(Figma's .* \+ the toggle's text .*\) is/.test(l))],
+      ['three findings in all', pr.findings.length === 3],
+    ] as const;
+    for (const [what, ok] of partWant) {
+      if (ok) console.log(`OK self-test: part borders: ${what}`);
+      else { bad++; console.error(`FAIL self-test: part borders: ${what}, but: ${pr.findings.length} findings: ${pr.findings.map((f) => `${f.cause ?? f.lines[0]} (${f.lines.length})`).join(' / ')}`); }
+    }
     // ROOT CAUSES (#4432 decision 1 A): Figma's buttons with no border, everything else equal, is one finding; another
     // difference is another, and one difference in two cases is one
     const nb = clone(base);
