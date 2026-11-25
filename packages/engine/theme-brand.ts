@@ -174,12 +174,13 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     const lev = input.modeLevers![m]!;
     if (lev.radius !== undefined && (!Number.isFinite(lev.radius) || lev.radius < 0 || lev.radius > 2))
       throw new Error(`modeLevers: mode '${m}' radius ${lev.radius} is out of range — must be a finite number in [0, 2]`);
-    // Per-mode weight values must be a valid font-weight (a whole number in [100, 900]; whole because the value keys
-    // a primitive, #3871). Role ordering is NOT
+    // Per-mode weight values must be a valid font-weight: a whole number in DTCG's [1, 1000], the global
+    // `typography.weightRoles` range (#3871), so a mode can move a weight as far as the brand can set one (#4214,
+    // owner decision A); whole because the value keys a primitive (#3871). Role ordering is NOT
     // enforced here (the UI owns that) — the engine accepts any valid weight per role.
     for (const [role, w] of Object.entries(lev.weights ?? {})) {
-      if (w !== undefined && (!Number.isInteger(w) || w < 100 || w > 900))
-        throw new Error(`modeLevers: mode '${m}' weight '${role}' ${w} is out of range — must be a whole number in [100, 900]`);
+      if (w !== undefined && (!Number.isInteger(w) || w < 1 || w > 1000))
+        throw new Error(`modeLevers: mode '${m}' weight '${role}' ${w} is out of range — must be a whole number in [1, 1000]`);
     }
     // #296 — per-mode leading/tracking name a RUNG on both sides (source key → target key). Both must
     // be real rungs; a NUMBER here is the old pre-#296 shape and is rejected with a pointer, because

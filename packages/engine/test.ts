@@ -42,7 +42,7 @@ import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly } from './emit-dtcg-overlay';
 import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
-import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme } from './emit-dtcg';
+import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme, windowsInvalidName } from './emit-dtcg';
 import { buildAiMetadata } from './ai-metadata';
 import { validate as validateJsonSchema } from './json-schema-lite';
 import { handleRpc, callTool, toolDefs, manifestRootKeys, summarizeDescription, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
@@ -7156,11 +7156,11 @@ arm: {
   ok(defWr?.value === 700 && defWr?.alias?.name === `${root}/core/font/weight/700`, `D-typo(e): Default (light) core/font/weight-role/strong stays 700 (${defWr?.value})`);
 
   // (f) validation throws — families/weights on a generate-only mode (hc-light), on an un-generated
-  //     mode, and a weight outside [100, 900].
+  //     mode, and a weight outside [1, 1000] (the global range since #4214).
   ok(threw(() => brandTheme({ ...base, modes: ['light', 'dark', 'hc-light', 'hc-dark'], modeLevers: { 'hc-light': { families: { display: 'Georgia' } } } } as unknown as BrandInput)), 'D-typo(f): families on hc-light (generate-only) throws');
   ok(threw(() => brandTheme({ ...base, modeLevers: { 'hc-light': { weights: { strong: 600 } } } } as unknown as BrandInput)), 'D-typo(f): weights on a mode this brand does not generate throws');
-  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 50 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 50 (<100) throws');
-  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 1000 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 1000 (>900) throws');
+  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 0 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 0 (<1) throws');
+  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 1001 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 1001 (>1000) throws');
 
   // (g) design.md round-trip preserves modeLevers.families/weights through parse∘serialize.
   ok(JSON.stringify(stable(parseDesignMd(toDesignMd(perMode)).input)) === JSON.stringify(stable(perMode)),
@@ -46301,6 +46301,28 @@ const MIN_ASSERTIONS = 1800;
   const schemaErrs = validateBrandInput(withRoles({ default: 450.5, strong: 2000 }));
   ok(schemaErrs.some((e) => e.includes('weightRoles.default') && e.includes('a whole number')) && schemaErrs.some((e) => e.includes('weightRoles.strong')),
     `#3871 the schema refuses a fractional and an out-of-range weight role (errors: ${JSON.stringify(schemaErrs)})`);
+  // #4214 (owner decision A, 2026-11-20): a per-mode weight takes the global range, [1, 1000], in the engine and the
+  // schema alike; before, both stopped it at [100, 900]. The edges build with every alias resolving, and the dark mode
+  // carries them; one past either edge is still refused by name, in both.
+  // BY-NAME MUTATION: put either range back to 100/900 (theme-brand.ts or the schema's `modeLevers` weights) → an arm fails.
+  const modeEdges = { ...base, modeLevers: { dark: { weights: { subtle: 1, max: 1000 } } } } as unknown as BrandInput;
+  const modeEdgeRefusal = refusal(() => brandTheme(modeEdges));
+  ok(modeEdgeRefusal === '', `#4214 per-mode weights 1 and 1000 are accepted by brandTheme (got ${JSON.stringify(modeEdgeRefusal)})`);
+  if (modeEdgeRefusal === '') {
+    const built = buildTree(brandTheme(modeEdges));
+    const root = Object.keys(built.tree).find((k) => !k.startsWith('$'))!;
+    const darkOf = (role: string) => built.tree[root]?.core?.font?.['weight-role']?.[role]?.$extensions?.prism3?.modes?.dark?.$value;
+    ok(built.stats.broken.length === 0 && /\.1\}$/.test(String(darkOf('subtle'))) && /\.1000\}$/.test(String(darkOf('max'))),
+      `#4214 per-mode weights 1 and 1000 build with every alias resolving, on the dark weight roles (dark subtle ${JSON.stringify(darkOf('subtle'))}, max ${JSON.stringify(darkOf('max'))}, broken ${built.stats.broken.length})`);
+  }
+  const modeEdgeSchema = validateBrandInput(modeEdges);
+  ok(modeEdgeSchema.length === 0, `#4214 the schema accepts per-mode weights 1 and 1000 (errors: ${JSON.stringify(modeEdgeSchema)})`);
+  for (const w of [0, 1001]) {
+    const msg = refusal(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: w } } } } as unknown as BrandInput));
+    ok(msg.includes("mode 'dark' weight 'strong'") && msg.includes('[1, 1000]'), `#4214 a per-mode weight of ${w} is refused by name, naming [1, 1000] (got ${JSON.stringify(msg)})`);
+    const errs = validateBrandInput({ ...base, modeLevers: { dark: { weights: { strong: w } } } } as unknown as BrandInput);
+    ok(errs.some((e) => e.includes('weights.strong')), `#4214 the schema refuses a per-mode weight of ${w} (errors: ${JSON.stringify(errs)})`);
+  }
 }
 
 // (imports hoist; kept beside the arms so no line a guide cites moves)
@@ -46575,6 +46597,65 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// #4214 (owner decision, 2026-11-20): an id Windows can't use as a file name (`CON`, `nul`, `a?b`, `a|b`, `a*b`) passed
+// the schema, brandTheme and #3875's write guard, so a brand built on Linux or macOS wrote files a Windows checkout
+// can't hold. The decision keeps the published schema as it is and refuses such an id where a file is written, by
+// name: in `fileInDir`, the guard `emitTheme` writes through, and on every other write the CLI makes. The oracle for
+// the refusal list is Windows' own rule (the characters < > : " | ? *, the control characters, and the device names as
+// the part before the first dot), restated here as literals, never read back from `windowsInvalidName`.
+// BY-NAME MUTATION: drop the `windowsInvalidName` call from `fileInDir` → the emitTheme and CLI arms fail; route the
+// CLI's fidelity report back to `resolve(...)` → the CLI-routing arm fails.
+{
+  const base = { id: 'ok', modes: ['light', 'dark'], primary: { l: 0.55, c: 0.15, h: 260 }, neutral: { hue: 260, chroma: 0.01 } } as unknown as BrandInput;
+  const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+  const refused = ['CON', 'con', 'nul', 'Aux', 'PRN', 'COM1', 'com9', 'LPT1', 'COM0', 'LPT¹', 'CON ', 'NUL.backup', 'a?b', 'a|b', 'a*b', 'a<b', 'a>b', 'a:b', 'a"b', 'a\u0001b'];
+  const accepted = ['aurora', 'Has Space', 'console', 'CONx', 'com10', 'lpt', 'a.con', '...', 'nb-redesign'];
+  for (const id of [...refused, ...accepted]) {
+    const name = `${id}.tokens.json`;
+    const why = windowsInvalidName(name) ?? '';
+    const want = refused.includes(id);
+    ok(want ? why.startsWith(`'${name}' is not a file name Windows can write`) : why === '',
+      `#4214 windowsInvalidName ${want ? 'refuses' : 'accepts'} the id ${JSON.stringify(id)} (got ${JSON.stringify(why)})`);
+  }
+  // The published contract is unchanged (owner decision): the schema and brandTheme still accept these ids.
+  for (const id of ['CON', 'nul', 'a?b', 'a|b', 'a*b']) {
+    const errs = validateBrandInput({ ...base, id } as unknown as BrandInput).filter((e) => e.startsWith('id'));
+    ok(errs.length === 0 && refusal(() => brandTheme({ ...base, id } as unknown as BrandInput)) === '',
+      `#4214 the schema and brandTheme still accept the id ${JSON.stringify(id)}; only the write refuses it (schema ${JSON.stringify(errs)})`);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'p3-4214-'));
+  try {
+    for (const id of ['nul', 'a?b']) {
+      const out = join(dir, `out-${id === 'nul' ? 'nul' : 'q'}`);
+      const msg = refusal(() => emitTheme(brandTheme({ ...base, id } as unknown as BrandInput), out));
+      ok(msg.includes('is not a file name Windows can write') && msg.endsWith('nothing was written.') && !existsSync(out),
+        `#4214 emitTheme refuses the id ${JSON.stringify(id)} by name before writing anything (got ${JSON.stringify(msg)}; wrote ${existsSync(out) ? readdirSync(out).join(', ') : 'nothing'})`);
+    }
+    // The CLI: the refusal reaches the user through fail(), naming the file and the reason, with nothing on disk.
+    const brief = join(dir, 'con.design.md');
+    writeFileSync(brief, '---\nid: CON\nprimary: { l: 0.55, c: 0.15, h: 260 }\nneutral: { hue: 260, chroma: 0.01 }\n---\n');
+    const cliOut = join(dir, 'out-cli');
+    const r = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), brief, '--out', cliOut, '--component-specs'], { cwd: HERE, encoding: 'utf8' });
+    const err = r.stderr ?? '';
+    ok(r.status === 1 && err.includes("✖ could not write 'CON'") && err.includes("'CON' is a reserved device name") && !/\n\s+at /.test(err)
+      && !(existsSync(cliOut) && readdirSync(cliOut).length > 0),
+      `#4214 the CLI refuses the id CON by name and writes nothing (exit ${r.status}; stderr ${JSON.stringify(err.slice(0, 300))}; wrote ${existsSync(cliOut) ? readdirSync(cliOut).join(', ') : 'nothing'})`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // Every other write the CLI makes (the fidelity report, the three component-spec files) goes through the same guard,
+  // so no write in cli.ts can skip it. Read from the source: each `writeFileSync(` takes a path the file binds from
+  // `fileInDir(`. A write that builds its own path (`writeFileSync(resolve(...` as before) fails here by name.
+  const cliSrc = readFileSync(resolve(HERE, 'cli.ts'), 'utf8');
+  const targets = [...cliSrc.matchAll(/writeFileSync\(\s*([^,]+),/g)].map((m) => m[1]!.trim());
+  const guarded = (t: string): boolean => {
+    const name = t.split('.')[0]!;
+    return /^[A-Za-z_$][\w$]*(\.[\w$]+)?$/.test(t) && new RegExp(`\\b${name}\\s*=\\s*(\\{\\s*\\w+:\\s*)?fileInDir\\(`).test(cliSrc);
+  };
+  ok(targets.length >= 4 && targets.every(guarded),
+    `#4214 every write in cli.ts goes through fileInDir (unguarded: ${JSON.stringify(targets.filter((t) => !guarded(t)))}; of ${targets.length})`);
 }
 
 // #3876 — the serializer wrote a quote in a double-quoted scalar as `\"`, and the parser never decoded it: every

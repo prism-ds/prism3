@@ -1,0 +1,3 @@
+## (2026-11-24) — The shadcn README says the dark destructive ring is the brand's ring color
+
+A docs-only follow-up to #4575. Its full-strength ring rule also repaints the dark-mode focus ring of the `destructive` Button and Badge: stock draws it in the destructive red at 40% (about 1.6:1 against the page), and the rule draws it in the brand's `--ring` (about 5:1). The delta review on #4575 found the change unstated in the decision and the README. The owner chose to keep it and say so (2026-11-24), so the README's "The shadcn/ui theme" section now names it. It landed as its own PR so #4575 merged at its reviewed head. No code, value or gate changes.

@@ -95,11 +95,11 @@
             "additionalProperties": false,
             "description": "OPTIONAL. Per-mode font WEIGHT per weight-role — a different NUMERIC value the role resolves to (e.g. dark's `strong` = 600 not 700). Never changes WHICH roles exist; only their number. Only a role whose numeric differs from light carries a per-mode override on the `font.weight-role.<role>` primitive. Role ordering is NOT enforced (the UI owns that).",
             "properties": {
-              "subtle": { "type": "integer", "minimum": 100, "maximum": 900, "description": "OPTIONAL. Per-mode numeric for the `subtle` weight-role." },
-              "default": { "type": "integer", "minimum": 100, "maximum": 900, "description": "OPTIONAL. Per-mode numeric for the `default` weight-role." },
-              "emphasis": { "type": "integer", "minimum": 100, "maximum": 900, "description": "OPTIONAL. Per-mode numeric for the `emphasis` weight-role." },
-              "strong": { "type": "integer", "minimum": 100, "maximum": 900, "description": "OPTIONAL. Per-mode numeric for the `strong` weight-role." },
-              "max": { "type": "integer", "minimum": 100, "maximum": 900, "description": "OPTIONAL. Per-mode numeric for the `max` weight-role." }
+              "subtle": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "OPTIONAL. Per-mode numeric for the `subtle` weight-role." },
+              "default": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "OPTIONAL. Per-mode numeric for the `default` weight-role." },
+              "emphasis": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "OPTIONAL. Per-mode numeric for the `emphasis` weight-role." },
+              "strong": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "OPTIONAL. Per-mode numeric for the `strong` weight-role." },
+              "max": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "OPTIONAL. Per-mode numeric for the `max` weight-role." }
             }
           },
           "lineHeights": {
