@@ -20068,6 +20068,12 @@ arm: {
       // OD-I6 A: fit is code only, so it projects no axis.
       ok(!(img.figmaProperties?.variantAxes ?? []).includes('fit') && JSON.stringify(img.figmaProperties?.variantAxes) === '["ratio","status"]',
         `#4113 the set's axes are ratio and status only (got ${JSON.stringify(img.figmaProperties?.variantAxes)})`);
+      // Right to left (the proposal's "mirror: false, with that rule in docs"; #4113 review): Image does not mirror, so
+      // both glyphs say `never` in their own fields, and the docs' "In RTL" note, generated only from those fields, says
+      // so. The sentence is typed here, never read off `rtl-mirror.ts`.
+      const ip = img.anatomy?.parts ?? {};
+      ok(ip.markerGlyph?.mirror === 'never' && ip.errorGlyph?.mirror === 'never' && rtlNote(img) === 'The marker and error glyphs do not mirror.',
+        `#4113 right to left: the marker and error glyphs state mirror: 'never', and the docs say "The marker and error glyphs do not mirror." (got ${JSON.stringify({ marker: ip.markerGlyph?.mirror ?? null, error: ip.errorGlyph?.mirror ?? null, note: rtlNote(img) ?? null })})`);
     }
 
     // ---- #2344 → #2649 (owner decision Q307 A): the groups hold their rows in a native `items` slot ----
@@ -43855,6 +43861,19 @@ arm: {
   const flipped = withMirrors(breadcrumbSep, { slashGlyph: 'mirrors' });
   const unbacked = withMirrors(breadcrumbSep, { chevronGlyph: 'never' });
   const toRow = withMirrors(breadcrumbSep, { frame: 'reverses' });
+  // OWN PARTS (#4113 review): `deepClaims` lets a nested def's field back a def's prose, which is right where the prose is
+  // about the nested part (a Breadcrumbs trail's slash). Where the prose is about the def's OWN parts, a nested field
+  // hides a missing one: Image's "Image does not mirror" passed on Skeleton's `mirror: 'never'` while Image's own glyphs
+  // stated nothing, so its docs carried no "In RTL" note. Each def named here must state each claim in its own parts.
+  // Typed here, never derived (docs/34).
+  const OWN_PARTS: Record<string, Claim[]> = { image: ['hold'] };
+  const ownOff = Object.entries(OWN_PARTS).flatMap(([id, claims]) => {
+    const d = rtlById.get(id);
+    if (!d) return [`${id}: not a def`];
+    const oc = ownClaims(d);
+    return claims.filter((c) => !oc.has(c)).map((c) => `${id}: the prose states ${c}, and no part of its own does (own: [${[...oc].join(', ')}]; what it nests does not count)`);
+  });
+  ok(ownOff.length === 0, `#3986 own parts: each listed def states its right-to-left claims in its own parts (${Object.keys(OWN_PARTS).join(', ')})${ownOff.length ? ` — ${ownOff.join('; ')}` : ''}`);
   ok(disagreements(breadcrumbSep).length === 0 && disagreements(toRow).some((b) => /states row/.test(b))
     && disagreements(unbacked).some((b) => /prose states flip/.test(b)) && disagreements(flipped).some((b) => /prose states hold/.test(b)),
     '#3986: the arm names a part stating what the prose does not (row) and prose no part states (flip; hold)');
