@@ -148,6 +148,9 @@ export const MOTION_DELAYS: Readonly<Record<string, number>> = { show: 400, 'min
 /** The eleventh preset's name (#2857, Q-PT4 A). The preset is approved; its NAME is still the owner's (the field
  *  offers the KB's "pop", `popup` and `contextual`), so it lives in this one constant: renaming it is mechanical. */
 export const QUICK_ARRIVAL_PRESET = 'pop';
+/** The `motion.distance.*` names the tree emits (Q-MP6 A): a pattern track's distance names one of these, a space step,
+ *  or a number of px (#4601 review). `tree.ts` writes the tokens; the phase 1 test holds `nudge` at `space.100`. */
+export const MOTION_DISTANCE_NAMES: readonly string[] = ['nudge'];
 /**
  * The default preset slots (#2857): the ten presets of Q-MP2 A on the rows approved in Q-MP8 A, and phase 2's `pop`
  * (Q-PT4 A) and `press` (Q-PT7 A), with `move` on normal (Q-PT5 A), each slot aliasing

@@ -15,7 +15,8 @@
  *
  * Dependency-light by rule: the component defs import `motionOf` from here, and they are bundled into the plugin.
  */
-import { MOTION_PRESET_DEFAULTS, ARRIVING_PRESETS, QUICK_ARRIVAL_PRESET } from './theme-motion';
+import { MOTION_PRESET_DEFAULTS, ARRIVING_PRESETS, QUICK_ARRIVAL_PRESET, MOTION_DISTANCE_NAMES } from './theme-motion';
+import { spaceScale } from './scale';
 import type { MotionTrackInput } from './theme-motion';
 
 /** The property groups a track moves (Q-MS7 A). */
@@ -121,6 +122,9 @@ export const presetPaths = (presets: readonly string[] = MOTION_PRESET_DEFAULTS.
  *  - a track naming a preset that doesn't exist;
  *  - two tracks with one key in a pattern;
  *  - a distance on a track that isn't a slide, a scale on one that doesn't scale, a scale outside (0, 1];
+ *  - a track on the opposite half's preset (owner decision A, #4601): an entrance on an exit half, or an exit on an
+ *    arriving preset's entering half. The exit half is the lever for an exit's timing; an in-place preset, which has
+ *    no exit half, plays either way, and a change in place is not held to a half;
  *  - a pattern whose every track goes off under reduced motion, so it shows no cue at all (rule R7). */
 export const patternProblems = (patterns: readonly MotionPattern[], presets?: readonly string[]): string[] => {
   const paths = new Set(presetPaths(presets));
@@ -136,6 +140,10 @@ export const patternProblems = (patterns: readonly MotionPattern[], presets?: re
       if (tr.scale !== undefined && !(tr.property === 'transform' && tr.transform === 'scale')) out.push(`${at}: a start scale belongs to a scale`);
       if (tr.scale !== undefined && !(Number.isFinite(tr.scale) && tr.scale > 0 && tr.scale <= 1)) out.push(`${at}: a start scale is above 0 and at most 1 (got ${tr.scale})`);
       if (tr.property === 'transform' && !tr.transform) out.push(`${at}: a transform track says what it does (scale, slide, turn or travel)`);
+      if (p.half === 'enter' && tr.preset.endsWith('.exit'))
+        out.push(`${at}: an entrance plays on an entering half, not '${tr.preset}' (to retime the entrance, use another entering preset)`);
+      if (p.half === 'exit' && ARRIVING_PRESETS.includes(tr.preset))
+        out.push(`${at}: an exit plays on an exit half, '${tr.preset}.exit', not '${tr.preset}' (to retime the exit, re-point presets.${tr.preset}.exit)`);
     }
     if (p.tracks.length && p.tracks.every((tr) => reducedKindOf(tr, p) === 'off'))
       out.push(`pattern '${p.name}': every track goes off under reduced motion, so it shows no cue that anything changed; one track keeps or fades (R7)`);
@@ -173,8 +181,17 @@ export const resolvePatterns = (overrides: Record<string, Record<string, MotionT
         if (typeof o.distance === 'number') {
           if (!(Number.isFinite(o.distance) && o.distance > 0)) throw new Error(`${ta}.distance: a distance in px is a number above 0 (got ${o.distance})`);
           next.distance = { px: o.distance };
-        } else if (typeof o.distance === 'string' && (/^distance\.[a-z][a-z0-9-]*$/.test(o.distance) || /^space\.[0-9]+$/.test(o.distance))) next.distance = { token: o.distance };
-        else throw new Error(`${ta}.distance: a distance is a token path ('distance.nudge', 'space.<step>') or a number of px (got ${JSON.stringify(o.distance)})`);
+        } else if (typeof o.distance === 'string' && /^distance\.[a-z][a-z0-9-]*$/.test(o.distance)) {
+          // #4601 review: the token must exist, or the agent file ships a reference to nothing.
+          if (!MOTION_DISTANCE_NAMES.includes(o.distance.slice('distance.'.length)))
+            throw new Error(`${ta}.distance: unknown distance '${o.distance}' (have: ${MOTION_DISTANCE_NAMES.map((n) => `distance.${n}`).join(', ')})`);
+          next.distance = { token: o.distance };
+        } else if (typeof o.distance === 'string' && /^space\.[0-9]+$/.test(o.distance)) {
+          const steps = spaceScale().map((s) => s.key);
+          if (!steps.includes(o.distance.slice('space.'.length)))
+            throw new Error(`${ta}.distance: unknown space step '${o.distance}' (have: ${steps.map((k) => `space.${k}`).join(', ')})`);
+          next.distance = { token: o.distance };
+        } else throw new Error(`${ta}.distance: a distance is a token path ('distance.nudge', 'space.<step>') or a number of px (got ${JSON.stringify(o.distance)})`);
       }
       if (o.scale !== undefined) {
         if (typeof o.scale !== 'number') throw new Error(`${ta}.scale: a start scale is a number (got ${JSON.stringify(o.scale)})`);
