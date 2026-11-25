@@ -7,7 +7,8 @@
  *
  * So the exporter names each paint style whose visible paints are all solid (`getSkippedSolidPaintStyles`). A gradient
  * still exports, a style that layers a gradient with a solid stays the layered-gradient skip (#3885), and a style with
- * no visible solid (an image, or every paint hidden) is not a solid style.
+ * no visible solid (an image, or every paint hidden) is not a solid style. Nor is one that layers a solid with an image
+ * (review of #4595): every visible paint must be solid.
  *
  * THE EXPECTED VALUES ARE NOT DERIVED FROM THE CODE UNDER TEST (docs/34): the fixture names exactly two solid styles,
  * `brand/flat` and `brand/stacked`, in the order Figma lists them.
@@ -37,6 +38,7 @@ const paintStyles = [
   { id: 'S:4', name: 'brand/photo', description: '', paints: [{ type: 'IMAGE', visible: true, scaleMode: 'FILL' }] },
   { id: 'S:5', name: 'brand/stacked', description: '', paints: [solid(0, 0, 0), solid(1, 1, 1)] },
   { id: 'S:6', name: 'brand/hidden', description: '', paints: [solid(0, 1, 0, false)] },
+  { id: 'S:7', name: 'brand/textured', description: '', paints: [solid(1, 1, 1), { type: 'IMAGE', visible: true, scaleMode: 'FILL' }] },
 ];
 
 function installFigma(): void {
@@ -70,6 +72,11 @@ describe('solid paint styles are named as skipped, not dropped silently (#3884)'
     const { exporter, files } = await exported();
     expect(files).toContain('gradients.json');
     expect(exporter.getSkippedGradientStyles()).toEqual(['brand/layered']);
+  });
+
+  test('a style that layers a solid with an image is not a solid style', async () => {
+    const { exporter } = await exported();
+    expect(exporter.getSkippedSolidPaintStyles().indexOf('brand/textured')).toBe(-1);
   });
 
   test('a second export starts from an empty list', async () => {
