@@ -329,7 +329,7 @@ export const tab: ComponentDef = {
   },
 
   motion: {
-    enter: 'None. On selection the underline slides from the previous tab to this one, on motion.duration.normal with motion.easing-role.default.',
+    enter: 'None. On selection the underline slides from the previous tab to this one, on motion.preset.move.',
     exit: 'None.',
     reduceMotion: 'Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast.',
   },

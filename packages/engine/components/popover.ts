@@ -25,6 +25,7 @@
  * them, with the 240 floor as Figma's min width; the 360 cap is code only. The 320 is the owner's (decision 2, 2026-11-19).
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const popover: ComponentDef = {
   id: 'popover',
@@ -325,11 +326,8 @@ export const popover: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'Fades in and scales up from a little under full size, from the trigger\'s side (motion.duration.fast, motion.easing-role.enter). The origin follows the side it opens on.',
-    exit: 'Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.',
-    reduceMotion: 'Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['popover/open', 'popover/close'], { enter: 'It scales from the trigger\'s side, and the origin follows the side it opens on.', reduceMotion: 'A fade is not movement, and it keeps the cue that a layer opened or closed.' }),
 
   notes: {
     contested: [],

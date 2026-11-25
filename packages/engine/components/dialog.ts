@@ -53,6 +53,7 @@
  * focus return are wired by the developer in plain HTML/CSS and carried by the web component (Q-BH1 A, #2454, docs/41 §7.2).
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const dialog: ComponentDef = {
   id: 'dialog',
@@ -503,11 +504,8 @@ export const dialog: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'A centered panel fades in and scales up a little; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge (motion.duration.moderate, motion.easing-role.enter). The backdrop fades in.',
-    exit: 'The reverse, on motion.easing-role.exit.',
-    reduceMotion: 'Under prefers-reduced-motion every placement and the backdrop fade only, with no slide and no scale, on motion.duration-reduced.normal to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['dialog/enter', 'dialog/exit', 'dialog/bottom/enter', 'dialog/bottom/exit', 'dialog/end/enter', 'dialog/end/exit'], { reduceMotion: 'A fade is not movement, and it keeps the cue that a layer opened or closed.' }),
 
   notes: {
     contested: [

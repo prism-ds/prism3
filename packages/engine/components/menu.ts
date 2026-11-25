@@ -32,6 +32,7 @@
  * own `leading` toggle (held for the owner): on, it shows the check column and the icon each behind their own toggle.
  */
 import { ComponentDef, PartDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 // ── Menu.Item ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -758,11 +759,8 @@ export const menu: ComponentDef = {
     planned: ['split-button', 'listbox'],
   },
 
-  motion: {
-    enter: 'Fades in and scales up from a little under full size, from the trigger\'s side (motion.duration.fast, motion.easing-role.enter). A submenu fades only.',
-    exit: 'Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.',
-    reduceMotion: 'Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that the menu opened or closed.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['popover/open', 'popover/close'], { enter: 'It scales from the trigger\'s side. A submenu fades only.', reduceMotion: 'A fade is not movement, and it keeps the cue that the menu opened or closed.' }),
 
   notes: {
     contested: [

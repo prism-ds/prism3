@@ -12,6 +12,7 @@
  * centered list in a full-width bar.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 const tabNest = (selection: 'selected' | 'unselected') => ({
   kind: 'nest' as const,
@@ -227,11 +228,8 @@ export const tabs: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.duration.normal with motion.easing-role.default.',
-    exit: 'The outgoing panel fades out under the incoming one. Panels never slide sideways.',
-    reduceMotion: 'Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['tabs/select'], { exit: 'The outgoing panel fades out under the incoming one. Panels never slide sideways.' }),
 
   notes: {
     contested: [],

@@ -44,6 +44,7 @@
  * top-aligned. So the glyph is exactly centered on line one, and on a wrapped message it stays beside line one.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const toast: ComponentDef = {
   id: 'toast',
@@ -345,11 +346,8 @@ export const toast: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'An 8px slide up and a fade (motion.preset.fade: motion.duration.normal, motion.easing-role.enter).',
-    exit: 'A fade (motion.duration.fast with motion.easing-role.exit). A replacement plays the exit, then the enter.',
-    reduceMotion: 'Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['toast/enter', 'toast/exit'], { exit: 'A replacement plays the exit, then the enter.' }),
 
   notes: {
     contested: [
