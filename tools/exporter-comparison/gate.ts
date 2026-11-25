@@ -254,19 +254,9 @@ const MIN_BRANDS = 5;
  * comment explaining the exception would have gone green forever instead, and nothing would have
  * connected the exception to its fix.
  */
-// #3510 — each spring's settle time (`motion.spring-duration.<name>`), a DTCG duration with no Figma variable yet: the
-// paired TIMING a Figma spring needs is G5 (#3485), whose name is the owner's. Every brand emits all three.
-const SPRING_DURATION_UNREACHABLE = ['snappy', 'gentle', 'bouncy'].map((name) => ({
-  path: `motion.spring-duration.${name}`,
-  why: 'a spring\'s CSS settle time (#3510); Figma has no variable for it until G5 pairs a TIMING with each spring',
-  owner: 'prism3',
-  issue: '#3485',
-}));
+// #3510's spring settle times (`motion.spring-duration.<name>`) were here until #2857 gave each a hidden TIMING
+// variable a spring preset's duration aliases; they pair now, and this gate went red on them until removed.
 const KNOWN_UNREACHABLE: Record<string, { path: string; why: string; owner: string; issue: string }[]> = {
-  aurora: SPRING_DURATION_UNREACHABLE,
-  harbor: SPRING_DURATION_UNREACHABLE,
-  prism3: SPRING_DURATION_UNREACHABLE,
-  wendys: SPRING_DURATION_UNREACHABLE,
   // aurora's two gradients (`gradient.brand`, `gradient.glow`) were here until #731 gave TokenPress's scanner a
   // paint-style channel and a gradient converter; they pair now, and this gate went red on them until removed.
   // #2942 — the link underline. Figma has no variable for text decoration (neither field takes one, so the value is a
@@ -275,7 +265,6 @@ const KNOWN_UNREACHABLE: Record<string, { path: string; why: string; owner: stri
   // brand-wide path has no Figma counterpart for it to read back, and the gate pairs by path. Only the reference brand
   // sets it; every other brand emits neither path.
   nb: [
-    ...SPRING_DURATION_UNREACHABLE,
     {
       path: 'core.font.underline.thickness',
       why: 'a per-style literal PERCENT inside each -link TEXT style (Figma has no variable for text decoration); TokenPress reads it into each composite as textDecorationThickness, and prism3\'s brand-wide path has no Figma counterpart',
@@ -344,6 +333,31 @@ const prism3SpringPaths = (brand: string): Set<string> => {
     const doc = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { variables?: Array<{ name?: string; resolvedType?: string; value?: { type?: string } }> };
     for (const v of doc.variables ?? []) {
       if (v.name && v.resolvedType === 'EASING' && v.value?.type === 'CUSTOM_SPRING') out.add(v.name.split('/').slice(1).join('.'));
+    }
+  }
+  return out;
+};
+
+/**
+ * #4593 — A KNOWN TOKENPRESS FOLD. TokenPress turns any group whose token children's names contain "duration", "delay"
+ * or "easing" into one `transition` composite, so each motion preset (#2857) comes back as a tokenpress-only
+ * `motion.preset.<name>` composite, and its four slots as prism3-only paths. The exempt set is read from prism3's OWN
+ * Figma emission (`motion*.json`, never from TokenPress) and held as a BIJECTION in both arms: each preset prism3 emits
+ * must come back folded, and nothing else is exempted. The day TokenPress stops folding, both arms fail by name.
+ */
+const prism3PresetFolds = (brand: string): Map<string, string[]> => {
+  const dir = join(FIGMA_OUT, brand);
+  const out = new Map<string, string[]>();
+  if (!existsSync(dir)) return out;
+  for (const f of readdirSync(dir).filter((n) => /^motion(\.[^.]+)?\.json$/.test(n))) {
+    const doc = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { variables?: Array<{ name?: string }> };
+    for (const v of doc.variables ?? []) {
+      const m = /^[^/]+\/motion\/preset\/([a-z0-9-]+)\/([a-z-]+)$/.exec(v.name ?? '');
+      if (!m) continue;
+      const g = `motion.preset.${m[1]}`;
+      const slots = out.get(g) ?? [];
+      if (!slots.includes(`${g}.${m[2]}`)) slots.push(`${g}.${m[2]}`);
+      out.set(g, slots);
     }
   }
   return out;
@@ -453,7 +467,10 @@ const main = async (): Promise<void> => {
     // as a BIJECTION so it cannot mask an invented or dropped token.
     const cutPaths = prism3CutPaths(brand);
     const springPaths = prism3SpringPaths(brand);
+    const presetFolds = prism3PresetFolds(brand);
+    const foldedSlots = new Set([...presetFolds.values()].flat());
     for (const p of r.paths.unpairedTokenPress) {
+      if (presetFolds.has(p)) continue; // #4593 known fold: TokenPress writes each preset's slots as one composite; see `prism3PresetFolds`.
       if (springPaths.has(p)) continue; // #2412 by-design: the conforming projection omits `spring` (#642); see `prism3SpringPaths`.
       if (cutPaths.has(p)) continue; // #1485 by-design: prism3 emits this cut as a Figma STRING variable with no DTCG token; TokenPress faithfully exports the variable (#1489 aligns the Text-Style reader).
       failures.push(
@@ -485,6 +502,12 @@ const main = async (): Promise<void> => {
         );
       }
     }
+    // #4593's BIJECTION: each preset prism3 emits comes back as a TokenPress composite, and its slots are gone.
+    for (const [g, slots] of presetFolds) {
+      if (!r.paths.unpairedTokenPress.includes(g) || !slots.every((sl) => r.paths.unpairedPrism3.includes(sl)))
+        failures.push(`[${brand}] PRESET FOLD GONE: TokenPress no longer folds '${g}' into a composite (or kept a slot) — if #4593 is fixed, delete the exemption (prism3PresetFolds).`);
+    }
+    if (presetFolds.size === 0) failures.push(`[${brand}] PRESET FOLD EXEMPTION EMPTY: prism3's Figma motion emission holds no preset slot — the #2857 preset emission may have broken (motion.json).`);
     if (springPaths.size === 0) {
       failures.push(`[${brand}] SPRING EXEMPTION EMPTY: prism3's Figma motion emission holds no EASING spring — the #2412 spring emission may have broken (motion.json).`);
     }
@@ -503,6 +526,7 @@ const main = async (): Promise<void> => {
     const known = KNOWN_UNREACHABLE[brand] ?? [];
     const knownPaths = new Set(known.map((k) => k.path));
     for (const p of r.paths.unpairedPrism3) {
+      if (foldedSlots.has(p)) continue; // #4593 known fold, held as a bijection in ARM 2a.
       if (!knownPaths.has(p)) {
         failures.push(
           `[${brand}] UNPAIRED (prism3-only), NOT IN THE MEMORY: ${p} — prism3 emits a path TokenPress cannot produce, ` +

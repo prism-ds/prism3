@@ -42,8 +42,19 @@ export const SPRING_SETTLE_EPSILON = 0.001;
 export const SPRING_SAMPLE_MS = 5;
 /** The most a `linear()` approximation may differ from the analytic spring, as a fraction of the travel. */
 export const SPRING_EASING_ERROR_BOUND = 0.005;
-/** The largest stiffness the error bound is argued for (h²/8 · k + rounding ≤ the bound). */
-export const SPRING_MAX_STIFFNESS = 1000;
+/** The largest stiffness a spring may have. The error bound holds at any stiffness, because a stiff spring is
+ *  sampled more finely (`springSampleMs`); this caps how many stops its `linear()` may carry. Raised from 1000 for
+ *  the effects spring (G1 A, #2857: stiffness 1600). */
+export const SPRING_MAX_STIFFNESS = 4000;
+/** The rounding error each stop adds: values are rounded to 3 decimals. */
+const STOP_ROUNDING = 0.0005;
+/**
+ * The sampling interval for a spring, in ms: `SPRING_SAMPLE_MS`, or finer for a spring stiff enough that 5ms would
+ * break the error bound. Linear interpolation errs by at most h²/8 · k, so h = √(8 · (bound − rounding) / k) keeps
+ * it within `SPRING_EASING_ERROR_BOUND`. Every spring up to stiffness 1000 keeps 5ms, so its curve is unchanged.
+ */
+export const springSampleMs = (s: Spring): number =>
+  Math.min(SPRING_SAMPLE_MS, Math.sqrt((8 * (SPRING_EASING_ERROR_BOUND - STOP_ROUNDING)) / s.stiffness) * 1000);
 
 const check = (s: Spring): void => {
   if (!(s.damping > 0 && s.damping <= 1)) throw new Error(`spring: a damping ratio must be in (0, 1], got ${s.damping}`);
@@ -95,7 +106,7 @@ export const springSettleMs = (s: Spring): number => {
 /** The stops `springLinearEasing` writes: evenly spaced over the settle time, the last one exactly 1. */
 export const springEasingStops = (s: Spring): number[] => {
   const settle = springSettleMs(s);
-  const n = Math.max(1, Math.ceil(settle / SPRING_SAMPLE_MS));
+  const n = Math.max(1, Math.ceil(settle / springSampleMs(s)));
   const stops: number[] = [];
   for (let i = 0; i <= n; i++) stops.push(i === n ? 1 : Math.round(springPosition(s, (i / n) * settle) * 1000) / 1000);
   return stops;

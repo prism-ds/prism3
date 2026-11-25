@@ -291,6 +291,19 @@ export const figmaEasingRoleDescription = (role: string, curve: string, byMode: 
   `${curve}${byMode.length ? ` (${byMode.map(([m, c]) => `${c} in ${m}`).join('; ')})` : ''} — ${role} easing`;
 export const figmaSpringDescription = (name: string, bounce: number): string =>
   `${name} spring, bounce ${bounce} — its length comes from the duration it plays with`;
+/** A spring's settle time (#3510, #2857): the length a bounce-only Figma spring plays for. */
+export const figmaSpringDurationDescription = (name: string, ms: number): string => `${ms}ms — the ${name} spring's settle time`;
+/** A delay step (G6 B), the same at every tempo. */
+export const figmaDelayDescription = (step: string, ms: number): string =>
+  step === 'show' ? `${ms}ms — wait before showing, so a fast result shows nothing` : step === 'min-show' ? `${ms}ms — least time a shown indicator stays` : `${ms}ms — ${step} delay`;
+/** A preset slot (#2857, Q-MS1 A): what it aliases, read off the DTCG target path, so the line names the role,
+ *  curve, spring or step a designer re-points. */
+export const figmaPresetDescription = (preset: string, slot: 'duration' | 'easing' | 'delay' | 'duration-reduced', target: string): string => {
+  const t = target.split('.').slice(-2).join(' ');
+  const said = /duration-ms 0$/.test(t) ? 'none' : t.replace(/^duration-ms (\d+)$/, '$1ms').replace(/^easing-role /, '').replace(/^easing /, '').replace(/^spring-easing (.+)$/, '$1 spring').replace(/^spring-duration (.+)$/, '$1 settle time').replace(/^duration-reduced (.+)$/, '$1 reduced').replace(/^duration /, '').replace(/^delay /, '');
+  const what = slot === 'duration-reduced' ? 'reduced duration' : slot;
+  return `${said} — ${preset} ${what}`;
+};
 
 /** `size/<rung>/<prop>` — dimensions only; a component's padding and gaps bind `space/*` (the spacing model). */
 export const figmaSizeDescription = (prop: string, px: number): string => {

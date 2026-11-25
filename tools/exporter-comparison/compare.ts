@@ -824,9 +824,11 @@ const explainViaModeOverlay = (
 //  go quiet here — the paths it used to explain reappear as unexplained failures, which is how these
 //  were found (29 on aurora, 28 on nb, 29 on wendys). `motion.` did not move with #1102; #2412 narrowed it
 //  to `motion.transition.` when the rest of motion became Figma variables.
-const NOT_IN_EMISSION = [
-  // Narrowed from `motion.` by #2412: durations, curves, roles and springs are Figma variables now.
-  { prefix: 'motion.transition.', why: 'a transition is a composite and Figma has no composite variable (owner Q291 4): its duration and easing role are emitted, the transition is not' },
+const NOT_IN_EMISSION: Array<{ prefix: string; match?: RegExp; why: string }> = [
+  // Narrowed from `motion.` by #2412: durations, curves, roles and springs are Figma variables now. #2857 retired the
+  // four `motion.transition.*`; a preset's composite is the composite now, matched by its pattern (its slots pair).
+  { prefix: 'motion.preset.<name>.transition', match: /^motion\.preset\.[a-z0-9-]+\.transition$/, why: 'a preset\'s transition is a composite and Figma has no composite variable (owner Q291 4): its slots are emitted, the composite is not' },
+  { prefix: 'motion.distance.', why: 'a FLOAT aliasing `space/100` crosses collections, which neither motion writer binds yet (#4589); the animation styles that bind it are phase 3' },
   // `core.font.line-height` and `core.font.letter-spacing` were here until #2423 emitted them as the `text-spacing`
   // collection: both ladders and their roles now round-trip by path.
   { prefix: 'core.font.typeface.', why: 'the typeface primitive tier is collapsed: the emission writes the resolved face onto `<root>/core/font/family/*`' },
@@ -920,10 +922,10 @@ const explainPaths = (
   const stillUnpaired = onlyP3.filter((p) => !claimedP3.has(p));
   const notInEmission = NOT_IN_EMISSION.map((r) => {
     const pairs = stillUnpaired
-      .filter((p) => p.startsWith(r.prefix))
+      .filter((p) => (r.match ? r.match.test(p) : p.startsWith(r.prefix)))
       .map((p) => ({ prism3: p, tokenpress: '(absent)' }));
     return {
-      reason: `NOT IN THE FIGMA EMISSION — ${r.prefix}*: ${r.why}`,
+      reason: `NOT IN THE FIGMA EMISSION — ${r.prefix}${r.match ? '' : '*'}: ${r.why}`,
       pairs,
       // A path paired against an ABSENCE has no counterpart type. `null` is the honest entry — not a
       // gap in the type arm, which is why `blindPairs` counts these separately. Conflating the two is

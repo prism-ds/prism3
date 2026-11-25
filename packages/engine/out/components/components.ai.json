@@ -6679,7 +6679,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "The thumb travels across the track on motion.transition.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back."
+        "reduceMotion": "The thumb travels across the track on motion.duration.normal with motion.easing-role.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back."
       },
       "composition": {
         "composesWith": [
@@ -6908,7 +6908,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "The nested control carries the thumb travel (motion.transition.default; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears."
+        "reduceMotion": "The nested control carries the thumb travel (motion.duration.normal with motion.easing-role.default; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears."
       },
       "composition": {
         "composesWith": [
@@ -8116,8 +8116,8 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "A count or dot fades in and scales up from a little under full size, from the corner it is anchored to, on motion.transition.enter. When a count changes, only the number changes, on motion.transition.default; the pill does not move. A status label appears with no motion.",
-        "exit": "A count or dot fades out and scales down toward its anchor corner on motion.transition.exit.",
+        "enter": "A count or dot fades in and scales up from a little under full size, from the corner it is anchored to, on motion.preset.fade. When a count changes, only the number changes, on motion.duration.normal with motion.easing-role.default; the pill does not move. A status label appears with no motion.",
+        "exit": "A count or dot fades out and scales down toward its anchor corner on motion.duration.fast with motion.easing-role.exit.",
         "reduceMotion": "Under prefers-reduced-motion a count or dot fades in and out with no scale, on motion.duration-reduced.normal both ways, and a changed count's number fades on the same role."
       },
       "composition": {
@@ -9033,7 +9033,7 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "None. On selection the underline slides from the previous tab to this one, on motion.transition.default.",
+        "enter": "None. On selection the underline slides from the previous tab to this one, on motion.duration.normal with motion.easing-role.default.",
         "exit": "None.",
         "reduceMotion": "Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast."
       },
@@ -9245,7 +9245,7 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.transition.default.",
+        "enter": "None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.duration.normal with motion.easing-role.default.",
         "exit": "The outgoing panel fades out under the incoming one. Panels never slide sideways.",
         "reduceMotion": "Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast."
       },
@@ -9629,8 +9629,8 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "On open, a chevron turns to its open position on motion.transition.default; a plus and minus swap glyphs.",
-        "exit": "On close, the chevron turns back on motion.transition.default; a plus and minus swap back.",
+        "enter": "On open, a chevron turns to its open position on motion.duration.normal with motion.easing-role.default; a plus and minus swap glyphs.",
+        "exit": "On close, the chevron turns back on motion.duration.normal with motion.easing-role.default; a plus and minus swap back.",
         "reduceMotion": "Under prefers-reduced-motion the indicator swaps to its open or closed glyph without turning."
       },
       "composition": {
@@ -9851,8 +9851,8 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "The panel eases open to its content height (motion.transition.enter), and the indicator turns to its open glyph.",
-        "exit": "The panel eases closed (motion.transition.exit), and the indicator turns back.",
+        "enter": "The panel eases open to its content height (motion.preset.expand), and the indicator turns to its open glyph.",
+        "exit": "The panel eases closed (motion.preset.expand), and the indicator turns back.",
         "reduceMotion": "Under prefers-reduced-motion the height changes at once, and the panel's fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed."
       },
       "composition": {
@@ -10395,7 +10395,7 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "None. On selection the pill travels to this option on motion.transition.default, or cross-fades.",
+        "enter": "None. On selection the pill travels to this option on motion.duration.normal with motion.easing-role.default, or cross-fades.",
         "exit": "None.",
         "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast."
       },
@@ -10613,7 +10613,7 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "None. On selection the pill travels to the new option on motion.transition.default, or cross-fades.",
+        "enter": "None. On selection the pill travels to the new option on motion.duration.normal with motion.easing-role.default, or cross-fades.",
         "exit": "None.",
         "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast."
       },
@@ -11879,8 +11879,8 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "An 8px slide up and a fade (motion.transition.enter: motion.duration.normal, motion.easing-role.enter).",
-        "exit": "A fade (motion.transition.exit: motion.duration.fast, motion.easing-role.exit). A replacement plays the exit, then the enter.",
+        "enter": "An 8px slide up and a fade (motion.preset.fade: motion.duration.normal, motion.easing-role.enter).",
+        "exit": "A fade (motion.duration.fast with motion.easing-role.exit). A replacement plays the exit, then the enter.",
         "reduceMotion": "Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal."
       },
       "composition": {
@@ -14515,7 +14515,7 @@
       },
       "motion": {
         "enter": "Fades in. A banner inserted at the top of a page reserves its space, so the content below does not jump.",
-        "exit": "Collapses its height and fades on motion.transition.exit, so the content below moves up smoothly.",
+        "exit": "Collapses its height and fades on motion.duration.fast with motion.easing-role.exit, so the content below moves up smoothly.",
         "reduceMotion": "Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal to appear and to go, and its height changes at once when it is dismissed."
       },
       "composition": {

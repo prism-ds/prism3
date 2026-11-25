@@ -1368,6 +1368,13 @@ export const GATES: Gate[] = [
     cmd: engine('lint-test-arms.ts'),
   },
   {
+    // #4458, #4330 — reads the four format constants, their JSON schemas and the authored record; needs no build and
+    // no `after`.
+    id: 'lint-format-history',
+    ciStep: 'One version of a published format names one shape (#4458)',
+    cmd: engine('lint-format-history.ts'),
+  },
+  {
     // #2997 gate 3 — reads the role map and the pinned shadcn variable set; needs no build and no `after`.
     id: 'shadcn-vars',
     ciStep: 'The shadcn map covers the pinned shadcn variable set (#2997)',

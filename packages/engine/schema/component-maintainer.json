@@ -2672,7 +2672,7 @@
           "THE DECOMPOSITION IS UNVERIFIED ON A REAL HOST, the same way `checkbox-control`'s was: the nested control instance must pin its own HEIGHT (the track height) rather than stretch to the `control-box` line box, and whether the instance's inherited sizing mode cooperates with the row's auto-layout is a real-host question the offline shim cannot answer. The symptom to look for: a control instance stretched to the line-box height instead of centered within it. The control is non-square, so the Row pins HEIGHT only and the width is the control's own 2:1 — a narrower pin than checkbox's square.",
           "THE THUMB GLYPH IS UNVERIFIED ON A REAL HOST for legibility at its smallest size. Since #1425 the thumb is 0.75 × the track (`control.size.*.thumb`), 18px at `small` and 24px at `medium` in every corpus brand, so the glyph is ~12.7px and ~17px after its optical inset; the smallest case is compact density `small`, a 12px thumb and a ~8.5px glyph. The measurement is in `switch-control.ts`.",
           "THE LABEL SIDE HAS ONE EXPRESSION AND `labelPosition` STILL HAS NONE. The anatomy states the DEFAULT (`row.children` is `[label, trackBox]`, label-leading); the flipped order the prop selects is not expressible, because a prop is not a coordinate. RTL is the sharper half and inverts twice over (the row mirrors AND the thumb travel flips).",
-          "THE TRAVEL'S TWO ENDPOINTS ARE EXPRESSED AND THE MOTION BETWEEN THEM IS NOT — on `switch-control` now. The slide on motion.transition.default with the synchronized track-color crossfade (at once under prefers-reduced-motion) is the animation the component is most recognized by and has no expression in the schema.",
+          "THE TRAVEL'S TWO ENDPOINTS ARE EXPRESSED AND THE MOTION BETWEEN THEM IS NOT — on `switch-control` now. The slide on motion.duration.normal with motion.easing-role.default with the synchronized track-color crossfade (at once under prefers-reduced-motion) is the animation the component is most recognized by and has no expression in the schema.",
           "THE role=\"switch\" ANNOUNCEMENT INSIDE A SHADOW ROOT on older Safari with VoiceOver, where no explicit aria-label or aria-labelledby is set (KB switch brief §15, from Material 3's notes). The `aria` block already tells a web-component host to set the name explicitly; whether older Safari announces the role and state correctly across the shadow boundary is not checked by anything here.",
           "THE WHOLE-ROW HIT TARGET HAS A NUMBER SINCE #2894: the row's floor, `size.*.min-height` (the control-height ladder), is bound in Figma as well as code, so a single-line row measures 36/44 at comfortable and 29/36 at compact, and every row clears SC 2.5.8's 24×24 (`test.ts` #2894). Still unverified on a real host, and sharper here than on the siblings because the row is label-leading (the control sits at the trailing edge, furthest from the label). The track spilling past its line-box cell is #1439, which the taller row hides but does not fix."
         ],
@@ -3634,7 +3634,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "The underline slide — in code the selected underline is one element owned by the tab list that moves and resizes to the selected tab, on `motion.transition.default`. Figma draws it per tab. Under prefers-reduced-motion it snaps."
+          "description": "The underline slide — in code the selected underline is one element owned by the tab list that moves and resizes to the selected tab, on `motion.duration.normal` with `motion.easing-role.default`. Figma draws it per tab. Under prefers-reduced-motion it snaps."
         },
         {
           "class": "semantics",
@@ -3962,7 +3962,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "the turn — a chevron may rotate 180 degrees on open instead of swapping glyphs, on motion.transition.default both ways, and swaps without turning under prefers-reduced-motion (the prism3-motion accordion recipe). Figma swaps the down and up glyphs, since a variant holds no motion."
+          "description": "the turn — a chevron may rotate 180 degrees on open instead of swapping glyphs, on motion.duration.normal with motion.easing-role.default both ways, and swaps without turning under prefers-reduced-motion (the prism3-motion accordion recipe). Figma swaps the down and up glyphs, since a variant holds no motion."
         },
         {
           "class": "right-to-left",
@@ -4072,7 +4072,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "the height animation — the panel eases open and closed (motion.transition.enter / exit); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion."
+          "description": "the height animation — the panel eases open and closed (the motion.preset.expand preset, both ways); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion."
         },
         {
           "class": "right-to-left",
@@ -4479,7 +4479,7 @@
         {
           "class": "implementation",
           "disposition": "REFUSED",
-          "description": "The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option's measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.transition.default. Under prefers-reduced-motion it moves without animation."
+          "description": "The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option's measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.duration.normal with motion.easing-role.default. Under prefers-reduced-motion it moves without animation."
         },
         {
           "class": "responsive-layout",
@@ -5088,7 +5088,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — enter: an 8px slide up and a fade on `motion.transition.enter` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.transition.exit` (`motion.duration.fast`, `motion.easing-role.exit`). Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest."
+          "description": "motion — enter: an 8px slide up and a fade on `motion.preset.fade` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.duration.fast` with `motion.easing-role.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest."
         },
         {
           "class": "right-to-left",
@@ -6217,7 +6217,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — appears with an opacity fade; a dismiss collapses the height and fades, on `motion.transition.exit`, so the content below does not jump. Under `prefers-reduced-motion` both fade only, on `motion.duration-reduced.normal`, and the height changes at once. A banner inserted at the top of a page later reserves its space. Figma shows the banner at rest."
+          "description": "motion — appears with an opacity fade; a dismiss collapses the height and fades, on `motion.duration.fast` with `motion.easing-role.exit`, so the content below does not jump. Under `prefers-reduced-motion` both fade only, on `motion.duration-reduced.normal`, and the height changes at once. A banner inserted at the top of a page later reserves its space. Figma shows the banner at rest."
         },
         {
           "class": "right-to-left",

@@ -253,7 +253,7 @@ export const toast: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — enter: an 8px slide up and a fade on `motion.transition.enter` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.transition.exit` (`motion.duration.fast`, `motion.easing-role.exit`). Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest.',
+          'motion — enter: an 8px slide up and a fade on `motion.preset.fade` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.duration.fast` with `motion.easing-role.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest.',
       },
       {
         class: 'right-to-left',
@@ -346,8 +346,8 @@ export const toast: ComponentDef = {
   },
 
   motion: {
-    enter: 'An 8px slide up and a fade (motion.transition.enter: motion.duration.normal, motion.easing-role.enter).',
-    exit: 'A fade (motion.transition.exit: motion.duration.fast, motion.easing-role.exit). A replacement plays the exit, then the enter.',
+    enter: 'An 8px slide up and a fade (motion.preset.fade: motion.duration.normal, motion.easing-role.enter).',
+    exit: 'A fade (motion.duration.fast with motion.easing-role.exit). A replacement plays the exit, then the enter.',
     reduceMotion: 'Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal.',
   },
 

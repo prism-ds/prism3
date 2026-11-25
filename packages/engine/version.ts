@@ -739,7 +739,7 @@ export const ENGINE_VERSION = '0.240.0';
  * the spring takes to settle, a DTCG `duration`. Both come from `spring.ts`. Six added paths; an added path cannot
  * break a reference. Nothing is removed or retyped: `motion.spring.*` keeps its damping and stiffness.
  */
-export const CONTRACT_VERSION = '15.4.0';
+export const CONTRACT_VERSION = '16.0.0';
 
 /**
  * THE COMPONENT VERSIONS (#1325 Option 3, #1326 decision 3, owner decision Q-CC1 A, 2026-11-18). Two more numbers,

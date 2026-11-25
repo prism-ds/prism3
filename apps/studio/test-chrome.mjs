@@ -509,7 +509,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { launchWithoutWebFonts } from './test-web-fonts-stub.mjs';
 import { hookGuard } from './test-hooks.mjs';
-import { INPUT_MS, makeBounded, rendersFrame, watchStalls } from './test-bounded.mjs';
+import { INPUT_MS, makeBounded, rendersFrame, stallWhere, watchStalls } from './test-bounded.mjs';
 import { P, loadModes, resolve as resolveToken } from './chrome/tokens.mjs';
 import { assertBundleFresh, PLUGIN_UI_SOURCE_ROOTS, STUDIO_SOURCE_ROOTS } from './test-bundle-freshness.mjs';
 import { SHARDS } from './chrome-shards.mjs';
@@ -1143,7 +1143,10 @@ const within = async (page, label, work, ms = STEP_MS) => {
   if (out && 'e' in out) throw out.e;
   if (out) return out.v;
   const live = await rendersFrame(page);
-  throw new Error(`${label} did not settle within ${ms / 1000}s; the page ${live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}`);
+  // On a page `watchStalls` watches, a page that renders no frame is paused and the message says where it stopped
+  // (its JavaScript stack, or none): #4342's stall never reproduced off CI, so the CI log is where it gets located.
+  const at = live ? '' : await stallWhere(page, Math.min(ms, STEP_MS));
+  throw new Error(`${label} did not settle within ${ms / 1000}s; the page ${live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}${at ? `; ${at}` : ''}`);
 };
 
 /** Reach a place through the tab row (the select, when narrow), and wait for the frame to show it. */
@@ -3217,11 +3220,50 @@ const watchRunEnded = (page) => page.evaluate(() => {
   window.__runEnded = [];
   window.addEventListener('message', (e) => { const m = e.data?.pluginMessage; if (m?.type === 'run-ended') window.__runEnded.push(m.line); });
 });
-/** The messages posted since the last call. A post is delivered as a task, so one task is let through first. */
-const takeWrites = (page) => page.evaluate(() => new Promise((r) => setTimeout(() => { const w = window.__writes.slice(); window.__writes.length = 0; r(w); }, 50)));
+/** #4073, #3686: the bound on a read that waits for a write it expects. Section 10's other waits on the page are 5 s. */
+const POST_WAIT_MS = 5000;
+/** The window a read lets in-flight posts land in before it reads: the whole of an absence check's wait, and the floor of
+ *  an expected read's, so a stray second write is caught as surely as it was when every read waited this long. */
+const POST_SETTLE_MS = 50;
+/** Read and empty the record `window[key]`. With `n` > 0 (#4073, #3686): wait until `n` entries have landed (of `type`,
+ *  when given), polled and bounded by POST_WAIT_MS, so a post delivered late on a loaded runner is still read; then a
+ *  marker message the page posts to itself, which lands after any post already queued (a window's messages arrive in
+ *  order), so a write the same handler posted after the awaited ones is read too. A miss returns what did land, and
+ *  the arm fails by name with it. With `n` 0: the settle step, POST_SETTLE_MS and no more, for a read that asserts
+ *  nothing was posted, or that only clears the record. Until #4073 every read was the 50 ms settle, and a post that
+ *  landed later read as `posted []`. */
+const takeFrom = (page, key, n = 0, type = null) => page.evaluate(async ({ key, n, type, wait, floor }) => {
+  const rec = window[key];
+  const t0 = performance.now();
+  const count = () => (type ? rec.filter((m) => m.type === type).length : rec.length);
+  while (n > 0 && count() < n && performance.now() - t0 < wait) await new Promise((r) => setTimeout(r, 10));
+  const left = floor - (performance.now() - t0);
+  if (left > 0) await new Promise((r) => setTimeout(r, left));
+  if (n > 0) {
+    await new Promise((r) => {
+      const tag = `p3-drain-${t0}-${Math.random()}`;
+      const on = (e) => { if (e.data?.p3Drain !== tag) return; window.removeEventListener('message', on); r(); };
+      window.addEventListener('message', on);
+      window.postMessage({ p3Drain: tag }, '*');
+    });
+  }
+  const w = rec.slice();
+  rec.length = 0;
+  // When this read began and ended, on the page's clock: the #4073 self-check judges the settle step by them, not by the
+  // runner's clock, which load stretches.
+  window.__p3Take = { t0, t1: performance.now() };
+  return w;
+}, { key, n, type, wait: POST_WAIT_MS, floor: POST_SETTLE_MS });
+/** The writes posted since the last read, once `n` (of `type`, when given) have landed: for a read that expects a write.
+ *  (mutation: `minBtn`'s click posting nothing, `agent-link-ui.ts` → `#2909 …: with the link off, Minimize asks …`, by name) */
+const takeWrites = (page, n = 1, type = null) => takeFrom(page, '__writes', n, type);
+/** The writes posted since the last read, after the settle step only: for a read that asserts nothing was posted, or
+ *  that clears the record before the action an arm reads. Never for a read that expects a write (#4073). */
+const settleWrites = (page) => takeFrom(page, '__writes', 0);
 const keyOf = (m) => (m.type === 'prune' ? `prune:${m.confirm}` : m.type === 'agent-link' ? `agent-link:${m.on}` : m.type);
-/** The writes posted since the last call, by kind. */
-const takePosts = async (page) => (await takeWrites(page)).map(keyOf);
+/** The writes posted since the last read, by kind: `takePosts` waits for `n` of them, `settlePosts` for none. */
+const takePosts = async (page, n = 1) => (await takeWrites(page, n)).map(keyOf);
+const settlePosts = async (page) => (await settleWrites(page)).map(keyOf);
 /** A value with its object keys sorted, as JSON: two messages are the same write when these match. */
 const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
 /** Where a posted message departs from the one it must be: the fields that differ, and inside `input`, its keys. */
@@ -3334,6 +3376,31 @@ for (const host of ['web', 'figma']) {
       const { ctx, page, errors } = await open({ host, theme, w, h, prep: pinPageDay });
       try {
         await recordPosts(page);
+        // #4073, #3686: the reads themselves, once. An entry that lands 200 ms late (four settle windows) is read by a read
+        // that expects it, and not by the settle step, which waits no longer than it did. A record of its own, so no
+        // listener on the page sees it. The settle half is judged on the page's clock: `late()` records when the entry is
+        // due and the entry when it landed, and the settle read fails only if it took an entry that was not yet due when
+        // its own settle window closed. Under load the read can begin after the entry is due, and then reading it is no
+        // fault of the settle step. (mutation: `takeFrom` not polling, the settle alone → this arm, by name; the settle
+        // step grown to 300 ms → this arm, by name)
+        if (host === 'web' && theme === 'light' && w === WIDTHS[0].w) {
+          const late = () => page.evaluate(() => {
+            window.__p3Late = [];
+            window.__p3Due = performance.now() + 200;
+            setTimeout(() => window.__p3Late.push({ type: 'late', at: performance.now() }), 200);
+          });
+          await late();
+          const t0 = Date.now();
+          const waited = await takeFrom(page, '__p3Late', 1);
+          const tookMs = Date.now() - t0;
+          await late();
+          const settled = await takeFrom(page, '__p3Late', 0);
+          const { due, take } = await page.evaluate(() => ({ due: window.__p3Due, take: window.__p3Take }));
+          const settleWaited = settled.length > 0 && due > take.t0 + POST_SETTLE_MS;
+          const ms = (v) => Math.round(v - (due - 200));
+          ok(waited.length === 1 && tookMs < POST_WAIT_MS && !settleWaited,
+            `#4073 ${where}: a read that expects a post reads one that lands 200 ms late (read ${JSON.stringify(waited.map(({ type }) => ({ type })))} in ${tookMs} ms, bound ${POST_WAIT_MS}), and the settle step does not wait for it (read ${JSON.stringify(settled.map(({ type }) => ({ type })))}; read from ${ms(take.t0)} to ${ms(take.t1)} ms, entry due at 200${settled[0] ? `, landed at ${ms(settled[0].at)}` : ''})`);
+        }
         // Idle: nothing has run. #2909: the rail shell draws no Activity tile (the drawer's own row is Activity), on both
         // hosts since Q2909.9 A, so only the drawer is read. #3113 (Q3113.9 A): the plugin draws its bar row from launch,
         // closed, reading "Activity"; at 380 the strip waits for the first run (Q3113.15, #2105's room for the levers); the
@@ -3404,7 +3471,7 @@ for (const host of ['web', 'figma']) {
         await hooks.click(page.locator('[data-p3="brand-switcher"]'), WAIT);
         const kept = await page.evaluate(() => { const s1 = document.querySelector('[data-p3="bar-agent"]'); return s1?.__p3Mark === 'slot' && !!s1.querySelector('[data-p3="agent-toggle"]'); });
         ok(slot && kept, `IA-3 ${where}: the Agent slot is the same node after the bar re-renders, and still holds the tile`);
-        await takePosts(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="agent-toggle"]'), WAIT);
         const sw = await takeWrites(page);
         ok(isWire(sw, AGENT_WIRE), `T7 ${where}: a click on the Agent switch asks the main thread to turn the link on, ${JSON.stringify(AGENT_WIRE)} (posted ${JSON.stringify(sw)})`);
@@ -3519,7 +3586,7 @@ for (const host of ['web', 'figma']) {
         ok(oneDiag, `mirror ${where}: Minimize's arrows run on Restore's diagonal, an exact mirror (#3083) (Minimize ${JSON.stringify(rm?.diag)}, Restore ${JSON.stringify(rr?.diag)})`);
         ok(inward && outward,
           `mirror ${where}: Minimize's arrows point inward, to the center, and Restore's outward, to the corners (the owner, 2026-10-26) (Minimize tips ${JSON.stringify(rm?.tips)} vs shafts ${JSON.stringify(rm?.shafts)}; Restore tips ${JSON.stringify(rr?.tips)} vs shafts ${JSON.stringify(rr?.shafts)})`);
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="agent-minimize"]'), WAIT);
         const mw = await takeWrites(page);
         ok(isWire(mw, { type: 'minimize-ui', minimized: true }), `#2949 ${where}: Minimize asks the main thread to minimize (posted ${JSON.stringify(mw)})`);
@@ -3587,7 +3654,7 @@ for (const host of ['web', 'figma']) {
         ok(a2.name === 'Agent link' && a2.role === 'switch' && a2.checked === 'false' && !a2.dot, `T7 #3083 ${where}: the published off state turns the switch off, aria-checked false (${JSON.stringify(a2)})`);
         const m2 = await minTile();
         ok(m2.shown && m2.name === 'Minimize', `#2909 ${where}: with the link off again, Minimize is still drawn (the owner's direction of 2026-10-24) (${JSON.stringify(m2)})`);
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="agent-minimize"]'), WAIT);
         const mw2 = await takeWrites(page);
         ok(isWire(mw2, { type: 'minimize-ui', minimized: true }), `#2909 ${where}: with the link off, Minimize asks the main thread to minimize (posted ${JSON.stringify(mw2)})`);
@@ -3629,7 +3696,7 @@ for (const host of ['web', 'figma']) {
         };
         let idleU = await updBtn();
         ok(idleU.text === UPDATE_LABEL && !idleU.disabled && !idleU.busy, `${where}: the bar's Update file reads "${UPDATE_LABEL}", and can run (read ${JSON.stringify(idleU)})`);
-        await takePosts(page);
+        await settleWrites(page);
         await openUpdate({ present: [], setUp: true });
         const u0 = await page.evaluate(() => ({ focusIn: !!document.activeElement?.closest('[data-p3="update-dialog"]'),
           modal: document.querySelector('[data-p3="update-dialog"]')?.getAttribute('aria-modal') }));
@@ -3669,7 +3736,7 @@ for (const host of ['web', 'figma']) {
         await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
         // The pointer leaves where Update file's button was: the drawer that opens beneath it holds its collapse on hover.
         await page.mouse.move(Math.round(w / 2), Math.round(h / 3));
-        const wa = await takeWrites(page);
+        const wa = await takeWrites(page, FIGMA_EFFECT.apply.length);
         const pa = wa.map(keyOf);
         ok(JSON.stringify(pa) === JSON.stringify(FIGMA_EFFECT.apply), `Update file ${where}: the theme step posts ${FIGMA_EFFECT.apply} — posted ${JSON.stringify(pa)}`);
         ok(isWire(wa, FIGMA_WIRE.apply), `Update file ${where}: the theme step posts the brand the page loaded (example-brands.json's prism3), whole — ${wireDiff(wa[0], FIGMA_WIRE.apply)}`);
@@ -3743,7 +3810,7 @@ for (const host of ['web', 'figma']) {
         // Clean up: Prune stale's dry run as the tab opens, then the confirmed prune from its Delete (Q668 A).
         await openUpdate(null);
         await hooks.click(page.locator('[data-p3="update-tab-clean"]'), WAIT);
-        const wp = await takeWrites(page);
+        const wp = await takeWrites(page, FIGMA_EFFECT.prune.length);
         const pp = wp.map(keyOf);
         ok(JSON.stringify(pp) === JSON.stringify(FIGMA_EFFECT.prune), `Clean up ${where}: opening the tab posts a dry-run prune (${FIGMA_EFFECT.prune}) — posted ${JSON.stringify(pp)}`);
         ok(isWire(wp, FIGMA_WIRE.prune), `Clean up ${where}: the dry run posts the brand the page loaded with confirm false, whole — ${wireDiff(wp[0], FIGMA_WIRE.prune)}`);
@@ -3796,7 +3863,7 @@ for (const host of ['web', 'figma']) {
         ok(fresh.length >= 3 && fresh[0][0] === 'update-check-setup' && fresh.every(([, c]) => c === 'true'),
           `Update file ${where}: on a file that is not set up, Set up file is the first item and every item starts ticked (Q668 A, Q2909.5 A) — read ${JSON.stringify(fresh)}`);
         await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
-        const wf = await takeWrites(page);
+        const wf = await takeWrites(page, FIGMA_EFFECT['file-setup'].length);
         const pf = wf.map(keyOf);
         ok(JSON.stringify(pf) === JSON.stringify(FIGMA_EFFECT['file-setup']), `Update file ${where}: the first step posts ${FIGMA_EFFECT['file-setup']} and waits on it — posted ${JSON.stringify(pf)}`);
         ok(isWire(wf, FIGMA_WIRE['file-setup']), `Update file ${where}: Set up file posts ${JSON.stringify(FIGMA_WIRE['file-setup'])} and nothing more — ${wireDiff(wf[0], FIGMA_WIRE['file-setup'])}`);
@@ -3812,10 +3879,12 @@ for (const host of ['web', 'figma']) {
         const stepWant = theme === 'light' ? ['bad', 'Set up file', 'File setup failed', [bad.summary]] : ['warn', 'Set up file', '2 pages skipped', [bad.summary]];
         const runRow = '[data-p3="activity-op"][data-op="update"]';
         await page.waitForFunction((r) => document.querySelector(`${r} [data-p3="op-verdict"]`)?.textContent === 'Stopped at Set up file', runRow, { timeout: 5000 }).catch(() => {});
-        const after = await takePosts(page);
+        const after = await settlePosts(page);
         ok(after.length === 0, `Update file ${where}: a step that does not land well ends the run: nothing more is posted (posted ${JSON.stringify(after)})`);
         // #533 (Q110 A): the run's end reaches the main thread once, as the drawer's short line, without its reason (that
         // stays in Activity). Literal. MUTATION: `ends.push` dropped from the Update file branch (`activity.ts`) → this arm.
+        // Waited for, bounded, as the prune's run-ended above is: read after a fixed wait alone, it raced the post (#4073).
+        await page.waitForFunction(() => window.__runEnded.length > 0, null, { timeout: POST_WAIT_MS }).catch(() => {});
         const ended = await page.evaluate(() => window.__runEnded.slice());
         ok(JSON.stringify(ended) === '["Update file failed."]',
           `#533 ${where}: the stopped run posts one run-ended, "Update file failed." (posted ${JSON.stringify(ended)})`);
@@ -3841,7 +3910,7 @@ for (const host of ['web', 'figma']) {
           ok(JSON.stringify(fs?.next) === JSON.stringify(['Update again', 'Copy details']),
             `Q3113.4 A ${where}: the ${kind} offers "Update again" and "Copy details" (${JSON.stringify(fs?.next)})`);
           // "Update again" opens Update file again (Q3390.2 A); its run posts exactly the message Set up file posted.
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator(`${runRow} [data-p3="op-again"]`), WAIT);
           await postMsg(page, { type: 'file-sets', present: [], setUp: false });
           await page.waitForFunction(() => document.querySelector('[data-p3="update-go"]')?.disabled === false, null, { timeout: 5000 }).catch(() => {});
@@ -3859,7 +3928,7 @@ for (const host of ['web', 'figma']) {
           // down one. MUTATION: the open entries remembered by their index again → this arm, by name.
           const row = runRow;
           await page.evaluate((r) => { const d = document.querySelector(`${r} details.p3-op-history`); if (d) d.open = true; const e = document.querySelector(`${r} details.p3-op-entry`); if (e) e.open = true; }, row);
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator(`${row} [data-p3="op-again"]`), WAIT);
           await postMsg(page, { type: 'file-sets', present: [], setUp: false });
           await page.waitForFunction(() => document.querySelector('[data-p3="update-go"]')?.disabled === false, null, { timeout: 5000 }).catch(() => {});
@@ -3876,9 +3945,9 @@ for (const host of ['web', 'figma']) {
           await postMsg(page, { type: 'agent-started', id: 'ag1', cmd: 'build-components' });
           await page.waitForFunction((r) => document.querySelector(`${r} [data-p3="op-again"]`)?.getAttribute('aria-disabled') === 'true', row, { timeout: 5000 }).catch(() => {});
           const busy = await page.evaluate((r) => document.querySelector(`${r} [data-p3="op-again"]`)?.getAttribute('aria-disabled') ?? null, row);
-          await takeWrites(page);
+          await settleWrites(page);
           await page.evaluate((r) => { const n = document.querySelector(`${r} [data-p3="op-again"]`); if (n) HTMLElement.prototype.click.call(n); }, row);
-          const busyW = await takeWrites(page);
+          const busyW = await settleWrites(page);
           const busyD = await page.evaluate(() => !!document.querySelector('[data-p3="update-dialog"]'));
           ok(busy === 'true' && busyW.length === 0 && !busyD,
             `#3126 review ${where}: with a second write running, "Update again" is aria-disabled and a click opens nothing and posts nothing (aria-disabled ${busy}, dialog ${busyD}, posted ${JSON.stringify(busyW.map(keyOf))})`);
@@ -3939,7 +4008,7 @@ for (const host of ['web', 'figma']) {
           const at = await page.evaluate(() => ({ place: document.querySelector('[data-p3="frame"]')?.dataset.place ?? null, layout: document.querySelector('[data-p3="frame"]')?.dataset.layout ?? null,
             levers: !!document.querySelector('[data-p3="components-levers"]'), docs: !!document.querySelector('[data-p3="documentation"]'),
             build: document.querySelectorAll('[data-p3="components-levers"] .p3-cp-bar').length }));
-          const px = await takePosts(page);
+          const px = await settlePosts(page);
           const landed = area === 'components' ? at.place === 'components' && at.levers && at.build === 0 : at.layout === 'page' && at.docs;
           ok(landed && px.length === 0, `${area} ${where}: the rail opens the ${area} area and writes nothing — ${JSON.stringify(at)}, posted ${JSON.stringify(px)}`);
         }
@@ -3952,19 +4021,20 @@ for (const host of ['web', 'figma']) {
           if ((await drawerState(page)).open) await hooks.click(page.locator(narrow ? '[data-p3="activity-close"]' : '[data-p3="activity-toggle"]'), WAIT);
           // The update's two posts are reads and a write `recordPosts` does not keep, so this arm listens for them itself.
           await page.evaluate(() => { if (window.__cv3308) return; window.__cv3308 = []; window.addEventListener('message', (e) => { const m = e.data?.pluginMessage; if (m && ['update-check-request', 'update-sets'].includes(m.type)) window.__cv3308.push(JSON.parse(JSON.stringify(m))); }); });
-          const takeCv = (type) => page.evaluate((t) => new Promise((r) => setTimeout(() => { const got = window.__cv3308.filter((m) => m.type === t); window.__cv3308.length = 0; r(got); }, 50)), type);
+          // `n` of `type` awaited, as `takeWrites` awaits them (#4073); `n` 0 is the settle step, which only clears the record.
+          const takeCv = async (type, n) => (await takeFrom(page, '__cv3308', n, type)).filter((m) => m.type === type);
           await openUpdate({ present: [], setUp: false, queued: [] });
           await hooks.click(page.locator('[data-p3="update-check-guides"]'), WAIT);
-          await takeWrites(page);
-          await takeCv('none');
+          await settleWrites(page);
+          await takeCv('none', 0);
           await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
-          const cv1 = (await takeWrites(page)).map(keyOf);
+          const cv1 = (await takeWrites(page, 1, 'file-setup')).map(keyOf);
           await postMsg(page, { type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: 'pages: 9 created' });
-          const cv2 = (await takeWrites(page)).map(keyOf);
+          const cv2 = (await takeWrites(page, 1, 'apply-theme')).map(keyOf);
           await postMsg(page, { type: 'apply-result', ok: true, headline: '✓ Applied 412 variables', summary: '412 variables written.' });
-          const cv3 = await takeCv('update-check-request');
+          const cv3 = await takeCv('update-check-request', 1);
           await postMsg(page, { type: 'update-check', previewHash: 'H-3308', missing: [], refused: [], sets: [] });
-          const cv4 = await takeCv('update-sets');
+          const cv4 = await takeCv('update-sets', 1);
           const cvRun = await updBtn();
           await postMsg(page, { type: 'component-update-result', ok: true, headline: '✓ About this library drawn', summary: 'Cover: drawn. About this library: drawn on the Cover page.', lines: ['Cover: drawn.', 'About this library: drawn on the Cover page.'] });
           await settle(page);
@@ -3972,7 +4042,7 @@ for (const host of ['web', 'figma']) {
           ok(cv1.includes('file-setup') && cv2.includes('apply-theme') && !cv2.includes('update-check-request')
             && cv3.length === 1 && canon(cv3[0].defs) === '[]' && cv4.length === 1 && canon(cv4[0].defs) === '[]' && cv4[0].previewHash === 'H-3308' && cvRun.busy && !cvEnd.busy,
             `${where}: #3308: a run that sets the file up and writes its theme ends with the cover: after Theme it checks and applies the update over no sets, and that verdict ends the run (posted ${JSON.stringify(cv1)}, ${JSON.stringify(cv2)}, then ${JSON.stringify(cv3)} and ${JSON.stringify(cv4)}; Update file ${JSON.stringify(cvRun)} → ${JSON.stringify(cvEnd)})`);
-          await takeWrites(page);
+          await settleWrites(page);
         }
         // #3128: a set the build queue posts that the host refuses (the plugin's run guard still held) gets no verdict.
         // The run ends on the refusal: Update file is free again, the Build set row is not left running, and its result
@@ -3983,7 +4053,7 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'file-sets', present: [], setUp: true, queued: ['badge', 'tag'] });
         await openComps(page, WAIT);
         await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
         const rfW1 = (await takeWrites(page)).map(keyOf);
         await postMsg(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built 1', summary: 'built', lines: ['built'] });
@@ -4014,11 +4084,11 @@ for (const host of ['web', 'figma']) {
           await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
           // Owner's call on #3306's review (A): ONE "Also adds" line, so every line under the dialog is read, not the first.
           const dbAlso = await page.evaluate(() => [...document.querySelectorAll('[data-p3="update-dialog"] [data-p3="update-add-also"]')].map((n) => n.textContent));
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
-          const dbW1 = (await takeWrites(page)).filter((m) => m.type === 'build-components');
+          const dbW1 = (await takeWrites(page, 1, 'build-components')).filter((m) => m.type === 'build-components');
           await postMsg(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built 1', summary: 'built', lines: ['built'] });
-          const dbW2 = (await takeWrites(page)).filter((m) => m.type === 'build-components');
+          const dbW2 = (await takeWrites(page, 1, 'build-components')).filter((m) => m.type === 'build-components');
           await postMsg(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built 1', summary: 'built', lines: ['built'] });
           await settle(page);
           const dbU = await updBtn();
@@ -4041,14 +4111,14 @@ for (const host of ['web', 'figma']) {
           await postMsg(page, { type: 'file-sets', ...abLacks });
           await openComps(page, WAIT);
           await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
-          const abW1 = (await takeWrites(page)).filter((m) => m.type === 'build-components');
+          const abW1 = (await takeWrites(page, 1, 'build-components')).filter((m) => m.type === 'build-components');
           await postMsg(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built 1', summary: 'built', lines: ['built'], alsoBuilt: ['badge', 'list-item', 'divider'] });
-          const abW2 = (await takeWrites(page)).filter((m) => m.type === 'build-components');
+          const abW2 = (await takeWrites(page, 1, 'build-components')).filter((m) => m.type === 'build-components');
           await postMsg(page, { type: 'component-result', ok: true, completed: true, headline: '✓ built 1', summary: 'built', lines: ['built'] });
           await settle(page);
-          const abW3 = (await takeWrites(page)).filter((m) => m.type === 'build-components');
+          const abW3 = (await settleWrites(page)).filter((m) => m.type === 'build-components');
           const abU = await updBtn();
           ok(canon([...abW1, ...abW2, ...abW3].map((m) => m.def)) === canon(['tag', 'link']) && !abU.busy,
             `${where}: #3359: a queued set an earlier build in the run made first is not posted again: Tag's build made Badge, so the run posts Tag then Link, and ends (posted ${JSON.stringify([...abW1, ...abW2, ...abW3])}, Update file ${JSON.stringify(abU)})`);
@@ -4065,7 +4135,7 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'file-sets', present: [], setUp: false, queued: ['badge', 'tag'] });
         await openComps(page, WAIT);
         await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
         await postMsg(page, { type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: 'pages: 9 created' });
         await postMsg(page, { type: 'component-result', ok: false, completed: true, headline: '⚠ 2 misses', summary: 'built', lines: ['built'] });
@@ -4093,7 +4163,7 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'file-sets', present: [], setUp: false, queued: ['badge', 'tag'] });
         await openComps(page, WAIT);
         await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
         await postMsg(page, { type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: 'pages: 9 created' });
         await postMsg(page, { type: 'component-result', ok: false, completed: true, headline: '⚠ 2 misses', summary: 'built', lines: ['built'] });
@@ -4127,7 +4197,7 @@ for (const host of ['web', 'figma']) {
           await postMsg(page, { type: 'file-sets', present: [], setUp: false, queued: ['tag'] });
           await openComps(page, WAIT);
           await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
           await postMsg(page, { type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: 'pages: 9 created' });
           await settle(page);
@@ -4148,7 +4218,7 @@ for (const host of ['web', 'figma']) {
           await settle(page);
           await postMsg(page, { type: 'style-guide-catalog', catalog: SG_RING_CATALOG });
           await settle(page);
-          const sgW = await takeWrites(page);
+          const sgW = await takeWrites(page, 1, 'style-guide');
           await postMsg(page, { type: 'style-guide-progress', done: 28, total: 45, tableMs: 5 });
           await settle(page);
           const g0 = await phases();
@@ -4172,7 +4242,7 @@ for (const host of ['web', 'figma']) {
         const sp0 = await page.evaluate(() => { const b = document.querySelector('[data-p3="docs-specs-draw"]'); const r = document.querySelector('[data-p3="docs-specs-result"]');
           return { label: b?.querySelector('[data-p3="label-idle"]')?.textContent ?? null, off: b?.getAttribute('aria-disabled') ?? null, result: r && !r.hidden ? r.textContent : null }; });
         ok(sp0.label === 'Draw specs' && sp0.off === null && sp0.result === null, `${where}: #2830 Q2830.3 A: Specs offers Draw specs, available, with no result yet (${JSON.stringify(sp0)})`);
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="docs-specs-draw"]'), WAIT);
         const spW = await takeWrites(page);
         const spBusy = await page.evaluate(() => document.querySelector('[data-p3="docs-specs-draw"]')?.getAttribute('aria-busy') ?? null);
@@ -4203,10 +4273,10 @@ for (const host of ['web', 'figma']) {
         await hooks.need(page, '[data-p3="update-add-row"]', WAIT);
         const spT = await page.evaluate(() => ({ theme: document.querySelector('[data-p3="update-check-theme"]')?.getAttribute('aria-checked') ?? null,
           sets: document.querySelectorAll('[data-p3="update-add-row"]').length }));
-        await takeWrites(page);
+        await settleWrites(page);
         await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
         await settle(page);
-        const spBW = await takeWrites(page);
+        const spBW = await settleWrites(page);
         const spBU = await updBtn();
         ok(spT.theme === 'false' && spT.sets === 1 && spBW.length === 0 && !spBU.busy,
           `${where}: #3034 review C3: while Draw specs is out, Update file's sets step builds nothing, and its run ends (queued ${JSON.stringify(spT)}, posted ${JSON.stringify(spBW.map(keyOf))}, Update file ${JSON.stringify(spBU)})`);
@@ -4234,14 +4304,14 @@ for (const host of ['web', 'figma']) {
         await postMsg(page, { type: 'agent-started', id: 'sp1', cmd: 'build-components' });
         await page.waitForFunction(() => document.querySelector('[data-p3="docs-specs-draw"]')?.getAttribute('aria-disabled') === 'true', null, { timeout: 5000 }).catch(() => {});
         const spG = await page.evaluate(() => { const b = document.querySelector('[data-p3="docs-specs-draw"]'); return { off: b?.getAttribute('aria-disabled') ?? null, busy: b?.getAttribute('aria-busy') ?? null }; });
-        await takeWrites(page);
+        await settleWrites(page);
         await page.evaluate(() => { const n = document.querySelector('[data-p3="docs-specs-draw"]'); if (n) HTMLElement.prototype.click.call(n); });
-        const spGW = await takeWrites(page);
+        const spGW = await settleWrites(page);
         ok(spG.off === 'true' && spG.busy === null && spGW.length === 0,
           `${where}: #3034 review C2: with an agent's components run out, Draw specs reads unavailable and a click posts nothing (${JSON.stringify(spG)}, posted ${JSON.stringify(spGW)})`);
         await page.evaluate(() => document.querySelector('[data-p3="docs-specs-draw"]')?.removeAttribute('aria-disabled'));
         await page.evaluate(() => { const n = document.querySelector('[data-p3="docs-specs-draw"]'); if (n) HTMLElement.prototype.click.call(n); });
-        const spGW2 = await takeWrites(page);
+        const spGW2 = await settleWrites(page);
         ok(spGW2.length === 0, `${where}: #3034 review C4: with an agent's components run out, the draw's own guard posts nothing even from a control left available (posted ${JSON.stringify(spGW2)})`);
         await postMsg(page, { type: 'agent-finished', id: 'sp1', cmd: 'build-components' });
         await page.waitForFunction(() => document.querySelector('[data-p3="docs-specs-draw"]')?.getAttribute('aria-disabled') === null, null, { timeout: 5000 }).catch(() => {});
@@ -4265,7 +4335,7 @@ for (const host of ['web', 'figma']) {
           ['theme', true, { type: 'apply-result', ok: true, headline: '✓ Applied 412 variables', summary: '412 variables written.' }],
         ]) {
           await openUpdate({ present: [], setUp });
-          await takeWrites(page);
+          await settleWrites(page);
           await hooks.click(page.locator('[data-p3="update-go"]'), WAIT);
           const urW = (await takeWrites(page)).map(keyOf);
           if ((await drawerState(page)).open) await hooks.click(page.locator(narrow ? '[data-p3="activity-close"]' : '[data-p3="activity-toggle"]'), WAIT);
@@ -4276,10 +4346,10 @@ for (const host of ['web', 'figma']) {
           const urG = await page.evaluate(() => { const b = document.querySelector('[data-p3="docs-specs-draw"]'); return { off: b?.getAttribute('aria-disabled') ?? null, busy: b?.getAttribute('aria-busy') ?? null }; });
           const urU = await updBtn();
           await page.evaluate(() => { const n = document.querySelector('[data-p3="docs-specs-draw"]'); if (n) HTMLElement.prototype.click.call(n); });
-          const urGW = await takeWrites(page);
+          const urGW = await settleWrites(page);
           await page.evaluate(() => document.querySelector('[data-p3="docs-specs-draw"]')?.removeAttribute('aria-disabled'));
           await page.evaluate(() => { const n = document.querySelector('[data-p3="docs-specs-draw"]'); if (n) HTMLElement.prototype.click.call(n); });
-          const urGW2 = await takeWrites(page);
+          const urGW2 = await settleWrites(page);
           ok(JSON.stringify(urW) === JSON.stringify([step === 'setup' ? 'file-setup' : 'apply-theme']) && urU.busy && urG.off === 'true' && urG.busy === null && urGW.length === 0 && urGW2.length === 0,
             `${where}: #3034 review M1: with Update file's ${step} step out and its dialog closed, Draw specs reads unavailable and posts nothing, even from a control left available (run posted ${JSON.stringify(urW)}, Update file busy ${urU.busy}, ${JSON.stringify(urG)}, posted ${JSON.stringify(urGW.concat(urGW2))})`);
           await postMsg(page, end);
@@ -4287,7 +4357,7 @@ for (const host of ['web', 'figma']) {
           const urE = await page.evaluate(() => document.querySelector('[data-p3="docs-specs-draw"]')?.getAttribute('aria-disabled') ?? null);
           const urEU = await updBtn();
           ok(urE === null && !urEU.busy, `${where}: #3034 review M1: once the ${step} step's verdict ends the run, Draw specs is available again (aria-disabled ${urE}, Update file busy ${urEU.busy})`);
-          await takeWrites(page);
+          await settleWrites(page);
           if ((await drawerState(page)).open) await hooks.click(page.locator(narrow ? '[data-p3="activity-close"]' : '[data-p3="activity-toggle"]'), WAIT);
         }
         if (!narrow) {
@@ -9105,6 +9175,26 @@ console.log(`\nQA-B9, B17, I11 — the eased reveal, the jump links, the remembe
       ok(stall.startsWith("#4127 self-check: the preview pane's frames did not settle within 3s; the page renders no frame") && took < 15000,
         `#4127: a frame wait that never settles fails by name within its bound, not at the 600s watchdog (${took}ms: ${stall.slice(0, 160)})`);
     }
+    // #4342: watched from here, after the self-check above (its frames are held by a stub, not stuck, so there is nothing
+    // to locate), so a real stall on the Type path below names the JavaScript it stopped in, or that it ran none.
+    await watchStalls(page);
+    // #4342: the location's own self-check. A page of its own, watched, then stuck in a JavaScript loop: a bounded wait
+    // on it fails saying its main thread is busy, it did not come back, and the loop's function. Measured: CI's #2183 line ("waiting for element to be visible, enabled and
+    // stable", then nothing) is exactly what a planted loop on the Type page produces, so a page stuck in JavaScript is
+    // the case to locate. Mutation this fails by name: `within` no longer asks `stallWhere`, or `watchStalls` dropped.
+    {
+      const sctx = await browser.newContext();
+      try {
+        const sp = await sctx.newPage();
+        await sp.setContent('<p>stall</p>');
+        await watchStalls(sp);
+        await sp.evaluate(() => { setTimeout(function stallSelfCheck() { for (;;) { /* held until the context closes */ } }, 50); });
+        const said = await within(sp, 'stall self-check', sp.evaluate(() => new Promise((r) => setTimeout(() => requestAnimationFrame(r), 200))), 3000)
+          .then(() => 'returned', (e) => String(e?.message ?? e));
+        ok(said.startsWith('stall self-check did not settle within 3s; the page renders no frame; the main thread runs no script, so it is busy; no frame in 3s more; it was running JavaScript: stallSelfCheck'),
+          `#4342: a wait on a page stuck in JavaScript names where it stopped, the function it was running (${said.slice(0, 200)})`);
+      } finally { await sctx.close(); }
+    }
 
     await installGlideLog(page);
     await goPlace(page, 'color-fills');
@@ -9886,7 +9976,7 @@ for (const reduced of [false, true]) {
     await openDepth(page);
     const tag = reduced ? 'under reduced motion' : 'without reduced motion';
     const mount = await dotAnims(page);
-    ok(mount.length === 4 && mount.every((a) => !a), `D9: ${tag}, the four traces are at rest when the page opens (${JSON.stringify(mount)})`);
+    ok(mount.length === 10 && mount.every((a) => !a), `D9: ${tag}, the ten preset traces (#2857) are at rest when the page opens (${JSON.stringify(mount)})`);
     await slide(page, 'shadow-softness', 0.4);
     const elev = await dotAnims(page);
     ok(elev.every((a) => !a), `D9: ${tag}, an Elevation edit plays nothing (${JSON.stringify(elev)})`);
@@ -9897,16 +9987,17 @@ for (const reduced of [false, true]) {
     const after = await dotAnims(page);
     const label = await page.evaluate(() => document.querySelector('[data-p3="motion-play"]')?.textContent ?? null);
     if (reduced) ok(after.every((a) => !a) && label === 'Play', `D9: under reduced motion, a Motion edit plays nothing, and the button still says Play (${JSON.stringify(after)}, "${label}")`);
-    else ok(after.length === 4 && after.every((a) => /mo-trace-y/.test(a) && /\d+ms cubic-bezier/.test(a)) && label === 'Replay', `D9: without reduced motion, a Motion edit plays the four traces once, and the button says Replay (${JSON.stringify(after)}, "${label}")`);
-    // Real speed: the emphasized trace runs its relaxed duration (moderate 300 × 1.3 = 390ms) at Off.
+    else ok(after.length === 10 && after.every((a) => /mo-trace-y/.test(a) && /\d+ms cubic-bezier/.test(a)) && label === 'Replay', `D9: without reduced motion, a Motion edit plays the ten preset traces once, and the button says Replay (${JSON.stringify(after)}, "${label}")`);
+    // Real speed: the surface preset's trace runs its relaxed duration (moderate 300 × 1.3 = 390ms) at Off, on its enter
+    // role's curve, decelerate (0, 0, 0.2, 1). #2857: the presets replaced the transitions, and none is on emphasized.
     const brand0 = JSON.stringify(await persisted(page));
     await hooks.click(page.locator('[data-p3="motion-play"]'));
     const played = await dotAnims(page);
-    ok(played.every((a) => /mo-trace-y/.test(a)) && played.some((a) => /\b390ms cubic-bezier\(0\.4, 0\.14/.test(a)), `D9: ${tag}, Play plays every trace once, at real speed (${JSON.stringify(played)})`);
+    ok(played.every((a) => /mo-trace-y/.test(a)) && played.some((a) => /\b390ms cubic-bezier\(0, 0, 0\.2, 1\)/.test(a)), `D9: ${tag}, Play plays every trace once, at real speed (${JSON.stringify(played)})`);
     await page.locator('[data-p3="motion-slowmo"]').selectOption('4');
     await hooks.click(page.locator('[data-p3="motion-play"]'));
     const slow = await dotAnims(page);
-    ok(slow.some((a) => /\b1560ms cubic-bezier\(0\.4, 0\.14/.test(a)), `D9: ${tag}, Slow motion 1/4 plays the same trace four times slower (${JSON.stringify(slow)})`);
+    ok(slow.some((a) => /\b1560ms cubic-bezier\(0, 0, 0\.2, 1\)/.test(a)), `D9: ${tag}, Slow motion 1/4 plays the same trace four times slower (${JSON.stringify(slow)})`);
     ok(JSON.stringify(await persisted(page)) === brand0, `#574: ${tag}, Play and Slow motion write nothing to the brand`);
     ok(errors.length === 0, `D9 ${tag}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
   } catch (e) {
@@ -14979,7 +15070,7 @@ for (const { w, h } of [{ w: 1280, h: 900 }, { w: 380, h: 420 }]) for (const hos
       if (host === 'web') return persisted(page);
       // #2486: a click that does not land says what Apply was doing, read off the page, not Playwright's wait alone.
       await applyViaUpdate(page).catch(async (e) => { e.applyState = await applyAsItStood(page); throw e; });
-      const ws = (await takeWrites(page)).filter((m) => m.type === 'apply-theme');
+      const ws = (await takeWrites(page, 1, 'apply-theme')).filter((m) => m.type === 'apply-theme');
       await postMsg(page, { type: 'apply-result', ok: true, headline: 'Applied', summary: 'Applied' });
       await settle(page);
       return ws.length === 1 ? ws[0].input : { posted: ws.length };
@@ -16192,10 +16283,16 @@ const SWITCH_DISABLED = (scheme) => {
   const d = PRISM3_DISABLED[scheme];
   return d ? { track: d.fill, edge: d.edge, knob: d.ink, button: d.icon } : null;
 };
-/** What a switch is and draws: its parts, its name and state, the track's fill and four edges and the knob's fill. */
-const READ_SWITCH = (sel) => {
+/** What a switch is and draws: its parts, its name and state, the track's fill and four edges and the knob's fill.
+ *  `[sel, true]` (#4466) first sets `disabled` on the switch it then reads, in this one task. Set in one `evaluate` and
+ *  read in the next, the read could meet a different node: on the web, a Google Fonts reply landing between the two
+ *  repaints the Type levers on `fonts` (`domains/type.ts`), and the fresh, enabled `type-fluid` switch it draws was read
+ *  as "a disabled switch drawn enabled". `getComputedStyle` restyles at once, so the skin read is the disabled one. */
+const READ_SWITCH = (arg) => {
+  const [sel, disable] = typeof arg === 'string' ? [arg, false] : arg;
   const b = document.querySelector(sel);
   if (!b) return null;
+  if (disable) b.disabled = true;
   const tr = b.querySelector(':scope > .p3-switch-track'), kn = tr?.querySelector(':scope > .p3-switch-knob');
   const t = tr ? getComputedStyle(tr) : null, k = kn ? getComputedStyle(kn) : null;
   return {
@@ -16219,12 +16316,15 @@ for (const host of ['web', 'figma']) {
   for (const theme of ['light', 'dark']) {
     const where = `#2183 ${host} ${theme}`;
     const { ctx, page, errors } = await open({ host, theme, w: 1280, h: 900 });
+    // #4465: watched from the start, so a page that stops on the Type path is located in the catch below.
+    await watchStalls(page);
     try {
       const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
       const kindOf = (r, label) => ok(!!r && r.kind && !r.dot && r.words === '',
         `${where}: ${label} is the track-and-knob kind: one track holding one knob, no dot and no state words (${JSON.stringify(r && { kind: r.kind, dot: r.dot, words: r.words })})`);
-      const disabledLook = async (sel, label, how) => {
-        const r = await page.evaluate(READ_SWITCH, sel);
+      // `disable` (#4466): disabled and read in one task, never across two `evaluate`s a repaint can fall between.
+      const disabledLook = async (sel, label, how, disable = false) => {
+        const r = await page.evaluate(READ_SWITCH, [sel, disable]);
         const v = r ? switchSkin(r, scheme) : null;
         ok(!!r && r.off && !!v?.pass,
           `${where}: a disabled ${label} switch (${how}, ${r?.checked === 'true' ? 'on' : 'off'}) draws Prism3's disabled switch: track color.disabled.fill ${v?.want?.track}, edge color.disabled.border ${v?.want?.edge}, knob color.disabled.on-fill ${v?.want?.knob} (drew ${JSON.stringify(v?.drew)}${v?.button ? ', the outline button\'s disabled.icon' : ''})`);
@@ -16232,7 +16332,8 @@ for (const host of ['web', 'figma']) {
       };
       for (const [place, hk, reveal] of SWITCH_HOOKS) {
         await goPlace(page, place);
-        if (reveal) await reveal(page).catch(() => {});
+        // #4465: not swallowed. A reveal that stopped surfaced 30s later as an anonymous click timeout on its switch.
+        if (reveal) await reveal(page);
         const sel = `[data-p3="${hk}"]`;
         const r0 = await page.evaluate(READ_SWITCH, sel);
         ok(!!r0, `${where}: the ${hk} switch is drawn on ${place}`);
@@ -16247,8 +16348,7 @@ for (const host of ['web', 'figma']) {
         ok(!!r1 && r1.checked !== r0.checked && r1.knobX !== r0.knobX, `${where}: a click turns the ${hk} switch and moves its knob (${r0.checked} → ${r1?.checked}, knob ${r0.knobX} → ${r1?.knobX})`);
         // Disabled the way the app disables a switch (`disabled`), in this state and then the other.
         for (const _ of [0, 1]) {
-          await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = true; }, sel);
-          await disabledLook(sel, hk, 'disabled');
+          await disabledLook(sel, hk, 'disabled', true);
           await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = false; }, sel);
           await hooks.click(page.locator(sel));
           await settle(page);
@@ -16281,14 +16381,16 @@ for (const host of ['web', 'figma']) {
         for (const hk of sg) kindOf(await page.evaluate(READ_SWITCH, `[data-p3="${hk}"]`), `the Build style guides ${hk} switch`);
         if (sg[0]) {
           const sel = `[data-p3="${sg[0]}"]`;
-          await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = true; }, sel);
-          await disabledLook(sel, `Build style guides ${sg[0]}`, 'disabled');
+          await disabledLook(sel, `Build style guides ${sg[0]}`, 'disabled', true);
           await page.evaluate((x) => { const b = document.querySelector(x); if (b) b.disabled = false; }, sel);
         }
       }
       ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
     } catch (e) {
-      ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}`);
+      // #4465: whether the page still rendered frames when the step gave up, and, when it rendered none, where it stopped.
+      const live = await rendersFrame(page);
+      const at = live ? '' : await stallWhere(page);
+      ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}; the page ${live ? 'still renders frames' : 'renders no frame'}${at ? `; ${at}` : ''}`);
     } finally { await ctx.close(); }
   }
 }
@@ -21331,10 +21433,10 @@ const runs3326 = async (page, where, w) => {
   ok(JSON.stringify(a.counts) === JSON.stringify([['bad', '1 failed']]),
     `#3326 PR 2 ${where}: the run counts once, as one failure (${JSON.stringify(a.counts)})`);
   // "Update again" opens Update file again, and writes nothing by itself.
-  await takeWrites(page);
+  await settleWrites(page);
   await hooks.click(page.locator('[data-p3="activity-op"][data-op="update"] [data-p3="op-again"]'), WAIT);
   const again = await page.evaluate(() => !!document.querySelector('[data-p3="update-dialog"]'));
-  const againW = await takeWrites(page);
+  const againW = await settleWrites(page);
   ok(again && againW.length === 0, `#3326 PR 2 ${where}: "Update again" opens Update file again and posts nothing by itself (dialog ${again}, posted ${JSON.stringify(againW.map(keyOf))})`);
   if (again) await hooks.click(page.locator('[data-p3="update-x"]'), WAIT);
   // C: an agent's Build set after the run keeps its own row.
@@ -22794,7 +22896,7 @@ if (runs('1909')) {
     ok(d1.picks.every((v) => v === 'rename') && d1.go === false, `#1909 ${where}: "Apply to all" sets every row, and Apply turns on (${JSON.stringify(d1.picks)}, off ${d1.go})`);
     await (SHOTS ? page.screenshot({ path: join(SHOTS, 's1909-plugin-light-1280-collisions.png') }) : null);
     step = 'apply';
-    await takeWrites(page);
+    await settleWrites(page);
     await hooks.click(page.locator('[data-p3="collisions-go"]'), WAIT);
     const w = await takeWrites(page);
     const want = { 'collection:color': 'rename', 'variable:color:pds3/color/background/primary': 'rename', 'effect style:shadow/xs': 'rename' };
@@ -22810,7 +22912,7 @@ if (runs('1909')) {
     step = 'escape';
     await page.keyboard.press('Escape');
     await settle(page);
-    const w2 = await takeWrites(page);
+    const w2 = await settleWrites(page);
     const gone2 = await page.evaluate(() => !document.querySelector('[data-p3="collisions-dialog"]'));
     ok(gone2 && w2.length === 0, `#1909 ${where}: Escape closes the list and posts nothing (${w2.length} posts)`);
     // The review of #3518 (finding 1): a Rename onto a name someone else holds. The refusal names the new row alone and
@@ -22823,7 +22925,7 @@ if (runs('1909')) {
     await hooks.need(page, '[data-p3="collisions-dialog"]', WAIT);
     const rows3 = await page.evaluate(() => [...document.querySelectorAll('[data-p3="collisions-row"] .p3-upd-setname')].map((n) => n.textContent));
     await page.locator('[data-p3="collisions-choice"]').nth(0).selectOption('skip');
-    await takeWrites(page);
+    await settleWrites(page);
     await hooks.click(page.locator('[data-p3="collisions-go"]'), WAIT);
     const w3 = await takeWrites(page);
     const want3 = { 'collection:color': 'rename', 'collection:color (Prism3)': 'skip' };

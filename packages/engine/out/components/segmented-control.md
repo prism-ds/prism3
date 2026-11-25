@@ -74,7 +74,7 @@ Use a segmented control for a choice between two to five short options that chan
 
 ### Motion
 
-- **Enter:** None. On selection the pill travels to the new option on motion.transition.default, or cross-fades.
+- **Enter:** None. On selection the pill travels to the new option on motion.duration.normal with motion.easing-role.default, or cross-fades.
 - **Exit:** None.
 - **Reduced motion:** The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.
 

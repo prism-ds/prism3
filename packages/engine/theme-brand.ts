@@ -13,7 +13,7 @@ import { iconMapErrors } from './icon-map';
 import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, INTERACTIVE_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
 import { PALETTE_NAME_RE, RESERVED_PALETTES, STATUS_DEFAULTS, statusRamp, inRedTerritory, hueDist, RED_CHROMA_FLOOR, normalizeDisabledStrategy, normalizeDisabledMin } from './theme-color';
 import { buildDims } from './theme-dims';
-import { buildMotion, type MotionAxis } from './theme-motion';
+import { buildMotion, checkCurveForRole, REDUCED_CAP_MS, type MotionAxis } from './theme-motion';
 import { LINE_HEIGHT_KEYS, LETTER_SPACING_KEYS, DISPLAY_VARIANTS, buildTypography, withLabelDefault, WEIGHT_ROLE_DEFAULT, type FontFamilyBinding, type WeightRole, deriveFamilies, WEIGHT_ROLE_ORDER, type TypeGroup, deriveTypefaces, PER_MODE_SIZE_GROUPS, type PerModeSizeGroup, HEADING_SIZE_FLOOR, mobileEndpoint, TYPE_GROUPS } from './theme-type';
 import { buildShadow, darkShadowSeed, type ShadowAxis, type ShadowStep, type ShadowLayer } from './theme-shadow';
 import { buildLayout, gridGapNotes } from './theme-layout';
@@ -174,12 +174,13 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     const lev = input.modeLevers![m]!;
     if (lev.radius !== undefined && (!Number.isFinite(lev.radius) || lev.radius < 0 || lev.radius > 2))
       throw new Error(`modeLevers: mode '${m}' radius ${lev.radius} is out of range — must be a finite number in [0, 2]`);
-    // Per-mode weight values must be a valid font-weight (a whole number in [100, 900]; whole because the value keys
-    // a primitive, #3871). Role ordering is NOT
+    // Per-mode weight values must be a valid font-weight: a whole number in DTCG's [1, 1000], the global
+    // `typography.weightRoles` range (#3871), so a mode can move a weight as far as the brand can set one (#4214,
+    // owner decision A); whole because the value keys a primitive (#3871). Role ordering is NOT
     // enforced here (the UI owns that) — the engine accepts any valid weight per role.
     for (const [role, w] of Object.entries(lev.weights ?? {})) {
-      if (w !== undefined && (!Number.isInteger(w) || w < 100 || w > 900))
-        throw new Error(`modeLevers: mode '${m}' weight '${role}' ${w} is out of range — must be a whole number in [100, 900]`);
+      if (w !== undefined && (!Number.isInteger(w) || w < 1 || w > 1000))
+        throw new Error(`modeLevers: mode '${m}' weight '${role}' ${w} is out of range — must be a whole number in [1, 1000]`);
     }
     // #296 — per-mode leading/tracking name a RUNG on both sides (source key → target key). Both must
     // be real rungs; a NUMBER here is the old pre-#296 shape and is rejected with a pointer, because
@@ -613,7 +614,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   notes.push(`dimensions: ${baseUnit}px grid, ${spaceBase}px spacing rhythm, '${density}' density (sets component sizes), radius scale ${n2(rScale)} (base radius ${n2(baseMd)}px).`);
   // #2053: the lever is retired. A brand file that still sets it is told it changes nothing.
   if (input.radiusHairline !== undefined) notes.push(`radius: radiusHairline is retired — radius.hairline (1px) is always emitted, so the setting changes nothing.`);
-  notes.push(`motion: '${input.motionPersonality?.tempo ?? 'standard'}' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.`);
+  notes.push(`motion: '${input.motionPersonality?.tempo ?? 'standard'}' tempo sets the durations; each reduced-motion twin is a short fade of at most ${REDUCED_CAP_MS}ms.`);
   // Per-mode MOTION TEMPO (Phase D): a customizable mode overriding `tempo` re-derives its duration ramp
   // (+ reduce-motion + stagger) via the SAME buildMotion the baseline uses, just at the mode's tempo.
   // Only a mode whose tempo DIFFERS from the baseline gets an entry (no-diff suppression) → byte-identical
@@ -639,6 +640,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     for (const [role, curve] of pairs) {
       if (!ROLES.includes(role)) throw new Error(`modeLevers.${m}.easings: unknown motion role '${role}' (have: ${ROLES.join(', ')})`);
       if (!CURVES.includes(curve)) throw new Error(`modeLevers.${m}.easings.${role}: unknown easing curve '${curve}' (have: ${CURVES.join(', ')})`);
+      checkCurveForRole(role, curve, motion.easing, motion.brandCurves, `modeLevers.${m}.easings.${role}`);
     }
     const base = Object.fromEntries(motion.easingRoles.map((r) => [r.role, r.curve]));
     const diff = pairs.filter(([role, curve]) => curve !== base[role]);

@@ -42,7 +42,7 @@ import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly } from './emit-dtcg-overlay';
 import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
-import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme } from './emit-dtcg';
+import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme, windowsInvalidName } from './emit-dtcg';
 import { buildAiMetadata } from './ai-metadata';
 import { validate as validateJsonSchema } from './json-schema-lite';
 import { handleRpc, callTool, toolDefs, manifestRootKeys, summarizeDescription, LATEST_PROTOCOL_VERSION, SERVER_INFO } from './mcp';
@@ -6944,8 +6944,11 @@ arm: {
       `D(a0): dark re-points the ROLE at calm (got ${role.$extensions.prism3.modes?.dark?.$value})`);
     ok(mo.easing.expressive.$extensions?.prism3?.modes === undefined,
       'D(a0): the CURVE primitive carries no per-mode override — a mode re-points, it never redefines');
-    ok(mo.transition.emphasized.$value.timingFunction === `{${root}.motion.easing-role.emphasized}`,
-      `D(a0): the transition names the role, so it inherits the re-point (got ${mo.transition.emphasized.$value.timingFunction})`);
+    // #2857: the presets replaced the transitions. Every preset easing slot on its default names the ROLE, never its
+    // curve, so a mode's re-point reaches it through the alias.
+    const offRole = Object.entries(mo.preset as Record<string, any>).filter(([, p]) => !/\.motion\.easing-role\.[a-z]+\}$/.test(p.easing.$value));
+    ok(Object.keys(mo.preset).length === 10 && offRole.length === 0,
+      `D(a0): every default preset's easing names a role, so it inherits the re-point (${offRole.map(([n, p]) => `${n}: ${p.easing.$value}`).join(', ') || '10 presets on roles'})`);
     ok(mo['easing-role'].default.$extensions?.prism3?.modes === undefined,
       'D(a0): an unre-pointed role is untouched (no blanket override)');
     // The BASELINE is settable too, and a mode deviates from it — without that, a mode could override
@@ -6959,19 +6962,21 @@ arm: {
         'D(a0): setting the baseline still does not touch any curve primitive');
       ok(threw(() => brandTheme({ ...base, motionPersonality: { easingRoles: { default: 'nope' } } } as unknown as BrandInput)),
         'D(a0): an unknown baseline curve is rejected');
-      // #2062: each transition's $description names the curve its easing ROLE resolves to, not the transition's
-      // fixed default. EXPECTED is read off the emitted easing-role leaf's own alias, never from the engine's
-      // map, on both the stock brand and the re-pointed one; a precondition holds that the re-point moved.
+      // #2062: each preset easing slot's $description names the curve its easing ROLE resolves to (the transitions
+      // carried this until #2857 retired them). EXPECTED is read off the emitted easing-role leaf's own alias, never
+      // from the engine's map, on both the stock brand and the re-pointed one; a precondition holds that it moved.
       const stock = buildTree(brandTheme(base as unknown as BrandInput)).tree[root].motion;
       ok(stock['easing-role'].default.$value !== mb['easing-role'].default.$value,
         `#2062 precondition: easingRoles.default: 'calm' moves the default role off its stock curve (${stock['easing-role'].default.$value} → ${mb['easing-role'].default.$value})`);
       for (const [label, mo] of [['stock', stock], ["easingRoles.default: 'calm'", mb]] as const) {
-        const wrong = Object.keys(mo.transition).filter((name) => {
-          const curve = /\.motion\.easing\.([a-z0-9-]+)\}$/.exec(mo['easing-role'][name]?.$value ?? '')?.[1];
-          return !curve || !String(mo.transition[name].$description ?? '').endsWith(` + ${curve})`);
+        const presets = mo.preset as Record<string, any>;
+        const wrong = Object.keys(presets).filter((name) => {
+          const role = /\.motion\.easing-role\.([a-z]+)\}$/.exec(presets[name].easing.$value)?.[1];
+          const curve = /\.motion\.easing\.([a-z0-9-]+)\}$/.exec(mo['easing-role'][role ?? '']?.$value ?? '')?.[1];
+          return !curve || !String(presets[name].easing.$description ?? '').endsWith(` (${curve})`);
         });
-        ok(Object.keys(mo.transition).length >= 4 && wrong.length === 0,
-          `#2062: on the ${label} brand, every motion.transition.* description names the curve its easing role resolves to (${Object.keys(mo.transition).length} transitions)${wrong.length ? ` — wrong: ${wrong.map((n) => `${n} says "${mo.transition[n].$description}", role → ${mo['easing-role'][n]?.$value}`).join('; ')}` : ''}`);
+        ok(Object.keys(presets).length === 10 && wrong.length === 0,
+          `#2062: on the ${label} brand, every preset easing description names the curve its easing role resolves to (${Object.keys(presets).length} presets)${wrong.length ? ` — wrong: ${wrong.map((n) => `${n} says "${presets[n].easing.$description}"`).join('; ')}` : ''}`);
       }
     }
     // no-diff suppression, matching every other axis
@@ -7151,11 +7156,11 @@ arm: {
   ok(defWr?.value === 700 && defWr?.alias?.name === `${root}/core/font/weight/700`, `D-typo(e): Default (light) core/font/weight-role/strong stays 700 (${defWr?.value})`);
 
   // (f) validation throws — families/weights on a generate-only mode (hc-light), on an un-generated
-  //     mode, and a weight outside [100, 900].
+  //     mode, and a weight outside [1, 1000] (the global range since #4214).
   ok(threw(() => brandTheme({ ...base, modes: ['light', 'dark', 'hc-light', 'hc-dark'], modeLevers: { 'hc-light': { families: { display: 'Georgia' } } } } as unknown as BrandInput)), 'D-typo(f): families on hc-light (generate-only) throws');
   ok(threw(() => brandTheme({ ...base, modeLevers: { 'hc-light': { weights: { strong: 600 } } } } as unknown as BrandInput)), 'D-typo(f): weights on a mode this brand does not generate throws');
-  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 50 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 50 (<100) throws');
-  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 1000 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 1000 (>900) throws');
+  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 0 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 0 (<1) throws');
+  ok(threw(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: 1001 } } } } as unknown as BrandInput)), 'D-typo(f): a weight of 1001 (>1000) throws');
 
   // (g) design.md round-trip preserves modeLevers.families/weights through parse∘serialize.
   ok(JSON.stringify(stable(parseDesignMd(toDesignMd(perMode)).input)) === JSON.stringify(stable(perMode)),
@@ -8899,12 +8904,16 @@ arm: {
 
   // (b) stagger + a reduce-motion step also carry the per-mode override (the whole ramp scales).
   ok(pmTree.motion.stagger.$extensions.prism3.modes?.dark?.ms === 50, `D-motion(b): stagger modes.dark → 50ms (got ${pmTree.motion.stagger.$extensions.prism3.modes?.dark?.ms})`);
-  ok(!!pmTree.motion['duration-reduced'].normal.$extensions.prism3.modes?.dark, 'D-motion(b): a reduce-motion step (normal) carries the per-mode override too');
+  // Q-MP17 A (#2857): a reduced twin is min(full, 100ms), so a step under 100ms still moves with tempo (instant: 50 →
+  // 65) and one at or over it does not (normal: 200 and 260 both reduce to 100), carrying no override.
+  ok(pmTree.motion['duration-reduced'].instant.$extensions.prism3.modes?.dark?.ms === 65, `D-motion(b): a reduce-motion step under the cap (instant) carries the per-mode override (got ${pmTree.motion['duration-reduced'].instant.$extensions.prism3.modes?.dark?.ms})`);
+  ok(pmTree.motion['duration-reduced'].normal.$extensions.prism3.modes === undefined && pmTree.motion['duration-reduced'].normal.$value === `{${root}.motion.duration-ms.100}`,
+    `Q-MP17 A: a reduce-motion step over the cap (normal) is 100ms at both tempos, so it carries no per-mode override (${pmTree.motion['duration-reduced'].normal.$value})`);
 
-  // (c) the composite transition leaf is UNCHANGED — it aliases motion.duration.<role>, so the per-mode
-  //     value is inherited via the alias (the transition SET is fixed).
-  ok(JSON.stringify(pmTree.motion.transition.default) === JSON.stringify(baseTree.motion.transition.default),
-    'D-motion(c): the transition.default composite leaf is unchanged (inheritance via the duration alias)');
+  // (c) a preset is UNCHANGED by a per-mode tempo — its slots alias motion.duration.<step>, so the per-mode value is
+  //     inherited via the alias (#2857: the presets replaced the transitions here).
+  ok(JSON.stringify(pmTree.motion.preset) === JSON.stringify(baseTree.motion.preset),
+    'D-motion(c): every preset leaf is unchanged by a per-mode tempo (inheritance via the duration alias)');
 
   // (d) every DTCG alias resolves.
   ok(built.stats.broken.length === 0 && built.stats.aliases > 0, `D-motion(d): all ${built.stats.aliases} aliases resolve` + (built.stats.broken.length ? ` — BROKEN ${built.stats.broken.slice(0, 3).map((b: any) => b.ref).join(',')}` : ''));
@@ -15496,7 +15505,11 @@ arm: {
   // leave a brand thinking it had set a curve.
   ok(validateBrandInput({ ...input, motionPersonality: { easingEmphasized: [0.2, 0, 0.4, 1] } as any }).length > 0, 'CR-04: the retired easingEmphasized is rejected, not ignored');
   ok(validateBrandInput({ ...input, motionPersonality: { easingRoles: { emphasized: 'calm' } } as any }).length === 0, 'CR-04: easingRoles accepts a known curve');
-  ok(validateBrandInput({ ...input, motionPersonality: { easingRoles: { emphasized: 'nope' } } as any }).length > 0, 'CR-04: easingRoles rejects an unknown curve at the schema layer');
+  // #2857 (Q-MP3 D): a brand curve is a name the schema cannot know, so the schema refuses a malformed name and the
+  // engine refuses an unknown one, by name.
+  ok(validateBrandInput({ ...input, motionPersonality: { easingRoles: { emphasized: 'Not A Curve' } } as any }).length > 0, 'CR-04: easingRoles rejects a malformed curve name at the schema layer');
+  ok(validateBrandInput({ ...input, motionPersonality: { easingRoles: { emphasized: 'nope' } } as any }).length === 0 && (() => { try { brandTheme({ ...input, motionPersonality: { easingRoles: { emphasized: 'nope' } } } as any); return false; } catch (e) { return /unknown easing curve 'nope'/.test((e as Error).message); } })(),
+    'CR-04 (#2857): an unknown curve name passes the schema, which cannot know brand curves, and brandTheme refuses it by name');
   // families.variable is boolean|per-face-object — a string matches neither
   ok(validateBrandInput({ ...input, typography: { families: { variable: 'yes' } } as any }).length > 0, 'CR-04: families.variable:"yes" rejected (boolean|object, not string)');
   ok(validateBrandInput({ ...input, typography: { families: { variable: { display: true } } } as any }).length === 0, 'CR-04: families.variable per-face object accepted');
@@ -33544,32 +33557,52 @@ arm: {
   type Row = [string, number, string | null];
   const prim = (key: number, sec: number): Row => [`motion/duration-ms/${key}`, sec, null];
   const sem = (name: string, key: number, sec: number): Row => [`motion/${name}`, sec, `motion/duration-ms/${key}`];
+  // #2857: a hidden TIMING primitive that is not a duration-ms step (a spring's settle time), and a published alias of
+  // any target (a preset slot).
+  const hid = (name: string, sec: number): Row => [`motion/${name}`, sec, null];
+  const al = (name: string, sec: number, target: string): Row => [`motion/${name}`, sec, `motion/${target}`];
+  // Each spring's settle time, read once off the emitted brief (the same in every brand: springs ignore tempo).
+  const SETTLES: Row[] = [hid('spring-duration/snappy', 0.317), hid('spring-duration/gentle', 0.435), hid('spring-duration/bouncy', 0.36), hid('spring-duration/effects', 0.231)];
+  // The ten presets' TIMING slots (#2857, Q-MS1 A): duration on its step, no delay (the 0ms primitive), and the reduced
+  // twin of its step. Typed per brand, since the step's seconds move with tempo.
+  const presetRows = (dur: Record<string, number>, red: Record<string, number>): Row[] => ([
+    ['state', 'fast'], ['fade', 'normal'], ['crossfade', 'normal'], ['move', 'moderate'], ['reveal', 'slow'],
+    ['draw', 'slow'], ['surface', 'moderate'], ['expand', 'normal'], ['step', 'moderate'], ['settle', 'slow'],
+  ] as const).flatMap(([p, step]): Row[] => [al(`preset/${p}/duration`, dur[step], `duration/${step}`), al(`preset/${p}/delay`, 0, 'duration-ms/0'), al(`preset/${p}/duration-reduced`, red[step], `duration-reduced/${step}`)]);
   const NB_MOTION: Row[] = [
-    prim(0, 0), prim(40, 0.04), prim(50, 0.05), prim(100, 0.1), prim(200, 0.2), prim(300, 0.3), prim(500, 0.5), prim(800, 0.8),
+    prim(0, 0), prim(40, 0.04), prim(50, 0.05), prim(100, 0.1), prim(200, 0.2), prim(300, 0.3), prim(400, 0.4), prim(500, 0.5), prim(800, 0.8),
     prim(900, 0.9), prim(1100, 1.1), prim(1300, 1.3), prim(1600, 1.6), prim(2600, 2.6),
     sem('duration/instant', 50, 0.05), sem('duration/fast', 100, 0.1), sem('duration/normal', 200, 0.2), sem('duration/moderate', 300, 0.3),
     sem('duration/slow', 500, 0.5), sem('duration/slower', 800, 0.8), sem('duration/spin', 800, 0.8), sem('duration/sweep', 1600, 1.6),
     sem('duration/long', 900, 0.9), sem('duration/longer', 1100, 1.1), sem('duration/longest', 1300, 1.3),
-    sem('duration-reduced/instant', 50, 0.05), sem('duration-reduced/fast', 100, 0.1), sem('duration-reduced/normal', 50, 0.05),
-    sem('duration-reduced/moderate', 0, 0), sem('duration-reduced/slow', 0, 0), sem('duration-reduced/slower', 0, 0),
-    sem('duration-reduced/long', 0, 0), sem('duration-reduced/longer', 0, 0), sem('duration-reduced/longest', 0, 0),
+    // Q-MP17 A: every reduced step is min(full, 100ms).
+    sem('duration-reduced/instant', 50, 0.05), sem('duration-reduced/fast', 100, 0.1), sem('duration-reduced/normal', 100, 0.1),
+    sem('duration-reduced/moderate', 100, 0.1), sem('duration-reduced/slow', 100, 0.1), sem('duration-reduced/slower', 100, 0.1),
+    sem('duration-reduced/long', 100, 0.1), sem('duration-reduced/longer', 100, 0.1), sem('duration-reduced/longest', 100, 0.1),
     sem('duration-reduced/spin', 2600, 2.6), sem('duration-reduced/sweep', 2600, 2.6),
+    sem('delay/show', 400, 0.4), sem('delay/min-show', 500, 0.5),
     sem('stagger', 40, 0.04),
+    ...SETTLES,
+    ...presetRows({ fast: 0.1, normal: 0.2, moderate: 0.3, slow: 0.5 }, { fast: 0.1, normal: 0.1, moderate: 0.1, slow: 0.1 }),
   ];
   const AURORA_MOTION: Row[] = [
-    prim(0, 0), prim(30, 0.03), prim(40, 0.04), prim(50, 0.05), prim(80, 0.08), prim(160, 0.16), prim(240, 0.24), prim(400, 0.4),
+    prim(0, 0), prim(30, 0.03), prim(40, 0.04), prim(80, 0.08), prim(100, 0.1), prim(160, 0.16), prim(240, 0.24), prim(400, 0.4), prim(500, 0.5),
     prim(640, 0.64), prim(720, 0.72), prim(800, 0.8), prim(880, 0.88), prim(1040, 1.04), prim(1600, 1.6), prim(2600, 2.6),
     sem('duration/instant', 40, 0.04), sem('duration/fast', 80, 0.08), sem('duration/normal', 160, 0.16), sem('duration/moderate', 240, 0.24),
     sem('duration/slow', 400, 0.4), sem('duration/slower', 640, 0.64), sem('duration/spin', 800, 0.8), sem('duration/sweep', 1600, 1.6),
     sem('duration/long', 720, 0.72), sem('duration/longer', 880, 0.88), sem('duration/longest', 1040, 1.04),
-    sem('duration-reduced/instant', 40, 0.04), sem('duration-reduced/fast', 80, 0.08), sem('duration-reduced/normal', 50, 0.05),
-    sem('duration-reduced/moderate', 0, 0), sem('duration-reduced/slow', 0, 0), sem('duration-reduced/slower', 0, 0),
-    sem('duration-reduced/long', 0, 0), sem('duration-reduced/longer', 0, 0), sem('duration-reduced/longest', 0, 0),
+    sem('duration-reduced/instant', 40, 0.04), sem('duration-reduced/fast', 80, 0.08), sem('duration-reduced/normal', 100, 0.1),
+    sem('duration-reduced/moderate', 100, 0.1), sem('duration-reduced/slow', 100, 0.1), sem('duration-reduced/slower', 100, 0.1),
+    sem('duration-reduced/long', 100, 0.1), sem('duration-reduced/longer', 100, 0.1), sem('duration-reduced/longest', 100, 0.1),
     sem('duration-reduced/spin', 2600, 2.6), sem('duration-reduced/sweep', 2600, 2.6),
+    sem('delay/show', 400, 0.4), sem('delay/min-show', 500, 0.5),
     sem('stagger', 30, 0.03),
+    ...SETTLES,
+    ...presetRows({ fast: 0.08, normal: 0.16, moderate: 0.24, slow: 0.4 }, { fast: 0.08, normal: 0.1, moderate: 0.1, slow: 0.1 }),
   ];
-  // EASING: `[name, value, alias, hidden]`. Curves are hidden primitives, roles published aliases of a curve,
-  // springs published, `bounce` only: 1 − the damping ratio (0.9 / 0.8 / 0.6 → 0.1 / 0.2 / 0.4, spike #2403).
+  // EASING: `[name, value, alias, hidden]`. Curves are hidden primitives, roles published aliases of a curve, springs
+  // hidden primitives since #2857 (a preset is the published handle), `bounce` only: 1 − the damping ratio
+  // (0.9 / 0.8 / 0.6 / 1 → 0.1 / 0.2 / 0.4 / 0, spike #2403). Each preset's easing is a published alias of its role.
   type ERow = [string, unknown, string | null, boolean];
   const bez = (x1: number, y1: number, x2: number, y2: number) => ({ type: 'CUSTOM_CUBIC_BEZIER', easingFunctionCubicBezier: { x1, y1, x2, y2 } });
   const spring = (bounce: number) => ({ type: 'CUSTOM_SPRING', easingFunctionSpring: { bounce } });
@@ -33584,9 +33617,13 @@ arm: {
     ['motion/easing-role/enter', bez(0, 0, 0.2, 1), 'motion/easing/decelerate', false],
     ['motion/easing-role/exit', bez(0.4, 0, 1, 1), 'motion/easing/accelerate', false],
     ['motion/easing-role/emphasized', bez(0.4, 0.14, 0.3, 1), 'motion/easing/expressive', false],
-    ['motion/spring/snappy', spring(0.1), null, false],
-    ['motion/spring/gentle', spring(0.2), null, false],
-    ['motion/spring/bouncy', spring(0.4), null, false],
+    ['motion/spring/snappy', spring(0.1), null, true],
+    ['motion/spring/gentle', spring(0.2), null, true],
+    ['motion/spring/bouncy', spring(0.4), null, true],
+    ['motion/spring/effects', spring(0), null, true],
+    ...([['state', 'default'], ['fade', 'enter'], ['crossfade', 'default'], ['move', 'default'], ['reveal', 'enter'], ['draw', 'default'],
+      ['surface', 'enter'], ['expand', 'default'], ['step', 'default'], ['settle', 'enter']] as const).map(([p, role]): ERow => [
+      `motion/preset/${p}/easing`, role === 'enter' ? bez(0, 0, 0.2, 1) : bez(0.2, 0, 0, 1), `motion/easing-role/${role}`, false]),
   ];
 
   /** The emitted `motion.json` of a theme, through the same shell regen writes with. */
@@ -33639,9 +33676,10 @@ arm: {
   const uncovered = nbDtcgMotion.filter((f) => !(f in MOTION_FIGMA_COVERAGE));
   ok(uncovered.length === 0 && nbDtcgMotion.length === Object.keys(MOTION_FIGMA_COVERAGE).length,
     `motion: every DTCG motion family has a Figma form or a stated reason (${nbDtcgMotion.join(', ')}${uncovered.length ? ` — UNCOVERED: ${uncovered.join(', ')}` : ''})`);
-  const transitionCover = MOTION_FIGMA_COVERAGE.transition as { none?: string };
-  ok(typeof transitionCover.none === 'string' && /composite/.test(transitionCover.none),
-    `motion: transition has no Figma form, and the reason names the composite (${transitionCover.none})`);
+  // #2857: the presets' slots reach Figma as TIMING and EASING; their composite has no form, and the row says why.
+  const presetCover = MOTION_FIGMA_COVERAGE.preset as { figma?: string; note?: string };
+  ok(presetCover.figma === 'TIMING+EASING' && /composite/.test(presetCover.note ?? '') && !('transition' in MOTION_FIGMA_COVERAGE),
+    `motion: a preset's slots are TIMING and EASING, its composite has no Figma form and the note names it, and no transition row is left (${JSON.stringify(presetCover)})`);
 
   // A spring with no bounce Figma would take is refused, not clamped.
   const threw = (fn: () => unknown): boolean => { try { fn(); return false; } catch { return true; } };
@@ -33667,7 +33705,8 @@ arm: {
     };
     const shipped = buildTree(nbTheme()).tree[NB_ROOT].motion.spring as Record<string, { $value: Spring }>;
     const shippedErr = Object.entries(shipped).map(([k, v]) => [k, errorOf(v.$value)] as const);
-    ok(shippedErr.length === 3 && shippedErr.every(([, e]) => e <= SPRING_EASING_ERROR_BOUND),
+    // Four since #2857: the effects spring (G1 A, stiffness 1600), sampled finer than 5ms so it keeps the same bound.
+    ok(shippedErr.map(([k]) => k).join() === 'snappy,gentle,bouncy,effects' && shippedErr.every(([, e]) => e <= SPRING_EASING_ERROR_BOUND),
       `#3510: each shipped spring's linear() curve stays within ${SPRING_EASING_ERROR_BOUND} of the analytic spring over its settle time (${shippedErr.map(([k, e]) => `${k} ${e.toFixed(4)}`).join(', ')})`);
     const sweep: Spring[] = [];
     for (const damping of [0.1, 0.3, 0.5, 0.7, 0.9, 1]) for (const stiffness of [50, 200, 500, 800, SPRING_MAX_STIFFNESS]) sweep.push({ damping, stiffness });
@@ -33708,10 +33747,10 @@ arm: {
     // The CSS-only source carries exactly the linearEasing leaves; the projection carries none of them.
     const cssOnly = buildCssOnly(buildTree(nbTheme()).tree) as any;
     const projected = buildOverlaySet(buildTree(nbTheme()).tree).base as any;
-    ok(Object.keys(cssOnly[NB_ROOT].motion).join() === 'spring-easing' && Object.keys(cssOnly[NB_ROOT].motion['spring-easing']).length === 3
+    ok(Object.keys(cssOnly[NB_ROOT].motion).join() === 'spring-easing' && Object.keys(cssOnly[NB_ROOT].motion['spring-easing']).join() === 'snappy,gentle,bouncy,effects'
       && !('$extensions' in cssOnly[NB_ROOT].motion['spring-easing'].snappy)
-      && !('spring-easing' in projected[NB_ROOT].motion) && Object.keys(projected[NB_ROOT].motion['spring-duration']).length === 3,
-      '#3510: the CSS-only source holds the three spring-easing curves and nothing else; the projection holds the durations and not the curves');
+      && !('spring-easing' in projected[NB_ROOT].motion) && Object.keys(projected[NB_ROOT].motion['spring-duration']).join() === 'snappy,gentle,bouncy,effects',
+      '#3510: the CSS-only source holds the four spring-easing curves and nothing else; the projection holds the durations and not the curves');
   }
 
   // Apply Theme writes it: the motion var plan carries the collection, same rows, typed per row.
@@ -39042,7 +39081,7 @@ arm: {
         for (const d of MATERIALIZATION_DELETIONS) if (d.domain(collection, name, root)) revived.push(`[delete:${d.id}] ${brand} ${key}`);
       }
     }
-    ok(MATERIALIZATION_DELETIONS.map((d) => d.id).join(',') === 'size-spacing-removed-spacing-model' && revived.length === 0,
+    ok(MATERIALIZATION_DELETIONS.map((d) => d.id).join(',') === 'size-spacing-removed-spacing-model,motion-50ms-reduced-floor-2857' && revived.length === 0,
       `materialization deletions check 2: no name a recorded deletion claims is emitted by any of ${brands.length} brands (deletions: ${MATERIALIZATION_DELETIONS.map((d) => d.id).join(', ')})${revived.length ? ` — STILL EMITTED: ${revived.slice(0, 4).join(' · ')}` : ''}`);
   }
   // THE DELETION ARM OF THE ACCOUNTING, driven directly with literal fixtures: honored, contradicted, and
@@ -45882,54 +45921,64 @@ arm: {
   }
 }
 
-// #2857 (owner decision Q-MP7 option 3, 2026-11-19) — the engine foundation for motion presets: the long steps of the
-// one duration scale, the brand's preset → step mapping, and the brand-only group outside the contract.
+// #2857 — MOTION PHASE 1 (owner decisions Q-MP2–Q-MP17, Q-MS1–Q-MS10, the clean break of 2026-11-24): primitives →
+// roles → the published preset tier `motion.preset.<name>.{duration,easing,delay,duration-reduced,transition}`, and the
+// brand-only group outside the contract. EXPECTED throughout is typed here, never read from MOTION_PRESET_DEFAULTS.
 {
   const base = { id: 'presets2857', primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.008 } };
   const withMotion = (mp: Record<string, unknown>) => ({ ...base, motionPersonality: mp }) as unknown as BrandInput;
   const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
   const sidecar = (input: BrandInput) => { const th = brandTheme(input); return buildAiMetadata(th, buildTree(th).tree) as any; };
   const treeOf = (input: BrandInput) => buildTree(brandTheme(input)).tree.prism;
+  const msOf = (v: string) => Number(/duration-ms\.(\d+)\}$/.exec(v)?.[1]);
 
-  // (1) THE DEFAULT MAPPING IS THE OWNER'S TEN (Q-MP1 A, #2857, 2026-11-19). EXPECTED is written here by hand, never
-  // read from the engine's MOTION_PRESET_DEFAULTS: the names are the decision's own list, in its order, and each row is
-  // the DRAFT default the Ready comment puts to the owner (step, easing role, reduced step). ACTUAL is the sidecar the
-  // engine emits for the canonical brand, so a preset added, dropped, renamed or moved fails here by name.
-  const QMP1 = 'state, fade, crossfade, move, reveal, draw, surface, expand, step and settle'.split(/, | and /);
-  const DRAFT_DEFAULTS: Record<string, [string, string, string]> = {
-    state: ['fast', 'default', 'fast'], fade: ['normal', 'enter', 'normal'], crossfade: ['normal', 'default', 'normal'],
-    move: ['moderate', 'default', 'normal'], reveal: ['slow', 'enter', 'normal'], draw: ['slow', 'default', 'normal'],
-    surface: ['moderate', 'enter', 'normal'], expand: ['normal', 'default', 'normal'], step: ['moderate', 'default', 'normal'],
-    settle: ['slow', 'enter', 'normal'],
+  // (1) THE DEFAULT ROWS ARE THE OWNER'S (Q-MP2 A names, Q-MP8 A rows, Q-MS6 A reduced from the duration). The names
+  // are the decision's own list, in its order; each row is [step, easing role]; the reduced twin follows the step, and
+  // every preset starts at once. ACTUAL is the sidecar the engine emits for the canonical brand, and the tree it names.
+  const QMP2 = 'state, fade, crossfade, move, reveal, draw, surface, expand, step and settle'.split(/, | and /);
+  const ROWS: Record<string, [string, string]> = {
+    state: ['fast', 'default'], fade: ['normal', 'enter'], crossfade: ['normal', 'default'], move: ['moderate', 'default'],
+    reveal: ['slow', 'enter'], draw: ['slow', 'default'], surface: ['moderate', 'enter'], expand: ['normal', 'default'],
+    step: ['moderate', 'default'], settle: ['slow', 'enter'],
   };
-  const cards = QMP1.map((data) => { const [dur, ease, rdur] = DRAFT_DEFAULTS[data] ?? ['?', '?', '?']; return { data, dur, ease, rdur }; });
   const prism3Input = readExampleBrand('./examples/prism3.design.md');
   const stockPresets = sidecar(prism3Input).motion_presets ?? {};
-  const wrongCards = cards.filter((c) => {
-    const p = stockPresets[c.data];
-    return !p || p.duration !== `motion.duration.${c.dur}` || p.easing !== `motion.easing-role.${c.ease}` || p.reduced_duration !== `motion.duration-reduced.${c.rdur}`;
+  const wrongRows = QMP2.filter((n) => {
+    const p = stockPresets[n], [step, role] = ROWS[n] ?? ['?', '?'];
+    return !p || p.token !== `motion.preset.${n}.transition` || p.duration !== `motion.preset.${n}.duration` || p.easing !== `motion.preset.${n}.easing`
+      || p.delay !== `motion.preset.${n}.delay` || p.duration_reduced !== `motion.preset.${n}.duration-reduced`
+      || p.resolves_to?.duration !== `motion.duration.${step}` || p.resolves_to?.easing !== `motion.easing-role.${role}`
+      || p.resolves_to?.delay !== 'motion.duration-ms.0' || p.resolves_to?.duration_reduced !== `motion.duration-reduced.${step}`;
   });
-  const emittedNames = Object.keys(stockPresets);
-  ok(QMP1.length === 10 && Object.keys(DRAFT_DEFAULTS).length === 10 && wrongCards.length === 0 && JSON.stringify(emittedNames) === JSON.stringify(QMP1),
-    `#2857 default mapping: the owner's ten Q-MP1 presets, in order, each on its DRAFT step, easing role and reduced step for prism3 (${QMP1.length} named, ${emittedNames.length} emitted: ${emittedNames.join(', ')})${wrongCards.length ? ` — wrong: ${wrongCards.map((c) => `${c.data} wants ${c.dur}/${c.ease}/${c.rdur}, got ${JSON.stringify(stockPresets[c.data])}`).join('; ')}` : ''}`);
-  // OWNER DECISIONS 2026-11-20 on #4332, each resolved through the prism3 tree to the value it lands on, with the
-  // EXPECTED written here as literals. `draw` FADES under reduced motion rather than disappearing: its reduced
-  // duration is a real fade (50ms at the standard tempo), not the 0ms "eliminated" twin of its `slow` step.
-  const decTree = buildTree(brandTheme(prism3Input)).tree;
-  const leafOf = (path: string | undefined): any => (path ? path.split('.').reduce((n: any, k) => n?.[k], decTree[Object.keys(decTree)[0]]) : undefined);
-  const drawReduced = stockPresets.draw?.reduced_duration;
-  ok(drawReduced === 'motion.duration-reduced.normal' && leafOf(drawReduced)?.$extensions?.prism3?.ms === 50,
-    `#2857 owner 2026-11-20: draw fades under reduced motion (motion.duration-reduced.normal, 50ms), not eliminated at 0ms (got ${drawReduced} → ${leafOf(drawReduced)?.$extensions?.prism3?.ms}ms)`);
-  // `expand` plays on the in-place `default` curve (standard, [0.2, 0, 0, 1]), not the arriving `enter` one.
-  const expandEasing = stockPresets.expand?.easing;
-  ok(expandEasing === 'motion.easing-role.default' && leafOf(expandEasing)?.$value === '{pds3.motion.easing.standard}',
-    `#2857 owner 2026-11-20: expand takes the in-place default curve (motion.easing-role.default → standard; got ${expandEasing} → ${leafOf(expandEasing)?.$value})`);
-  // OWNER DECISION 2026-11-20 on #4332 (Accordion recipe → A): the prism3-motion skill's Accordion recipe plays the
-  // panel's height on the `expand` preset, both ways, instead of hand-picking the enter and exit transitions. The
-  // SUBJECT is the hand-written skill; the ORACLE is the emitted sidecar, so the recipe's preset must exist and every
-  // name it says `expand` resolves to must be the one prism3 emits. Every "`<name>` preset" the skill cites must be an
-  // emitted preset too. Mutations: the panel row back to `motion.transition.enter` / `.exit`, or the recipe naming a
-  // preset prism3 doesn't emit, fail this arm by name.
+  ok(QMP2.length === 10 && wrongRows.length === 0 && JSON.stringify(Object.keys(stockPresets)) === JSON.stringify(QMP2),
+    `#2857 Q-MP2/Q-MP8/Q-MS1: the ten presets, in order, each naming its motion.preset.<name> tokens and resolving to its approved step and role, no delay, and its step's reduced twin (${Object.keys(stockPresets).join(', ')})${wrongRows.length ? ` — wrong: ${wrongRows.map((n) => `${n} ${JSON.stringify(stockPresets[n])}`).join('; ')}` : ''}`);
+  // The sidecar is read off the tree: each named token is a real leaf, each `resolves_to` its alias, and every slot holds
+  // an alias, never a number (Q-MS2 A).
+  const p3tree = buildTree(brandTheme(prism3Input)).tree;
+  const p3root = Object.keys(p3tree)[0];
+  const p3m = p3tree[p3root].motion;
+  const slotOff = QMP2.flatMap((n) => (['duration', 'easing', 'delay', 'duration-reduced'] as const).flatMap((slot) => {
+    const leaf = p3m.preset?.[n]?.[slot];
+    const said = stockPresets[n]?.resolves_to?.[slot === 'duration-reduced' ? 'duration_reduced' : slot];
+    return !leaf || typeof leaf.$value !== 'string' || leaf.$value !== `{${p3root}.${said}}` || !at(p3tree[p3root], said) ? [`${n}.${slot}: ${leaf?.$value} vs ${said}`] : [];
+  }));
+  ok(slotOff.length === 0, `#2857 Q-MS2 A: every preset slot is an alias of the target the sidecar names, and that target is a real leaf${slotOff.length ? ` — ${slotOff.slice(0, 3).join('; ')}` : ''}`);
+  const comp = p3m.preset?.fade?.transition;
+  ok(comp?.$type === 'transition' && JSON.stringify(comp.$value) === JSON.stringify({ duration: `{${p3root}.motion.preset.fade.duration}`, timingFunction: `{${p3root}.motion.preset.fade.easing}`, delay: `{${p3root}.motion.preset.fade.delay}` }),
+    `#2857 Q-MS8: motion.preset.fade.transition is a DTCG transition over the preset's own slots (${JSON.stringify(comp?.$value)})`);
+  // Owner decisions of 2026-11-20 on #4332, resolved to the values they land on. `draw` fades under reduced motion: its
+  // reduced twin is a real 100ms fade (Q-MP17 A), not a 0ms one. `expand` plays on the in-place curve.
+  const leafOf = (path: string | undefined): any => (path ? path.split('.').reduce((n: any, k) => n?.[k], p3tree[p3root]) : undefined);
+  const drawReduced = stockPresets.draw?.resolves_to?.duration_reduced;
+  ok(drawReduced === 'motion.duration-reduced.slow' && leafOf(drawReduced)?.$extensions?.prism3?.ms === 100,
+    `#2857 owner 2026-11-20: draw fades under reduced motion, on a 100ms fade, not eliminated (got ${drawReduced} → ${leafOf(drawReduced)?.$extensions?.prism3?.ms}ms)`);
+  const expandEasing = stockPresets.expand?.resolves_to?.easing;
+  ok(expandEasing === 'motion.easing-role.default' && leafOf(expandEasing)?.$value === `{${p3root}.motion.easing.standard}`,
+    `#2857 owner 2026-11-20: expand takes the in-place default curve (got ${expandEasing} → ${leafOf(expandEasing)?.$value})`);
+  // OWNER DECISION 2026-11-20 on #4332 (Accordion recipe → A): the skill's Accordion recipe plays the panel on the `expand`
+  // preset both ways, and names that preset's own tokens. The SUBJECT is the hand-written skill; the ORACLE is the
+  // emitted sidecar. Mutations: the panel row back to the old transitions, or a recipe naming a preset prism3 doesn't
+  // emit, fail this arm by name.
   {
     const motionSkill = readFileSync(resolve(HERE, '../../skills/prism3-motion/SKILL.md'), 'utf8');
     const accordion = /\n### Accordion\n([\s\S]*?)(?=\n### )/.exec(motionSkill)?.[1] ?? '';
@@ -45939,56 +45988,103 @@ arm: {
     const cited = [...motionSkill.matchAll(/`([a-z][a-z-]*)` preset\b/g)].map((m) => m[1]);
     const unknown = cited.filter((n) => !(n in stockPresets));
     const exp = stockPresets.expand ?? {};
-    const resolvesTo = [exp.duration, exp.easing, exp.reduced_duration];
-    const missing = resolvesTo.filter((n) => !n || !accordion.includes(`\`${n}\``));
+    const missing = [exp.duration, exp.easing, exp.duration_reduced].filter((n) => !n || !accordion.includes(`\`${n}\``));
     ok(rowOk && cited.includes('expand') && unknown.length === 0 && missing.length === 0,
-      `#4332 owner 2026-11-20: the prism3-motion Accordion recipe plays the panel on the \`expand\` preset both ways, and every preset and name it cites is emitted (panel row: ${JSON.stringify(cells)}; presets cited: ${cited.join(', ') || 'none'}${unknown.length ? `; not emitted: ${unknown.join(', ')}` : ''}${missing.length ? `; expand resolves to names the recipe doesn't cite: ${missing.join(', ')}` : ''})`);
+      `#4332 owner 2026-11-20: the prism3-motion Accordion recipe plays the panel on the \`expand\` preset both ways and binds its tokens, and every preset it cites is emitted (panel row: ${JSON.stringify(cells)}; cited: ${cited.join(', ')}${unknown.length ? `; unknown ${unknown.join(', ')}` : ''}${missing.length ? `; not named ${missing.join(', ')}` : ''})`);
   }
-  // The owner's own examples (Q-MP7 option 3) name `crossfade` and `surface`: a brand can map both.
-  const mapped = sidecar({ ...prism3Input, motionPersonality: { ...(prism3Input.motionPersonality ?? {}), presets: { crossfade: 'long', surface: 'longest' } } } as BrandInput).motion_presets ?? {};
-  ok(mapped.crossfade?.duration === 'motion.duration.long' && mapped.surface?.duration === 'motion.duration.longest',
-    `#2857 default mapping: the owner's Q-MP7 examples map (crossfade → long, surface → longest; got ${JSON.stringify([mapped.crossfade?.duration, mapped.surface?.duration])})`);
-  // Every path a preset names is a real tree leaf, so a preset resolves through the mapping to the semantic step.
-  const p3tree = buildTree(brandTheme(prism3Input)).tree;
-  const p3root = Object.keys(p3tree)[0];
-  const dangling = Object.entries<any>(stockPresets).flatMap(([n, p]) => [p.duration, p.easing, p.reduced_duration].filter((path) => !at(p3tree[p3root], path)).map((path) => `${n} → ${path}`));
-  ok(Object.keys(stockPresets).length > 0 && dangling.length === 0, `#2857 default mapping: every preset names a leaf the prism3 tree emits${dangling.length ? ` — dangling: ${dangling.join('; ')}` : ''}`);
-  // No value moves: the steps that existed before keep the values they had at the standard tempo (frozen here), and
-  // spelling the default mapping out in the input changes nothing the engine emits.
-  const BEFORE: Record<string, number> = { instant: 50, fast: 100, normal: 200, moderate: 300, slow: 500, slower: 800 };
-  const msOf = (v: string) => Number(/duration-ms\.(\d+)\}$/.exec(v)?.[1]);
-  const moved = Object.entries(BEFORE).filter(([k, v]) => msOf(p3tree[p3root].motion.duration[k]?.$value ?? '') !== v);
-  ok(moved.length === 0, `#2857 default mapping: no existing duration step moves for prism3${moved.length ? ` — moved: ${moved.map(([k]) => `${k} → ${p3tree[p3root].motion.duration[k]?.$value}`).join('; ')}` : ''}`);
-  const spelled = { ...prism3Input, motionPersonality: { ...(prism3Input.motionPersonality ?? {}), presets: Object.fromEntries(cards.map((c) => [c.data, c.dur])) } } as BrandInput;
-  ok(JSON.stringify(buildTree(brandTheme(spelled)).tree) === JSON.stringify(p3tree) && JSON.stringify(sidecar(spelled)) === JSON.stringify(sidecar(prism3Input)),
-    '#2857 default mapping: writing the default mapping into the input is byte-identical to leaving it out (tree and sidecar)');
 
-  // The long steps: three steps past `slower`, tempo-scaled like every step, 0ms under reduced motion. Values frozen.
+  // (2) Q-MP17 A: every step's reduced twin is min(full, 100ms), at every tempo; the loop periods keep their own.
+  const REDUCED: Record<string, Record<string, number>> = {
+    snappy: { instant: 40, fast: 80, normal: 100, moderate: 100, slow: 100, slower: 100, long: 100, longer: 100, longest: 100, spin: 2600, sweep: 2600 },
+    standard: { instant: 50, fast: 100, normal: 100, moderate: 100, slow: 100, slower: 100, long: 100, longer: 100, longest: 100, spin: 2600, sweep: 2600 },
+    relaxed: { instant: 65, fast: 100, normal: 100, moderate: 100, slow: 100, slower: 100, long: 100, longer: 100, longest: 100, spin: 2600, sweep: 2600 },
+  };
+  for (const [tempo, want] of Object.entries(REDUCED)) {
+    const mo = treeOf(withMotion({ tempo })).motion;
+    const bad = Object.entries(want).filter(([k, v]) => msOf(mo['duration-reduced'][k]?.$value ?? '') !== v);
+    ok(bad.length === 0, `#2857 Q-MP17 A (${tempo}): every reduced step is min(full, 100ms), never 0, and the loops keep theirs${bad.length ? ` — wrong: ${bad.map(([k, v]) => `${k} ${mo['duration-reduced'][k]?.$value} (want ${v})`).join('; ')}` : ''}`);
+  }
+  // The long steps stay tempo-scaled, each on a real primitive.
   for (const [tempo, f] of [['snappy', 0.8], ['standard', 1], ['relaxed', 1.3]] as const) {
     const mo = treeOf(withMotion({ tempo })).motion;
-    const want = { long: 900, longer: 1100, longest: 1300 };
-    const bad = Object.entries(want).filter(([k, v]) => msOf(mo.duration[k]?.$value ?? '') !== Math.round((v * f) / 5) * 5 || msOf(mo['duration-reduced'][k]?.$value ?? '') !== 0
-      || mo['duration-ms'][String(Math.round((v * f) / 5) * 5)]?.$type !== 'duration');
-    ok(bad.length === 0, `#2857 long steps (${tempo}): motion.duration.{long,longer,longest} are 900/1100/1300ms × ${f}, reduced to 0, each on a real duration-ms primitive${bad.length ? ` — wrong: ${bad.map(([k]) => `${k} ${mo.duration[k]?.$value} / reduced ${mo['duration-reduced'][k]?.$value}`).join('; ')}` : ''}`);
+    const bad = Object.entries({ long: 900, longer: 1100, longest: 1300 }).filter(([k, v]) => msOf(mo.duration[k]?.$value ?? '') !== Math.round((v * f) / 5) * 5 || mo['duration-ms'][String(Math.round((v * f) / 5) * 5)]?.$type !== 'duration');
+    ok(bad.length === 0, `#2857 long steps (${tempo}): motion.duration.{long,longer,longest} are 900/1100/1300ms × ${f}, each on a real duration-ms primitive${bad.length ? ` — wrong: ${bad.map(([k]) => k).join(', ')}` : ''}`);
   }
 
-  // (2) AN OVERRIDE MOVES EXACTLY ONE PRESET, and only in the sidecar: a preset is not a token, so the tree is
-  // byte-identical.
-  const stock = sidecar(withMotion({})).motion_presets;
-  const over = sidecar(withMotion({ presets: { surface: 'longest' } })).motion_presets;
-  const differ = Object.keys({ ...stock, ...over }).filter((k) => JSON.stringify(stock[k]) !== JSON.stringify(over[k]));
-  ok(differ.length === 1 && differ[0] === 'surface' && over.surface?.duration === 'motion.duration.longest'
-    && over.surface?.easing === stock.surface?.easing && over.surface?.reduced_duration === stock.surface?.reduced_duration,
-    `#2857 override: presets {surface: 'longest'} moves exactly that preset's step and nothing else (moved: ${JSON.stringify(differ)}, now ${JSON.stringify(over.surface)})`);
-  ok(JSON.stringify(treeOf(withMotion({ presets: { surface: 'longest' } }))) === JSON.stringify(treeOf(withMotion({}))),
-    '#2857 override: a preset mapping moves no token (the tree is byte-identical)');
+  // (3) THE NEW PRIMITIVES: the effects spring (Q-MP4 A, G1 A), the delays (G6 B), the nudge distance (Q-MP6 A). Typed.
+  {
+    const mo = treeOf(withMotion({})).motion;
+    ok(JSON.stringify(mo.spring?.effects?.$value) === JSON.stringify({ damping: 1, stiffness: 1600 }) && mo['spring-duration']?.effects?.$value === '231ms' && /^linear\(/.test(mo['spring-easing']?.effects?.$value ?? ''),
+      `#2857 Q-MP4 A: motion.spring.effects is damping 1, stiffness 1600, settling in 231ms, with a CSS linear() curve (${JSON.stringify(mo.spring?.effects?.$value)}, ${mo['spring-duration']?.effects?.$value})`);
+    const relaxed = treeOf(withMotion({ tempo: 'relaxed' })).motion;
+    ok(msOf(mo.delay?.show?.$value ?? '') === 400 && msOf(mo.delay?.['min-show']?.$value ?? '') === 500 && msOf(relaxed.delay?.show?.$value ?? '') === 400 && Object.keys(mo.delay ?? {}).join() === 'show,min-show',
+      `#2857 G6 B: motion.delay.show 400ms and motion.delay.min-show 500ms, the same at a relaxed tempo (${mo.delay?.show?.$value}, ${mo.delay?.['min-show']?.$value}; relaxed ${relaxed.delay?.show?.$value})`);
+    ok(mo.distance?.nudge?.$type === 'dimension' && mo.distance?.nudge?.$value === '{prism.space.100}',
+      `#2857 Q-MP6 A: motion.distance.nudge aliases space.100 (${mo.distance?.nudge?.$value})`);
+  }
 
-  // (3) AN UNKNOWN ENTRY IS REFUSED BY NAME: an unknown preset, an unknown step, a loop period (not a step), and in
-  // the brand-only group an unknown kind and an unknown field.
+  // (4) THE CLEAN BREAK (owner, 2026-11-24): no motion.transition.* in the engine's tree, in any committed brand's
+  // emission, or in the contract baseline. Mutation: restore a transition → this arm, and token-contract --check.
+  {
+    const leftover = readdirSync(resolve(HERE, './out')).filter((f) => /^[^.]+\.tokens\.json$/.test(f)).filter((f) => {
+      const t = JSON.parse(readFileSync(resolve(HERE, `./out/${f}`), 'utf8'));
+      return 'transition' in (t[Object.keys(t).find((k) => !k.startsWith('$'))!].motion ?? {});
+    });
+    const baseline = readBaseline();
+    const inBaseline = [...Object.keys(baseline.guaranteed), ...baseline.brandDependent].filter((p) => p.startsWith('motion.transition'));
+    ok(!('transition' in treeOf(withMotion({})).motion) && leftover.length === 0 && inBaseline.length === 0,
+      `#2857 clean break: no motion.transition.* in the tree, the committed emissions or the contract baseline${leftover.length ? ` — still in ${leftover.join(', ')}` : ''}${inBaseline.length ? ` — baseline holds ${inBaseline.join(', ')}` : ''}`);
+  }
+
+  // (5) A BRAND RE-POINTS A SLOT (Q-MS3 A, Q-MP25 A generalized): a step, a curve, a brand curve, a delay. Only that
+  // preset moves, in the tree and the sidecar.
+  {
+    const curves = { landing: [0.3, 0, 0.1, 1] };
+    const over = withMotion({ curves, presets: { step: { easing: 'easing.landing' }, surface: { duration: 'duration.longest', easing: 'easing.calm', delay: 'delay.show' } } });
+    const mo = treeOf(over).motion, stock = treeOf(withMotion({ curves })).motion;
+    ok(mo.preset.step.easing.$value === '{prism.motion.easing.landing}' && mo.preset.surface.duration.$value === '{prism.motion.duration.longest}'
+      && mo.preset.surface.easing.$value === '{prism.motion.easing.calm}' && mo.preset.surface.delay.$value === '{prism.motion.delay.show}'
+      && mo.preset.surface['duration-reduced'].$value === '{prism.motion.duration-reduced.longest}',
+      `#2857 Q-MS3 A: a brand re-points a slot at a brand curve, a curve, a step and a delay, and the reduced twin follows the duration (${mo.preset.surface.duration.$value}, ${mo.preset.surface.easing.$value}, ${mo.preset.surface.delay.$value}, ${mo.preset.step.easing.$value})`);
+    const moved = Object.keys(mo.preset).filter((n) => JSON.stringify(mo.preset[n]) !== JSON.stringify(stock.preset[n]));
+    const restSame = Object.keys(mo).filter((k) => k !== 'preset').every((k) => JSON.stringify(mo[k]) === JSON.stringify(stock[k]));
+    ok(JSON.stringify(moved) === '["surface","step"]' && restSame, `#2857 override: re-pointing two presets moves exactly those two and nothing else in motion (moved: ${JSON.stringify(moved)})`);
+    const spelled = withMotion({ presets: Object.fromEntries(QMP2.map((n) => [n, { duration: `duration.${ROWS[n][0]}`, easing: `easing-role.${ROWS[n][1]}` }])) });
+    ok(JSON.stringify(treeOf(spelled)) === JSON.stringify(treeOf(withMotion({}))) && JSON.stringify(sidecar(spelled)) === JSON.stringify(sidecar(withMotion({}))),
+      '#2857 override: writing the default slots into the input is byte-identical to leaving them out (tree and sidecar)');
+  }
+
+  // (6) THE SPRING RULE: a preset eased by a spring plays for that spring's settle time. Absent, the duration is filled
+  // in; any other duration is refused by name, and a settle time without its spring is refused too. Under reduced motion
+  // it becomes the short fade min(settle, 100ms) (G3 B). Its composite is a custom type the projection omits.
+  {
+    const sp = treeOf(withMotion({ presets: { settle: { easing: 'spring.gentle' } } })).motion;
+    ok(sp.preset.settle.duration.$value === '{prism.motion.spring-duration.gentle}' && sp.preset.settle.easing.$type === 'linearEasing'
+      && sp.preset.settle.easing.$value === '{prism.motion.spring-easing.gentle}' && sp.preset.settle['duration-reduced'].$value === '{prism.motion.duration-ms.100}'
+      && sp.preset.settle.transition.$type === 'springTransition',
+      `#2857 Q-MS3 A spring: a spring-eased preset plays for the spring's settle time, fades for min(settle, 100ms) under reduced motion, and its composite is springTransition (${sp.preset.settle.duration.$value}, ${sp.preset.settle['duration-reduced'].$value}, ${sp.preset.settle.transition.$type})`);
+    const proj = JSON.stringify(buildBase(buildTree(brandTheme(withMotion({ presets: { settle: { easing: 'spring.gentle' } } }))).tree));
+    ok(!proj.includes('springTransition') && !proj.includes('spring-easing.gentle}'), '#2857 spring preset: the conforming projection omits the spring composite and the spring curve slot (#642)');
+    const mismatch = refusal(() => brandTheme(withMotion({ presets: { settle: { easing: 'spring.gentle', duration: 'duration.slow' } } })));
+    ok(/motionPersonality\.presets\.settle\.duration: a preset eased by the spring 'gentle' plays for its settle time, so its duration is 'spring-duration\.gentle' \(got 'duration\.slow'\)/.test(mismatch),
+      `#2857 spring rule: a spring easing with a step duration is refused by name (${JSON.stringify(mismatch)})`);
+    const other = refusal(() => brandTheme(withMotion({ presets: { settle: { easing: 'spring.gentle', duration: 'spring-duration.snappy' } } })));
+    ok(/its duration is 'spring-duration\.gentle' \(got 'spring-duration\.snappy'\)/.test(other), `#2857 spring rule: another spring's settle time is refused by name (${JSON.stringify(other)})`);
+    const orphan = refusal(() => brandTheme(withMotion({ presets: { fade: { duration: 'spring-duration.gentle' } } })));
+    ok(/motionPersonality\.presets\.fade\.duration: 'spring-duration\.gentle' is the settle time of the spring 'gentle', and goes with easing 'spring\.gentle'/.test(orphan),
+      `#2857 spring rule: a settle time with no spring is refused by name (${JSON.stringify(orphan)})`);
+  }
+
+  // (7) A SLOT IS NEVER A NUMBER (Q-MS2 A), and every other wrong slot is refused by name.
   const refusals: Array<[string, Record<string, unknown>, RegExp]> = [
-    ['unknown preset', { presets: { 'dialog/enter': 'normal' } }, /motionPersonality\.presets: unknown preset 'dialog\/enter'/],
-    ['unknown step', { presets: { fade: 'huge' } }, /motionPersonality\.presets\.fade: unknown duration step 'huge'/],
-    ['a loop period', { presets: { fade: 'spin' } }, /motionPersonality\.presets\.fade: unknown duration step 'spin'/],
+    ['unknown preset', { presets: { 'dialog/enter': { duration: 'duration.normal' } } }, /motionPersonality\.presets: unknown preset 'dialog\/enter'/],
+    ['a number in a slot', { presets: { fade: { duration: 300 } } }, /motionPersonality\.presets\.fade\.duration: a slot names a motion path, never a number \(got 300\)/],
+    ['the old string form', { presets: { fade: 'long' } }, /motionPersonality\.presets\.fade: a preset is an object of slots/],
+    ['unknown slot', { presets: { fade: { reduced: 'duration.fast' } } }, /motionPersonality\.presets\.fade: unknown slot 'reduced'/],
+    ['unknown step', { presets: { fade: { duration: 'duration.huge' } } }, /motionPersonality\.presets\.fade\.duration: unknown duration 'duration\.huge'/],
+    ['a loop period', { presets: { fade: { duration: 'duration.spin' } } }, /motionPersonality\.presets\.fade\.duration: unknown duration 'duration\.spin'/],
+    ['unknown easing', { presets: { fade: { easing: 'easing.nope' } } }, /motionPersonality\.presets\.fade\.easing: unknown easing 'easing\.nope'/],
+    ['unknown delay', { presets: { fade: { delay: 'delay.later' } } }, /motionPersonality\.presets\.fade\.delay: unknown delay 'delay\.later'/],
     ['unknown brand-only kind', { brandOnly: { thumb: { kind: 'wobble' } } }, /motionPersonality\.brandOnly\.thumb: unknown kind 'wobble'/],
     ['unknown brand-only field', { brandOnly: { coast: { kind: 'gesture', friction: 2 } } }, /motionPersonality\.brandOnly\.coast: unknown field 'friction'/],
     ['missing brand-only field', { brandOnly: { thumb: { kind: 'spring', damping: 0.7 } } }, /motionPersonality\.brandOnly\.thumb: kind 'spring' needs 'stiffness'/],
@@ -45997,8 +46093,44 @@ arm: {
     const msg = refusal(() => brandTheme(withMotion(mp)));
     ok(want.test(msg), `#2857 refused by name: ${label} (got ${JSON.stringify(msg)})`);
   }
-  ok(validateBrandInput(withMotion({ presets: { fade: 'huge' } }) as never).some((e) => /motionPersonality\.presets\.fade is "huge"; it takes one of/.test(String(e))),
-    '#2857 refused by name: the schema refuses an unknown step too');
+  ok(validateBrandInput(withMotion({ presets: { fade: { duration: 300 } } }) as never).length > 0 && validateBrandInput(withMotion({ presets: { fade: 'long' } }) as never).length > 0,
+    '#2857 refused by name: the schema refuses a number in a slot and the old string form too');
+
+  // (8) BRAND CURVES AND THEIR GUARDRAILS (Q-MP3 D): beside the six, a hidden primitive in Figma, and refused when it
+  // overshoots, leaves CSS's x range, takes one of the six's names, or does not fit the role that uses it.
+  {
+    const ok1 = treeOf(withMotion({ curves: { landing: [0.3, 0, 0.1, 1] }, easingRoles: { enter: 'landing' } })).motion;
+    ok(JSON.stringify(ok1.easing.landing?.$value) === '[0.3,0,0.1,1]' && ok1.easing.landing?.$extensions?.prism3?.brandCurve === true && ok1['easing-role'].enter.$value === '{prism.motion.easing.landing}',
+      `#2857 Q-MP3 D: a brand curve sits beside the six, marked as the brand's, and a role can use it (${ok1['easing-role'].enter.$value})`);
+    const curveRefusals: Array<[string, Record<string, unknown>, RegExp]> = [
+      ['overshoot', { curves: { bounce: [0.3, -0.2, 0.2, 1.3] } }, /motionPersonality\.curves\.bounce: y1 and y2 must be between 0 and 1; a curve that overshoots is a spring's job/],
+      ['x out of range', { curves: { wide: [1.2, 0, 0.2, 1] } }, /motionPersonality\.curves\.wide: x1 and x2 must be between 0 and 1/],
+      ['a built-in name', { curves: { calm: [0.4, 0, 0.6, 1] } }, /motionPersonality\.curves\.calm: 'calm' is one of Prism3's own curves/],
+      ['an accelerating curve on enter', { curves: { slowstart: [0.6, 0, 1, 1] }, easingRoles: { enter: 'slowstart' } }, /motionPersonality\.easingRoles\.enter: the brand curve 'slowstart' accelerates .*, and the enter role decelerates/],
+      ['a decelerating curve on exit', { curves: { quick: [0, 0, 0.2, 1] }, easingRoles: { exit: 'quick' } }, /motionPersonality\.easingRoles\.exit: the brand curve 'quick' decelerates .*, and the exit role accelerates/],
+    ];
+    for (const [label, mp, want] of curveRefusals) {
+      const msg = refusal(() => brandTheme(withMotion(mp)));
+      ok(want.test(msg), `#2857 Q-MP3 D guardrail: ${label} is refused by name (got ${JSON.stringify(msg)})`);
+    }
+    const perMode = refusal(() => brandTheme({ ...base, modes: ['light', 'dark'], motionPersonality: { curves: { slowstart: [0.6, 0, 1, 1] } }, modeLevers: { dark: { easings: { enter: 'slowstart' } } } } as unknown as BrandInput));
+    ok(/modeLevers\.dark\.easings\.enter: the brand curve 'slowstart' accelerates/.test(perMode), `#2857 Q-MP3 D guardrail: a mode's re-point is held to the role too (got ${JSON.stringify(perMode)})`);
+    ok(refusal(() => brandTheme(withMotion({ easingRoles: { enter: 'calm' } }))) === '', '#2857 Q-MP3 D guardrail: the six are not held to it, so enter can still use calm');
+  }
+
+  // (9) FIGMA (Q-MS1 A, the Q-MS10 checks): each preset slot is a published TIMING or EASING alias; a spring preset's
+  // easing aliases the spring itself (bounce only) and its duration the hidden settle time. Typed.
+  {
+    const th = brandTheme(withMotion({ presets: { settle: { easing: 'spring.gentle' } } }));
+    const vars = new Map(figmaArtifacts(th).artifacts.filter((a) => a.path === 'motion.json').flatMap((a) => (JSON.parse(a.content) as FigmaCollectionFile).variables).map((v) => [v.name, v]));
+    const g = (n: string) => vars.get(`prism/motion/${n}`);
+    ok(g('preset/settle/easing')?.alias?.name === 'prism/motion/spring/gentle' && JSON.stringify(g('preset/settle/easing')?.value) === JSON.stringify({ type: 'CUSTOM_SPRING', easingFunctionSpring: { bounce: 0.2 } })
+      && g('preset/settle/duration')?.alias?.name === 'prism/motion/spring-duration/gentle' && g('preset/settle/duration')?.value === 0.435
+      && g('spring-duration/gentle')?.hiddenFromPublishing === true && !g('preset/settle/easing')?.hiddenFromPublishing && g('preset/settle/transition') === undefined,
+      `#2857 Figma: a spring preset's easing aliases motion/spring/gentle (bounce 0.2) and its duration the hidden settle time, 0.435s; the composite has no variable (${g('preset/settle/easing')?.alias?.name}, ${g('preset/settle/duration')?.alias?.name})`);
+    ok(g('preset/fade/easing')?.alias?.name === 'prism/motion/easing-role/enter' && g('preset/fade/duration')?.alias?.name === 'prism/motion/duration/normal' && g('preset/fade/delay')?.alias?.name === 'prism/motion/duration-ms/0',
+      `#2857 Figma: a default preset's slots alias its role, its step and the 0ms primitive (${g('preset/fade/easing')?.alias?.name}, ${g('preset/fade/duration')?.alias?.name}, ${g('preset/fade/delay')?.alias?.name})`);
+  }
 
   // (4) THE BRAND-ONLY GROUP STAYS OUT OF THE CONTRACT. A brand that sets it gets custom-typed leaves under
   // motion.brand.*, which the conforming projection omits; no corpus member emits them, so the live corpus
@@ -46230,6 +46362,28 @@ const MIN_ASSERTIONS = 1800;
   const schemaErrs = validateBrandInput(withRoles({ default: 450.5, strong: 2000 }));
   ok(schemaErrs.some((e) => e.includes('weightRoles.default') && e.includes('a whole number')) && schemaErrs.some((e) => e.includes('weightRoles.strong')),
     `#3871 the schema refuses a fractional and an out-of-range weight role (errors: ${JSON.stringify(schemaErrs)})`);
+  // #4214 (owner decision A, 2026-11-20): a per-mode weight takes the global range, [1, 1000], in the engine and the
+  // schema alike; before, both stopped it at [100, 900]. The edges build with every alias resolving, and the dark mode
+  // carries them; one past either edge is still refused by name, in both.
+  // BY-NAME MUTATION: put either range back to 100/900 (theme-brand.ts or the schema's `modeLevers` weights) → an arm fails.
+  const modeEdges = { ...base, modeLevers: { dark: { weights: { subtle: 1, max: 1000 } } } } as unknown as BrandInput;
+  const modeEdgeRefusal = refusal(() => brandTheme(modeEdges));
+  ok(modeEdgeRefusal === '', `#4214 per-mode weights 1 and 1000 are accepted by brandTheme (got ${JSON.stringify(modeEdgeRefusal)})`);
+  if (modeEdgeRefusal === '') {
+    const built = buildTree(brandTheme(modeEdges));
+    const root = Object.keys(built.tree).find((k) => !k.startsWith('$'))!;
+    const darkOf = (role: string) => built.tree[root]?.core?.font?.['weight-role']?.[role]?.$extensions?.prism3?.modes?.dark?.$value;
+    ok(built.stats.broken.length === 0 && /\.1\}$/.test(String(darkOf('subtle'))) && /\.1000\}$/.test(String(darkOf('max'))),
+      `#4214 per-mode weights 1 and 1000 build with every alias resolving, on the dark weight roles (dark subtle ${JSON.stringify(darkOf('subtle'))}, max ${JSON.stringify(darkOf('max'))}, broken ${built.stats.broken.length})`);
+  }
+  const modeEdgeSchema = validateBrandInput(modeEdges);
+  ok(modeEdgeSchema.length === 0, `#4214 the schema accepts per-mode weights 1 and 1000 (errors: ${JSON.stringify(modeEdgeSchema)})`);
+  for (const w of [0, 1001]) {
+    const msg = refusal(() => brandTheme({ ...base, modeLevers: { dark: { weights: { strong: w } } } } as unknown as BrandInput));
+    ok(msg.includes("mode 'dark' weight 'strong'") && msg.includes('[1, 1000]'), `#4214 a per-mode weight of ${w} is refused by name, naming [1, 1000] (got ${JSON.stringify(msg)})`);
+    const errs = validateBrandInput({ ...base, modeLevers: { dark: { weights: { strong: w } } } } as unknown as BrandInput);
+    ok(errs.some((e) => e.includes('weights.strong')), `#4214 the schema refuses a per-mode weight of ${w} (errors: ${JSON.stringify(errs)})`);
+  }
 }
 
 // (imports hoist; kept beside the arms so no line a guide cites moves)
@@ -46506,6 +46660,65 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   }
 }
 
+// #4214 (owner decision, 2026-11-20): an id Windows can't use as a file name (`CON`, `nul`, `a?b`, `a|b`, `a*b`) passed
+// the schema, brandTheme and #3875's write guard, so a brand built on Linux or macOS wrote files a Windows checkout
+// can't hold. The decision keeps the published schema as it is and refuses such an id where a file is written, by
+// name: in `fileInDir`, the guard `emitTheme` writes through, and on every other write the CLI makes. The oracle for
+// the refusal list is Windows' own rule (the characters < > : " | ? *, the control characters, and the device names as
+// the part before the first dot), restated here as literals, never read back from `windowsInvalidName`.
+// BY-NAME MUTATION: drop the `windowsInvalidName` call from `fileInDir` → the emitTheme and CLI arms fail; route the
+// CLI's fidelity report back to `resolve(...)` → the CLI-routing arm fails.
+{
+  const base = { id: 'ok', modes: ['light', 'dark'], primary: { l: 0.55, c: 0.15, h: 260 }, neutral: { hue: 260, chroma: 0.01 } } as unknown as BrandInput;
+  const refusal = (f: () => unknown): string => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+  const refused = ['CON', 'con', 'nul', 'Aux', 'PRN', 'COM1', 'com9', 'LPT1', 'COM0', 'LPT¹', 'CON ', 'NUL.backup', 'a?b', 'a|b', 'a*b', 'a<b', 'a>b', 'a:b', 'a"b', 'a\u0001b'];
+  const accepted = ['aurora', 'Has Space', 'console', 'CONx', 'com10', 'lpt', 'a.con', '...', 'nb-redesign'];
+  for (const id of [...refused, ...accepted]) {
+    const name = `${id}.tokens.json`;
+    const why = windowsInvalidName(name) ?? '';
+    const want = refused.includes(id);
+    ok(want ? why.startsWith(`'${name}' is not a file name Windows can write`) : why === '',
+      `#4214 windowsInvalidName ${want ? 'refuses' : 'accepts'} the id ${JSON.stringify(id)} (got ${JSON.stringify(why)})`);
+  }
+  // The published contract is unchanged (owner decision): the schema and brandTheme still accept these ids.
+  for (const id of ['CON', 'nul', 'a?b', 'a|b', 'a*b']) {
+    const errs = validateBrandInput({ ...base, id } as unknown as BrandInput).filter((e) => e.startsWith('id'));
+    ok(errs.length === 0 && refusal(() => brandTheme({ ...base, id } as unknown as BrandInput)) === '',
+      `#4214 the schema and brandTheme still accept the id ${JSON.stringify(id)}; only the write refuses it (schema ${JSON.stringify(errs)})`);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'p3-4214-'));
+  try {
+    for (const id of ['nul', 'a?b']) {
+      const out = join(dir, `out-${id === 'nul' ? 'nul' : 'q'}`);
+      const msg = refusal(() => emitTheme(brandTheme({ ...base, id } as unknown as BrandInput), out));
+      ok(msg.includes('is not a file name Windows can write') && msg.endsWith('nothing was written.') && !existsSync(out),
+        `#4214 emitTheme refuses the id ${JSON.stringify(id)} by name before writing anything (got ${JSON.stringify(msg)}; wrote ${existsSync(out) ? readdirSync(out).join(', ') : 'nothing'})`);
+    }
+    // The CLI: the refusal reaches the user through fail(), naming the file and the reason, with nothing on disk.
+    const brief = join(dir, 'con.design.md');
+    writeFileSync(brief, '---\nid: CON\nprimary: { l: 0.55, c: 0.15, h: 260 }\nneutral: { hue: 260, chroma: 0.01 }\n---\n');
+    const cliOut = join(dir, 'out-cli');
+    const r = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), brief, '--out', cliOut, '--component-specs'], { cwd: HERE, encoding: 'utf8' });
+    const err = r.stderr ?? '';
+    ok(r.status === 1 && err.includes("✖ could not write 'CON'") && err.includes("'CON' is a reserved device name") && !/\n\s+at /.test(err)
+      && !(existsSync(cliOut) && readdirSync(cliOut).length > 0),
+      `#4214 the CLI refuses the id CON by name and writes nothing (exit ${r.status}; stderr ${JSON.stringify(err.slice(0, 300))}; wrote ${existsSync(cliOut) ? readdirSync(cliOut).join(', ') : 'nothing'})`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // Every other write the CLI makes (the fidelity report, the three component-spec files) goes through the same guard,
+  // so no write in cli.ts can skip it. Read from the source: each `writeFileSync(` takes a path the file binds from
+  // `fileInDir(`. A write that builds its own path (`writeFileSync(resolve(...` as before) fails here by name.
+  const cliSrc = readFileSync(resolve(HERE, 'cli.ts'), 'utf8');
+  const targets = [...cliSrc.matchAll(/writeFileSync\(\s*([^,]+),/g)].map((m) => m[1]!.trim());
+  const guarded = (t: string): boolean => {
+    const name = t.split('.')[0]!;
+    return /^[A-Za-z_$][\w$]*(\.[\w$]+)?$/.test(t) && new RegExp(`\\b${name}\\s*=\\s*(\\{\\s*\\w+:\\s*)?fileInDir\\(`).test(cliSrc);
+  };
+  ok(targets.length >= 4 && targets.every(guarded),
+    `#4214 every write in cli.ts goes through fileInDir (unguarded: ${JSON.stringify(targets.filter((t) => !guarded(t)))}; of ${targets.length})`);
+}
+
 // #3876 — the serializer wrote a quote in a double-quoted scalar as `\"`, and the parser never decoded it: every
 // export → import added a backslash before each quote in a brand name, and the scanners toggled their quote state on
 // the escaped quote. The round-trip gate above runs only the example brands, and none holds a quote in a string, so it
@@ -46748,12 +46961,14 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const aiSchema = JSON.parse(readFileSync(resolve(HERE, 'schema', 'ai-metadata.schema.json'), 'utf8'));
   const aiErrs = validateJsonSchema(aiSchema, buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree));
   ok(aiErrs.length === 0, `#3076 a mapped brand's .ai.json is valid against ai-metadata.schema.json (${aiErrs.slice(0, 3).join('; ')})`);
-  // ONE SCHEMA VERSION, ONE SHAPE. #2857 took `prism3-ai-metadata/0.6` for `motion_presets`, so the icons block is the
-  // next version, 0.7. Both lines are typed here, never read from ai-metadata.ts: a merge that leaves both fields under
-  // one id (git merges the two identical `0.6` lines silently) fails this arm by name.
+  // ONE SCHEMA VERSION, ONE SHAPE. #2857 took `prism3-ai-metadata/0.6` for `motion_presets`, the icons block took 0.7,
+  // and the preset tier's new `motion_presets` shape takes 0.8 (#2857 phase 1). Both lines are typed here, never read from
+  // ai-metadata.ts: a merge that leaves two shapes under one id (git merges identical version lines silently) fails this
+  // arm by name.
   const aiDoc = buildAiMetadata(mappedTheme, buildTree(mappedTheme).tree) as any;
-  ok(aiDoc.$schema === 'prism3-ai-metadata/0.7' && aiSchema.$id === 'prism3-ai-metadata/0.7' && 'icons' in aiDoc && 'motion_presets' in aiDoc,
-    `#3076 the icons block takes its own sidecar schema version, 0.7, after #2857's motion_presets took 0.6 (got $schema ${aiDoc.$schema}, $id ${aiSchema.$id})`);
+  ok(aiDoc.$schema === 'prism3-ai-metadata/0.8' && aiSchema.$id === 'prism3-ai-metadata/0.8' && 'icons' in aiDoc && 'motion_presets' in aiDoc
+    && Object.values<any>(aiDoc.motion_presets).every((p) => typeof p.token === 'string' && typeof p.resolves_to === 'object'),
+    `#3076 / #2857: the sidecar is schema 0.8 since motion_presets took its token shape, with icons and the preset tokens in it (got $schema ${aiDoc.$schema}, $id ${aiSchema.$id})`);
   const xErrs = validateJsonSchema(JSON.parse(readFileSync(resolve(HERE, 'schema', 'component-defs.schema.json'), 'utf8')), JSON.parse(JSON.stringify(xdoc)));
   ok(xErrs.length === 0, `#3076 a mapped brand's component export is valid against component-defs.schema.json (${xErrs.slice(0, 3).join('; ')})`);
   // DUPLICATE ART IS REPORTED, NEVER REFUSED (owner decision 2026-11-20 A). Each brand glyph below is typed by hand as a

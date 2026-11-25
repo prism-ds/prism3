@@ -1,8 +1,8 @@
 {
-  "$schema": "prism3-ai-metadata/0.7",
+  "$schema": "prism3-ai-metadata/0.8",
   "brand": "prism3",
   "generated": true,
-  "note": "Agent-readable metadata, companion to prism3.tokens.json. Every token in that tree has one entry here, keyed by its path below the brand root; color roles drop the leading `color.` segment. Tiers: `color` (semantic color roles), `typography` (type styles and font roles), `layout` (space, size, radius, border-width, background-blur, focus-ring, icon, control and grid roles, and the type line boxes), `motion` (motion roles), `gradient` when the brand has one, and `primitives` (the raw values the roles resolve to). The primitive families are `core.palette`, `core.dimension`, `core.font`, `opacity`, `motion.duration-ms`, `motion.easing`, `motion.spring`, `motion.spring-duration`, `motion.spring-easing`, `shadow`, `breakpoint`, `container`. Not every one sits under `core`: a family outside it is still a primitive, so read the tier, not the path. A primitive carries `aliased_by`, every token that resolves to it directly or through another alias, recomputed on every build. On a color role, `sits_on` names the grounds an ink or edge is placed on and `carries` the inks placed on a ground; both are measured in every mode. `tracks` names companion roles and implies no contrast. `contrast_with` is the role's contrast contract: `requirement` states it as a check that resolves both roles in every mode, and `ratio` is the light-mode measurement. `usage_limit` marks an ink that is for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, the duration step it plays on (the brand's mapping), its easing role and its reduced-motion duration. Field definitions: the JSON Schema whose `$id` is this file's `$schema`.",
+  "note": "Agent-readable metadata, companion to prism3.tokens.json. Every token in that tree has one entry here, keyed by its path below the brand root; color roles drop the leading `color.` segment. Tiers: `color` (semantic color roles), `typography` (type styles and font roles), `layout` (space, size, radius, border-width, background-blur, focus-ring, icon, control and grid roles, and the type line boxes), `motion` (motion roles), `gradient` when the brand has one, and `primitives` (the raw values the roles resolve to). The primitive families are `core.palette`, `core.dimension`, `core.font`, `opacity`, `motion.duration-ms`, `motion.easing`, `motion.spring`, `motion.spring-duration`, `motion.spring-easing`, `shadow`, `breakpoint`, `container`. Not every one sits under `core`: a family outside it is still a primitive, so read the tier, not the path. A primitive carries `aliased_by`, every token that resolves to it directly or through another alias, recomputed on every build. On a color role, `sits_on` names the grounds an ink or edge is placed on and `carries` the inks placed on a ground; both are measured in every mode. `tracks` names companion roles and implies no contrast. `contrast_with` is the role's contrast contract: `requirement` states it as a check that resolves both roles in every mode, and `ratio` is the light-mode measurement. `usage_limit` marks an ink that is for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, its `motion.preset.<name>` tokens (the transition composite and its duration, easing, delay and reduced duration), and in `resolves_to` the step, role, curve or spring each slot points at for this brand. Bind the preset tokens. Field definitions: the JSON Schema whose `$id` is this file's `$schema`.",
   "color_fields": [
     "$description",
     "meaning",
@@ -9611,46 +9611,46 @@
       "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.normal": {
-      "$description": "reduce-motion normal — 50ms",
+      "$description": "reduce-motion normal — 100ms",
       "meaning": "Reduced-motion duration role — normal",
       "when_to_use": "The duration of `motion.duration.normal` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.50}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.moderate": {
-      "$description": "reduce-motion moderate — 0ms (eliminated — substitute a cross-fade)",
+      "$description": "reduce-motion moderate — 100ms",
       "meaning": "Reduced-motion duration role — moderate",
       "when_to_use": "The duration of `motion.duration.moderate` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.0}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.slow": {
-      "$description": "reduce-motion slow — 0ms (eliminated — substitute a cross-fade)",
+      "$description": "reduce-motion slow — 100ms",
       "meaning": "Reduced-motion duration role — slow",
       "when_to_use": "The duration of `motion.duration.slow` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.0}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.slower": {
-      "$description": "reduce-motion slower — 0ms (eliminated — substitute a cross-fade)",
+      "$description": "reduce-motion slower — 100ms",
       "meaning": "Reduced-motion duration role — slower",
       "when_to_use": "The duration of `motion.duration.slower` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.0}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.long": {
-      "$description": "reduce-motion long — 0ms (eliminated — substitute a cross-fade)",
+      "$description": "reduce-motion long — 100ms",
       "meaning": "Reduced-motion duration role — long",
       "when_to_use": "The duration of `motion.duration.long` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.0}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.longer": {
-      "$description": "reduce-motion longer — 0ms (eliminated — substitute a cross-fade)",
+      "$description": "reduce-motion longer — 100ms",
       "meaning": "Reduced-motion duration role — longer",
       "when_to_use": "The duration of `motion.duration.longer` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.0}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.longest": {
-      "$description": "reduce-motion longest — 0ms (eliminated — substitute a cross-fade)",
+      "$description": "reduce-motion longest — 100ms",
       "meaning": "Reduced-motion duration role — longest",
       "when_to_use": "The duration of `motion.duration.longest` when the user prefers reduced motion.",
-      "resolves_to": "{pds3.motion.duration-ms.0}"
+      "resolves_to": "{pds3.motion.duration-ms.100}"
     },
     "motion.duration-reduced.spin": {
       "$description": "reduce-motion spin — 2600ms per full turn: a slow turn, kept rather than removed, because the spinner is how a sighted user sees work continuing",
@@ -9663,6 +9663,18 @@
       "meaning": "Reduced-motion duration role — one slow pass of an indeterminate progress bar",
       "when_to_use": "The period of an indeterminate progress bar's sweep when the user prefers reduced motion: slower, never stopped, because the moving segment is the only sign the work is continuing.",
       "resolves_to": "{pds3.motion.duration-ms.2600}"
+    },
+    "motion.delay.show": {
+      "$description": "delay show — 400ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo",
+      "meaning": "Motion delay — show",
+      "when_to_use": "How long a tooltip or a busy indicator waits before it shows, so a fast result shows nothing. The same at every tempo.",
+      "resolves_to": "{pds3.motion.duration-ms.400}"
+    },
+    "motion.delay.min-show": {
+      "$description": "delay min-show — 500ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo",
+      "meaning": "Motion delay — min-show",
+      "when_to_use": "The least time a shown busy indicator stays, so it does not flash. The same at every tempo.",
+      "resolves_to": "{pds3.motion.duration-ms.500}"
     },
     "motion.easing-role.default": {
       "$description": "easing role 'default' → standard — the intent a transition names, so a mode can substitute a curve without redefining one",
@@ -9688,44 +9700,344 @@
       "when_to_use": "The easing curve of a transition, named by purpose. Reference the role, not the curve it maps to.",
       "resolves_to": "{pds3.motion.easing.expressive}"
     },
-    "motion.transition.default": {
-      "$description": "motion default — standard in-place transition (normal + standard)",
-      "meaning": "Transition composite — default",
-      "when_to_use": "A complete transition (duration and easing). Apply it whole.",
+    "motion.preset.state.duration": {
+      "$description": "preset state duration — the fast step",
+      "meaning": "Motion preset state — duration",
+      "when_to_use": "How long a state change runs. Under reduced motion, use `motion.preset.state.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.fast}"
+    },
+    "motion.preset.state.easing": {
+      "$description": "preset state easing — the default role (standard)",
+      "meaning": "Motion preset state — easing",
+      "when_to_use": "The easing of a state change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.default}"
+    },
+    "motion.preset.state.delay": {
+      "$description": "preset state delay — none, it starts at once",
+      "meaning": "Motion preset state — delay",
+      "when_to_use": "How long a state change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.state.duration-reduced": {
+      "$description": "preset state reduced duration — the fast step's reduced twin, derived from the duration",
+      "meaning": "Motion preset state — reduced-motion duration",
+      "when_to_use": "The duration of a state change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.fast}"
+    },
+    "motion.preset.state.transition": {
+      "$description": "preset state — the fast step on the default role (standard), at once",
+      "meaning": "Motion preset state — its transition composite",
+      "when_to_use": "A whole state change: its duration, easing and delay together. Apply it whole.",
       "resolves_to": {
-        "duration": "{pds3.motion.duration.normal}",
-        "timingFunction": "{pds3.motion.easing-role.default}",
-        "delay": "0ms"
+        "duration": "{pds3.motion.preset.state.duration}",
+        "timingFunction": "{pds3.motion.preset.state.easing}",
+        "delay": "{pds3.motion.preset.state.delay}"
       }
     },
-    "motion.transition.enter": {
-      "$description": "motion enter — element settles in (normal + decelerate)",
-      "meaning": "Transition composite — enter",
-      "when_to_use": "A complete transition (duration and easing). Apply it whole.",
+    "motion.preset.fade.duration": {
+      "$description": "preset fade duration — the normal step",
+      "meaning": "Motion preset fade — duration",
+      "when_to_use": "How long a fade change runs. Under reduced motion, use `motion.preset.fade.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.normal}"
+    },
+    "motion.preset.fade.easing": {
+      "$description": "preset fade easing — the enter role (decelerate)",
+      "meaning": "Motion preset fade — easing",
+      "when_to_use": "The easing of a fade change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.enter}"
+    },
+    "motion.preset.fade.delay": {
+      "$description": "preset fade delay — none, it starts at once",
+      "meaning": "Motion preset fade — delay",
+      "when_to_use": "How long a fade change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.fade.duration-reduced": {
+      "$description": "preset fade reduced duration — the normal step's reduced twin, derived from the duration",
+      "meaning": "Motion preset fade — reduced-motion duration",
+      "when_to_use": "The duration of a fade change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.normal}"
+    },
+    "motion.preset.fade.transition": {
+      "$description": "preset fade — the normal step on the enter role (decelerate), at once",
+      "meaning": "Motion preset fade — its transition composite",
+      "when_to_use": "A whole fade change: its duration, easing and delay together. Apply it whole.",
       "resolves_to": {
-        "duration": "{pds3.motion.duration.normal}",
-        "timingFunction": "{pds3.motion.easing-role.enter}",
-        "delay": "0ms"
+        "duration": "{pds3.motion.preset.fade.duration}",
+        "timingFunction": "{pds3.motion.preset.fade.easing}",
+        "delay": "{pds3.motion.preset.fade.delay}"
       }
     },
-    "motion.transition.exit": {
-      "$description": "motion exit — element accelerates out (fast + accelerate)",
-      "meaning": "Transition composite — exit",
-      "when_to_use": "A complete transition (duration and easing). Apply it whole.",
+    "motion.preset.crossfade.duration": {
+      "$description": "preset crossfade duration — the normal step",
+      "meaning": "Motion preset crossfade — duration",
+      "when_to_use": "How long a crossfade change runs. Under reduced motion, use `motion.preset.crossfade.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.normal}"
+    },
+    "motion.preset.crossfade.easing": {
+      "$description": "preset crossfade easing — the default role (standard)",
+      "meaning": "Motion preset crossfade — easing",
+      "when_to_use": "The easing of a crossfade change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.default}"
+    },
+    "motion.preset.crossfade.delay": {
+      "$description": "preset crossfade delay — none, it starts at once",
+      "meaning": "Motion preset crossfade — delay",
+      "when_to_use": "How long a crossfade change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.crossfade.duration-reduced": {
+      "$description": "preset crossfade reduced duration — the normal step's reduced twin, derived from the duration",
+      "meaning": "Motion preset crossfade — reduced-motion duration",
+      "when_to_use": "The duration of a crossfade change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.normal}"
+    },
+    "motion.preset.crossfade.transition": {
+      "$description": "preset crossfade — the normal step on the default role (standard), at once",
+      "meaning": "Motion preset crossfade — its transition composite",
+      "when_to_use": "A whole crossfade change: its duration, easing and delay together. Apply it whole.",
       "resolves_to": {
-        "duration": "{pds3.motion.duration.fast}",
-        "timingFunction": "{pds3.motion.easing-role.exit}",
-        "delay": "0ms"
+        "duration": "{pds3.motion.preset.crossfade.duration}",
+        "timingFunction": "{pds3.motion.preset.crossfade.easing}",
+        "delay": "{pds3.motion.preset.crossfade.delay}"
       }
     },
-    "motion.transition.emphasized": {
-      "$description": "motion emphasized — expressive / hero moment (moderate + expressive)",
-      "meaning": "Transition composite — emphasized",
-      "when_to_use": "A complete transition (duration and easing). Apply it whole.",
+    "motion.preset.move.duration": {
+      "$description": "preset move duration — the moderate step",
+      "meaning": "Motion preset move — duration",
+      "when_to_use": "How long a move change runs. Under reduced motion, use `motion.preset.move.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.moderate}"
+    },
+    "motion.preset.move.easing": {
+      "$description": "preset move easing — the default role (standard)",
+      "meaning": "Motion preset move — easing",
+      "when_to_use": "The easing of a move change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.default}"
+    },
+    "motion.preset.move.delay": {
+      "$description": "preset move delay — none, it starts at once",
+      "meaning": "Motion preset move — delay",
+      "when_to_use": "How long a move change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.move.duration-reduced": {
+      "$description": "preset move reduced duration — the moderate step's reduced twin, derived from the duration",
+      "meaning": "Motion preset move — reduced-motion duration",
+      "when_to_use": "The duration of a move change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.moderate}"
+    },
+    "motion.preset.move.transition": {
+      "$description": "preset move — the moderate step on the default role (standard), at once",
+      "meaning": "Motion preset move — its transition composite",
+      "when_to_use": "A whole move change: its duration, easing and delay together. Apply it whole.",
       "resolves_to": {
-        "duration": "{pds3.motion.duration.moderate}",
-        "timingFunction": "{pds3.motion.easing-role.emphasized}",
-        "delay": "0ms"
+        "duration": "{pds3.motion.preset.move.duration}",
+        "timingFunction": "{pds3.motion.preset.move.easing}",
+        "delay": "{pds3.motion.preset.move.delay}"
+      }
+    },
+    "motion.preset.reveal.duration": {
+      "$description": "preset reveal duration — the slow step",
+      "meaning": "Motion preset reveal — duration",
+      "when_to_use": "How long a reveal change runs. Under reduced motion, use `motion.preset.reveal.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.slow}"
+    },
+    "motion.preset.reveal.easing": {
+      "$description": "preset reveal easing — the enter role (decelerate)",
+      "meaning": "Motion preset reveal — easing",
+      "when_to_use": "The easing of a reveal change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.enter}"
+    },
+    "motion.preset.reveal.delay": {
+      "$description": "preset reveal delay — none, it starts at once",
+      "meaning": "Motion preset reveal — delay",
+      "when_to_use": "How long a reveal change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.reveal.duration-reduced": {
+      "$description": "preset reveal reduced duration — the slow step's reduced twin, derived from the duration",
+      "meaning": "Motion preset reveal — reduced-motion duration",
+      "when_to_use": "The duration of a reveal change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.slow}"
+    },
+    "motion.preset.reveal.transition": {
+      "$description": "preset reveal — the slow step on the enter role (decelerate), at once",
+      "meaning": "Motion preset reveal — its transition composite",
+      "when_to_use": "A whole reveal change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{pds3.motion.preset.reveal.duration}",
+        "timingFunction": "{pds3.motion.preset.reveal.easing}",
+        "delay": "{pds3.motion.preset.reveal.delay}"
+      }
+    },
+    "motion.preset.draw.duration": {
+      "$description": "preset draw duration — the slow step",
+      "meaning": "Motion preset draw — duration",
+      "when_to_use": "How long a draw change runs. Under reduced motion, use `motion.preset.draw.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.slow}"
+    },
+    "motion.preset.draw.easing": {
+      "$description": "preset draw easing — the default role (standard)",
+      "meaning": "Motion preset draw — easing",
+      "when_to_use": "The easing of a draw change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.default}"
+    },
+    "motion.preset.draw.delay": {
+      "$description": "preset draw delay — none, it starts at once",
+      "meaning": "Motion preset draw — delay",
+      "when_to_use": "How long a draw change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.draw.duration-reduced": {
+      "$description": "preset draw reduced duration — the slow step's reduced twin, derived from the duration",
+      "meaning": "Motion preset draw — reduced-motion duration",
+      "when_to_use": "The duration of a draw change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.slow}"
+    },
+    "motion.preset.draw.transition": {
+      "$description": "preset draw — the slow step on the default role (standard), at once",
+      "meaning": "Motion preset draw — its transition composite",
+      "when_to_use": "A whole draw change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{pds3.motion.preset.draw.duration}",
+        "timingFunction": "{pds3.motion.preset.draw.easing}",
+        "delay": "{pds3.motion.preset.draw.delay}"
+      }
+    },
+    "motion.preset.surface.duration": {
+      "$description": "preset surface duration — the moderate step",
+      "meaning": "Motion preset surface — duration",
+      "when_to_use": "How long a surface change runs. Under reduced motion, use `motion.preset.surface.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.moderate}"
+    },
+    "motion.preset.surface.easing": {
+      "$description": "preset surface easing — the enter role (decelerate)",
+      "meaning": "Motion preset surface — easing",
+      "when_to_use": "The easing of a surface change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.enter}"
+    },
+    "motion.preset.surface.delay": {
+      "$description": "preset surface delay — none, it starts at once",
+      "meaning": "Motion preset surface — delay",
+      "when_to_use": "How long a surface change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.surface.duration-reduced": {
+      "$description": "preset surface reduced duration — the moderate step's reduced twin, derived from the duration",
+      "meaning": "Motion preset surface — reduced-motion duration",
+      "when_to_use": "The duration of a surface change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.moderate}"
+    },
+    "motion.preset.surface.transition": {
+      "$description": "preset surface — the moderate step on the enter role (decelerate), at once",
+      "meaning": "Motion preset surface — its transition composite",
+      "when_to_use": "A whole surface change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{pds3.motion.preset.surface.duration}",
+        "timingFunction": "{pds3.motion.preset.surface.easing}",
+        "delay": "{pds3.motion.preset.surface.delay}"
+      }
+    },
+    "motion.preset.expand.duration": {
+      "$description": "preset expand duration — the normal step",
+      "meaning": "Motion preset expand — duration",
+      "when_to_use": "How long a expand change runs. Under reduced motion, use `motion.preset.expand.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.normal}"
+    },
+    "motion.preset.expand.easing": {
+      "$description": "preset expand easing — the default role (standard)",
+      "meaning": "Motion preset expand — easing",
+      "when_to_use": "The easing of a expand change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.default}"
+    },
+    "motion.preset.expand.delay": {
+      "$description": "preset expand delay — none, it starts at once",
+      "meaning": "Motion preset expand — delay",
+      "when_to_use": "How long a expand change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.expand.duration-reduced": {
+      "$description": "preset expand reduced duration — the normal step's reduced twin, derived from the duration",
+      "meaning": "Motion preset expand — reduced-motion duration",
+      "when_to_use": "The duration of a expand change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.normal}"
+    },
+    "motion.preset.expand.transition": {
+      "$description": "preset expand — the normal step on the default role (standard), at once",
+      "meaning": "Motion preset expand — its transition composite",
+      "when_to_use": "A whole expand change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{pds3.motion.preset.expand.duration}",
+        "timingFunction": "{pds3.motion.preset.expand.easing}",
+        "delay": "{pds3.motion.preset.expand.delay}"
+      }
+    },
+    "motion.preset.step.duration": {
+      "$description": "preset step duration — the moderate step",
+      "meaning": "Motion preset step — duration",
+      "when_to_use": "How long a step change runs. Under reduced motion, use `motion.preset.step.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.moderate}"
+    },
+    "motion.preset.step.easing": {
+      "$description": "preset step easing — the default role (standard)",
+      "meaning": "Motion preset step — easing",
+      "when_to_use": "The easing of a step change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.default}"
+    },
+    "motion.preset.step.delay": {
+      "$description": "preset step delay — none, it starts at once",
+      "meaning": "Motion preset step — delay",
+      "when_to_use": "How long a step change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.step.duration-reduced": {
+      "$description": "preset step reduced duration — the moderate step's reduced twin, derived from the duration",
+      "meaning": "Motion preset step — reduced-motion duration",
+      "when_to_use": "The duration of a step change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.moderate}"
+    },
+    "motion.preset.step.transition": {
+      "$description": "preset step — the moderate step on the default role (standard), at once",
+      "meaning": "Motion preset step — its transition composite",
+      "when_to_use": "A whole step change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{pds3.motion.preset.step.duration}",
+        "timingFunction": "{pds3.motion.preset.step.easing}",
+        "delay": "{pds3.motion.preset.step.delay}"
+      }
+    },
+    "motion.preset.settle.duration": {
+      "$description": "preset settle duration — the slow step",
+      "meaning": "Motion preset settle — duration",
+      "when_to_use": "How long a settle change runs. Under reduced motion, use `motion.preset.settle.duration-reduced`.",
+      "resolves_to": "{pds3.motion.duration.slow}"
+    },
+    "motion.preset.settle.easing": {
+      "$description": "preset settle easing — the enter role (decelerate)",
+      "meaning": "Motion preset settle — easing",
+      "when_to_use": "The easing of a settle change. Reference the preset, not what it points at.",
+      "resolves_to": "{pds3.motion.easing-role.enter}"
+    },
+    "motion.preset.settle.delay": {
+      "$description": "preset settle delay — none, it starts at once",
+      "meaning": "Motion preset settle — delay",
+      "when_to_use": "How long a settle change waits before it starts.",
+      "resolves_to": "{pds3.motion.duration-ms.0}"
+    },
+    "motion.preset.settle.duration-reduced": {
+      "$description": "preset settle reduced duration — the slow step's reduced twin, derived from the duration",
+      "meaning": "Motion preset settle — reduced-motion duration",
+      "when_to_use": "The duration of a settle change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{pds3.motion.duration-reduced.slow}"
+    },
+    "motion.preset.settle.transition": {
+      "$description": "preset settle — the slow step on the enter role (decelerate), at once",
+      "meaning": "Motion preset settle — its transition composite",
+      "when_to_use": "A whole settle change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{pds3.motion.preset.settle.duration}",
+        "timingFunction": "{pds3.motion.preset.settle.easing}",
+        "delay": "{pds3.motion.preset.settle.delay}"
       }
     },
     "motion.stagger": {
@@ -9733,58 +10045,144 @@
       "meaning": "Stagger delay role",
       "when_to_use": "The delay between items that animate in sequence.",
       "resolves_to": "{pds3.motion.duration-ms.40}"
+    },
+    "motion.distance.nudge": {
+      "$description": "distance nudge — the small offset an element travels as it enters or leaves, such as a toast sliding in",
+      "meaning": "Motion distance — nudge",
+      "when_to_use": "The small offset an element travels as it enters or leaves, such as a toast sliding in.",
+      "resolves_to": "{pds3.space.100}"
     }
   },
   "motion_presets": {
     "state": {
-      "duration": "motion.duration.fast",
-      "easing": "motion.easing-role.default",
-      "reduced_duration": "motion.duration-reduced.fast"
+      "token": "motion.preset.state.transition",
+      "duration": "motion.preset.state.duration",
+      "easing": "motion.preset.state.easing",
+      "delay": "motion.preset.state.delay",
+      "duration_reduced": "motion.preset.state.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.fast",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.fast"
+      }
     },
     "fade": {
-      "duration": "motion.duration.normal",
-      "easing": "motion.easing-role.enter",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.fade.transition",
+      "duration": "motion.preset.fade.duration",
+      "easing": "motion.preset.fade.easing",
+      "delay": "motion.preset.fade.delay",
+      "duration_reduced": "motion.preset.fade.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.normal",
+        "easing": "motion.easing-role.enter",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.normal"
+      }
     },
     "crossfade": {
-      "duration": "motion.duration.normal",
-      "easing": "motion.easing-role.default",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.crossfade.transition",
+      "duration": "motion.preset.crossfade.duration",
+      "easing": "motion.preset.crossfade.easing",
+      "delay": "motion.preset.crossfade.delay",
+      "duration_reduced": "motion.preset.crossfade.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.normal",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.normal"
+      }
     },
     "move": {
-      "duration": "motion.duration.moderate",
-      "easing": "motion.easing-role.default",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.move.transition",
+      "duration": "motion.preset.move.duration",
+      "easing": "motion.preset.move.easing",
+      "delay": "motion.preset.move.delay",
+      "duration_reduced": "motion.preset.move.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.moderate",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.moderate"
+      }
     },
     "reveal": {
-      "duration": "motion.duration.slow",
-      "easing": "motion.easing-role.enter",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.reveal.transition",
+      "duration": "motion.preset.reveal.duration",
+      "easing": "motion.preset.reveal.easing",
+      "delay": "motion.preset.reveal.delay",
+      "duration_reduced": "motion.preset.reveal.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.slow",
+        "easing": "motion.easing-role.enter",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.slow"
+      }
     },
     "draw": {
-      "duration": "motion.duration.slow",
-      "easing": "motion.easing-role.default",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.draw.transition",
+      "duration": "motion.preset.draw.duration",
+      "easing": "motion.preset.draw.easing",
+      "delay": "motion.preset.draw.delay",
+      "duration_reduced": "motion.preset.draw.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.slow",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.slow"
+      }
     },
     "surface": {
-      "duration": "motion.duration.moderate",
-      "easing": "motion.easing-role.enter",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.surface.transition",
+      "duration": "motion.preset.surface.duration",
+      "easing": "motion.preset.surface.easing",
+      "delay": "motion.preset.surface.delay",
+      "duration_reduced": "motion.preset.surface.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.moderate",
+        "easing": "motion.easing-role.enter",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.moderate"
+      }
     },
     "expand": {
-      "duration": "motion.duration.normal",
-      "easing": "motion.easing-role.default",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.expand.transition",
+      "duration": "motion.preset.expand.duration",
+      "easing": "motion.preset.expand.easing",
+      "delay": "motion.preset.expand.delay",
+      "duration_reduced": "motion.preset.expand.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.normal",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.normal"
+      }
     },
     "step": {
-      "duration": "motion.duration.moderate",
-      "easing": "motion.easing-role.default",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.step.transition",
+      "duration": "motion.preset.step.duration",
+      "easing": "motion.preset.step.easing",
+      "delay": "motion.preset.step.delay",
+      "duration_reduced": "motion.preset.step.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.moderate",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.moderate"
+      }
     },
     "settle": {
-      "duration": "motion.duration.slow",
-      "easing": "motion.easing-role.enter",
-      "reduced_duration": "motion.duration-reduced.normal"
+      "token": "motion.preset.settle.transition",
+      "duration": "motion.preset.settle.duration",
+      "easing": "motion.preset.settle.easing",
+      "delay": "motion.preset.settle.delay",
+      "duration_reduced": "motion.preset.settle.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.slow",
+        "easing": "motion.easing-role.enter",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.slow"
+      }
     }
   },
   "gradient_fields": [
@@ -12531,6 +12929,7 @@
       "consume": "Private primitive — reference via space / radius / size / border-width / focus.",
       "aliased_by": [
         "control.size.sm.dot",
+        "motion.distance.nudge",
         "radius.xl",
         "space.100"
       ]
@@ -13753,12 +14152,26 @@
       "tier": "primitive",
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
-        "motion.duration-reduced.long",
-        "motion.duration-reduced.longer",
-        "motion.duration-reduced.longest",
-        "motion.duration-reduced.moderate",
-        "motion.duration-reduced.slow",
-        "motion.duration-reduced.slower"
+        "motion.preset.crossfade.delay",
+        "motion.preset.crossfade.transition",
+        "motion.preset.draw.delay",
+        "motion.preset.draw.transition",
+        "motion.preset.expand.delay",
+        "motion.preset.expand.transition",
+        "motion.preset.fade.delay",
+        "motion.preset.fade.transition",
+        "motion.preset.move.delay",
+        "motion.preset.move.transition",
+        "motion.preset.reveal.delay",
+        "motion.preset.reveal.transition",
+        "motion.preset.settle.delay",
+        "motion.preset.settle.transition",
+        "motion.preset.state.delay",
+        "motion.preset.state.transition",
+        "motion.preset.step.delay",
+        "motion.preset.step.transition",
+        "motion.preset.surface.delay",
+        "motion.preset.surface.transition"
       ]
     },
     "motion.duration-ms.40": {
@@ -13777,7 +14190,6 @@
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
         "motion.duration-reduced.instant",
-        "motion.duration-reduced.normal",
         "motion.duration.instant"
       ]
     },
@@ -13788,8 +14200,26 @@
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
         "motion.duration-reduced.fast",
+        "motion.duration-reduced.long",
+        "motion.duration-reduced.longer",
+        "motion.duration-reduced.longest",
+        "motion.duration-reduced.moderate",
+        "motion.duration-reduced.normal",
+        "motion.duration-reduced.slow",
+        "motion.duration-reduced.slower",
         "motion.duration.fast",
-        "motion.transition.exit"
+        "motion.preset.crossfade.duration-reduced",
+        "motion.preset.draw.duration-reduced",
+        "motion.preset.expand.duration-reduced",
+        "motion.preset.fade.duration-reduced",
+        "motion.preset.move.duration-reduced",
+        "motion.preset.reveal.duration-reduced",
+        "motion.preset.settle.duration-reduced",
+        "motion.preset.state.duration",
+        "motion.preset.state.duration-reduced",
+        "motion.preset.state.transition",
+        "motion.preset.step.duration-reduced",
+        "motion.preset.surface.duration-reduced"
       ]
     },
     "motion.duration-ms.200": {
@@ -13799,8 +14229,12 @@
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
         "motion.duration.normal",
-        "motion.transition.default",
-        "motion.transition.enter"
+        "motion.preset.crossfade.duration",
+        "motion.preset.crossfade.transition",
+        "motion.preset.expand.duration",
+        "motion.preset.expand.transition",
+        "motion.preset.fade.duration",
+        "motion.preset.fade.transition"
       ]
     },
     "motion.duration-ms.300": {
@@ -13810,7 +14244,21 @@
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
         "motion.duration.moderate",
-        "motion.transition.emphasized"
+        "motion.preset.move.duration",
+        "motion.preset.move.transition",
+        "motion.preset.step.duration",
+        "motion.preset.step.transition",
+        "motion.preset.surface.duration",
+        "motion.preset.surface.transition"
+      ]
+    },
+    "motion.duration-ms.400": {
+      "$description": "duration primitive — 400ms (literal; the semantic tier names the use)",
+      "meaning": "Motion duration primitive",
+      "tier": "primitive",
+      "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
+      "aliased_by": [
+        "motion.delay.show"
       ]
     },
     "motion.duration-ms.500": {
@@ -13819,7 +14267,14 @@
       "tier": "primitive",
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
-        "motion.duration.slow"
+        "motion.delay.min-show",
+        "motion.duration.slow",
+        "motion.preset.draw.duration",
+        "motion.preset.draw.transition",
+        "motion.preset.reveal.duration",
+        "motion.preset.reveal.transition",
+        "motion.preset.settle.duration",
+        "motion.preset.settle.transition"
       ]
     },
     "motion.duration-ms.800": {
@@ -13891,7 +14346,18 @@
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them.",
       "aliased_by": [
         "motion.easing-role.default",
-        "motion.transition.default"
+        "motion.preset.crossfade.easing",
+        "motion.preset.crossfade.transition",
+        "motion.preset.draw.easing",
+        "motion.preset.draw.transition",
+        "motion.preset.expand.easing",
+        "motion.preset.expand.transition",
+        "motion.preset.move.easing",
+        "motion.preset.move.transition",
+        "motion.preset.state.easing",
+        "motion.preset.state.transition",
+        "motion.preset.step.easing",
+        "motion.preset.step.transition"
       ]
     },
     "motion.easing.decelerate": {
@@ -13901,7 +14367,14 @@
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them.",
       "aliased_by": [
         "motion.easing-role.enter",
-        "motion.transition.enter"
+        "motion.preset.fade.easing",
+        "motion.preset.fade.transition",
+        "motion.preset.reveal.easing",
+        "motion.preset.reveal.transition",
+        "motion.preset.settle.easing",
+        "motion.preset.settle.transition",
+        "motion.preset.surface.easing",
+        "motion.preset.surface.transition"
       ]
     },
     "motion.easing.accelerate": {
@@ -13910,8 +14383,7 @@
       "tier": "primitive",
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them.",
       "aliased_by": [
-        "motion.easing-role.exit",
-        "motion.transition.exit"
+        "motion.easing-role.exit"
       ]
     },
     "motion.easing.expressive": {
@@ -13920,8 +14392,7 @@
       "tier": "primitive",
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them.",
       "aliased_by": [
-        "motion.easing-role.emphasized",
-        "motion.transition.emphasized"
+        "motion.easing-role.emphasized"
       ]
     },
     "motion.easing.calm": {
@@ -13948,6 +14419,12 @@
       "tier": "primitive",
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them."
     },
+    "motion.spring.effects": {
+      "$description": "spring effects — damping 1, stiffness 1600",
+      "meaning": "Spring primitive (damping / stiffness)",
+      "tier": "primitive",
+      "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them."
+    },
     "motion.spring-duration.snappy": {
       "$description": "spring snappy settle time — 317ms, the time the snappy spring takes to settle on its target; play spring-easing snappy over it",
       "meaning": "Spring settle time — the duration its CSS curve plays over",
@@ -13966,6 +14443,12 @@
       "tier": "primitive",
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them."
     },
+    "motion.spring-duration.effects": {
+      "$description": "spring effects settle time — 231ms, the time the effects spring takes to settle on its target; play spring-easing effects over it",
+      "meaning": "Spring settle time — the duration its CSS curve plays over",
+      "tier": "primitive",
+      "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them."
+    },
     "motion.spring-easing.snappy": {
       "$description": "spring snappy as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration snappy (317ms); the damping and stiffness stay in spring snappy",
       "meaning": "Spring as a CSS linear() curve, for code that cannot run a spring",
@@ -13980,6 +14463,12 @@
     },
     "motion.spring-easing.bouncy": {
       "$description": "spring bouncy as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration bouncy (360ms); the damping and stiffness stay in spring bouncy",
+      "meaning": "Spring as a CSS linear() curve, for code that cannot run a spring",
+      "tier": "primitive",
+      "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them."
+    },
+    "motion.spring-easing.effects": {
+      "$description": "spring effects as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration effects (231ms); the damping and stiffness stay in spring effects",
       "meaning": "Spring as a CSS linear() curve, for code that cannot run a spring",
       "tier": "primitive",
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them."
