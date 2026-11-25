@@ -11,7 +11,9 @@ its `--self-test` (in `check:build`) proves the arithmetic on planted records.
 file. It **writes nothing**: no node, page, style, variable or version. For each member it records the variant, each
 boolean property's effective value on that member (#4461: the visibility of the node wired to it, or of the node shown
 there unwired, listed under `unwired`; the set default only when neither exists), the extent, padding, stroke weights and corner radii, and every visible layer's box from
-`absoluteBoundingBox`, relative to the member, with its node id, type and horizontal sizing.
+`absoluteBoundingBox`, relative to the member, with its node id, type and horizontal sizing. Each layer also records
+its `border`, the stroke weight on each side that takes layout space (0 unless the frame includes its strokes in
+layout), and, where it is stroked, its `stroke`: the weights, the alignment and whether they're in layout.
 
 ## Which file
 
@@ -71,6 +73,16 @@ name unless the record comes back. So dropping either `return`, the outer one or
   transition) aside before it measures, so the press isn't a geometry difference. Another arm's press is measured the
   same way: the KPI 2 row on the scorecard says so. A glyph flipped right to left (`data-mirror`, #4052 A) keeps its
   box, so it doesn't move a measurement either.
+
+## Part borders (#3408 KPI 2 findings, 2026-11-25)
+
+The first records showed the field's content and entry inset 17px in code and 16px in Figma, and the Show/Hide
+button 2px wider in code than its text. Both are a border: CSS's border takes layout space, and Figma's INSIDE stroke
+(or the button's absent one) doesn't. A record made before this carried no part strokes, so those lines counted as
+findings of their own. Each record from this one on carries every layer's layout border, and the code record carries
+each part's CSS border and padding. The comparison then groups every line a part's border explains under that part,
+one finding per bordered part, as it does for the button's root. Whether that difference stays is OWNER DECISION G1
+on #3408.
 
 ## Not yet verified live
 

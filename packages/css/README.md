@@ -288,7 +288,7 @@ fields' 120px minimum width as a documented raw px.
 | One toggle only (`platform-owned`) | `::-ms-reveal` hidden. | — |
 | Content direction (the text field's `accessibility.aria`, #4051) | The text field's input carries `dir="auto"`, so a value's direction can differ from the page's: a Latin email address stays left to right on a right-to-left page. The password field's input carries no `dir` (#4051 A), so it follows the page's direction, and a masked value's direction doesn't hint at what was typed. | — |
 | The input's attributes (`semantics`) | In the contract and the demo: `autocomplete`, `spellcheck="false"`, `autocapitalize="none"`. | `passwordrules`. |
-| The label row and the button's hit area (`hit-target`, Q380 A) | The button sets `min-block-size: 0` and the def's zero block padding. Its `::before` reads the button def's `size.<field size>.hit-target`: centered at small, anchored to the row's bottom at medium and large. | — |
+| The label row and the button's hit area (`hit-target`, Q380 A) | The row centers its children, and the button stretches to it (`align-self: stretch`, the def's `crossAxisFill`, #2804), its "Show" centered. It sets `min-block-size: 0` and the def's zero block padding. Its `::before` reads the button def's `size.<field size>.hit-target`: centered at small, anchored to the row's bottom at medium and large. | — |
 | The trailing affix as a control (`semantics`) | — (decorative glyph only) | A Clear or reveal button (S4). |
 | `prefix`, `suffix` | — | No part in the anatomy (#1699). |
 | The small field on a coarse pointer (`responsive-layout`) | — | The 16px input under `pointer: coarse`: no token carries it. |

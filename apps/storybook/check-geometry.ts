@@ -12,7 +12,8 @@
  *
  * WHAT IT MEASURES. Every story, both delivery forms, left to right and right to left, on the light theme. For the
  * component's root: its extent, padding, border widths and corner radii. For each part of the def's anatomy that has a
- * box in code: its box (x, y, width, height) relative to the root's top left, read from the browser's layout
+ * box in code: its box (x, y, width, height) relative to the root's top left, and its border and padding widths, read
+ * from the browser's layout
  * (`getBoundingClientRect`), not from declared values. Parts are keyed by the anatomy's own part path
  * (`container/control/content`), the key Figma's layers carry, so the record can be set beside Figma's.
  *
@@ -58,7 +59,7 @@ const stories = (plant: Plant = {}): Story[] => {
   return contractStories(CONTRACT, index).filter((s) => !plant.drop?.includes(s.id));
 };
 
-export type Box = { x: number; y: number; w: number; h: number; font?: { size: number; lineHeight: number | null } };
+export type Box = { x: number; y: number; w: number; h: number; border?: number[]; padding?: number[]; font?: { size: number; lineHeight: number | null } };
 export type RootGeometry = { w: number; h: number; padding: number[]; border: number[]; radius: number[] };
 export type Measure = { where: Record<string, string>; root: RootGeometry; parts: Record<string, Box>; text?: string };
 const DP = 100; // 0.01px
@@ -88,7 +89,13 @@ const MEASURE = `(([component, rootSel, parts, state, dp, prefix, ring, labelSel
     if (!el || getComputedStyle(el).display === 'none') continue;
     const b = el.getBoundingClientRect();
     if (!b.width && !b.height) continue;
-    out[part] = { x: r2(b.left - rb.left), y: r2(b.top - rb.top), w: r2(b.width), h: r2(b.height) };
+    // and its border and padding widths (top, right, bottom, left): a CSS border takes layout space, where Figma's stroke
+    // does only when the frame includes it in layout, so the comparison can name a residual its border explains, and
+    // read a hugging part's content box (#3408 KPI 2 findings, 2026-11-25)
+    const ps = getComputedStyle(el);
+    out[part] = { x: r2(b.left - rb.left), y: r2(b.top - rb.top), w: r2(b.width), h: r2(b.height),
+      border: [ps.borderTopWidth, ps.borderRightWidth, ps.borderBottomWidth, ps.borderLeftWidth].map(px),
+      padding: [ps.paddingTop, ps.paddingRight, ps.paddingBottom, ps.paddingLeft].map(px) };
     // a part that sets text itself (a non-empty text node of its own): its computed font size and line height, in px,
     // unrounded, so the comparison can model how Figma rounds a line box (#4432 decision 2 C)
     if ([...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) {
@@ -144,6 +151,7 @@ export const diff = (where: string, x: Measure, y: Measure, a: string, b: string
     const [p, q] = [x.parts[part], y.parts[part]];
     if (!p || !q) { out.push(`${where}: ${part} is drawn in the ${p ? a : b} only`); continue; }
     for (const k of ['x', 'y', 'w', 'h'] as const) if (!near(p[k], q[k])) out.push(`${where}: ${part} ${({ x: 'x', y: 'y', w: 'width', h: 'height' })[k]} is ${p[k]} in the ${a}, ${q[k]} in the ${b}`);
+    for (const k of ['border', 'padding'] as const) if (JSON.stringify(p[k]) !== JSON.stringify(q[k])) out.push(`${where}: ${part} ${k} is ${JSON.stringify(p[k] ?? null)} in the ${a}, ${JSON.stringify(q[k] ?? null)} in the ${b}`);
     if (JSON.stringify(p.font) !== JSON.stringify(q.font)) out.push(`${where}: ${part} font (size, line height) is ${JSON.stringify(p.font ?? null)} in the ${a}, ${JSON.stringify(q.font ?? null)} in the ${b}`);
   }
   return out;

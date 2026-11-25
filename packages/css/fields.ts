@@ -395,9 +395,9 @@ const fieldCss = (id: 'text-field' | 'password-field'): { css: string; rules: nu
   if (toggleAt) {
     const row = partSel(ROOT, 'container/labelRow');
     const variant = toggleAt.variant as Record<string, string>;
-    add(row, [['display', 'flex'], ['align-items', 'flex-end']], 'the label row (Q301.2 B): the label, then the Show/Hide button at its end, one label line tall (Q380 A)');
+    add(row, [['display', 'flex'], ['align-items', 'center']], 'the label row (Q301.2 B): the label, then the Show/Hide button at its end, one label line tall (Q380 A); its children centered, as the def\'s row aligns them');
     add(partSel(ROOT, 'container/labelRow/labelCell'), [['flex', '1 1 auto'], ['min-inline-size', '0']]);
-    add(tsel(ROOT), [['flex', 'none'], ['min-block-size', '0']], 'the nested Button (Q301.3 B), small, text, flush: one line of its label, so the row takes the label\'s height (codeOnly hit-target)');
+    add(tsel(ROOT), [['flex', 'none'], ['align-self', 'stretch'], ['min-block-size', '0']], 'the nested Button (Q301.3 B), small, text, flush: it stretches to the row, one label line tall, and its "Show" centers on it (crossAxisFill, #2804); its own floor is held off, so the row takes the label\'s height (codeOnly hit-target)');
     add(`${tsel(ROOT)}[hidden]`, [['display', 'none']], 'before the script runs the button is hidden, so the field is a plain password input (Q86 A)');
     add(`${tsel(ROOT)} .${PREFIX}-password-field__toggle-suffix, .${PREFIX}-password-field__announcer`, [
       ['position', 'absolute'], ['inline-size', '1px'], ['block-size', '1px'], ['overflow', 'hidden'], ['clip-path', 'inset(50%)'], ['white-space', 'nowrap'],

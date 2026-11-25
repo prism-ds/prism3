@@ -18,13 +18,14 @@
  *    #3921, and a caret set after the press is kept, #3945); a form submit puts the field back to hidden; a
  *    disabled field's button does nothing.
  * 5. GEOMETRY. The button's hit area is at least 24×24 at small and 44×44 at medium and large, and never reaches into
- *    the input box; the box is at least 44px tall at every size; the message's glyph centers on its first line. All
+ *    the input box; the box is at least 44px tall at every size; the button stretches to the label row and its "Show"
+ *    centers on it (the def's crossAxisFill); the message's glyph centers on its first line. All
  *    held to this file's own px literals (docs/34).
  *
  * 6. A STATUS ALWAYS WRITES ITS MESSAGE (Q-POC2 A, #1712 A). Every demo field at error, warning or success has its
  *    message written, shown and named in the input's `aria-describedby`.
  *
- * SELF-TEST: ten mutants, each must fail by name.
+ * SELF-TEST: eleven mutants, each must fail by name.
  */
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
@@ -174,6 +175,17 @@ export const run = async (browser: any, o: Opts = {}): Promise<{ failures: strin
       ok(g.w >= floor - LAYOUT_UNIT && g.h >= floor - LAYOUT_UNIT, `${theme} password ${size}: the Show/Hide hit area is ${g.w}×${g.h}, under ${floor}×${floor}`);
       ok(g.bottom <= g.boxTop + 0.01, `${theme} password ${size}: the Show/Hide hit area reaches ${(g.bottom - g.boxTop).toFixed(2)}px into the input box`);
       ok(g.boxH >= BOX_FLOOR_PX - LAYOUT_UNIT, `${theme} password ${size}: the input box is ${g.boxH}px tall, under ${BOX_FLOOR_PX}`);
+      // the button stretches to the label row and its "Show" centers on it (the def's crossAxisFill and its row's
+      // align: center, #2804): read from layout, held to the row's own box, not to a declared value
+      const s = await page.evaluate((q: string) => {
+        const f = document.querySelector(q)!;
+        const row = f.querySelector('.p3-password-field__label-row')!.getBoundingClientRect();
+        const b = f.querySelector('.p3-password-field__toggle')!.getBoundingClientRect();
+        const t = f.querySelector('.p3-password-field__toggle .p3-button__label')!.getBoundingClientRect();
+        return { top: b.top - row.top, h: b.height, rowH: row.height, off: (t.top + t.height / 2) - (b.top + b.height / 2) };
+      }, `[data-demo="${theme}/password-field/${size}/default/rest"]`);
+      ok(Math.abs(s.top) <= 0.01 && Math.abs(s.h - s.rowH) <= 0.01, `${theme} password ${size}: the Show/Hide button is ${s.h.toFixed(2)}px tall at ${s.top.toFixed(2)} in its ${s.rowH.toFixed(2)}px label row; it should stretch to the row`);
+      ok(Math.abs(s.off) <= LAYOUT_UNIT, `${theme} password ${size}: the Show/Hide label sits ${s.off.toFixed(2)}px off the button's middle; it should center on it`);
     }
     for (const status of ['error', 'warning', 'success']) {
       const d = await page.evaluate((q: string) => {
@@ -331,6 +343,9 @@ const MUTANTS: { name: string; opts: Opts; mustName: RegExp }[] = [
   { name: 'the medium toggle hit area shrunk to the small floor',
     opts: { css: '.p3-password-field[data-prop-size="medium"] .p3-password-field__toggle::before { inset: min(0%, calc((100% - var(--pds3-space-300)) / 2)) !important; }' },
     mustName: /password medium: the Show\/Hide hit area is .*under 44×44/ },
+  { name: 'the toggle back at the row\'s bottom, hugging its label (before #3408\'s KPI 2 fix)',
+    opts: { css: '.p3-password-field__label-row > .p3-password-field__toggle { align-self: flex-end !important; }' },
+    mustName: /password medium: the Show\/Hide button is .*px tall at .* in its .*px label row; it should stretch to the row/ },
   { name: 'the toggle shown before the script runs',
     opts: { css: '.p3-password-field__toggle[hidden] { display: inline-flex !important; }' },
     mustName: /before the script runs the Show\/Hide button is hidden/ },
