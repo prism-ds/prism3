@@ -15,6 +15,9 @@ npx tsx tools/poc-scorecard/scorecard.ts --self-test                            
 - **A row's `detail`** (optional) is text from a passing run's output, shown after the value. The ejection rows
   (`tools/poc-ejection/`) use it for the other count, the steps, the time and the upstream channel. A FAIL cell
   shows only the FAIL line, cut at 600 characters.
+- **KPI 1, developer + CLI** (`tools/poc-kpi1/`): the value is the wall-clock seconds, and the detail carries the
+  commands, hand edits, fixes, errors and, from scratch, the install with owner decision K1. `kpi3-one-edit` reads the
+  update run's second line, the readings that reached the edited tokens.
 - **Units carry no number.** A count written into a row's unit would print on every card whatever the run measured,
   and `--self-test` fails on one. A record's `dirty` counts untracked files that aren't ignored.
 - **API mismatches against Figma** (`api-mismatches.ts --manifest <custom-elements.json>`). For each def an arm ships
