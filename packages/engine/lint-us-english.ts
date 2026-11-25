@@ -369,6 +369,9 @@ const gated: string[] = [
   // The component-contract baseline (#1325): kept out of `regen` for the token contract's reason, and it carries
   // prose (`note`, prop types and def names), so it is named here by hand.
   join(repo, 'packages/engine/schema/component-contract.json'),
+  // The format-history record (#4458): kept out of `regen` for the same reason, and its `note` and each row's note
+  // are prose, so it is named here by hand.
+  join(repo, 'packages/engine/schema/format-history.json'),
   // The paint census (#758) — the second baseline kept out of `regen` for the identical reason, and so
   // listed by hand for the identical reason: it carries prose (`note`) and inherits none of the regen
   // list's coverage. This is the line the comment above predicted would be needed.

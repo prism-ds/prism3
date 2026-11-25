@@ -610,8 +610,9 @@ const refsIn = (v: any): string[] => {
 export type AiMetadataOptions = { tokensFile?: string };
 
 /** The sidecar's schema id. The JSON Schema at `schema/ai-metadata.schema.json` carries the same `$id`,
- *  and a test holds the two equal — bump both together when a field is added, renamed or removed.
- *  0.6 — `motion_presets` (#2857). 0.7 — `icons`, the brand icon map (#3076). */
+ *  and a test holds the two equal — bump both together when a field is added, renamed or removed, then record the
+ *  version: `npx tsx packages/engine/lint-format-history.ts --accept --note "<what it adds>"` (#4458).
+ *  0.6 — `motion_presets` (#2857). 0.7 — `icons`, the brand icon map (#3076). Later rows: `schema/format-history.json`. */
 export const AI_METADATA_SCHEMA = 'prism3-ai-metadata/0.7';
 
 /** The one normative sentence (AI/C-1) — a check a reader can run with `tokens.json` alone: resolve both

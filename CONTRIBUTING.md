@@ -1397,6 +1397,13 @@ npx tsx packages/engine/lint-test-arms.ts           # a registered test arm is s
                                                     # merge that drops an arm fails ARM GONE by name; a
                                                     # new arm fails UNREGISTERED until --accept adds its
                                                     # file.
+npx tsx packages/engine/lint-format-history.ts      # one version of a published format names one shape
+                                                    # (#4458, #4330): schema/format-history.json holds a
+                                                    # row per version with a hash of its JSON schema's
+                                                    # shape. Two PRs raising one format to the same number
+                                                    # conflict on the record; kept both, DUPLICATE; kept
+                                                    # one, SHAPE. A raise: bump the constant and the $id,
+                                                    # then --accept --note "<what it adds>" (appends).
 npx tsx packages/engine/shadcn-vars.ts --check      # the shadcn map covers the pinned shadcn variable set
                                                     # (#2997): every pinned name mapped, every extra
                                                     # declared, the map version equal to the pin's; only
