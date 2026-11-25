@@ -9,6 +9,10 @@
  * meant to visit and did not is a failure by id, and a case checked in one form only is a failure by name (review of
  * #3971; CLAUDE.md §4, a scope asserts each promised surface is represented, not a count).
  *
+ * REGISTRATION (#3969): before any story is opened, `held` checks once that each element tag the element form renders
+ * is registered in the built preview, and names each one that isn't. Without it, every element story of an unregistered
+ * tag waited out `open`'s 15 s before failing, which a chunked run or a CI step limit cut off first.
+ *
  * RIGHT TO LEFT (#3986 part 2, Q-RTL1 A): every check runs each story twice, left to right and right to left. `open`
  * sets the Storybook toolbar's `dir` global, which puts `dir` on the story frame, and refuses a story whose frame did
  * not take it. `represented` holds both directions: a story checked left to right only fails by id, with "(rtl)".
@@ -24,7 +28,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const STATIC = resolve(HERE, 'storybook-static');
 export const require = createRequire(import.meta.url);
 
-export type Story = { id: string; component: string; form: 'element' | 'html'; case: string };
+/** `form` is a delivery form's name: arm 1's are `element` and `html`; another arm's contract names its own. */
+export type Story = { id: string; component: string; form: string; case: string };
 /** The state a case shows: its name, less the `-no-message` suffix of a field case drawn with the message off
  *  (`hover-no-message` is forced to hover, `disabled-no-message` is disabled). */
 export const stateOf = (s: Pick<Story, 'case'>): string => s.case.replace(/-no-message$/, '');
@@ -58,12 +63,12 @@ export const stories = (plant: Plant = {}): Story[] => {
 
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 
-/** Serves `storybook-static/` on a free local port. */
-export const serve = async (): Promise<{ server: Server; origin: string }> => {
+/** Serves a built Storybook (arm 1's `storybook-static/` unless `dir` names another) on a free local port. */
+export const serve = async (dir: string = STATIC): Promise<{ server: Server; origin: string }> => {
   const server = createServer((req, res) => {
     const path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^([/\\])+/, '');
-    const file = resolve(STATIC, path || 'index.html');
-    if (!file.startsWith(STATIC + sep) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
+    const file = resolve(dir, path || 'index.html');
+    if (!file.startsWith(dir + sep) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
     res.end(readFileSync(file));
   });
@@ -89,12 +94,12 @@ export type Plant = { init?: string; after?: string; css?: string; drop?: string
  * never settles, or if the story frame's `data-theme` or `dir` is not the one asked for.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const open = async (page: any, origin: string, s: Story, theme: 'light' | 'dark', plant: Plant = {}, dir: Dir = 'ltr'): Promise<void> => {
+export const open = async (page: any, origin: string, s: Story, theme: 'light' | 'dark', plant: Plant = {}, dir: Dir = 'ltr', root = '[data-component]'): Promise<void> => {
   const errors: string[] = [];
   page.removeAllListeners('pageerror');
   page.on('pageerror', (e: Error) => errors.push(e.message));
   await page.goto(`${origin}/iframe.html?id=${s.id}&viewMode=story&globals=theme:${theme};dir:${dir}`);
-  await page.waitForSelector('#storybook-root [data-component]', { timeout: 15000 });
+  await page.waitForSelector(`#storybook-root ${root}`, { timeout: 15000 });
   if (FORCED[stateOf(s)]) await page.waitForSelector(`#storybook-root.${FORCED[stateOf(s)]}`, { timeout: 10000 });
   if (s.component === 'password-field') {
     await page.waitForFunction(() => [...document.querySelectorAll('.p3-password-field__toggle')].every((b) => !(b as HTMLElement).hidden), null, { timeout: 10000 });
@@ -115,6 +120,35 @@ export const open = async (page: any, origin: string, s: Story, theme: 'light' |
   if (plant.css) await page.addStyleTag({ content: plant.css });
   if (errors.length) throw new Error(`page error: ${errors.join(' / ')}`);
 };
+
+/**
+ * THE ELEMENT TAGS arm 1's element form renders, written here by hand (#3969), never read from the preview: the subject
+ * is whether `.storybook/preview.js` registered them.
+ */
+export const ELEMENT_TAGS: Record<string, string> = { button: 'p3-button', 'text-field': 'p3-text-field', 'password-field': 'p3-password-field' };
+/** A story every build holds, opened once to read the registry: an HTML-form story needs no element to render. */
+const PROBE_STORY = 'components-button-html--rest';
+/**
+ * Each tag in `tags` that the built preview has not registered, opened once (#3969). The preview's imports have all run
+ * once any story has rendered, so one page answers for every story. A page that never renders names that instead.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const unregistered = async (browser: any, origin: string, tags: string[] = Object.values(ELEMENT_TAGS), plant: Plant = {}): Promise<string[]> => {
+  if (!tags.length) return [];
+  const ctx = await context(browser, plant);
+  const page = await ctx.newPage();
+  try {
+    await page.goto(`${origin}/iframe.html?id=${PROBE_STORY}&viewMode=story`);
+    try { await page.waitForSelector('#storybook-root [data-component]', { timeout: 15000 }); }
+    catch { return [`the registry could not be read: ${PROBE_STORY} never rendered`]; }
+    const missing: string[] = await page.evaluate((ts: string[]) => ts.filter((t) => !customElements.get(t)), tags);
+    return missing.map((t) => `${t} is not registered in the built preview (.storybook/preview.js imports no element module that defines it), so none of its element stories can render: each would wait 15 s and fail`);
+  } finally {
+    await ctx.close();
+  }
+};
+/** A plant that makes the preview's `customElements.define` skip one tag, as if its import were deleted from preview.js. */
+export const skipDefine = (tag: string): string => `(() => { const d = customElements.define.bind(customElements); customElements.define = (n, c, o) => { if (n !== ${JSON.stringify(tag)}) d(n, c, o); }; })()`;
 
 /** A fresh browser context with a mutant's `init` planted. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -165,8 +199,8 @@ export const expectedStories = (): Story[] => Object.entries(EXPECTED).flatMap((
  * (with "(rtl)" right to left); and a case is never checked in one form only, which would leave the form comparison
  * skipped, or it fails by name.
  */
-export const represented = (r: Result, label: string, only: (s: Story) => boolean): void => {
-  const want = expectedStories().filter(only);
+export const represented = (r: Result, label: string, only: (s: Story) => boolean, expected: () => Story[] = expectedStories): void => {
+  const want = expected().filter(only);
   for (const dir of DIRS) {
     for (const s of want) if (!r.checked.has(at(s, dir))) r.failures.push(`${at(s, dir)}: not checked by ${label}`);
     const byCase = new Map<string, Story[]>();
@@ -186,21 +220,34 @@ export const represented = (r: Result, label: string, only: (s: Story) => boolea
  * `represented` call and they fail by name (delta review of #3971, R2). A real run that calls `run` directly, past
  * `held`, fails by name too.
  */
+/**
+ * Another arm's run (#4436): its Storybook, the stories it must have checked (from its contract), and the element tags
+ * its preview registers. Arm 1's run passes none of these.
+ */
+export type MainOptions = { storybook?: string; expected?: () => Story[]; tags?: string[] };
 export const main = async (
   label: string, summary: string,
   run: (browser: unknown, origin: string, plant?: Plant, only?: (s: Story) => boolean) => Promise<Result>,
   mutants: { name: string; plant: Plant; only: (s: Story) => boolean; mustName: RegExp }[],
+  opts: MainOptions = {},
 ): Promise<void> => {
   const { chromium } = require('playwright');
   const browser = await chromium.launch();
-  const { server, origin } = await serve();
+  const { server, origin } = await serve(opts.storybook);
   const wasHeld = new WeakSet<Result>();
-  const held = async (plant?: Plant, only: (s: Story) => boolean = () => true): Promise<Result> => {
-    const r = await run(browser, origin, plant, only);
-    represented(r, label, only);
+  const held = async (plant: Plant = {}, only: (s: Story) => boolean = () => true): Promise<Result> => {
+    // #3969: an unregistered element fails by name here, at once, instead of 15 s per story inside `run`.
+    const missing = await unregistered(browser, origin, opts.tags, plant);
+    const r = missing.length ? result() : await run(browser, origin, plant, only);
+    r.failures.unshift(...missing);
+    represented(r, label, only, opts.expected);
     wasHeld.add(r);
     return r;
   };
+  // Every check carries the registration mutant (#3969): one tag left undefined must be named before any story opens.
+  if (!opts.tags || opts.tags.includes(ELEMENT_TAGS.button)) {
+    mutants = [...mutants, { name: 'p3-button left unregistered (its import deleted from preview.js)', plant: { init: skipDefine(ELEMENT_TAGS.button) }, only: (s) => s.component === 'button' && s.case === 'rest', mustName: /^p3-button is not registered in the built preview/ }];
+  }
   let bad = 0;
   try {
     const real = await held();

@@ -1,0 +1,109 @@
+{
+ "format": "1.0",
+ "arm": "a second contract over arm 1's Storybook, shaped as another arm's would be (#4436 fixture)",
+ "components": {
+  "button": {
+   "root": ".p3-button",
+   "parts": {
+    "container": "",
+    "container/leadingVisual": ".p3-button__leading-visual",
+    "container/spinner": ".p3-button__spinner",
+    "container/label": ".p3-button__label",
+    "container/trailingVisual": ".p3-button__trailing-visual"
+   },
+   "focusRing": {
+    "drawn": "outline"
+   },
+   "variant": {
+    "cases": {}
+   }
+  },
+  "text-field": {
+   "root": ".p3-text-field",
+   "parts": {
+    "container": "",
+    "container/label": ":scope > .p3-field-label",
+    "container/control": ":scope > .p3-text-field__control",
+    "container/control/content": ":scope > .p3-text-field__control > .p3-text-field__content",
+    "container/control/content/leadingVisual": ".p3-text-field__content > .p3-text-field__leading-visual",
+    "container/control/content/entry": ".p3-text-field__content > .p3-text-field__entry",
+    "container/control/content/entry/placeholder": {
+     "unboxed": "the native input's placeholder text, drawn inside the entry"
+    },
+    "container/control/content/entry/value": {
+     "unboxed": "the native input's value text, drawn inside the entry"
+    },
+    "container/control/content/entry/caret": {
+     "unboxed": "the browser's own caret"
+    },
+    "container/control/content/entry/caretEnd": {
+     "unboxed": "the browser's own caret"
+    },
+    "container/control/trailingVisual": ":scope > .p3-text-field__control > .p3-text-field__trailing-visual",
+    "container/message": ":scope > .p3-field-message"
+   },
+   "focusRing": {
+    "drawn": "none",
+    "why": "the field shows focus with its control's border, as its anatomy does"
+   },
+   "variant": {
+    "cases": {
+     "error": {
+      "validation": "error"
+     }
+    }
+   }
+  }
+ },
+ "forms": {
+  "plain": {
+   "cases": {
+    "button": {
+     "rest": "components-button-html--rest",
+     "hover": "components-button-html--hover",
+     "focus-visible": "components-button-html--focus-visible",
+     "disabled": "components-button-html--disabled",
+     "pending": "components-button-html--pending",
+     "with-visuals": "components-button-html--with-visuals"
+    },
+    "text-field": {
+     "rest": "components-text-field-html--rest",
+     "hover": "components-text-field-html--hover",
+     "focus-visible": "components-text-field-html--focus-visible",
+     "error": "components-text-field-html--error",
+     "disabled": "components-text-field-html--disabled",
+     "pending": "components-text-field-html--pending",
+     "with-icons": "components-text-field-html--with-icons"
+    }
+   }
+  },
+  "wc": {
+   "cases": {
+    "button": {
+     "rest": "components-button-element--rest",
+     "hover": "components-button-element--hover",
+     "focus-visible": "components-button-element--focus-visible",
+     "disabled": "components-button-element--disabled",
+     "pending": "components-button-element--pending",
+     "with-visuals": "components-button-element--with-visuals"
+    },
+    "text-field": {
+     "rest": "components-text-field-element--rest",
+     "hover": "components-text-field-element--hover",
+     "focus-visible": "components-text-field-element--focus-visible",
+     "error": "components-text-field-element--error",
+     "disabled": "components-text-field-element--disabled",
+     "pending": "components-text-field-element--pending",
+     "with-icons": "components-text-field-element--with-icons"
+    }
+   }
+  }
+ },
+ "tokens": {
+  "scheme": "map",
+  "map": {
+   "--brand-fill": "pds3.color.interactive.primary.fill.rest",
+   "--brand-text": "pds3.color.text.primary"
+  }
+ }
+}
