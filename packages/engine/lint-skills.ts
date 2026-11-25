@@ -1046,6 +1046,54 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/remote Prism3 key in a file that holds Prism3 locally is a finding/i],
     resolve: [],
   },
+  // #4468 (owner decision A): every build ends with a ledger under four headings, in this order of the
+  // decision. The rule's sentence names all four in one paragraph, and the worked example writes each as a
+  // heading of its own, so dropping a heading from either fails by its own id.
+  {
+    id: '#4468 end every build with a ledger',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/end every build with a[^.]*ledger/i, /\*\*Used\*\*/, /\*\*Composed\*\*/, /\*\*Invented\*\*/, /\*\*Unsure\*\*/],
+    resolve: [],
+  },
+  {
+    id: '#4468 the worked ledger',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/^> \*\*Used:\*\*/m, /^> \*\*Composed:\*\*/m, /^> \*\*Invented:\*\*/m, /^> \*\*Unsure:\*\*/m],
+    resolve: [],
+  },
+  // #4469 part 1 (owner decision A): a layer built by hand because no component fits is named `GAP / …`, the
+  // audit counts those layers by name, Outline view is the check by eye, and the end-of-job note lists them.
+  // Four placements, one rule each.
+  {
+    id: '#4469 name a hand-built layer GAP / (section 1)',
+    skills: ['prism3-rebind'],
+    roles: [],
+    must: [/by hand because no component fits/i, /`GAP \/ `/, /"GAP \/ [A-Z]/],
+    resolve: [],
+  },
+  {
+    id: '#4469 the audit counts GAP layers by name (section 7)',
+    skills: ['prism3-rebind'],
+    roles: [],
+    must: [/count the `GAP \/ ` layers by name/i],
+    resolve: [],
+  },
+  {
+    id: '#4469 the Outline view check (section 7)',
+    skills: ['prism3-rebind'],
+    roles: [],
+    must: [/Cmd\/Ctrl\+Y/, /library instances in purple/i],
+    resolve: [],
+  },
+  {
+    id: '#4469 the end-of-job note (section 9)',
+    skills: ['prism3-rebind'],
+    roles: [],
+    must: [/end-of-job note/i, /instances you placed/i, /`GAP \/ ` layers/, /worth suggesting/i],
+    resolve: [],
+  },
 ];
 const blocks = (text: string): string[] => text.split(/\n(?=\s*\n|- |\d+\. )/);
 export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => string | undefined, color: Record<string, { avoid_when?: string }>, paths: Set<string>): Finding[] => {

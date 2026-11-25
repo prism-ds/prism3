@@ -260,6 +260,40 @@ Then reread the brief against what you built. Each thing it asks for is either b
 component and its tokens, or named in your report as not built ("Say what you can't build", above).
 Nothing is in between.
 
+## End every build with a ledger
+
+End every build with a short ledger under four headings: **Used**, **Composed**, **Invented** and
+**Unsure**. It closes your report, after the self-check and after anything you named as not built. A
+reviewer reads it to tell a faithful build from one that filled gaps, without reading the code first.
+
+- **Used:** each Prism3 component you placed, by its catalog `id`, and each token role you bound, by
+  name (`text.primary`, `interactive.primary.fill.rest`).
+- **Composed:** each piece you built from Prism3 components and token roles because no single component
+  is that piece, such as a settings row from `text.primary`, `text.secondary` and a `switch-row`. This is the
+  plain layout or surface "Say what you can't build" allows. A stand-in for a missing component is not
+  composed: leave it out and name it, as that section says.
+- **Invented:** anything that is not a Prism3 component or role, with the reason. The rules above leave
+  this empty in a faithful build, so each entry here is a departure for the reviewer to decide on.
+- **Unsure:** each choice you are not sure of, with what would settle it. A role you picked between two
+  candidates goes here, with both names.
+
+Write **none** under a heading that has nothing, so a short ledger reads as complete rather than cut off.
+
+**A worked ledger: a sign-in card.** The brief asks for a card with an email field, a password field, a
+Sign in button and a "Forgot password?" link.
+
+> **Used:** `text-field`, `password-field`, `button` (`appearance="filled"`); `background.secondary`,
+> `border.primary`, `text.primary`, `text.link.default`, `radius.lg`, `space.400`.
+>
+> **Composed:** the card itself, a column of the three controls and the link on `background.secondary`
+> with a `border.primary` edge and `radius.lg` corners. Prism3 has no card component yet, and the card
+> holds no behavior of its own.
+>
+> **Invented:** none.
+>
+> **Unsure:** the gap between the fields and the button. I used `space.400`; `space.300` also fits the
+> brief's mockup. A designer's spacing call settles it.
+
 ## Two worked edges (where the raw name isn't enough)
 
 These are the exact cases where "the catalog alone" leaves an agent one step short — the
