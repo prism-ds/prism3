@@ -10559,20 +10559,23 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
     // split over two lines (the URL on the line above), or a `/name\.ts$/` test, which a run with the extension left
     // off never matches. A plain-node `.mjs` or `.js` cannot import the `.ts` helper; its guard must compare real paths
     // on the line that reads argv[1] (and such a file run without its extension fails to load, loudly). This file is
-    // left out by name: it quotes the old shapes as data, and nothing guards it.
+    // left out of the guard rule by name, and only that rule: it quotes the old shapes as data, and nothing guards it.
+    // Its temp roots are scanned like any other file's.
     // THE TEMP-ROOT RULE: any `tmpdir()` call, bare or namespace-qualified (`os.tmpdir()`), unless it is the argument of
     // `realpathSync(`.
     const scanSource = (f: string, src: string) => {
       const out = { badGuards: [] as string[], badTmp: [] as string[], guards: 0, roots: 0 };
-      if (f === 'packages/engine/test.ts') return out;
       const ts = /\.(ts|mts|cts)$/.test(f);
+      // A match inside a string literal is prose about the guard, not a guard (an odd count of quotes before it).
+      const inString = (line: string, at: number): boolean => (line.slice(0, at).match(/['"`]/g) ?? []).length % 2 === 1;
       src.split('\n').forEach((line, i) => {
         if (/^\s*(\*|\/\/|\/\*)/.test(line)) return;
         if (/\bisEntry\((?:import\.meta\.url)?\)/.test(line) && !/(?:const|function) isEntry\b/.test(line)) out.guards++;
-        if (/process\.argv\[1\]/.test(line) && f !== 'packages/engine/entry-point.ts'
+        const argv = [...line.matchAll(/process\.argv\[1\]/g)].filter((m) => !inString(line, m.index!));
+        if (argv.length && f !== 'packages/engine/entry-point.ts' && f !== 'packages/engine/test.ts'
           && (ts || !/realpathSync\(process\.argv\[1\]\)[^;]*===[^;]*realpathSync\(|realpathSync\([^;]*===[^;]*realpathSync\(process\.argv\[1\]\)/.test(line))) out.badGuards.push(`${f}:${i + 1}`);
         for (const m of line.matchAll(/(?<![\w$'"`.])(?:[A-Za-z_$][\w$]*\.)?tmpdir\(\)/g)) {
-          if ((line.slice(0, m.index).match(/['`]/g) ?? []).length % 2) continue;
+          if (inString(line, m.index!)) continue;
           if (line.slice(Math.max(0, m.index! - 'realpathSync('.length), m.index) === 'realpathSync(') out.roots++;
           else out.badTmp.push(`${f}:${i + 1}`);
         }
@@ -10589,6 +10592,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
       ['a bare tmpdir()', 'x.ts', "const d = join(tmpdir(), 'p-');", 'tmp'],
       ['an .mjs guard comparing unresolved paths', 'x.mjs', "const isMain = process.argv[1] === fileURLToPath(import.meta.url);", 'guard'],
       ['isEntry, and a resolved os.tmpdir()', 'x.ts', "if (isEntry(import.meta.url)) main();\nconst d = join(realpathSync(os.tmpdir()), 'p-');", 'clean'],
+      ['argv[1] named inside a string', 'x.ts', "const why = 'reads process.argv[1] to tell a run from an import';", 'clean'],
       ['an .mjs guard comparing real paths', 'x.mjs', "try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }", 'clean'],
     ];
     const plantedOff = planted.filter(([, f, src, want]) => {
