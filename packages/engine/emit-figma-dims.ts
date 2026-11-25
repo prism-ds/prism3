@@ -26,7 +26,7 @@ import {
   figmaControlDescription, figmaLabelLineBoxDescription, figmaBodyLineBoxDescription, figmaCaptionLineBoxDescription, figmaBorderWidthDescription, figmaFocusDescription, figmaOpacityDescription, figmaBlurDescription,
   figmaTextSpacingPrimitiveDescription, figmaTextSpacingRoleDescription,
   figmaDurationPrimitiveDescription, figmaDurationDescription, figmaStaggerDescription,
-  figmaCurveDescription, figmaEasingRoleDescription, figmaSpringDescription,
+  figmaCurveDescription, figmaEasingRoleDescription, figmaSpringDescription, figmaSpringDurationDescription, figmaDelayDescription, figmaPresetDescription,
   figmaBreakpointDescription, figmaContainerDescription, figmaGridVarDescription,
 } from './figma-description';
 import { figName, nsName, coreName, CORE_COLLECTION, PRIMITIVE_SCOPES } from './emit-figma-color';
@@ -503,14 +503,26 @@ export const buildFigmaDims = (theme: Theme): FigmaDimsCollections => {
 //   motion/duration/<role>         → TIMING aliases into duration-ms, as the DTCG aliases them.
 //   motion/duration-reduced/<role> → the reduce-motion companion, same shape.
 //   motion/stagger                 → TIMING alias into duration-ms.
-//   motion/easing/<curve>          → EASING `CUSTOM_CUBIC_BEZIER` primitives (hidden from publishing).
+//   motion/delay/<step>            → TIMING aliases into duration-ms (G6 B), the same at every tempo.
+//   motion/easing/<curve>          → EASING `CUSTOM_CUBIC_BEZIER` primitives (hidden from publishing), a brand's
+//                                    own curves among them (Q-MP3 D).
 //   motion/easing-role/<role>      → EASING aliases into easing, re-pointed per mode where a mode lever moves one.
-//   motion/spring/<name>           → EASING `CUSTOM_SPRING`, `bounce` only. Published: no role tier aliases a
-//                                    spring, so hiding one would leave a library with no handle on it.
-//   motion/transition/*            → NOT EMITTED: Figma has no composite variable, and the nearest thing, an
+//   motion/spring/<name>           → EASING `CUSTOM_SPRING`, `bounce` only (the Q-MS10 check: damping, stiffness,
+//                                    mass and duration are refused). Hidden from publishing: a primitive, now
+//                                    that a preset is the published handle on it.
+//   motion/spring-duration/<name>  → TIMING primitives (hidden): a spring's settle time, the length Figma's
+//                                    bounce-only spring takes from the duration it is paired with.
+//   motion/distance/*              → NOT EMITTED YET: a FLOAT aliasing `space/100` crosses collections, and both
+//                                    motion writers (the plugin's and the paste pass) bind aliases inside the
+//                                    variables they write. Phase 3's styles are what bind it.
+//   motion/preset/<name>/<slot>    → PUBLISHED TIMING and EASING aliases of roles or primitives (Q-MS1 A): the
+//                                    names an animation style binds (phase 3), so re-pointing a preset is one
+//                                    alias move. A spring preset's easing aliases motion/spring/<name>, and its
+//                                    duration motion/spring-duration/<name>.
+//   motion/preset/<name>/transition → NOT EMITTED: Figma has no composite variable, and the nearest thing, an
 //                                    animation style, must also name WHAT animates, which a DTCG transition does
-//                                    not say (Q291 4). A transition is its duration plus its easing role, and
-//                                    both of those are here. `MOTION_FIGMA_COVERAGE` states it per family.
+//                                    not say (Q291 4). A preset's composite is its slots, and every slot is
+//                                    here. `MOTION_FIGMA_COVERAGE` states it per family.
 // Names keep the DTCG path (`motion` is a top-level DTCG family, so the collection mirrors it 1:1 and the export
 // lands on the same paths with no renaming). That includes `duration-ms`, whose values are now seconds: the
 // name is the DTCG path, the value is in the unit Figma's TIMING holds (spike #2403: every field a TIMING
@@ -534,18 +546,21 @@ const MOTION_SCOPES: string[] = ['ALL_SCOPES'];
 
 /** Every DTCG motion family and its Figma form, or the reason it has none (#2412 "done when"). Read by the
  *  suite against the DTCG tree, so a family added to `motion` without a line here fails by name. */
-export const MOTION_FIGMA_COVERAGE: Record<string, { figma: 'TIMING' | 'EASING' } | { none: string }> = {
+export const MOTION_FIGMA_COVERAGE: Record<string, { figma: 'TIMING' | 'EASING' | 'TIMING+EASING'; note?: string } | { none: string }> = {
   'duration-ms': { figma: 'TIMING' },
   duration: { figma: 'TIMING' },
   'duration-reduced': { figma: 'TIMING' },
+  delay: { figma: 'TIMING' },
   stagger: { figma: 'TIMING' },
   easing: { figma: 'EASING' },
   'easing-role': { figma: 'EASING' },
   spring: { figma: 'EASING' },
-  // #3510: what CSS plays in place of a spring. Figma runs the spring itself, so it takes neither yet.
-  'spring-duration': { none: 'not yet: the paired TIMING a Figma spring needs is G5 (#3485), named by the owner; it will take its number from spring.ts, as this does' },
+  // #3510: what CSS plays over a spring. Figma's spring takes its length from the duration it is paired with, so the
+  // settle time is a TIMING primitive a spring preset's duration aliases.
+  'spring-duration': { figma: 'TIMING' },
   'spring-easing': { none: 'a CSS stand-in for the spring: Figma runs the spring natively, as motion/spring/<name>' },
-  transition: { none: 'Figma has no composite variable; a transition is its duration and its easing role, both emitted' },
+  distance: { none: 'not yet: a FLOAT aliasing space/100 crosses collections, which neither motion writer binds; the animation styles that bind it are phase 3' },
+  preset: { figma: 'TIMING+EASING', note: 'each slot is a variable; the transition composite has none, because Figma has no composite variable' },
   brand: { none: 'the brand-only group (#2857) is custom-typed one-offs with no Figma variable type yet; emitted only for a brand that sets it' },
 };
 
@@ -598,6 +613,10 @@ export const buildFigmaMotion = (theme: Theme): FigmaCollectionFile[] => {
       name: `motion/duration-reduced/${role}`, leaf: motion['duration-reduced'][role],
       describe: (ms: number, byMode: Array<[string, number]>) => figmaDurationDescription(role, ms, byMode, true),
     })),
+    ...Object.keys(motion.delay ?? {}).map((step) => ({
+      name: `motion/delay/${step}`, leaf: motion.delay[step],
+      describe: (ms: number) => figmaDelayDescription(step, ms),
+    })),
     { name: 'motion/stagger', leaf: motion.stagger, describe: figmaStaggerDescription },
   ];
 
@@ -647,18 +666,47 @@ export const buildFigmaMotion = (theme: Theme): FigmaCollectionFile[] => {
         alias: { type: 'VARIABLE_ALIAS' as const, name: aliasFigName(source.$value) },
       };
     });
-    const springs: FigmaVar[] = Object.keys(motion.spring).map((name) => {
-      const bounce = springBounce(motion.spring[name].$value.damping);
-      return {
-        name: ns(`motion/spring/${name}`),
-        resolvedType: 'EASING' as const,
-        scopes: MOTION_SCOPES,
-        description: figmaSpringDescription(name, bounce),
-        value: { type: 'CUSTOM_SPRING' as const, easingFunctionSpring: { bounce } },
-        alias: null,
-      };
-    });
-    return [...prims, ...sems, ...curves, ...roles, ...springs];
+    const springValue = (name: string): FigmaEasing => ({ type: 'CUSTOM_SPRING' as const, easingFunctionSpring: { bounce: springBounce(motion.spring[name].$value.damping) } });
+    const springs: FigmaVar[] = Object.keys(motion.spring).map((name) => ({
+      name: ns(`motion/spring/${name}`),
+      resolvedType: 'EASING' as const,
+      scopes: MOTION_SCOPES,
+      description: figmaSpringDescription(name, springBounce(motion.spring[name].$value.damping)),
+      value: springValue(name),
+      alias: null,
+      hiddenFromPublishing: true,
+    }));
+    const settles: FigmaVar[] = Object.keys(motion['spring-duration']).map((name) => ({
+      name: ns(`motion/spring-duration/${name}`),
+      resolvedType: 'TIMING' as const,
+      scopes: MOTION_SCOPES,
+      description: figmaSpringDurationDescription(name, msFromValue(tree, motion['spring-duration'][name].$value)),
+      value: secondsOf(msFromValue(tree, motion['spring-duration'][name].$value)),
+      alias: null,
+      hiddenFromPublishing: true,
+    }));
+    // A preset slot's Figma alias: its DTCG target's own variable, except a spring's CSS curve, whose Figma form is
+    // the spring itself (`motion/spring/<name>`). Its value is the target's, resolved in this mode.
+    const SPRING_EASING = /\.motion\.spring-easing\.([^.}]+)\}$/;
+    const easingTarget = (v: string): { alias: string; value: FigmaEasing } => {
+      const sp = SPRING_EASING.exec(v);
+      if (sp) return { alias: ns(`motion/spring/${sp[1]}`), value: springValue(sp[1]) };
+      const target = at(tree, v.slice(1, -1));
+      const resolved = pick(target, mode);
+      const curve = /\.motion\.easing-role\./.test(v) ? curveOf(resolved.$value) : curveOf(v);
+      return { alias: aliasFigName(v), value: bezierEasing(motion.easing[curve].$value) };
+    };
+    const presets: FigmaVar[] = Object.keys(motion.preset ?? {}).flatMap((name) => (['duration', 'easing', 'delay', 'duration-reduced'] as const).map((slot) => {
+      const leaf = motion.preset[name][slot];
+      const base = { name: ns(`motion/preset/${name}/${slot}`), scopes: MOTION_SCOPES, description: figmaPresetDescription(name, slot, leaf.$extensions.prism3.aliasOf) };
+      if (slot === 'easing') {
+        const t = easingTarget(leaf.$value);
+        return { ...base, resolvedType: 'EASING' as const, value: t.value, alias: { type: 'VARIABLE_ALIAS' as const, name: t.alias } };
+      }
+      const target = at(tree, String(leaf.$value).slice(1, -1));
+      return { ...base, resolvedType: 'TIMING' as const, value: secondsOf(msFromValue(tree, pick(target, mode).$value)), alias: { type: 'VARIABLE_ALIAS' as const, name: aliasFigName(leaf.$value) } };
+    }));
+    return [...prims, ...sems, ...curves, ...roles, ...springs, ...settles, ...presets];
   };
   return modes.map((mode) => ({ $collection: 'motion', $mode: mode, variables: varsFor(mode) }));
 };

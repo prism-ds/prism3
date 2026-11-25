@@ -19022,6 +19022,17 @@
             }
           }
         },
+        "400": {
+          "$type": "duration",
+          "$value": "400ms",
+          "$description": "duration primitive — 400ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 400
+            }
+          }
+        },
         "500": {
           "$type": "duration",
           "$value": "500ms",
@@ -19261,85 +19272,85 @@
         },
         "normal": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.50}",
-          "$description": "reduce-motion normal — 50ms",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion normal — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.50",
-              "ms": 50
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "moderate": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.0}",
-          "$description": "reduce-motion moderate — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion moderate — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "slow": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.0}",
-          "$description": "reduce-motion slow — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion slow — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "slower": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.0}",
-          "$description": "reduce-motion slower — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion slower — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "long": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.0}",
-          "$description": "reduce-motion long — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion long — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "longer": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.0}",
-          "$description": "reduce-motion longer — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion longer — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "longest": {
           "$type": "duration",
-          "$value": "{wds.motion.duration-ms.0}",
-          "$description": "reduce-motion longest — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{wds.motion.duration-ms.100}",
+          "$description": "reduce-motion longest — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "wds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "wds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
@@ -19364,6 +19375,32 @@
               "role": "semantic",
               "aliasOf": "wds.motion.duration-ms.2600",
               "ms": 2600
+            }
+          }
+        }
+      },
+      "delay": {
+        "show": {
+          "$type": "duration",
+          "$value": "{wds.motion.duration-ms.400}",
+          "$description": "delay show — 400ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "wds.motion.duration-ms.400",
+              "ms": 400
+            }
+          }
+        },
+        "min-show": {
+          "$type": "duration",
+          "$value": "{wds.motion.duration-ms.500}",
+          "$description": "delay min-show — 500ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "wds.motion.duration-ms.500",
+              "ms": 500
             }
           }
         }
@@ -19548,6 +19585,20 @@
               "customType": "spring"
             }
           }
+        },
+        "effects": {
+          "$type": "spring",
+          "$value": {
+            "damping": 1,
+            "stiffness": 1600
+          },
+          "$description": "spring effects — damping 1, stiffness 1600",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "spring"
+            }
+          }
         }
       },
       "spring-duration": {
@@ -19581,6 +19632,17 @@
             "prism3": {
               "generated": true,
               "ms": 360
+            }
+          }
+        },
+        "effects": {
+          "$type": "duration",
+          "$value": "231ms",
+          "$description": "spring effects settle time — 231ms, the time the effects spring takes to settle on its target; play spring-easing effects over it",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 231
             }
           }
         }
@@ -19618,62 +19680,627 @@
               "customType": "linearEasing"
             }
           }
+        },
+        "effects": {
+          "$type": "linearEasing",
+          "$value": "linear(0, 0.016, 0.056, 0.111, 0.175, 0.243, 0.312, 0.38, 0.445, 0.506, 0.562, 0.614, 0.66, 0.703, 0.74, 0.774, 0.803, 0.83, 0.853, 0.873, 0.89, 0.905, 0.919, 0.93, 0.94, 0.949, 0.956, 0.963, 0.968, 0.973, 0.977, 0.98, 0.983, 0.986, 0.988, 0.99, 0.991, 0.993, 0.994, 0.995, 0.995, 0.996, 0.997, 0.997, 0.998, 0.998, 0.998, 0.999, 0.999, 1)",
+          "$description": "spring effects as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration effects (231ms); the damping and stiffness stay in spring effects",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "linearEasing"
+            }
+          }
         }
       },
-      "transition": {
-        "default": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{wds.motion.duration.normal}",
-            "timingFunction": "{wds.motion.easing-role.default}",
-            "delay": "0ms"
+      "preset": {
+        "state": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.fast}",
+            "$description": "preset state duration — the fast step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.fast"
+              }
+            }
           },
-          "$description": "motion default — standard in-place transition (normal + standard)",
-          "$extensions": {
-            "prism3": {
-              "role": "composite"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.default}",
+            "$description": "preset state easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset state delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.fast}",
+            "$description": "preset state reduced duration — the fast step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.fast",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.state.duration}",
+              "timingFunction": "{wds.motion.preset.state.easing}",
+              "delay": "{wds.motion.preset.state.delay}"
+            },
+            "$description": "preset state — the fast step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
             }
           }
         },
-        "enter": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{wds.motion.duration.normal}",
-            "timingFunction": "{wds.motion.easing-role.enter}",
-            "delay": "0ms"
+        "fade": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.normal}",
+            "$description": "preset fade duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.normal"
+              }
+            }
           },
-          "$description": "motion enter — element settles in (normal + decelerate)",
-          "$extensions": {
-            "prism3": {
-              "role": "composite"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.enter}",
+            "$description": "preset fade easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset fade delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.normal}",
+            "$description": "preset fade reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.fade.duration}",
+              "timingFunction": "{wds.motion.preset.fade.easing}",
+              "delay": "{wds.motion.preset.fade.delay}"
+            },
+            "$description": "preset fade — the normal step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
             }
           }
         },
-        "exit": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{wds.motion.duration.fast}",
-            "timingFunction": "{wds.motion.easing-role.exit}",
-            "delay": "0ms"
+        "crossfade": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.normal}",
+            "$description": "preset crossfade duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.normal"
+              }
+            }
           },
-          "$description": "motion exit — element accelerates out (fast + accelerate)",
-          "$extensions": {
-            "prism3": {
-              "role": "composite"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.default}",
+            "$description": "preset crossfade easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset crossfade delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.normal}",
+            "$description": "preset crossfade reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.crossfade.duration}",
+              "timingFunction": "{wds.motion.preset.crossfade.easing}",
+              "delay": "{wds.motion.preset.crossfade.delay}"
+            },
+            "$description": "preset crossfade — the normal step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
             }
           }
         },
-        "emphasized": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{wds.motion.duration.moderate}",
-            "timingFunction": "{wds.motion.easing-role.emphasized}",
-            "delay": "0ms"
+        "move": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.moderate}",
+            "$description": "preset move duration — the moderate step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.moderate"
+              }
+            }
           },
-          "$description": "motion emphasized — expressive / hero moment (moderate + expressive)",
-          "$extensions": {
-            "prism3": {
-              "role": "composite"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.default}",
+            "$description": "preset move easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset move delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.moderate}",
+            "$description": "preset move reduced duration — the moderate step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.moderate",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.move.duration}",
+              "timingFunction": "{wds.motion.preset.move.easing}",
+              "delay": "{wds.motion.preset.move.delay}"
+            },
+            "$description": "preset move — the moderate step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "reveal": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.slow}",
+            "$description": "preset reveal duration — the slow step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.slow"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.enter}",
+            "$description": "preset reveal easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset reveal delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.slow}",
+            "$description": "preset reveal reduced duration — the slow step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.slow",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.reveal.duration}",
+              "timingFunction": "{wds.motion.preset.reveal.easing}",
+              "delay": "{wds.motion.preset.reveal.delay}"
+            },
+            "$description": "preset reveal — the slow step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "draw": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.slow}",
+            "$description": "preset draw duration — the slow step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.slow"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.default}",
+            "$description": "preset draw easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset draw delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.slow}",
+            "$description": "preset draw reduced duration — the slow step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.slow",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.draw.duration}",
+              "timingFunction": "{wds.motion.preset.draw.easing}",
+              "delay": "{wds.motion.preset.draw.delay}"
+            },
+            "$description": "preset draw — the slow step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "surface": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.moderate}",
+            "$description": "preset surface duration — the moderate step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.moderate"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.enter}",
+            "$description": "preset surface easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset surface delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.moderate}",
+            "$description": "preset surface reduced duration — the moderate step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.moderate",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.surface.duration}",
+              "timingFunction": "{wds.motion.preset.surface.easing}",
+              "delay": "{wds.motion.preset.surface.delay}"
+            },
+            "$description": "preset surface — the moderate step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "expand": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.normal}",
+            "$description": "preset expand duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.normal"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.default}",
+            "$description": "preset expand easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset expand delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.normal}",
+            "$description": "preset expand reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.expand.duration}",
+              "timingFunction": "{wds.motion.preset.expand.easing}",
+              "delay": "{wds.motion.preset.expand.delay}"
+            },
+            "$description": "preset expand — the normal step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "step": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.moderate}",
+            "$description": "preset step duration — the moderate step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.moderate"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.default}",
+            "$description": "preset step easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset step delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.moderate}",
+            "$description": "preset step reduced duration — the moderate step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.moderate",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.step.duration}",
+              "timingFunction": "{wds.motion.preset.step.easing}",
+              "delay": "{wds.motion.preset.step.delay}"
+            },
+            "$description": "preset step — the moderate step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "settle": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration.slow}",
+            "$description": "preset settle duration — the slow step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration.slow"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{wds.motion.easing-role.enter}",
+            "$description": "preset settle easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-ms.0}",
+            "$description": "preset settle delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{wds.motion.duration-reduced.slow}",
+            "$description": "preset settle reduced duration — the slow step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "wds.motion.duration-reduced.slow",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{wds.motion.preset.settle.duration}",
+              "timingFunction": "{wds.motion.preset.settle.easing}",
+              "delay": "{wds.motion.preset.settle.delay}"
+            },
+            "$description": "preset settle — the slow step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
             }
           }
         }
@@ -19687,6 +20314,19 @@
             "role": "semantic",
             "aliasOf": "wds.motion.duration-ms.40",
             "ms": 40
+          }
+        }
+      },
+      "distance": {
+        "nudge": {
+          "$type": "dimension",
+          "$value": "{wds.space.100}",
+          "$description": "distance nudge — the small offset an element travels as it enters or leaves, such as a toast sliding in",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "wds.space.100"
+            }
           }
         }
       }
@@ -23949,7 +24589,7 @@
         "action: the primary palette, by default — actionPalette is not set.",
         "danger: the brand's hue 21.95.",
         "dimensions: 4px grid, 8px spacing rhythm, 'comfortable' density (sets component sizes), radius scale 1 (base radius 4px).",
-        "motion: 'standard' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.",
+        "motion: 'standard' tempo sets the durations; each reduced-motion twin is a short fade of at most 100ms.",
         "shadow: 6 steps (xs–2xl) of two layers each, plus a one-layer inset, softness 1; tinted to hue 249 at 0.15. Full shadows in light, reduced in dark, where surface lightness carries elevation.",
         "gradient: none — the brand declares no gradients, and none are added by default.",
         "layout: 5 breakpoints (sm 0, md 768, lg 1024, xl 1440, 2xl 1920); 12-column grid (4/8/12/12/12 by breakpoint); gutters 16/16/24/24/32px and margins 16/24/24/32/48px, from the spacing scale; containers max 1440px, narrow 720px.",

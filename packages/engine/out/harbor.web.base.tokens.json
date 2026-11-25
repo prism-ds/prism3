@@ -4384,6 +4384,11 @@
           "$value": "65ms",
           "$description": "duration primitive — 65ms (literal; the semantic tier names the use)"
         },
+        "100": {
+          "$type": "duration",
+          "$value": "100ms",
+          "$description": "duration primitive — 100ms (literal; the semantic tier names the use)"
+        },
         "130": {
           "$type": "duration",
           "$value": "130ms",
@@ -4398,6 +4403,16 @@
           "$type": "duration",
           "$value": "390ms",
           "$description": "duration primitive — 390ms (literal; the semantic tier names the use)"
+        },
+        "400": {
+          "$type": "duration",
+          "$value": "400ms",
+          "$description": "duration primitive — 400ms (literal; the semantic tier names the use)"
+        },
+        "500": {
+          "$type": "duration",
+          "$value": "500ms",
+          "$description": "duration primitive — 500ms (literal; the semantic tier names the use)"
         },
         "650": {
           "$type": "duration",
@@ -4505,43 +4520,43 @@
         },
         "fast": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.50}",
-          "$description": "reduce-motion fast — 50ms"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion fast — 100ms"
         },
         "normal": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion normal — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion normal — 100ms"
         },
         "moderate": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion moderate — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion moderate — 100ms"
         },
         "slow": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion slow — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion slow — 100ms"
         },
         "slower": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion slower — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion slower — 100ms"
         },
         "long": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion long — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion long — 100ms"
         },
         "longer": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion longer — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion longer — 100ms"
         },
         "longest": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion longest — 0ms (eliminated — substitute a cross-fade)"
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion longest — 100ms"
         },
         "spin": {
           "$type": "duration",
@@ -4552,6 +4567,18 @@
           "$type": "duration",
           "$value": "{hds.motion.duration-ms.2600}",
           "$description": "reduce-motion sweep — 2600ms per pass: a slow sweep, kept rather than removed, because the moving segment is how a sighted user sees the work continuing"
+        }
+      },
+      "delay": {
+        "show": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.400}",
+          "$description": "delay show — 400ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo"
+        },
+        "min-show": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.500}",
+          "$description": "delay min-show — 500ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo"
         }
       },
       "easing": {
@@ -4653,50 +4680,336 @@
           "$type": "duration",
           "$value": "360ms",
           "$description": "spring bouncy settle time — 360ms, the time the bouncy spring takes to settle on its target; play spring-easing bouncy over it"
+        },
+        "effects": {
+          "$type": "duration",
+          "$value": "231ms",
+          "$description": "spring effects settle time — 231ms, the time the effects spring takes to settle on its target; play spring-easing effects over it"
         }
       },
-      "transition": {
-        "default": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.normal}",
-            "timingFunction": "{hds.motion.easing-role.default}",
-            "delay": "0ms"
+      "preset": {
+        "state": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.fast}",
+            "$description": "preset state duration — the fast step"
           },
-          "$description": "motion default — standard in-place transition (normal + standard)"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset state easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset state delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.fast}",
+            "$description": "preset state reduced duration — the fast step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.state.duration}",
+              "timingFunction": "{hds.motion.preset.state.easing}",
+              "delay": "{hds.motion.preset.state.delay}"
+            },
+            "$description": "preset state — the fast step on the default role (standard), at once"
+          }
         },
-        "enter": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.normal}",
-            "timingFunction": "{hds.motion.easing-role.enter}",
-            "delay": "0ms"
+        "fade": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset fade duration — the normal step"
           },
-          "$description": "motion enter — element settles in (normal + decelerate)"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset fade easing — the enter role (decelerate)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset fade delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset fade reduced duration — the normal step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.fade.duration}",
+              "timingFunction": "{hds.motion.preset.fade.easing}",
+              "delay": "{hds.motion.preset.fade.delay}"
+            },
+            "$description": "preset fade — the normal step on the enter role (decelerate), at once"
+          }
         },
-        "exit": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.fast}",
-            "timingFunction": "{hds.motion.easing-role.exit}",
-            "delay": "0ms"
+        "crossfade": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset crossfade duration — the normal step"
           },
-          "$description": "motion exit — element accelerates out (fast + accelerate)"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset crossfade easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset crossfade delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset crossfade reduced duration — the normal step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.crossfade.duration}",
+              "timingFunction": "{hds.motion.preset.crossfade.easing}",
+              "delay": "{hds.motion.preset.crossfade.delay}"
+            },
+            "$description": "preset crossfade — the normal step on the default role (standard), at once"
+          }
         },
-        "emphasized": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.moderate}",
-            "timingFunction": "{hds.motion.easing-role.emphasized}",
-            "delay": "0ms"
+        "move": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.moderate}",
+            "$description": "preset move duration — the moderate step"
           },
-          "$description": "motion emphasized — expressive / hero moment (moderate + expressive)"
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset move easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset move delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.moderate}",
+            "$description": "preset move reduced duration — the moderate step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.move.duration}",
+              "timingFunction": "{hds.motion.preset.move.easing}",
+              "delay": "{hds.motion.preset.move.delay}"
+            },
+            "$description": "preset move — the moderate step on the default role (standard), at once"
+          }
+        },
+        "reveal": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.slow}",
+            "$description": "preset reveal duration — the slow step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset reveal easing — the enter role (decelerate)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset reveal delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.slow}",
+            "$description": "preset reveal reduced duration — the slow step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.reveal.duration}",
+              "timingFunction": "{hds.motion.preset.reveal.easing}",
+              "delay": "{hds.motion.preset.reveal.delay}"
+            },
+            "$description": "preset reveal — the slow step on the enter role (decelerate), at once"
+          }
+        },
+        "draw": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.slow}",
+            "$description": "preset draw duration — the slow step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset draw easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset draw delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.slow}",
+            "$description": "preset draw reduced duration — the slow step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.draw.duration}",
+              "timingFunction": "{hds.motion.preset.draw.easing}",
+              "delay": "{hds.motion.preset.draw.delay}"
+            },
+            "$description": "preset draw — the slow step on the default role (standard), at once"
+          }
+        },
+        "surface": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.moderate}",
+            "$description": "preset surface duration — the moderate step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset surface easing — the enter role (decelerate)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset surface delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.moderate}",
+            "$description": "preset surface reduced duration — the moderate step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.surface.duration}",
+              "timingFunction": "{hds.motion.preset.surface.easing}",
+              "delay": "{hds.motion.preset.surface.delay}"
+            },
+            "$description": "preset surface — the moderate step on the enter role (decelerate), at once"
+          }
+        },
+        "expand": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset expand duration — the normal step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset expand easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset expand delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset expand reduced duration — the normal step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.expand.duration}",
+              "timingFunction": "{hds.motion.preset.expand.easing}",
+              "delay": "{hds.motion.preset.expand.delay}"
+            },
+            "$description": "preset expand — the normal step on the default role (standard), at once"
+          }
+        },
+        "step": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.moderate}",
+            "$description": "preset step duration — the moderate step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset step easing — the default role (standard)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset step delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.moderate}",
+            "$description": "preset step reduced duration — the moderate step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.step.duration}",
+              "timingFunction": "{hds.motion.preset.step.easing}",
+              "delay": "{hds.motion.preset.step.delay}"
+            },
+            "$description": "preset step — the moderate step on the default role (standard), at once"
+          }
+        },
+        "settle": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.slow}",
+            "$description": "preset settle duration — the slow step"
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset settle easing — the enter role (decelerate)"
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset settle delay — none, it starts at once"
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.slow}",
+            "$description": "preset settle reduced duration — the slow step's reduced twin, derived from the duration"
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.settle.duration}",
+              "timingFunction": "{hds.motion.preset.settle.easing}",
+              "delay": "{hds.motion.preset.settle.delay}"
+            },
+            "$description": "preset settle — the slow step on the enter role (decelerate), at once"
+          }
         }
       },
       "stagger": {
         "$type": "duration",
         "$value": "{hds.motion.duration-ms.50}",
         "$description": "stagger standard — 50ms between siblings"
+      },
+      "distance": {
+        "nudge": {
+          "$type": "dimension",
+          "$value": "{hds.space.100}",
+          "$description": "distance nudge — the small offset an element travels as it enters or leaves, such as a toast sliding in"
+        }
       }
     },
     "type": {

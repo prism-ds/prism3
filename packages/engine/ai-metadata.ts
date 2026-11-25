@@ -613,7 +613,7 @@ export type AiMetadataOptions = { tokensFile?: string };
  *  and a test holds the two equal — bump both together when a field is added, renamed or removed, then record the
  *  version: `npx tsx packages/engine/lint-format-history.ts --accept --note "<what it adds>"` (#4458).
  *  0.6 — `motion_presets` (#2857). 0.7 — `icons`, the brand icon map (#3076). Later rows: `schema/format-history.json`. */
-export const AI_METADATA_SCHEMA = 'prism3-ai-metadata/0.7';
+export const AI_METADATA_SCHEMA = 'prism3-ai-metadata/0.8';
 
 /** The one normative sentence (AI/C-1) — a check a reader can run with `tokens.json` alone: resolve both
  *  roles in each mode, composite a translucent one over its ground, compare with the floor. `lint-voice.ts`
@@ -679,7 +679,15 @@ const thinRole = (path: string): { tier: 'layout' | 'motion' | 'typography'; mea
     if (s[1] === 'duration') return { tier: 'motion', meaning: `Motion duration role — ${last}`, when: `How long a transition runs. Under reduced motion, use \`motion.duration-reduced.${last}\`.` };
     if (s[1] === 'duration-reduced') return { tier: 'motion', meaning: `Reduced-motion duration role — ${last}`, when: `The duration of \`motion.duration.${last}\` when the user prefers reduced motion.` };
     if (s[1] === 'easing-role') return { tier: 'motion', meaning: `Easing role — ${last}`, when: 'The easing curve of a transition, named by purpose. Reference the role, not the curve it maps to.' };
-    if (s[1] === 'transition') return { tier: 'motion', meaning: `Transition composite — ${last}`, when: 'A complete transition (duration and easing). Apply it whole.' };
+    // #2857 (Q-MS1 A): the preset tier, the names an agent binds. Each slot aliases a role, curve, spring or step.
+    if (s[1] === 'preset' && s.length === 3) return undefined;
+    if (s[1] === 'preset' && last === 'transition') return { tier: 'motion', meaning: `Motion preset ${s[2]} — its transition composite`, when: `A whole ${s[2]} change: its duration, easing and delay together. Apply it whole.` };
+    if (s[1] === 'preset' && last === 'duration') return { tier: 'motion', meaning: `Motion preset ${s[2]} — duration`, when: `How long a ${s[2]} change runs. Under reduced motion, use \`motion.preset.${s[2]}.duration-reduced\`.` };
+    if (s[1] === 'preset' && last === 'duration-reduced') return { tier: 'motion', meaning: `Motion preset ${s[2]} — reduced-motion duration`, when: `The duration of a ${s[2]} change when the user prefers reduced motion: a short fade, derived from the preset's duration.` };
+    if (s[1] === 'preset' && last === 'easing') return { tier: 'motion', meaning: `Motion preset ${s[2]} — easing`, when: `The easing of a ${s[2]} change. Reference the preset, not what it points at.` };
+    if (s[1] === 'preset' && last === 'delay') return { tier: 'motion', meaning: `Motion preset ${s[2]} — delay`, when: `How long a ${s[2]} change waits before it starts.` };
+    if (s[1] === 'delay') return { tier: 'motion', meaning: `Motion delay — ${last}`, when: last === 'min-show' ? 'The least time a shown busy indicator stays, so it does not flash. The same at every tempo.' : 'How long a tooltip or a busy indicator waits before it shows, so a fast result shows nothing. The same at every tempo.' };
+    if (s[1] === 'distance') return { tier: 'motion', meaning: `Motion distance — ${last}`, when: 'The small offset an element travels as it enters or leaves, such as a toast sliding in.' };
     if (s[1] === 'stagger') return { tier: 'motion', meaning: 'Stagger delay role', when: 'The delay between items that animate in sequence.' };
   }
   if (s[0] === CORE_TIER && s[1] === 'font') {
@@ -1068,8 +1076,9 @@ export const buildAiMetadata = (theme: Theme, tree: any, opts: AiMetadataOptions
       'and `carries` the inks placed on a ground; both are measured in every mode. `tracks` names companion roles and ' +
       'implies no contrast. `contrast_with` is the role\'s contrast contract: `requirement` states it as a check that ' +
       'resolves both roles in every mode, and `ratio` is the light-mode measurement. `usage_limit` marks an ink that is ' +
-      'for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, the duration ' +
-      'step it plays on (the brand\'s mapping), its easing role and its reduced-motion duration. Field definitions: the JSON Schema whose `$id` is this ' +
+      'for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, its ' +
+      '`motion.preset.<name>` tokens (the transition composite and its duration, easing, delay and reduced duration), and ' +
+      'in `resolves_to` the step, role, curve or spring each slot points at for this brand. Bind the preset tokens. Field definitions: the JSON Schema whose `$id` is this ' +
       'file\'s `$schema`.',
     color_fields: fieldsOf(colorRoles, ['$description', 'meaning', 'when_to_use', 'avoid_when', 'usage_limit', 'sits_on', 'carries', 'tracks', 'contrast_with', 'mode_overrides']),
     typography_fields: fieldsOf(typography, ['$description', 'meaning', 'when_to_use', 'avoid_when', 'resolves_to', 'used_by']),
@@ -1080,11 +1089,17 @@ export const buildAiMetadata = (theme: Theme, tree: any, opts: AiMetadataOptions
     typography,
     layout,
     motion,
-    // Each motion preset, resolved through the brand's preset → step mapping (#2857, Q-MP7 option 3). A preset is not
-    // a token: it names the shared scale's step, so the paths here are `motion` tier entries above.
-    motion_presets: Object.fromEntries(theme.motion.presets.map((p) => [p.preset, {
-      duration: `motion.duration.${p.duration}`, easing: `motion.easing-role.${p.easing}`, reduced_duration: `motion.duration-reduced.${p.reduced}`,
-    }])),
+    // Each motion preset (#2857, Q-MS1 A): the `motion.preset.<name>` tokens an agent binds, and what each slot points
+    // at for this brand, read off the tree's aliases so the two cannot disagree.
+    motion_presets: Object.fromEntries(theme.motion.presets.map((p) => {
+      const t = `motion.preset.${p.preset}`;
+      const leaf = (tree as any)[root]?.motion?.preset?.[p.preset] ?? {};
+      const target = (slot: string): string => String(leaf[slot]?.$extensions?.prism3?.aliasOf ?? '').replace(`${root}.`, '');
+      return [p.preset, {
+        token: `${t}.transition`, duration: `${t}.duration`, easing: `${t}.easing`, delay: `${t}.delay`, duration_reduced: `${t}.duration-reduced`,
+        resolves_to: { duration: target('duration'), easing: target('easing'), delay: target('delay'), duration_reduced: target('duration-reduced') },
+      }];
+    })),
     // THE BRAND ICON MAP (#3076), when the brand sets one: component docs name Prism3's icons, and an agent resolves each
     // through `map`. `names` is the icon set this brand's file holds. DRAFT note copy.
     ...(theme.icons ? { icons: {

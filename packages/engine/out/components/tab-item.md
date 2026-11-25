@@ -76,7 +76,7 @@ Use inside Tabs only. A tab names one panel of related content; selecting it sho
 
 ### Motion
 
-- **Enter:** None. On selection the underline slides from the previous tab to this one, on motion.transition.default.
+- **Enter:** None. On selection the underline slides from the previous tab to this one, on motion.duration.normal with motion.easing-role.default.
 - **Exit:** None.
 - **Reduced motion:** Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast.
 

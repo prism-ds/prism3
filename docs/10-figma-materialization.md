@@ -472,10 +472,16 @@ border-width). The **4** uncovered — `motion`, `breakpoint`, `grid`, `containe
      are EASING aliases of them, re-pointed per mode where `modeLevers.<mode>.easings` moves one (the
      curves stay mode-invariant).
    - `motion/spring/*` are **EASING** `CUSTOM_SPRING` holding `bounce` only, `1 − damping ratio`
-     (0.9 / 0.8 / 0.6 → 0.1 / 0.2 / 0.4). Stiffness has no place: a spring's length is the duration it
-     plays with. Published, since no role tier aliases a spring.
-   - `motion/transition/*` have **no** Figma form: Figma has no composite variable, and an animation
-     style must also name what animates, which a DTCG transition does not. `MOTION_FIGMA_COVERAGE`
+     (0.9 / 0.8 / 0.6 / 1 → 0.1 / 0.2 / 0.4 / 0). Stiffness has no place: a spring's length is the duration
+     it plays with, `motion/spring-duration/*`, its settle time. Both are hidden primitives since #2857, because a
+     preset is the published handle on a spring.
+   - `motion/preset/<name>/{duration,easing,delay,duration-reduced}` (#2857, Q-MS1 A) are **published**
+     TIMING and EASING aliases of roles or primitives: the names an animation style binds, so re-pointing a
+     preset is one alias move. A spring preset's easing aliases `motion/spring/<name>`, and its duration
+     `motion/spring-duration/<name>`. `motion/delay/*` are published TIMING aliases too.
+   - A preset's composite, `motion.preset.<name>.transition`, has **no** Figma form: Figma has no composite
+     variable, and an animation style must also name what animates, which a DTCG transition does not.
+     `motion/distance/*` has none yet (#4589). `MOTION_FIGMA_COVERAGE`
      (`emit-figma-dims.ts`) states every family's form or reason, and the suite holds it to the DTCG.
 
    Figma refuses a `scopes` write on TIMING and EASING, so the emission states `ALL_SCOPES` and no

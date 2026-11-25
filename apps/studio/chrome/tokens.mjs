@@ -69,7 +69,7 @@ export function leafAt(tree, dotted) {
   return n;
 }
 /** Follows alias chains; returns { value, leaf, chain } where chain lists every path visited. A path may name one
- *  member of a composite token after a `#` (`motion.transition.default#duration`): the member's value is resolved
+ *  member of a composite token after a `#` (`motion.preset.crossfade.transition#duration`): the member's value is resolved
  *  the same way, so two variables read from one composite cannot drift apart. */
 export function resolve(tree, dotted, chain = []) {
   const hash = dotted.indexOf('#');

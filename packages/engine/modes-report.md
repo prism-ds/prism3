@@ -1303,7 +1303,7 @@ Component sizes — t-shirt, density `comfortable` (control heights; each compon
 - action: the primary palette, by default — actionPalette is not set.
 - danger: the brand's hue 25.
 - dimensions: 4px grid, 8px spacing rhythm, 'comfortable' density (sets component sizes), radius scale 1 (base radius 4px).
-- motion: 'standard' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.
+- motion: 'standard' tempo sets the durations; each reduced-motion twin is a short fade of at most 100ms.
 - shadow: 6 steps (xs–2xl) of two layers each, plus a one-layer inset, softness 1; tinted to hue 267 at 0.35. Full shadows in light, reduced in dark, where surface lightness carries elevation.
 - gradient: 2 brand gradient(s) — brand (linear 135°, 2 stops), glow (radial, 2 stops). Stops alias the color ramps and blend in oklch; a tool that blends only in sRGB gets a 5-stop sRGB version. Contrast for text on a gradient is computed at its worst-contrast stop.
 - layout: 5 breakpoints (sm 0, md 768, lg 1024, xl 1440, 2xl 1920); 12-column grid (4/8/12/12/12 by breakpoint); gutters 16/16/24/24/32px and margins 16/24/24/32/48px, from the spacing scale; containers max 1440px, narrow 720px.
@@ -2846,7 +2846,7 @@ Component sizes — t-shirt, density `comfortable` (control heights; each compon
 - action: uses the 'accent' palette instead of primary, as the brand sets.
 - danger: the primary (hue 285) is not red, so danger gets its own red at hue 27.
 - dimensions: 4px grid, 8px spacing rhythm, 'comfortable' density (sets component sizes), radius scale 2 (base radius 4px).
-- motion: 'snappy' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.
+- motion: 'snappy' tempo sets the durations; each reduced-motion twin is a short fade of at most 100ms.
 - shadow: 6 steps (xs–2xl) of two layers each, plus a one-layer inset, softness 1.3; tinted to hue 285 at 0.5. Full shadows in light, reduced in dark, where surface lightness carries elevation.
 - gradient: 2 brand gradient(s) — brand (linear 135°, 2 stops), glow (radial, 2 stops). Stops alias the color ramps and blend in oklch; a tool that blends only in sRGB gets a 5-stop sRGB version. Contrast for text on a gradient is computed at its worst-contrast stop.
 - layout: 6 breakpoints (xs 0, sm 480, md 768, lg 1024, xl 1440, 2xl 1920); 12-column grid (4/8/12/12/12/12 by breakpoint); gutters 16/16/24/24/32/32px and margins 16/24/24/32/48/48px, from the spacing scale; containers max 1280px, narrow 720px.
@@ -4095,7 +4095,7 @@ Component sizes — t-shirt, density `comfortable` (control heights; each compon
 - action: the primary palette, by default — actionPalette is not set.
 - danger: the brand's hue 27.
 - dimensions: 4px grid, 8px spacing rhythm, 'comfortable' density (sets component sizes), radius scale 1 (base radius 4px).
-- motion: 'relaxed' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.
+- motion: 'relaxed' tempo sets the durations; each reduced-motion twin is a short fade of at most 100ms.
 - shadow: 6 steps (xs–2xl) of two layers each, plus a one-layer inset, softness 1; tinted to hue 65 at 0.15. Full shadows in light, reduced in dark, where surface lightness carries elevation.
 - gradient: none — the brand declares no gradients, and none are added by default.
 - layout: 5 breakpoints (sm 0, md 768, lg 1024, xl 1440, 2xl 1920); 12-column grid (4/8/12/12/12 by breakpoint); gutters 16/16/24/24/32px and margins 16/24/24/32/48px, from the spacing scale; containers max 1440px, narrow 720px.

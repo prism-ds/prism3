@@ -13,7 +13,7 @@ import { iconMapErrors } from './icon-map';
 import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, INTERACTIVE_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
 import { PALETTE_NAME_RE, RESERVED_PALETTES, STATUS_DEFAULTS, statusRamp, inRedTerritory, hueDist, RED_CHROMA_FLOOR, normalizeDisabledStrategy, normalizeDisabledMin } from './theme-color';
 import { buildDims } from './theme-dims';
-import { buildMotion, type MotionAxis } from './theme-motion';
+import { buildMotion, checkCurveForRole, REDUCED_CAP_MS, type MotionAxis } from './theme-motion';
 import { LINE_HEIGHT_KEYS, LETTER_SPACING_KEYS, DISPLAY_VARIANTS, buildTypography, withLabelDefault, WEIGHT_ROLE_DEFAULT, type FontFamilyBinding, type WeightRole, deriveFamilies, WEIGHT_ROLE_ORDER, type TypeGroup, deriveTypefaces, PER_MODE_SIZE_GROUPS, type PerModeSizeGroup, HEADING_SIZE_FLOOR, mobileEndpoint, TYPE_GROUPS } from './theme-type';
 import { buildShadow, darkShadowSeed, type ShadowAxis, type ShadowStep, type ShadowLayer } from './theme-shadow';
 import { buildLayout, gridGapNotes } from './theme-layout';
@@ -614,7 +614,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   notes.push(`dimensions: ${baseUnit}px grid, ${spaceBase}px spacing rhythm, '${density}' density (sets component sizes), radius scale ${n2(rScale)} (base radius ${n2(baseMd)}px).`);
   // #2053: the lever is retired. A brand file that still sets it is told it changes nothing.
   if (input.radiusHairline !== undefined) notes.push(`radius: radiusHairline is retired — radius.hairline (1px) is always emitted, so the setting changes nothing.`);
-  notes.push(`motion: '${input.motionPersonality?.tempo ?? 'standard'}' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.`);
+  notes.push(`motion: '${input.motionPersonality?.tempo ?? 'standard'}' tempo sets the durations; each reduced-motion twin is a short fade of at most ${REDUCED_CAP_MS}ms.`);
   // Per-mode MOTION TEMPO (Phase D): a customizable mode overriding `tempo` re-derives its duration ramp
   // (+ reduce-motion + stagger) via the SAME buildMotion the baseline uses, just at the mode's tempo.
   // Only a mode whose tempo DIFFERS from the baseline gets an entry (no-diff suppression) → byte-identical
@@ -640,6 +640,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     for (const [role, curve] of pairs) {
       if (!ROLES.includes(role)) throw new Error(`modeLevers.${m}.easings: unknown motion role '${role}' (have: ${ROLES.join(', ')})`);
       if (!CURVES.includes(curve)) throw new Error(`modeLevers.${m}.easings.${role}: unknown easing curve '${curve}' (have: ${CURVES.join(', ')})`);
+      checkCurveForRole(role, curve, motion.easing, motion.brandCurves, `modeLevers.${m}.easings.${role}`);
     }
     const base = Object.fromEntries(motion.easingRoles.map((r) => [r.role, r.curve]));
     const diff = pairs.filter(([role, curve]) => curve !== base[role]);
