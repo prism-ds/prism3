@@ -33375,6 +33375,49 @@ arm: {
   ok(stamped.$extensions?.generator?.version === ENGINE_VERSION,
     'version: every emitted tree carries the engine version, so a suspect value can be traced to the code that produced it');
 }
+// THE WEB THEMES ON EVERY SURFACE BUT A BROWSER'S (the lane after #2997). The expected side is the committed
+// `out/shadcn/**` and `out/tailwind/**`: regen's, written from the handoff on disk and held by `regen --check`. Held to it
+// byte for byte:
+//   · in memory, the path Studio and the plugin call (`webThemeHandoff`, then `shadcnFiles` and `tailwindFiles`), for every
+//     committed brand the engine rebuilds from its input: the example brands, and nb from `nbTheme()`;
+//   · the MCP's `export_theme` with `include: ["shadcn", "tailwind"]`, at the paths it writes;
+//   · the CLI with `--shadcn --tailwind`, on an engine-native brief and on the standard-dialect one.
+// The two browser hosts are `test:export-parity`'s. BY-NAME MUTATION: change the projector (`web-themes.ts`) without
+// regenerating → every surface here fails, each named, and `regen --check` does too.
+{
+  const wt = await import('./web-themes') as typeof import('./web-themes');
+  const committed = (p: string): string | undefined => { try { return readFileSync(resolve(HERE, 'out', p), 'utf8'); } catch { return undefined; } };
+  const wrong: string[] = [];
+  let held = 0;
+  const hold = (where: string, path: string, text: string | undefined) => { held++; const want = committed(path); if (want === undefined || text !== want) wrong.push(`${where}: ${path}${want === undefined ? ' (not committed)' : text === undefined ? ' (not written)' : ''}`); };
+  const examples = JSON.parse(readFileSync(resolve(HERE, 'schema/example-brands.json'), 'utf8')) as Record<string, BrandInput>;
+  const memoryBrands: Array<[string, ReturnType<typeof brandTheme>]> = [...Object.values(examples).map((b) => [String(b.id), brandTheme(b)] as [string, ReturnType<typeof brandTheme>]), ['nb', nbTheme()]];
+  for (const [id, theme] of memoryBrands) {
+    const h = wt.webThemeHandoff(buildTree(theme).tree, id);
+    for (const f of [...wt.shadcnFiles(h), ...wt.tailwindFiles(h)]) hold(`in memory, ${id}`, f.path, f.text);
+  }
+  // the MCP, as a client calls it
+  const aurora = examples.aurora ?? Object.values(examples)[0];
+  const mcpFiles = new Map<string, string>();
+  const mcpIo = { mkdir: () => {}, writeFile: (q: string, c: string) => { mcpFiles.set(q, c); } };
+  const mcpRes = callTool('export_theme', { brand: aurora, outDir: './wt', include: ['shadcn', 'tailwind'] }, undefined, mcpIo);
+  ok(!mcpRes.isError && mcpFiles.size === 3, `web themes: export_theme with shadcn and tailwind writes three files (${[...mcpFiles.keys()].join(', ') || 'none'})`);
+  for (const p of [`shadcn/${aurora.id}.css`, `shadcn/${aurora.id}.registry-item.json`, `tailwind/${aurora.id}.theme.css`]) hold(`export_theme, ${aurora.id}`, p, mcpFiles.get(`./wt/${p}`));
+  // the CLI, as a user runs it
+  const wtOut = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-cli-webthemes-'));
+  try {
+    for (const [brief, id] of [['harbor.design.md', 'harbor'], ['wendys.design.md', 'wendys']] as const) {
+      const r = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), resolve(HERE, 'examples', brief), '--out', wtOut, '--shadcn', '--tailwind'], { cwd: HERE, encoding: 'utf8' });
+      ok(r.status === 0, `web themes: cli.ts ${brief} --shadcn --tailwind exits 0 (${r.status}: ${(r.stderr || '').trim().slice(0, 160)})`);
+      for (const p of [`shadcn/${id}.css`, `shadcn/${id}.registry-item.json`, `tailwind/${id}.theme.css`]) {
+        let text: string | undefined; try { text = readFileSync(join(wtOut, p), 'utf8'); } catch { text = undefined; }
+        hold(`cli.ts, ${id}`, p, text);
+      }
+    }
+  } finally { rmSync(wtOut, { recursive: true, force: true }); }
+  ok(held >= (memoryBrands.length + 1 + 2) * 3 && wrong.length === 0,
+    `web themes: every surface writes the committed shadcn/ui and Tailwind files byte for byte (${held} files held: in memory for ${memoryBrands.map(([id]) => id).join(', ')}, export_theme, cli.ts${wrong.length ? `; wrong: ${wrong.slice(0, 6).join(', ')}${wrong.length > 6 ? ` and ${wrong.length - 6} more` : ''}` : ''})`);
+}
 {
   // #4145: three exports had no reader and a comment claiming one. Each claim is now true or gone.
   // 1. SPECS_SCHEMA_VERSION is held equal to the Specs pin `packages/tokens/package.json` installs (the pin
@@ -33997,7 +34040,7 @@ arm: {
     `export_theme: include:[tokens] writes only the DTCG tree and its projections (${[...g.files.keys()].join(', ')})`);
   ok(mcpCallTool('export_theme', { brand: xbrand, outDir: './t3', include: ['nope'] }, undefined, mkFake().io).isError === true,
     'export_theme: an unknown include section errors rather than silently writing nothing');
-  ok(EXPORT_SECTIONS.length === 4, 'export_theme: four artifact families');
+  ok(EXPORT_SECTIONS.length === 6, 'export_theme: six artifact families (tokens, aiMetadata, figma, componentSpecs, and the shadcn/ui and Tailwind themes)');
   // #3425 — the component-defs export is opt-in: the default call above wrote none of it, and asking for it writes the
   // pair, parseable, for the brand passed, with the brand's settings resolved.
   ok(![...f.files.keys()].some((k) => k.includes('component-defs')), 'export_theme: the default call writes no component-defs export (opt-in)');

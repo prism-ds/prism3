@@ -27,6 +27,9 @@
  *      file is BYTE-IDENTICAL across the two. No normalization, no tolerance.
  *   2. ACCURACY: the set is exactly `packages/engine/out/<id>.base.tokens.json` plus each
  *      `out/<id>.<mode>.overlay.tokens.json`, read off disk, and each file is byte-identical to its committed copy.
+ *   2b. THE WEB THEMES (the lane after #2997): each "shadcn/ui theme" and "Tailwind theme" download is the committed
+ *      `out/shadcn/<id>.css`, `out/shadcn/<id>.registry-item.json` or `out/tailwind/<id>.theme.css`, byte for byte, and
+ *      the same in both hosts.
  *   3. THE DEFAULT (#2552): "Include build metadata" shows Off, and no download is the single-file
  *      `<id>.tokens.json`, which keeps its modes inside `$extensions` and is never a handoff file. For one brand
  *      per host the option is then turned On: the same files, each carrying `$extensions`, and each equal to its
@@ -168,11 +171,17 @@ const consumerSet = (id) => readdirSync(OUT).filter((f) => f === `${id}.base.tok
 /** Every `$extensions` removed, at any depth: the test's own strip, so it does not borrow the subject's. */
 const strip = (n) => Array.isArray(n) ? n.map(strip) : n && typeof n === 'object'
   ? Object.fromEntries(Object.entries(n).filter(([k]) => k !== '$extensions').map(([k, v]) => [k, strip(v)])) : n;
-const METADATA_LABEL = 'Include build metadata';   // #2552, DRAFT wording; the option's own aria-label prefix
+const METADATA_LABEL = 'Include build metadata';
+/** The two web-theme tabs (DRAFT labels for the owner), and each download name mapped to the committed file it must be
+ *  byte for byte. Typed here, never read from the subject. */
+const WEB_THEMES = {
+  shadcn: { tab: 'shadcn/ui theme', files: (id) => ({ [`${id}.shadcn.css`]: `shadcn/${id}.css`, [`${id}.shadcn.registry-item.json`]: `shadcn/${id}.registry-item.json` }) },
+  tailwind: { tab: 'Tailwind theme', files: (id) => ({ [`${id}.tailwind.theme.css`]: `tailwind/${id}.theme.css` }) },
+};   // #2552, DRAFT wording; the option's own aria-label prefix
 
 /** Load `id` from the start screen the way a person does, then Export › Download at the default settings, collecting
  *  every file the download writes. With `metadataOn`, the metadata option is switched On first. */
-const exportFrom = async (host, id, metadataOn = false) => {
+const exportFrom = async (host, id, metadataOn = false, theme = null) => {
   const { ctx, page, errors } = await openStart(host);
   try {
     const src = SOURCES[id];
@@ -195,7 +204,9 @@ const exportFrom = async (host, id, metadataOn = false) => {
     const off = metaOpt('Off');
     const metadataDefault = (await off.count()) === 1 ? await off.getAttribute('aria-checked') : 'absent';
     if (metadataOn) await hooks.click(metaOpt('On'));
-    const want = consumerSet(id).length;
+    // A web theme: its tab, by the label a person reads, before the download.
+    if (theme) await hooks.click(page.locator(`[data-p3="${box}"] [data-p3="export-artifact"]`).filter({ hasText: new RegExp(`^${WEB_THEMES[theme].tab}$`) }));
+    const want = theme ? Object.keys(WEB_THEMES[theme].files(id)).length : consumerSet(id).length;
     const got = new Map();
     // The listener stays attached through the beat below: detaching it at `want` files left the beat listening to
     // nothing, so a download beyond the expected count (the single-file tree, arriving last) passed silently.
@@ -257,6 +268,31 @@ for (const id of GATED) {
   for (const name of names(web.files)) {
     const a = web.files.get(name), b = figma.files.get(name);
     ok(a === b, `${id}: PARITY — web and plugin ${name} are byte-identical (${a.length} / ${b?.length ?? 0} bytes)${a === b ? '' : ` — ${b === undefined ? 'plugin did not write it' : firstDiff(a, b)}`}`);
+  }
+}
+
+// ── the web themes (the lane after #2997): web == plugin == the committed out/shadcn and out/tailwind files ──────────
+// Each tab's download, by the label a person reads, held to the regen artifacts byte for byte. The expected side is
+// the committed `out/shadcn/<id>.css`, `.registry-item.json` and `out/tailwind/<id>.theme.css`, written by
+// `emit-shadcn.ts` / `emit-tailwind.ts` from the handoff on disk and held by `regen --check`: that path runs no studio
+// code, no bundler and no browser. The download names are typed here, each mapped to the committed file it must be.
+for (const id of GATED) for (const theme of Object.keys(WEB_THEMES)) {
+  const want = WEB_THEMES[theme].files(id);
+  let web, figma;
+  try { web = await exportFrom('web', id, false, theme); } catch (e) { ok(false, `${id}: the web ${theme} export ran — ${e.message.split('\n')[0]}`); continue; }
+  try { figma = await exportFrom('figma', id, false, theme); } catch (e) { ok(false, `${id}: the plugin ${theme} export ran — ${e.message.split('\n')[0]}`); continue; }
+  for (const [host, x] of [['web', web], ['plugin', figma]]) {
+    ok(x.errors.length === 0, `${id}: ${host} ${theme} raised no page error${x.errors.length ? ` — ${x.errors[0]}` : ''}`);
+    ok(JSON.stringify(names(x.files)) === JSON.stringify(Object.keys(want).sort()),
+      `${id}: ${host} — the ${WEB_THEMES[theme].tab} download is ${Object.keys(want).sort().join(', ')} (${names(x.files).join(', ') || 'nothing'})`);
+    for (const [name, committed] of Object.entries(want)) {
+      const body = x.files.get(name), expect = readFileSync(join(OUT, committed), 'utf8');
+      ok(body === expect, `${id}: ACCURACY — the ${host} ${name} is out/${committed} byte for byte (${body?.length ?? 0} / ${expect.length} bytes)${body === expect ? '' : ` — ${body === undefined ? 'not downloaded' : firstDiff(body, expect)}`}`);
+    }
+  }
+  for (const name of Object.keys(want)) {
+    const a = web.files.get(name), b = figma.files.get(name);
+    ok(a !== undefined && a === b, `${id}: PARITY — web and plugin ${name} are byte-identical (${a?.length ?? 0} / ${b?.length ?? 0} bytes)`);
   }
 }
 

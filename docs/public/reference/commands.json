@@ -455,7 +455,7 @@
         {
           "name": "export_theme",
           "title": "Write the token system to disk",
-          "description": "Generate a brand and WRITE its artifacts to a directory, returning a manifest of what was written — never the content. Use this instead of theme_brand include:[\"tokens\"] whenever you want the actual files: the DTCG tree alone is roughly 440,000 characters for a four-mode brand, which no tool result should carry. Files carry the names the CLI writes. \"tokens\" writes <id>.tokens.json (the full DTCG tree), <id>.base.tokens.json and one <id>.<mode>.overlay.tokens.json per other mode (the set a multi-mode code build reads); \"aiMetadata\" writes <id>.ai.json; \"figma\" writes a figma/ directory of Figma collection files; \"componentSpecs\" writes <id>.component-contracts.json (every component contract, with the brand's settings resolved), <id>.component-defs.json (the same file under its old name) and <id>.component-defs.specs.json (the same in the Specs format). `include` replaces the default [\"tokens\", \"aiMetadata\", \"figma\"]; for everything, pass all four. For one release each file is also written under its old unprefixed name (tokens.json, ai-metadata.json, component-contracts.json, component-defs.json, component-defs.specs.json). Arguments: { brand, outDir, include }. `outDir` must be a RELATIVE path. Requires a host that granted filesystem access; returns an error if not.",
+          "description": "Generate a brand and WRITE its artifacts to a directory, returning a manifest of what was written — never the content. Use this instead of theme_brand include:[\"tokens\"] whenever you want the actual files: the DTCG tree alone is roughly 440,000 characters for a four-mode brand, which no tool result should carry. Files carry the names the CLI writes. \"tokens\" writes <id>.tokens.json (the full DTCG tree), <id>.base.tokens.json and one <id>.<mode>.overlay.tokens.json per other mode (the set a multi-mode code build reads); \"aiMetadata\" writes <id>.ai.json; \"figma\" writes a figma/ directory of Figma collection files; \"componentSpecs\" writes <id>.component-contracts.json (every component contract, with the brand's settings resolved), <id>.component-defs.json (the same file under its old name) and <id>.component-defs.specs.json (the same in the Specs format). \"shadcn\" writes shadcn/<id>.css (the shadcn/ui theme's light and dark variables) and shadcn/<id>.registry-item.json (the registry item a shadcn/ui project installs, with the full-strength focus ring); \"tailwind\" writes tailwind/<id>.theme.css (a Tailwind v4 theme). `include` replaces the default [\"tokens\", \"aiMetadata\", \"figma\"]; for everything, pass all six. For one release each file is also written under its old unprefixed name (tokens.json, ai-metadata.json, component-contracts.json, component-defs.json, component-defs.specs.json). Arguments: { brand, outDir, include }. `outDir` must be a RELATIVE path. Requires a host that granted filesystem access; returns an error if not.",
           "inputSchema": {
             "type": "object",
             "properties": {
@@ -469,14 +469,16 @@
               },
               "include": {
                 "type": "array",
-                "description": "Artifact families to write, replacing the default [\"tokens\", \"aiMetadata\", \"figma\"]. componentSpecs is written only when named, so pass all four for everything.",
+                "description": "Artifact families to write, replacing the default [\"tokens\", \"aiMetadata\", \"figma\"]. componentSpecs, shadcn and tailwind are written only when named, so pass all six for everything.",
                 "items": {
                   "type": "string",
                   "enum": [
                     "tokens",
                     "aiMetadata",
                     "figma",
-                    "componentSpecs"
+                    "componentSpecs",
+                    "shadcn",
+                    "tailwind"
                   ]
                 }
               }
@@ -1153,6 +1155,14 @@
         },
         {
           "flag": "--out",
+          "source": "packages/engine/cli.ts#argv"
+        },
+        {
+          "flag": "--shadcn",
+          "source": "packages/engine/cli.ts#argv"
+        },
+        {
+          "flag": "--tailwind",
           "source": "packages/engine/cli.ts#argv"
         },
         {

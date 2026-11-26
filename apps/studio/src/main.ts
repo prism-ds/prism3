@@ -19,7 +19,7 @@
  * volatile region (ramps or preview), so knob focus is never lost; a failed brand
  * combination is caught and surfaced with the last-good render preserved.
  */
-import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION } from '@prism3/engine';
+import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION, webThemeHandoff, shadcnFiles, tailwindFiles, type WebThemeFile } from '@prism3/engine';
 import { componentSpecsFileNames, loadComponentSpecsExporter } from './state/component-specs-export';
 import { hostCommit, type CheckedSetView, type HostCommit } from './write-adapter';
 import { AGENT_OP, initialHostSession, reduce, topicsFor, brandEffectFor, type HostSession, type OpKey } from './state/host-session';
@@ -1441,6 +1441,20 @@ const exportTokens = (): void => {
  *  input and the slug are read at the click, so an edit made while the chunk loads does not change what downloads.
  *  One download per file, as the token set (three since #1325). A chunk that fails to load downloads nothing and is
  *  logged; the dialog has no words for it yet (#3429, held for the owner). */
+/** The shadcn/ui or Tailwind theme for the brand on screen (the lane after #2997): `web-themes.ts`, the projector regen
+ *  writes `out/shadcn/**` and `out/tailwind/**` with, over the same consumer set the token download writes
+ *  (`buildOverlaySet`, no metadata). So a committed brand downloads exactly its committed files, which
+ *  `test:export-parity` holds in both hosts. Off the last-good theme, like the tokens. */
+const webThemeFilesOf = (which: 'shadcn' | 'tailwind'): WebThemeFile[] => {
+  ensureThemeFresh();
+  const h = webThemeHandoff(buildTree(theme).tree, slug());
+  return which === 'shadcn' ? shadcnFiles(h) : tailwindFiles(h);
+};
+const exportWebTheme = (which: 'shadcn' | 'tailwind'): void => {
+  if (restoreFailure) return;
+  for (const f of webThemeFilesOf(which)) download(f.name, f.text, f.name.endsWith('.json') ? 'application/json' : 'text/css');
+};
+
 const exportComponentSpecs = async (): Promise<void> => {
   const input = lastGoodInput, name = slug();
   let exporter;
@@ -1578,6 +1592,11 @@ const exportView = (): ExportView => {
     // One block PER FILE, with the name above it when there are several, never the texts concatenated.
     const prev = exportPreview(tree, slug(), exportSettings, exportMetadata);
     right.push({ kind: 'previews', files: prev.map((f) => ({ name: prev.length > 1 ? f.name : null, text: f.text })) });
+  } else if (exportArtifact === 'shadcn' || exportArtifact === 'tailwind') {
+    const names = webThemeFilesOf(exportArtifact).map((f) => f.name);
+    right.push({ kind: 'cap', text: names.length === 1 ? '1 file' : `${names.length} files` });
+    right.push({ kind: 'files', text: names.join('\n') });
+    if (restoreFailure) right.push({ kind: 'note', text: THEME_NONE, hook: 'export-restore-note' });
   } else if (exportArtifact === 'component-specs') {
     const names = componentSpecsFileNames(slug());
     if (names) {
@@ -1597,7 +1616,8 @@ const exportView = (): ExportView => {
   // Owner (#2007): after a failed restore the tokens on hand are the DEMO's, so that download is off too.
   const off = exportArtifact === 'design-md' && !briefInput() ? BRIEF_NONE : exportArtifact === 'dtcg' && restoreFailure ? TOKENS_NONE
     : exportArtifact === 'component-specs' && !componentSpecsFileNames(slug()) ? SPECS_WEB_OFF
-    : exportArtifact === 'component-specs' && restoreFailure ? SPECS_NONE : null;
+    : exportArtifact === 'component-specs' && restoreFailure ? SPECS_NONE
+    : (exportArtifact === 'shadcn' || exportArtifact === 'tailwind') && restoreFailure ? THEME_NONE : null;
   return {
     artifacts: ARTIFACTS.map((a) => ({ id: a.id, label: a.label, on: a.id === exportArtifact })),
     desc: artifact.desc,
@@ -1609,10 +1629,12 @@ const exportView = (): ExportView => {
         options: METADATA_OPTION.options.map((o) => ({ value: o.value, label: o.label, on: (o.value === 'on') === exportMetadata })) }] : []),
     ],
     // Said out loud rather than left as an empty area: silence reads as a loading state or a bug.
-    none: settings.length ? null : exportArtifact === 'component-specs' ? SPECS_NO_SETTINGS : 'Nothing to set — the brief is written one way.',
+    none: settings.length ? null : exportArtifact === 'component-specs' ? SPECS_NO_SETTINGS
+      : exportArtifact === 'shadcn' || exportArtifact === 'tailwind' ? THEME_NO_SETTINGS : 'Nothing to set — the brief is written one way.',
     right,
     // #3553 Q-UI8 A: the word alone; the bar draws the vendored download icon before it.
-    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component specs' : 'Download tokens', off },
+    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component specs'
+      : exportArtifact === 'shadcn' ? 'Download shadcn/ui theme' : exportArtifact === 'tailwind' ? 'Download Tailwind theme' : 'Download tokens', off },
   };
 };
 
@@ -1665,7 +1687,8 @@ const barActions: BarActions = {
   download: () => {
     // The Export area stays drawn (`exportOpen` in `barRead`, #2909).
     exportMenuOpen = false; barChanged();
-    if (exportArtifact === 'design-md') exportDesignMd(); else if (exportArtifact === 'component-specs') void exportComponentSpecs(); else exportTokens();
+    if (exportArtifact === 'design-md') exportDesignMd(); else if (exportArtifact === 'component-specs') void exportComponentSpecs();
+    else if (exportArtifact === 'shadcn' || exportArtifact === 'tailwind') exportWebTheme(exportArtifact); else exportTokens();
   },
 };
 
@@ -1961,6 +1984,9 @@ const TOKENS_NONE = "Off after a failed restore: these tokens would be the demo 
 /** #3425 (DRAFT wording for the owner, Q3425.1); "component contracts" since #1325 (Q-CC1 A, DRAFT). */
 const SPECS_NONE = "Off after a failed restore: these component specs would be the demo brand's, not this file's.";
 const SPECS_NO_SETTINGS = "Nothing to set — the component specs follow this brand's component settings.";
+// The web themes' two notes (DRAFT wording for the owner), in the specs' pattern.
+const THEME_NONE = "Off after a failed restore: this theme would be the demo brand's, not this file's.";
+const THEME_NO_SETTINGS = 'Nothing to set — the theme is written from this brand one way.';
 const SPECS_WEB_OFF = 'In the Figma plugin: the component specs are built from the component definitions, which the web Studio leaves out.';   // a fallback no host reaches since #3429: the plugin provides the exporter, the web a loader
 /** The error bar after a failed restore, by kind (owner, 2026-10-02). Every kind says "until a brand loads": the
  *  owner's words (#4222, 2026-11-19), though a rebuild that resolves also ends `unresolved`. */

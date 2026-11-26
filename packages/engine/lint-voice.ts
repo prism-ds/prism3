@@ -547,6 +547,9 @@ const gated: string[] = [
     .filter((f) => f.endsWith('.js') || f.endsWith('.html')),
   join(repo, 'packages/engine/schema/theme-schema.json'),
   join(repo, 'packages/engine/README.md'),
+  // The studio README (#4592): the shadcn/ui registry item's `docs` line sends every installer to its
+  // `### The shadcn/ui theme` section, so it is consumer-facing shipped prose.
+  join(repo, 'apps/studio/README.md'),
   // The token-name baseline — deliberately not a `regen` artifact (see CLAUDE.md principle 5), so
   // named by hand here exactly as lint-us-english.ts names it.
   join(repo, 'packages/engine/schema/token-contract.json'),
@@ -807,6 +810,8 @@ const REQUIRED_SURFACES: { label: string; test: (f: string) => boolean }[] = [
   { label: 'shipped skills (skills/**/SKILL.md)', test: (f) => f.startsWith(`${repo}/skills/`) },
   { label: 'the emitted reports (ENGINE_ARTIFACTS)', test: (f) => ENGINE_ARTIFACTS.some((a) => f.endsWith(`/${a}`)) },
   { label: 'the engine README', test: (f) => f.endsWith('/packages/engine/README.md') },
+  // #4592: matched exactly, as the root README is, so another README cannot stand in for it.
+  { label: 'the studio README (the shadcn/ui consumer note)', test: (f) => f === join(repo, 'apps/studio/README.md') },
   // The designer guides (#2637), anchored at the repo root like skills.
   { label: 'the designer guides (docs/public/guides/*.md)', test: (f) => f.startsWith(`${repo}/docs/public/guides/`) },
   // The analysis reports (#2651), anchored at the repo root rather than matched by a bare `/reports/` substring.

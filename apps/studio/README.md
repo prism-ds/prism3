@@ -75,7 +75,7 @@ makes obvious, and that a third probe will hit on its first run.
   - **Brand and Palettes don't:** nothing they set varies by mode, so they show no line and stay editable
     in every mode.
 - **Symptom.** A probe that loops pages on the outside and modes on the inside reads each page in
-  whichever mode the *previous* page happened to leave behind, so its results are ordering artefacts.
+  whichever mode the *previous* page happened to leave behind, so its results are ordering artifacts.
   Worse, it does not look like an ordering bug. Arrive at one of the seven pages from a derived mode
   and every field is read-only, so the probe reports controls that will not take an edit. That is the
   app being correct. The first draft of `test-smoke.mjs` looped this way and reported two false
@@ -188,6 +188,13 @@ Install a brand's theme into a shadcn/ui project:
 ```bash
 npx shadcn add https://prism3-ds.vercel.app/r/<brand>.json
 ```
+
+That URL serves the hosted brands. For a brand of your own, Export's **shadcn/ui theme** downloads the same two files
+the registry and `out/shadcn/` hold, `<brand>.shadcn.css` and `<brand>.shadcn.registry-item.json`, and **Tailwind
+theme** downloads `<brand>.tailwind.theme.css`. Install the registry item with `npx shadcn add ./<brand>.shadcn.registry-item.json`.
+The command line writes them with `cli.ts <brief> --out <dir> --shadcn --tailwind`, and the MCP's `export_theme` with
+`include: ["shadcn", "tailwind"]`. All of them run the projector regen does, so a brand gets the same bytes on every
+surface.
 
 The registry item carries two rules beyond the theme variables, both for focus. Stock shadcn/ui draws the focus outline
 (`outline-ring/50`) and every component's focus ring (`ring-ring/50`) at 50%, which is 2.0–2.8:1 against the page. The

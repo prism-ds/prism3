@@ -84,7 +84,7 @@ export const AVAILABLE_SOURCES: readonly ExportSource[] = ['generated'];
 // Artifacts — the first level. Which output, then its settings.
 // ===========================================================================================
 
-export type ArtifactId = 'dtcg' | 'design-md' | 'component-specs';
+export type ArtifactId = 'dtcg' | 'design-md' | 'component-specs' | 'shadcn' | 'tailwind';
 
 export interface ArtifactDef {
   readonly id: ArtifactId;
@@ -124,6 +124,21 @@ export const ARTIFACTS: readonly ArtifactDef[] = [
     id: 'component-specs',
     label: 'Component specs',
     desc: "Every component's contract: its props, states, parts and the tokens each part binds, built with this brand's component settings. As Prism3 JSON and in the Specs format.",
+  },
+  {
+    // The shadcn/ui theme for the brand on screen (the lane after #2997; DRAFT wording for the owner): the plain CSS and
+    // the registry item, from the projector regen writes `out/shadcn/**` with (`web-themes.ts`), so a committed brand
+    // downloads exactly its committed files. Only the registry item carries the focus-ring rule and the README pointer.
+    id: 'shadcn',
+    label: 'shadcn/ui theme',
+    desc: "This brand as a shadcn/ui theme: its colors for light and dark as CSS variables, and a registry item a shadcn/ui project installs. The registry item also keeps every focus ring at full strength.",
+  },
+  {
+    // The Tailwind v4 theme for the brand on screen (DRAFT wording for the owner), from the projector regen writes
+    // `out/tailwind/**` with.
+    id: 'tailwind',
+    label: 'Tailwind theme',
+    desc: "This brand as a Tailwind v4 theme: one CSS file to import after Tailwind, with its colors for light and dark, and its radii, fonts and shadows.",
   },
 ];
 

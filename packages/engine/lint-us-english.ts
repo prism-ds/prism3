@@ -360,6 +360,9 @@ const gated: string[] = [
   // scan was narrower than the standard it claimed to enforce, and being ungated is what made that
   // invisible rather than the spelling being hard to see.
   join(repo, 'README.md'),
+  // The studio README (#4592): the shadcn/ui registry item's `docs` line sends every installer to its
+  // `### The shadcn/ui theme` section, so it is consumer-facing shipped prose.
+  join(repo, 'apps/studio/README.md'),
   // The token-name baseline (#464). Named EXPLICITLY, unlike everything above it, because it is
   // deliberately not a `regen` artifact — a baseline regen could rewrite would silently agree with
   // the deletion it exists to catch. That exemption bought a blind spot in this gate at the same
@@ -601,6 +604,8 @@ const REQUIRED_SURFACES: { label: string; test: (f: string) => boolean }[] = [
   // root-level file can satisfy `endsWith('/packages/engine/README.md')`, so its absence stays fatal
   // either way. A promise loose enough to describe two surfaces protects neither.
   { label: 'the root README (the repo front door)', test: (f) => f === join(repo, 'README.md') },
+  // #4592: matched exactly, as the root README is, so another README cannot stand in for it.
+  { label: 'the studio README (the shadcn/ui consumer note)', test: (f) => f === join(repo, 'apps/studio/README.md') },
   // The served docs (#2637), anchored at the repo root. `llms.txt` is required by name, so the surface cannot be
   // represented by some other file under the directory while the agent entry point is gone.
   { label: 'the served docs entry point (docs/public/llms.txt)', test: (f) => f === join(repo, 'docs/public/llms.txt') },
