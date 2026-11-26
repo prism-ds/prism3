@@ -10729,6 +10729,11 @@ for (const host of ['web', 'figma']) {
 // light 1280, Brand to Shape with the fit owed: the custom mode is chosen by its radio once the fit has run — fit select,
 // checked custom-1`, 3 runs of 3. (At natural speed the same mutation failed S7 Shape edits in 2 runs of 3, once with
 // the issue's `selectOption` timeout: the reason for holding the fit back here.)
+// #4605: the window is read off the app's own signal as it is raised, not at the moment `goPlace` returns. That moment
+// fell on either side of the window on a slow runner. MUTATION (after a `wip:` commit): the immediate read put back,
+// with a 1.5 s pause after `goPlace` standing in for a slow runner → `#3700 web light 1280, Brand to Shape with the fit
+// owed: Shape opens with Brand's select still shown and its fit still owed — fit radios, data-fit-pending false`,
+// 10 runs of 10; with the recorded transition, 0 of 30 under the same pause.
 {
   const where = '#3700 web light 1280, Brand to Shape with the fit owed';
   const { ctx, page, errors } = await open({ host: 'web', theme: 'light', w: 1280, h: 900 });
@@ -10747,8 +10752,25 @@ for (const host of ['web', 'figma']) {
       window.requestAnimationFrame = (cb) => setTimeout(() => raf(cb), 600);
       window.cancelAnimationFrame = (id) => clearTimeout(id);
     });
+    // #4605: the window is the app's own signal, read at the moment it is raised, never at a moment the test picks. The
+    // header sets `data-fit-pending` when its observer sees Shape's header, and clears it once the fit has run (600 ms
+    // later here). A read after `goPlace` landed on either side of that on a slow runner: before the flag was set
+    // ("fit select, data-fit-pending false") or after the fit had run ("fit radios"). So the transition is recorded as it
+    // happens, with the control's state at that instant, and the arm waits on the record.
+    await page.evaluate(() => {
+      window.__p3FitOwed = null;
+      const mo = new MutationObserver(() => {
+        const w = document.querySelector('[data-p3="mode-control"]')?.parentElement;
+        if (window.__p3FitOwed || document.querySelector('[data-p3="frame"]')?.dataset.place !== 'shape' || !w?.hasAttribute('data-fit-pending')) return;
+        window.__p3FitOwed = { fit: w.dataset.fit ?? null, pending: true };
+        mo.disconnect();
+      });
+      mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-fit-pending', 'data-place'] });
+    });
     await goPlace(page, 'shape');
-    const owed = await page.evaluate(() => { const w = document.querySelector('[data-p3="mode-control"]')?.parentElement; return { fit: w?.dataset.fit ?? null, pending: !!w?.hasAttribute('data-fit-pending') }; });
+    // `requestAnimationFrame` is slowed above, so the wait polls on an interval rather than on frames.
+    await page.waitForFunction(() => window.__p3FitOwed !== null, null, { polling: 50, timeout: 10000 }).catch(() => {});
+    const owed = await page.evaluate(() => window.__p3FitOwed ?? { fit: null, pending: false });
     ok(owed.fit === 'select' && owed.pending, `${where}: Shape opens with Brand's select still shown and its fit still owed — fit ${owed.fit}, data-fit-pending ${owed.pending}`);
     await chooseAnyMode(page, 'custom-1');
     const now = await page.evaluate(() => { const w = document.querySelector('[data-p3="mode-control"]')?.parentElement;
