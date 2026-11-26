@@ -7,7 +7,7 @@
     { "file": "test-persist.ts", "floor": 7 },
     { "file": "test-write-float.ts", "floor": 33 },
     { "file": "test-write-styles.ts", "floor": 23 },
-    { "file": "test-write-animation-styles.ts", "floor": 17 },
+    { "file": "test-write-animation-styles.ts", "floor": 21 },
     { "file": "test-write-grid-styles.ts", "floor": 22 },
     { "file": "test-style-renames.ts", "floor": 16 },
     { "file": "test-write-typography.ts", "floor": 82 },

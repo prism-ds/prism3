@@ -18,6 +18,7 @@
 import { buildAnimationStylesPlan, buildMotionVarPlan } from '@prism3/engine/figma';
 import { brandTheme, type BrandInput } from '@prism3/engine';
 import { applyAnimationStylesPlan, FIGMA_ENTRY_KINDS } from './src/write-animation-styles';
+import { planStyleGuide } from './src/style-guide';
 
 let failed = 0;
 let executed = 0;
@@ -179,6 +180,30 @@ ok(noVars.bound === 0 && noVars.misses.some((m) => m.endsWith(`${ROOT}/motion/pr
 const skipped = await applyAnimationStylesPlan(plan, { variables: host.variables });
 ok(!skipped.written && /no animation styles/.test(skipped.skipped ?? ''),
   `a Figma with no animation styles skips them and says so (${JSON.stringify(skipped.skipped)})`);
+
+console.log('\nthe style guide: one row per pattern, its reduced sibling in the same row (Q-PT22 A)');
+// The catalog is built from what landed in the shim, as `readCatalog` reads a file: each style's name, description and
+// its entries by the name of the Figma animation each was added from.
+const catalog = {
+  collections: [], variables: [],
+  animationStyles: host.styles.map((s) => ({ id: s.id, name: s.name, description: s.description, entries: s.animationEntries.map((e) => e.name) })),
+};
+const sg = planStyleGuide(catalog, null, { types: ['animation'] });
+const table = sg.tables.find((t) => t.type === 'animation');
+const rowOf = (name: string) => table?.rows.find((r) => r.name === name);
+const fullNames = EXPECTED_STYLES.filter((n) => !n.endsWith('/reduced'));
+const rowNames = table?.rows.map((r) => r.name) ?? [];
+const wantRows = [...fullNames, ...GUIDE_ONLY.map((p) => `state/${p}`)];
+ok(sg.tables.length === 1 && rowNames.length === wantRows.length && wantRows.every((n) => rowNames.includes(n)),
+  `one animation table, a row per style that is not a reduced sibling and one per style-guide-only pattern (${rowNames.length} rows, ${wantRows.length} expected; missing: ${wantRows.filter((n) => !rowNames.includes(n)).join(', ') || 'none'})`);
+const toastRow = rowOf('toast/enter');
+ok(toastRow?.extra?.[0]?.value === 'Fade · Position' && toastRow?.extra?.[1]?.value === 'The toast fades in quickly, with no slide.' && toastRow?.specimen?.kind === 'animation',
+  `a row names what its style plays and carries its reduced sibling's words in the same row (toast/enter: ${JSON.stringify(toastRow?.extra?.map((x) => x.value))})`);
+const hoverRow = rowOf('state/hover');
+ok(hoverRow?.variableId === '' && hoverRow?.extra?.[0]?.value === 'Style guide only' && hoverRow?.description === 'The control changes color.',
+  `a style-guide-only pattern is a row with no style, saying what it does (state/hover: ${JSON.stringify([hoverRow?.extra?.[0]?.value, hoverRow?.description])})`);
+const noReducedRow = rowOf('accordion/expand/indicator');
+ok(noReducedRow?.extra?.[1]?.value === '—', `a style with no reduced sibling says so in its row (accordion/expand/indicator: ${JSON.stringify(noReducedRow?.extra?.[1]?.value)})`);
 
 console.log(`\nplugin ANIMATION STYLES write-adapter: ${failed === 0 ? 'ALL PASS' : failed + ' FAILED'} — ${executed} assertions executed`);
 if (failed) process.exit(1);
