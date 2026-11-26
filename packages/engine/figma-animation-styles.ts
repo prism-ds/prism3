@@ -60,6 +60,10 @@ export type AnimationEntryRow = {
   duration: string;
   easing: string;
   delay: string;
+  /** The delay that variable resolves to for this brand, in ms. Zero for every default preset; a brand that re-points a
+   *  preset's delay (`motionPersonality.presets.<name>.delay`) makes it more. The host may not take a delay yet, so the
+   *  executor names any it can't write. */
+  delayMs: number;
   /** A slide's distance: the px its token resolves to for this brand (no motion distance variable exists in Figma yet,
    *  #4589), a px a brand set, or the element's own size. */
   distance?: { px: number; token?: string } | { self: true };
@@ -102,6 +106,11 @@ export const animationStyleFolder = (pattern: string, element: string | null): s
 export const animationStyleName = (pattern: string, element: string | null, reduced: boolean): string =>
   `${animationStyleFolder(pattern, element)} / ${reduced ? 'reduced' : 'default'}`;
 
+const msOf = (v: unknown): number | undefined => {
+  const m = typeof v === 'string' ? /^(\d+(?:\.\d+)?)ms$/.exec(v) : null;
+  return m ? Number(m[1]) : undefined;
+};
+
 const pxOf = (v: unknown): number | undefined => {
   const m = typeof v === 'string' ? /^(-?\d+(?:\.\d+)?)px$/.exec(v) : null;
   return m ? Number(m[1]) : typeof v === 'number' ? v : undefined;
@@ -124,11 +133,19 @@ export const buildAnimationStylesPlan = (theme: Theme, sw = ANIMATION_STYLE_SWIT
     if (px === undefined) throw new Error(`figma animation styles: track '${tr.element}.${tr.property}' names distance '${d.token}', which resolves to no px value`);
     return { px, token: d.token };
   };
+  const delayMsOf = (preset: string): number => {
+    tree ??= buildTree(theme).tree;
+    const node = at(tree, `${root}.motion.preset.${preset}.delay`);
+    const ms = node ? msOf(deref(tree, node)?.$value) : undefined;
+    if (ms === undefined) throw new Error(`figma animation styles: preset '${preset}' has no delay in milliseconds`);
+    return ms;
+  };
   const entryOf = (tr: MotionTrack, kind: AnimationEntryKind, durationSlot: 'duration' | 'duration-reduced'): AnimationEntryRow => ({
     kind, element: tr.element, preset: tr.preset,
     duration: presetVariable(root, tr.preset, durationSlot),
     easing: presetVariable(root, tr.preset, 'easing'),
     delay: presetVariable(root, tr.preset, 'delay'),
+    delayMs: delayMsOf(tr.preset),
     ...(kind === 'slide' || kind === 'travel' ? { ...(tr.distance ? { distance: distanceOf(tr) } : {}), ...(tr.from ? { from: tr.from } : {}) } : {}),
     ...(kind === 'scale' && tr.scale !== undefined ? { scale: tr.scale } : {}),
   });
@@ -182,4 +199,18 @@ export const animationGuideOnlyRows = (sw = ANIMATION_STYLE_SWITCHES): { pattern
       why: GUIDE_ONLY_WHY,
     };
   });
+};
+
+/** What reduced motion does to the element a style folder names, in plain words (the owner's decision of 2026-11-26 on
+ *  #4608: an element reduced motion turns off has no reduced style, and its style guide row still says what reduced
+ *  motion does). From the engine's patterns; `undefined` for a folder no pattern names. */
+export const animationReducedWords = (folder: string, sw = ANIMATION_STYLE_SWITCHES): string | undefined => {
+  for (const p of MOTION_PATTERNS) {
+    const els = [...new Set(p.tracks.map((tr) => tr.element))];
+    const split = sw.grain === 'element' && els.length > 1;
+    for (const el of split ? els : [null]) {
+      if (animationStyleFolder(p.name, el) === folder) return el ? motionPlainWords(p, el, true) : els.map((e) => motionPlainWords(p, e, true)).join(' ');
+    }
+  }
+  return undefined;
 };

@@ -40,6 +40,12 @@ export const FIGMA_ENTRY_PROPS: { duration: string; easing: string; delay: strin
   duration: 'duration', easing: 'easing', delay: null, distance: 'distance', scale: 'scale', from: null,
 };
 
+/** What a style doesn't carry, in the plain words the style guide's row says them in (DRAFT copy, #2857). */
+export const NOT_CARRIED = { delay: 'its delay', edge: 'the edge it slides from', distance: 'its own-size distance' } as const;
+/** Where the list rides on the style: Prism3's shared plugin data, as the ownership mark does. */
+export const NOT_CARRIED_NS = 'prism3';
+export const NOT_CARRIED_KEY = 'animation-not-carried';
+
 type Alias = { type: 'VARIABLE_ALIAS'; id: string };
 export type AnimationEntryNode = { readonly id: string; readonly name: string; readonly props?: Readonly<Record<string, unknown>> };
 /** The slice of Figma's `CustomAnimationStyle` this writes. */
@@ -100,6 +106,14 @@ export const applyAnimationStylesPlan = async (plan: AnimationStylesPlan, host: 
     markOwned(s);   // the ownership mark (#1884), as every style this plugin writes carries
     s.description = row.description;
     for (const e of [...s.animationEntries]) s.removeAnimationEntry(e.id);
+    // WHAT THIS STYLE DOESN'T CARRY (#4608 review, finding 3): a value the plan holds that the host gives no property for
+    // yet (#2857). Each is a named miss in the report, never a silent drop, and the list rides on the style itself
+    // (`NOT_CARRIED_KEY`), so the style guide's row says it to a designer who never saw the report.
+    const notCarried = new Set<string>();
+    const unwritten = (what: string, detail: string): void => {
+      if (!notCarried.has(what)) misses.push(`${row.name}: ${detail} is not written yet, because Figma's property for it is not named (#2857)`);
+      notCarried.add(what);
+    };
     for (const entry of row.entries) {
       const kindName = FIGMA_ENTRY_KINDS[entry.kind];
       const kind = kindName ? kinds.get(kindName) : undefined;
@@ -119,16 +133,31 @@ export const applyAnimationStylesPlan = async (plan: AnimationStylesPlan, host: 
       };
       bind(FIGMA_ENTRY_PROPS.duration, entry.duration);
       bind(FIGMA_ENTRY_PROPS.easing, entry.easing);
-      bind(FIGMA_ENTRY_PROPS.delay, entry.delay);
-      // A distance is written as its px (no motion distance variable exists in Figma yet, #4589); a self-sized slide
-      // writes none, and plays the host's own default distance until a property for a slide's own size is named.
+      // A delay of 0 plays the same unwritten; any other is a miss until the host names a delay property.
+      if (FIGMA_ENTRY_PROPS.delay) bind(FIGMA_ENTRY_PROPS.delay, entry.delay);
+      else if (entry.delayMs > 0) unwritten(NOT_CARRIED.delay, `its ${entry.delayMs}ms delay (${entry.delay})`);
+      // A distance is written as its px (no motion distance variable exists in Figma yet, #4589). A self-sized slide has
+      // no px: it is a miss until the host names how a slide takes its own size.
       if (entry.distance && 'px' in entry.distance && takes(FIGMA_ENTRY_PROPS.distance)) props[FIGMA_ENTRY_PROPS.distance] = entry.distance.px;
+      if (entry.distance && 'self' in entry.distance) unwritten(NOT_CARRIED.distance, 'its own-size distance');
       if (entry.from && FIGMA_ENTRY_PROPS.from && takes(FIGMA_ENTRY_PROPS.from)) props[FIGMA_ENTRY_PROPS.from] = entry.from;
+      else if (entry.from && !FIGMA_ENTRY_PROPS.from) unwritten(NOT_CARRIED.edge, `the edge it slides from (${entry.from})`);
       if (entry.scale !== undefined && takes(FIGMA_ENTRY_PROPS.scale)) props[FIGMA_ENTRY_PROPS.scale] = entry.scale;
       await s.addAnimationEntryAsync(kind.styleId, props);
       entries++;
     }
+    try { s.setSharedPluginData?.(NOT_CARRIED_NS, NOT_CARRIED_KEY, notCarried.size ? JSON.stringify([...notCarried]) : ''); } catch { /* best-effort, as the ownership mark is */ }
     await tick?.();
   }
   return { written: true, total: plan.styles.length, created, entries, bound, misses };
+};
+
+/** Apply Theme's summary line for this stage (DRAFT copy, #2857): how many styles, and how many values they don't carry
+ *  yet, the first three named. Empty when this Figma has no animation styles, as for a host that skips them. */
+export const animationStylesNote = (r: AnimationStylesResult): string => {
+  if (!r.written) return '';
+  const head = `Animation styles: ${r.total} (+${r.created})`;
+  if (!r.misses.length) return head;
+  const shown = r.misses.slice(0, 3).join('; ');
+  return `${head}; ${r.misses.length} ${r.misses.length === 1 ? 'value' : 'values'} not written: ${shown}${r.misses.length > 3 ? '; …' : ''}`;
 };

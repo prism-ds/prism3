@@ -38,7 +38,7 @@
  * numerically.
  */
 import { contrast, composite, formatRatio, type RGB } from '@prism3/engine';
-import { STYLE_GUIDE_GROUPS, animationGuideOnlyRows, styleGuideGroup, styleGuideGroupOf } from '@prism3/engine/figma';
+import { STYLE_GUIDE_GROUPS, animationGuideOnlyRows, animationReducedWords, styleGuideGroup, styleGuideGroupOf } from '@prism3/engine/figma';
 import { SECTION_HEADER_SET, isTemplateSet } from './file-components';
 import { HEADER_VARIANT } from './page-header';
 import { FORMER_TABLE_PAGES, TAXONOMY, allLeaves, leafPageName, movesClause } from './file-taxonomy';
@@ -100,7 +100,7 @@ export interface SgLayoutGrid { pattern: string; count?: number; gutterSize?: nu
 export interface SgGridStyle { id: string; name: string; description?: string; layoutGrids: readonly SgLayoutGrid[] }
 /** A local custom animation style (#2857 motion phase 3), as `getLocalCustomAnimationStylesAsync` returns it: its entries
  *  by the name of the Figma animation each was added from. */
-export interface SgAnimationStyle { id: string; name: string; description?: string; entries: readonly string[] }
+export interface SgAnimationStyle { id: string; name: string; description?: string; entries: readonly string[]; notCarried?: readonly string[] }
 export interface SgCatalog {
   collections: readonly SgCollection[];
   variables: readonly SgVariable[];
@@ -1144,6 +1144,7 @@ const planGradientStyles = (catalog: SgCatalog, ix: Index, options: StyleGuideOp
 export const ANIMATION_STYLES_ID = 'animation-styles';
 /** Every pattern is a folder holding its `default` and `reduced` styles (Q-PT20 as revised 2026-11-26). */
 const DEFAULT_LEAF = / \/ default$/;
+const listOf = (xs: readonly string[]): string => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
 
 /**
  * THE ANIMATION-STYLE TABLE (#2857 motion phase 3, Q-PT22 A): one row per animation style the file holds, its reduced
@@ -1169,7 +1170,13 @@ const planAnimationStyles = (catalog: SgCatalog, options: StyleGuideOptions): Sg
     };
   };
   const rows: SgRow[] = [
-    ...styles.map((s) => row(s.id, s.folder, s.entries.join(' · ') || '—', byName.get(`${s.folder} / reduced`)?.description || '—', s.description ?? '')),
+    // A style's Plays cell says what it doesn't carry yet (#4608 review, finding 3), and a folder with no reduced style
+    // says what reduced motion does to its element (the owner's decision of 2026-11-26 on #4608). DRAFT copy.
+    ...styles.map((s) => {
+      const plays = `${s.entries.join(' · ') || '—'}${s.notCarried?.length ? ` (not carried yet: ${listOf(s.notCarried)})` : ''}`;
+      const reduced = byName.get(`${s.folder} / reduced`)?.description || animationReducedWords(s.folder) || '—';
+      return row(s.id, s.folder, plays, reduced, s.description ?? '');
+    }),
     ...guide.map((g) => row('', g.name, 'Style guide only', g.reduced, g.description)),
   ];
   const n = styles.length;
@@ -1626,7 +1633,7 @@ export const readCatalog = async (vars: StyleGuideApi['variables'], textStyles?:
   const es = (styles.effect ? await styles.effect() : []) as readonly SgEffectStyle[];
   const ps = (styles.paint ? await styles.paint() : []) as readonly SgPaintStyle[];
   const gs = (styles.grid ? await styles.grid() : []) as readonly SgGridStyle[];
-  const as = (styles.animation ? await styles.animation() : []) as readonly { id: string; name: string; description?: string; animationEntries?: readonly { name: string }[] }[];
+  const as = (styles.animation ? await styles.animation() : []) as readonly { id: string; name: string; description?: string; animationEntries?: readonly { name: string }[]; getSharedPluginData?(ns: string, key: string): string }[];
   const catalog: SgCatalog = {
     collections: cols.map((c) => ({ id: c.id, name: c.name, modes: c.modes.map((m) => ({ modeId: m.modeId, name: m.name })), defaultModeId: c.defaultModeId })),
     variables: vs.map((v) => ({ id: v.id, name: v.name, variableCollectionId: v.variableCollectionId, resolvedType: v.resolvedType, description: v.description, valuesByMode: v.valuesByMode, scopes: v.scopes ? [...v.scopes] : undefined })),
@@ -1646,7 +1653,12 @@ export const readCatalog = async (vars: StyleGuideApi['variables'], textStyles?:
       id: t.id, name: t.name, description: t.description,
       layoutGrids: (t.layoutGrids ?? []).map((g) => ({ pattern: g.pattern, count: g.count, gutterSize: g.gutterSize, offset: g.offset, color: g.color })),
     })),
-    animationStyles: as.map((t) => ({ id: t.id, name: t.name, description: t.description, entries: (t.animationEntries ?? []).map((e) => e.name) })),
+    animationStyles: as.map((t) => {
+      // What the style doesn't carry yet, as the animation writer stamps it (#4608 review, finding 3).
+      let notCarried: string[] = [];
+      try { const raw = t.getSharedPluginData?.('prism3', 'animation-not-carried'); if (raw) notCarried = JSON.parse(raw) as string[]; } catch { /* unreadable: none said */ }
+      return { id: t.id, name: t.name, description: t.description, entries: (t.animationEntries ?? []).map((e) => e.name), ...(notCarried.length ? { notCarried } : {}) };
+    }),
   };
   return { catalog, collectionById: new Map(cols.map((c) => [c.id, c])), variableById: new Map(vs.map((v) => [v.id, v])) };
 };

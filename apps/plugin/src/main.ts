@@ -42,6 +42,7 @@ import { emissionOf, themeDue } from './theme-emission';
 import { fieldStyleNote, searchFieldStyleNote } from './field-style-note';
 import { tagStyleNote } from './tag-style-note';
 import { gridSkippedNote } from './write-grid-styles';
+import { animationStylesNote } from './write-animation-styles';
 import { styleRenamedNote } from './rename-styles';
 import { applyComponentPlan, partialWriteOf } from './write-components';
 import type { ComponentProgress, CompPageTarget, CompNode, ComponentsApi } from './write-components';
@@ -408,7 +409,7 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       postVerdict({ type: 'apply-result', ok: false, headline: conflictHeadline(guarded.conflicts.length), summary: conflicts, lines: [conflicts], ...collisions }, sink);
       return;
     }
-    const { mig, r, f, s, gs, tv, ts, mv, uc, rw, styleRenames } = guarded.result;
+    const { mig, r, f, s, gs, tv, ts, mv, as, uc, rw, styleRenames } = guarded.result;
     // `motion` (#2412) — TIMING + EASING through the mixed-type executor; its refusals count with the font ones.
     const motionTotal = mv.collections.reduce((n, c) => n + c.total, 0);
     const motionCreated = mv.collections.reduce((n, c) => n + c.created, 0);
@@ -542,6 +543,8 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
       `Styles: ${s.effects.total} effects (+${s.effects.created}, ${s.effects.bound} bound) / ${s.paints.total} gradients (+${s.paints.created}, ${s.paints.bound} stops bound) / ${gs.total} grid styles (+${gs.created})`,
       `Type: ${pf.brandLoaded} fonts, ${fontVarTotal} font variables (+${fontVarCreated}), ${ts.total} text styles (+${ts.created})`,
       `Motion: ${motionTotal} variables (+${motionCreated})`,
+      // #2857 phase 3: the animation styles, and what they don't carry yet (#4608 review, finding 3). DRAFT copy.
+      animationStylesNote(as),
       // #2412 (Q293 A): the one deletion Apply makes, so it is always said (wording: Q302).
       motionReplacedItem(mv.replaced.length),
       retiredWeightsItem(rw.removed),   // #4474: the other deletion Apply makes, so it is always said
@@ -566,13 +569,14 @@ const applyTheme = async (input: BrandInput, choices: CollisionChoices | undefin
     // above caps at three is here whole, keyed by the axis that produced it.
     sink.data({
       apply: {
-        misses: { color: r.misses, float: f.misses, fontVars: tv.misses, motion: mv.misses, textStyles: ts.misses, styles: s.misses, refused },
+        misses: { color: r.misses, float: f.misses, fontVars: tv.misses, motion: mv.misses, textStyles: ts.misses, styles: s.misses, animationStyles: as.misses, refused },
         counts: {
           palette: { total: r.paletteTotal, created: r.paletteCreated }, color: { total: r.colorTotal, created: r.colorCreated },
           floatCollections: f.collections.length, floatCreated,
           effects: { total: s.effects.total, created: s.effects.created, bound: s.effects.bound },
           gradients: { total: s.paints.total, created: s.paints.created, stopsBound: s.paints.bound },
           gridStyles: { total: gs.total, created: gs.created, renamed: gs.renamed, skipped: gs.skipped },
+          animationStyles: { written: as.written, total: as.total, created: as.created, entries: as.entries, bound: as.bound, ...(as.skipped ? { skipped: as.skipped } : {}) },
           fontsLoaded: pf.brandLoaded, fontVars: { total: fontVarTotal, created: fontVarCreated },
           motion: { total: motionTotal, created: motionCreated, replaced: mv.replaced },
           textStyles: { total: ts.total, created: ts.created }, bindings: r.bound + f.bound + tv.bound + mv.bound + ts.bound,
