@@ -45,19 +45,26 @@ move).
 - **TIMING is in seconds.** A frame whose style binds a TIMING variable of 0.24 plays in about a quarter of a second, so
   every TIMING value is ms ÷ 1000. The existing variables already were, from phase 1 on: 295 across the example brands,
   and 487 in the committed `out/figma` of all five. `test.ts` now holds each to its DTCG milliseconds.
-- **Not yet named:** the property a preset's **delay** binds under (0 for every default preset), and how a **self-sized
-  slide** (the sheet, the drawer) names its edge and its own height. Both write nothing until they are named.
+- **Not yet named, so never written silently** (the review's finding 3 on #4608): the property a preset's **delay** binds
+  under, a slide's **edge**, and a **self-sized slide's** own height. Until #2857 names them, the executor records each
+  value it can't write as a named miss in its report ("Dialog / bottom / enter / panel / default: the edge it slides from
+  (bottom) is not written yet, because Figma's property for it is not named (#2857)"). It also stamps the list on the
+  style itself, so the style guide's row says what the style doesn't carry, and Apply Theme's summary names the first
+  three. A delay of 0 (every default preset's) plays the same unwritten, so only a non-zero one is a miss: the plan
+  carries each preset's resolved delay.
+- **Reduced styles for the five indicator elements** (owner, 2026-11-26 on #4608): the accordion indicator, the tabs
+  underline, the switch thumb and the segmented pill get no reduced style, since reduced motion turns them off. Their
+  style guide row says what reduced motion does ("The indicator doesn't turn.").
+- **AS-1 = A** (owner, 2026-11-26 on #4608): the element level only where a pattern moves more than one element.
 
 ### Held for the owner (on #2857)
 
-- **The grain:** a Figma animation style plays on the one layer it is applied to, so as built a multi-element pattern is a
-  style per element (`ANIMATION_STYLE_SWITCHES.grain`).
 - **The drafted descriptions.**
 - **The style guide's new strings.**
 
 ### Checked
 
-- `test-write-animation-styles.ts` (23, the floor) drives the real executor against a shim of the host:
+- `test-write-animation-styles.ts` (30, the floor) drives the real executor against a shim of the host:
   - every one of the 59 expected styles is written, by its folder name, and nothing loose beside a folder;
   - the shim's host offers Figma's seven animations, typed from the check, and a property an animation does not list is a
     named miss;
@@ -78,6 +85,8 @@ move).
   | opacity mapped to a kind Figma doesn't offer (`Fade`) | `Dialog / enter / panel / default fades (Opacity) and scales up …` |
   | the `default` leaf dropped from a name | `every style sits in its pattern's folder as default or reduced …` |
   | TIMING written in ms | `#2857 phase 3: every TIMING variable … is its duration in seconds` |
+  | a slide's edge dropped with no miss | `no entry's edge, own-size distance or delay is dropped without a miss (silent: Toast / enter / default)` |
+  | a non-zero delay dropped with no miss | `a brand that delays the surface preset … gets a named delay miss on every style that plays on surface …` |
 
 **Trap.** An animation style has no idea of child layers: every entry plays on the node the style is applied to. A
 pattern's own grouping (scrim, panel, content) can't live in one style, which is why the grain is a switch, not a
