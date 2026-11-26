@@ -50,6 +50,7 @@ import { buildTree } from './tree';
 import { buildAiMetadata } from './ai-metadata';
 import { toolDefs } from './mcp';
 import { leverManifest } from './levers';
+import { componentDefs } from './components/index';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../..');
@@ -1057,10 +1058,20 @@ const OWNER_RULES: OwnerRule[] = [
     resolve: [],
   },
   {
+    // Owner decision 7175625635 (A): Composed is built only from Prism3's own parts, never a stand-in. The worked
+    // example's brief asks for a card, which Prism3 only plans, so the example leaves it out and names it.
+    id: '#4468 the worked ledger leaves out what Prism3 lacks',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/"Not built: the card/, /no card component yet \(it is planned\)/, /rather than build a stand-in/],
+    resolve: [],
+  },
+  {
     id: '#4468 the worked ledger',
     skills: ['prism3-build-ui'],
     roles: [],
-    must: [/^> \*\*Used:\*\*/m, /^> \*\*Composed:\*\*/m, /^> \*\*Invented:\*\*/m, /^> \*\*Unsure:\*\*/m],
+    // The brief's link is Prism3's `link` component, placed, not a hand-styled link (#4603 review).
+    must: [/^> \*\*Used:\*\*/m, /^> \*\*Composed:\*\*/m, /^> \*\*Invented:\*\*/m, /^> \*\*Unsure:\*\*/m, /^> \*\*Used:\*\*[^\n]*`link`/m],
     resolve: [],
   },
   // #4469 part 1 (owner decision A): a layer built by hand because no component fits is named `GAP / …`, the
@@ -1141,6 +1152,44 @@ export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => 
     process.exit(1);
   }
   for (const rule of OWNER_RULES) findings.push(...ownerRuleFindings(rule, read, color, TOKEN_PATHS));
+}
+
+// ---- 8b. THE WORKED LEDGER'S COMPONENTS (#4468 review, M3) --------------------------------------------------------
+// The worked ledger in `prism3-build-ui` teaches an agent to list each component it placed under **Used**. A component
+// id there that no def registers teaches the agent to name one that doesn't exist, and checks 1-3 read only token paths,
+// so `password-input` for `password-field` passed. Each code span on the **Used:** line that is not a token path (no
+// dot) and not a prop value (no `=`) must be a registered component id. The oracle is the registry, `componentDefs`;
+// the subject is the skill text.
+export const ledgerComponentFindings = (text: string, ids: ReadonlySet<string>): Finding[] => {
+  const used = text.split('\n').filter((l) => /^> \*\*Used:\*\*/.test(l));
+  if (!used.length) return [{ file: 'skills/prism3-build-ui/SKILL.md', kind: 'ledger component', detail: 'the worked ledger has no **Used:** line to check' }];
+  // the Used entry runs on until the next blank quote line
+  const lines = text.split('\n');
+  const out: Finding[] = [];
+  for (const start of used) {
+    const i = lines.indexOf(start);
+    const entry: string[] = [];
+    for (let j = i; j < lines.length && lines[j].startsWith('>') && lines[j].trim() !== '>'; j++) entry.push(lines[j]);
+    for (const m of entry.join(' ').matchAll(/`([^`]+)`/g)) {
+      const name = m[1];
+      if (name.includes('.') || name.includes('=')) continue;
+      if (!ids.has(name)) out.push({ file: 'skills/prism3-build-ui/SKILL.md', kind: 'ledger component', detail: `the worked ledger's **Used** names \`${name}\`, which no component definition registers` });
+    }
+  }
+  return out;
+};
+{
+  const ids = new Set(componentDefs.map((d) => d.id));
+  // Self-check, both directions: a real id passes, a made-up one fails by name, and a ledger with no Used line fails.
+  const self: [string, number][] = [
+    [ledgerComponentFindings('> **Used:** `button` (`appearance="filled"`); `text.primary`.\n>\n', ids).length === 0 ? 'ok' : 'real id refused', 0],
+    [ledgerComponentFindings('> **Used:** `button`, `password-input`; `text.primary`.\n>\n', ids).length === 1 ? 'ok' : 'made-up id passed', 0],
+    [ledgerComponentFindings('no ledger here\n', ids).length === 1 ? 'ok' : 'missing Used line passed', 0],
+  ];
+  const brokenSelf = self.filter(([r]) => r !== 'ok');
+  if (brokenSelf.length) { console.error(`\n❌ the ledger-component check is broken: ${brokenSelf.map(([r]) => r).join('; ')}`); process.exit(1); }
+  const ui = join(skillsDir, 'prism3-build-ui', 'SKILL.md');
+  if (existsSync(ui)) findings.push(...ledgerComponentFindings(readFileSync(ui, 'utf8'), ids));
 }
 
 // ---- 9. RETIRED SKILL NAMES (#3412) --------------------------------------------------------------

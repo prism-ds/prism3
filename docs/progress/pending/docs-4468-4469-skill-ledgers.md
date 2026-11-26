@@ -13,3 +13,10 @@
 **Held by.** `lint-skills.ts` check 8 (owner rules) holds six new rules, one per placement, each by its own id. Removing any one fails by that id: the ledger sentence, the worked ledger's headings, the GAP naming, the audit count, the Outline check and the end-of-job note.
 
 **Wording choice.** The decision says "wireframe view". Figma's own menu calls Cmd/Ctrl+Y **Outline**, so the skill uses that name, so an agent can find it, and gives "wireframe view" beside it.
+
+**After review.** The review (CHANGES at `b4734fb0`) and the owner's decision (Composed is built only from Prism3's own parts, never a stand-in) found the worked ledger teaching the opposite of its rule. Its **Composed** entry was a card, which Prism3 only plans, and its link was hand-styled.
+- **The example now:** the brief still asks for a card. The report names it as not built ("Prism3 has no card component yet (it is planned)"). **Composed** is the sign-in form itself, a column of Prism3 components with spacing between them, and **Used** lists `link`.
+- **Held:**
+  - a new `lint-skills` check holds every component id on the worked ledger's **Used** line to the registry; the review's `password-field` → `password-input` mutation had passed;
+  - a new owner rule holds the not-built card;
+  - the worked-ledger rule now requires `link` under **Used**.

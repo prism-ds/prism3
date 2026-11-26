@@ -279,15 +279,21 @@ reviewer reads it to tell a faithful build from one that filled gaps, without re
 
 Write **none** under a heading that has nothing, so a short ledger reads as complete rather than cut off.
 
-**A worked ledger: a sign-in card.** The brief asks for a card with an email field, a password field, a
-Sign in button and a "Forgot password?" link.
+**A worked ledger: a sign-in form.** The brief asks for a card holding an email field, a password field, a
+Sign in button and a "Forgot password?" link. The component catalog has no `card`: it appears only in other
+components' `planned` lists. So the card is left out and named, and everything else is built from Prism3's own
+components and tokens.
 
-> **Used:** `text-field`, `password-field`, `button` (`appearance="filled"`); `background.secondary`,
-> `border.primary`, `text.primary`, `text.link.default`, `radius.lg`, `space.400`.
+The report names the card first, as "Say what you can't build" asks: "Not built: the card around the form. Prism3
+has no card component yet (it is planned), so I left it out rather than build a stand-in from a surface, a border
+and a radius." Then the ledger closes it:
+
+> **Used:** `text-field`, `password-field`, `button` (`appearance="filled"`), `link`; `background.primary`,
+> `space.400`.
 >
-> **Composed:** the card itself, a column of the three controls and the link on `background.secondary`
-> with a `border.primary` edge and `radius.lg` corners. Prism3 has no card component yet, and the card
-> holds no behavior of its own.
+> **Composed:** the sign-in form: a column of the email field, the password field, the Sign in button and the
+> link, `space.400` apart, on the page's `background.primary`. Every piece in it is a Prism3 component, and the
+> column adds only the spacing between them.
 >
 > **Invented:** none.
 >
