@@ -1324,7 +1324,7 @@ if (!sidecarCount || channelFiles !== sidecarCount || channelExempted === 0) {
 // channel (voice-standard §4), so a `MUST` in it is a hit. Each string is scanned alone, values and keys,
 // never the serialized JSON (a `\n` escape hides the next word; `mcp-served.ts` header); a hit names its
 // JSON path in place of a line number. No comment stripping: these are strings, not source.
-const MCP_TOOLS = ['list_levers', 'theme_brand', 'score_consumption', 'theme_from_brief', 'export_theme', 'validate_brand'];
+const MCP_TOOLS = ['list_levers', 'theme_brand', 'score_consumption', 'theme_from_brief', 'export_theme', 'validate_brand', 'list_components', 'get_component'];
 const served = servedToolsList(repo);
 let mcpToolsScanned = 0;
 if ('error' in served) blind.push(`the MCP tools/list surface — ${served.error}`);

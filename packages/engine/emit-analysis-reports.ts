@@ -45,6 +45,7 @@ import { ICON_NAMES } from './icon-glyphs';
 import { COMPONENT_GLYPHS } from './component-glyphs';
 // The file list lives in `regen.ts`, which compares exactly these; `buildReports` refuses to write any other set.
 import { REPORT_ARTIFACTS, REPORTS_DIR } from './regen';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..');
@@ -668,7 +669,7 @@ export const buildReports = (): Record<string, string> => {
   return out;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const out = buildReports();
   mkdirSync(reportsDir, { recursive: true });
   // Writes its own files and nothing else. It never clears the directory: `regen --check` runs this emitter

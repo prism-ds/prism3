@@ -29,6 +29,7 @@ import { ENGINE_VERSION } from './version.ts';
 import {
   SHADCN_COLOR_VARS, SHADCN_DIMENSION_VARS, SHADCN_FONT_FALLBACK, SHADCN_MAP_VERSION, SHADCN_THEME_VARS,
 } from './projections/shadcn.ts';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const OUT_DIR = resolve(here, 'out');
@@ -264,7 +265,7 @@ export const emitShadcn = (out = OUT_DIR, handoffDir = OUT_DIR): string[] => {
   return written;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const i = process.argv.indexOf('--out');
   const out = i > 0 ? resolve(process.argv[i + 1] ?? '') : OUT_DIR;
   const written = emitShadcn(out);

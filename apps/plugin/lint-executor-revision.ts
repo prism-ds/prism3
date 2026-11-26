@@ -83,7 +83,7 @@
  * Run: `npx tsx apps/plugin/lint-executor-revision.ts`
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, posix, resolve } from 'node:path';
@@ -482,7 +482,7 @@ const check = (o: Options): string[] => {
 // ---- the self-check: #2529/#2548 replayed in a throwaway repo (#2551) -------------------------------------
 
 const selfCheck = (): string[] => {
-  const work = mkdtempSync(join(tmpdir(), 'p3-exec-rev-'));
+  const work = mkdtempSync(join(realpathSync(tmpdir()), 'p3-exec-rev-'));
   const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_CONFIG_NOSYSTEM: '1',
     GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
   const g = (dir: string, ...args: string[]): string => {

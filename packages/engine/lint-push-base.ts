@@ -72,7 +72,7 @@
  * Run: `npx tsx packages/engine/lint-push-base.ts`
  */
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -321,7 +321,7 @@ const GATES = ['lint-emission-version', 'lint-component-surface', 'lint-componen
 
 // ---- the clone -------------------------------------------------------------------------------------------
 
-const work = mkdtempSync(join(tmpdir(), 'p3-push-base-'));
+const work = mkdtempSync(join(realpathSync(tmpdir()), 'p3-push-base-'));
 const failures: string[] = [];
 let ran = 0;
 let queueRan = 0;

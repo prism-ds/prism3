@@ -51,6 +51,7 @@ import { AGENT_COMMANDS, AGENT_PROTOCOL_VERSION, MAILBOX } from '../../apps/plug
 import { RUN_CODE } from '../../apps/plugin/src/dev-commands';
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
 import { localeFreeCompare } from './locale-free-order';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..');
@@ -307,6 +308,7 @@ export const CLI = [
 /** Files that read `process.argv` and are deliberately not listed, each with why. */
 export const CLI_EXCLUDED: Record<string, string> = {
   'packages/engine/test.ts': 'a gate; the gates are listed by `npx tsx verify.ts --list`',
+  'packages/engine/entry-point.ts': 'not a command: the entry guard every script calls (#4583), which reads process.argv[1] to tell a run from an import',
   'run-suites.ts': 'the runner behind `npm run -w @prism3/studio test` and `-w @prism3/plugin test` (#1066), a gate step; the gates are listed by `npx tsx verify.ts --list`',
   'packages/engine/emit-dtcg.ts': 'a regen step; run regen.ts',
   'packages/engine/emit-figma.ts': 'a regen step; run regen.ts',
@@ -476,7 +478,7 @@ export const diffByName = (committed: unknown, fresh: unknown): string[] => {
   return out;
 };
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const target = join(repo, REFERENCE);
   let fresh: string;

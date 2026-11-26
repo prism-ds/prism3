@@ -308,6 +308,8 @@ const TOOL_MODULE: Record<string, Runs> = {
   theme_from_brief: { module: 'packages/engine/design-md.ts', symbol: 'parseDesignMd' },
   export_theme: { module: 'packages/engine/tree.ts', symbol: 'buildTree' },
   validate_brand: { module: 'packages/engine/emit-dtcg.ts', symbol: 'validateBrandInput' },
+  list_components: { module: 'packages/engine/mcp-components.ts', symbol: 'listComponents' },
+  get_component: { module: 'packages/engine/mcp-components.ts', symbol: 'getComponent' },
 };
 /** The bundles each UI lane ships, by their build entry points (apps/studio/build.mjs, apps/plugin/build.mjs). */
 const LANE_ROOTS: Record<'web' | 'figma', string[]> = {

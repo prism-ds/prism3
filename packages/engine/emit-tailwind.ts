@@ -24,6 +24,7 @@ import {
 } from './emit-shadcn.ts';
 import { SHADCN_COLOR_VARS } from './projections/shadcn.ts';
 import { shadowModeVar, TAILWIND_DIMENSIONS, TAILWIND_FONTS, TAILWIND_MAP_VERSION, TAILWIND_SHADOWS } from './projections/tailwind.ts';
+import { isEntry } from './entry-point';
 
 /** A shadow layer as the handoff writes it: color and lengths in DTCG 2025.10 object forms (#4123), or a color alias. */
 type Layer = { color: unknown; offsetX: unknown; offsetY: unknown; blur: unknown; spread: unknown; inset?: boolean };
@@ -70,7 +71,7 @@ export const emitTailwind = (out = OUT_DIR, handoffDir = OUT_DIR): string[] => {
   });
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const i = process.argv.indexOf('--out');
   const out = i > 0 ? resolve(process.argv[i + 1] ?? '') : OUT_DIR;
   const written = emitTailwind(out);

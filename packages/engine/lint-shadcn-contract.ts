@@ -37,6 +37,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PROJECTION_TARGETS } from './projections/targets.ts';
 import { renderUncommitted, UNCOMMITTED_OUT } from './regen.ts';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -116,7 +117,7 @@ export const contractFailures = (
   return out;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const r = renderUncommitted();
   if ('error' in r) { console.error(`✗ cannot read the component contract: ${r.error}`); process.exit(1); }
   const file = r.files[UNCOMMITTED_OUT.indexOf('components/component-contracts.json')]!;

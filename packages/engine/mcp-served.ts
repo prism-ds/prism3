@@ -28,7 +28,7 @@
  * with `npx --yes tsx@4`), so its path cannot be named here directly.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -88,7 +88,7 @@ export const servedBridgeInstructions = (repo: string): { text: string } | { err
   const ID = 'prose-gate-bridge-initialize';
   const request = JSON.stringify({ jsonrpc: '2.0', id: ID, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'prose-gate', version: '1' } } }) + '\n';
   const server = join(repo, 'tools/figma-bridge/server.ts');
-  const dir = mkdtempSync(join(tmpdir(), 'p3-prose-bridge-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-prose-bridge-'));
   const flags = ['--port', '0', '--config', join(dir, 'figma-bridge.json')];
   const underTsx = process.execArgv.some((a) => /[\\/]tsx[\\/]/.test(a));
   const [cmd, args] = underTsx ? [process.execPath, [...process.execArgv, server, ...flags]] : ['npx', ['tsx', server, ...flags]];
