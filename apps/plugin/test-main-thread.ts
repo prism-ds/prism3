@@ -28,7 +28,7 @@
  */
 import { EXAMPLE_BRANDS_JSON as exampleBrands, brandTheme, buildTree, type BrandInput } from '@prism3/engine';
 import {
-  buildFigmaColor, buildFloatWritePlan, buildFontVarPlan, buildGridStylePlan, buildMotionVarPlan, buildStylesPlan,
+  buildAnimationStylesPlan, buildFigmaColor, buildFloatWritePlan, buildFontVarPlan, buildGridStylePlan, buildMotionVarPlan, buildStylesPlan,
   buildTextStylePlan, buildWritePlan, treeBuilds, withSharedTree,
 } from '@prism3/engine/figma';
 import { themePlans } from './src/apply-theme';
@@ -58,7 +58,7 @@ for (const [name, input] of brands) {
   // The same plans, each emitter on its own tree, as every emitter built before #4230.
   const th = brandTheme(input);
   const apart = { theme: th, textPlan: buildTextStylePlan(th), colorFiles: buildFigmaColor(th), colorPlan: buildWritePlan(buildFigmaColor(th)),
-    floatPlan: buildFloatWritePlan(th), fontPlan: buildFontVarPlan(th), motionPlan: buildMotionVarPlan(th), stylesPlan: buildStylesPlan(th), gridPlan: buildGridStylePlan(th) };
+    floatPlan: buildFloatWritePlan(th), fontPlan: buildFontVarPlan(th), motionPlan: buildMotionVarPlan(th), animationPlan: buildAnimationStylesPlan(th), stylesPlan: buildStylesPlan(th), gridPlan: buildGridStylePlan(th) };
   ok(treeBuilds() - before > 5, `#4230 premise ${name}: the emitters apart build a tree each (${treeBuilds() - before - n})`);
   ok(JSON.stringify(plans) === JSON.stringify(apart), `#4230 ${name}: the shared tree changes no plan`);
 }
@@ -79,7 +79,7 @@ for (const [name, input] of brands) {
         const th = brandTheme(input);
         freeze(buildTree(th));
         buildTextStylePlan(th); buildWritePlan(buildFigmaColor(th)); buildFloatWritePlan(th); buildFontVarPlan(th);
-        buildMotionVarPlan(th); buildStylesPlan(th); buildGridStylePlan(th);
+        buildMotionVarPlan(th); buildStylesPlan(th); buildGridStylePlan(th); buildAnimationStylesPlan(th);
       });
     } catch (e) { threw = String(e); }
     ok(!threw && treeBuilds() - before === 1, `#4230 ${name}: no plan changes the shared tree it reads (${threw || 'none'}; ${treeBuilds() - before} builds)`);

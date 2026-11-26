@@ -560,7 +560,7 @@ export const MOTION_FIGMA_COVERAGE: Record<string, { figma: 'TIMING' | 'EASING' 
   // settle time is a TIMING primitive a spring preset's duration aliases.
   'spring-duration': { figma: 'TIMING' },
   'spring-easing': { none: 'a CSS stand-in for the spring: Figma runs the spring natively, as motion/spring/<name>' },
-  distance: { none: 'not yet: a FLOAT aliasing space/100 crosses collections, which neither motion writer binds; the animation styles that bind it are phase 3' },
+  distance: { none: 'not yet: a FLOAT aliasing space/100 crosses collections, which neither motion writer binds (#4589); an animation style writes the px its token resolves to (#2857 phase 3)' },
   preset: { figma: 'TIMING+EASING', note: 'each slot is a variable; the transition composite has none, because Figma has no composite variable' },
   brand: { none: 'the brand-only group (#2857) is custom-typed one-offs with no Figma variable type yet; emitted only for a brand that sets it' },
 };
@@ -575,7 +575,10 @@ const msFromValue = (tree: any, v: unknown): number => {
   }
   throw new Error(`emit-figma motion: not a millisecond duration: ${JSON.stringify(v)}`);
 };
-/** Seconds, the unit a TIMING variable holds, from milliseconds. Rounded so 260ms is 0.26, not float noise. */
+/** A TIMING variable's value: SECONDS, milliseconds ÷ 1000, rounded so 260ms is 0.26, not float noise. Settled by the
+ *  2026-11-26 checks on #2857: a frame whose animation style binds a TIMING variable set to 0.24 plays in about a quarter
+ *  of a second, and a literal entry duration is in seconds too. Every TIMING variable is written here, so none can be in
+ *  ms; `test.ts` holds every brand's against its DTCG milliseconds. */
 const secondsOf = (ms: number): number => Math.round(ms * 1000) / 1e6;
 /** The curve key a role or curve `$value` names — `{<root>.motion.easing.<curve>}` → `<curve>`. */
 const curveOf = (v: unknown): string => {

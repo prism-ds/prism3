@@ -76,8 +76,8 @@ const DOCS_INTRO = 'Update file draws a table for each group of tokens in this f
 const DOCS_NOT_SET_UP = 'This file isn’t set up yet. The first Update file sets it up, then draws these tables.';
 /** A catalog the host could not read (owner decision SG4). */
 const READ_ERROR = "Couldn't read this file's variables. Close the page and open it again.";
-const KIND_LABEL: Record<StyleGuideKind, string> = { color: 'Color', dimension: 'Spacing and size', font: 'Font variables', text: 'Text styles', effect: 'Effect styles', gradient: 'Gradient styles', grid: 'Grid styles' };
-const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid'];
+const KIND_LABEL: Record<StyleGuideKind, string> = { color: 'Color', dimension: 'Spacing and size', font: 'Font variables', text: 'Text styles', effect: 'Effect styles', gradient: 'Gradient styles', grid: 'Grid styles', animation: 'Animation styles' };
+const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid', 'animation'];
 const STATUS: Record<SgRunTable['status'] | 'stopped', string> = { waiting: 'Waiting', drawing: 'Drawing', done: 'Done', failed: 'Not drawn', stopped: 'Not drawn' };
 
 /** The page's own state, kept for the session (not persisted): the selection survives leaving and coming back. */

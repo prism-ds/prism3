@@ -17,6 +17,7 @@
  */
 import { applyWritePlan, applyFloatPlan, applyVarCollectionPlan, beginMigration, unownedCore } from './write-figma';
 import { applyStylesPlan } from './write-styles';
+import { applyAnimationStylesPlan } from './write-animation-styles';
 import { applyGridStylePlan } from './write-grid-styles';
 import { applyTextStylePlan } from './write-text-styles';
 import { renameStylesForPlan, renameTextStylesForPlan } from './rename-styles';
@@ -32,7 +33,7 @@ import { persistInput, restoreInput } from './persist-figma';
 import { emissionOf, stampEmission } from './theme-emission';
 import { fontPreloadApiOf, preflightApiOf, textApiOf } from './theme-ports';
 import type { ThemeHost } from './theme-ports';
-import { buildFigmaColor, buildWritePlan, buildFloatWritePlan, buildStylesPlan, buildGridStylePlan, buildFontVarPlan, buildMotionVarPlan, buildTextStylePlan, withSharedTree } from '@prism3/engine/figma';
+import { buildFigmaColor, buildWritePlan, buildFloatWritePlan, buildStylesPlan, buildGridStylePlan, buildFontVarPlan, buildMotionVarPlan, buildTextStylePlan, buildAnimationStylesPlan, withSharedTree } from '@prism3/engine/figma';
 import { brandTheme, type BrandInput } from '@prism3/engine';
 
 export type { ThemeHost };
@@ -53,9 +54,12 @@ export const themePlans = (input: BrandInput) => withSharedTree(() => {
   const fontPlan = buildFontVarPlan(theme);
   // `motion` (#2412): TIMING + EASING, so the mixed-type executor's, not the FLOAT one's.
   const motionPlan = buildMotionVarPlan(theme);
+  // Motion phase 3 (#2857): an animation style per motion pattern and its reduced sibling, written after the preset
+  // variables they bind, in the same stage.
+  const animationPlan = buildAnimationStylesPlan(theme);
   const stylesPlan = buildStylesPlan(theme);
   const gridPlan = buildGridStylePlan(theme);
-  return { theme, textPlan, colorFiles, colorPlan, floatPlan, fontPlan, motionPlan, stylesPlan, gridPlan };
+  return { theme, textPlan, colorFiles, colorPlan, floatPlan, fontPlan, motionPlan, animationPlan, stylesPlan, gridPlan };
 });
 export type ThemePlans = ReturnType<typeof themePlans>;
 
@@ -192,6 +196,9 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
       // executor. Independent of every other axis: nothing aliases into or out of `motion`.
       await pace?.stage('motion', 6);
       const mv = await applyVarCollectionPlan(motionPlan, host.variables, mig, pace?.tick);
+      // THE ANIMATION STYLES (#2857 phase 3), after the preset variables they bind exist. A host with no animation styles
+      // skips this and says so (`supportsAnimationStyles`).
+      const as = await applyAnimationStylesPlan(plans.animationPlan, host, pace?.tick, bindIn);
       // THE `core` VARIABLES NO SLICE OWNS (#1109), read after the three `core` writers ran: each reports its own slice,
       // so a variable in a group none of them owns was in no report. Only here are all three slices in scope.
       const uc = await unownedCore(host.variables, names.core, [
@@ -204,7 +211,7 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
       persistInput(host.root, input);
       // #3422 Q44.1 A: and the print of what was written, so the recount can tell an engine update apart (`theme-emission.ts`).
       stampEmission(host.root, emissionOf(plans));
-      return { mig, r, f, s, gs, tv, ts, mv, uc, rw, styleRenames: [...sr, ...tr] };
+      return { mig, r, f, s, gs, tv, ts, mv, as, uc, rw, styleRenames: [...sr, ...tr] };
     },
   );
   return { plans, pf, guarded, before, chose, exec, names, applied, weightFallbacks };

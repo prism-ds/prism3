@@ -38,7 +38,7 @@
  * numerically.
  */
 import { contrast, composite, formatRatio, type RGB } from '@prism3/engine';
-import { STYLE_GUIDE_GROUPS, styleGuideGroup, styleGuideGroupOf } from '@prism3/engine/figma';
+import { STYLE_GUIDE_GROUPS, animationGuideOnlyRows, animationReducedWords, styleGuideGroup, styleGuideGroupOf } from '@prism3/engine/figma';
 import { SECTION_HEADER_SET, isTemplateSet } from './file-components';
 import { HEADER_VARIANT } from './page-header';
 import { FORMER_TABLE_PAGES, TAXONOMY, allLeaves, leafPageName, movesClause } from './file-taxonomy';
@@ -98,6 +98,9 @@ export interface SgPaintStyle { id: string; name: string; description?: string; 
 export interface SgLayoutGrid { pattern: string; count?: number; gutterSize?: number; offset?: number; color?: { r: number; g: number; b: number; a: number } }
 /** A local grid style (#3171), as `getLocalGridStylesAsync` returns it. */
 export interface SgGridStyle { id: string; name: string; description?: string; layoutGrids: readonly SgLayoutGrid[] }
+/** A local custom animation style (#2857 motion phase 3), as `getLocalCustomAnimationStylesAsync` returns it: its entries
+ *  by the name of the Figma animation each was added from. */
+export interface SgAnimationStyle { id: string; name: string; description?: string; entries: readonly string[]; notCarried?: readonly string[] }
 export interface SgCatalog {
   collections: readonly SgCollection[];
   variables: readonly SgVariable[];
@@ -105,6 +108,7 @@ export interface SgCatalog {
   effectStyles?: readonly SgEffectStyle[];
   paintStyles?: readonly SgPaintStyle[];
   gridStyles?: readonly SgGridStyle[];
+  animationStyles?: readonly SgAnimationStyle[];
 }
 
 /** The engine's contrast contract, per mode: `resolveAllModes(theme)` satisfies it structurally. */
@@ -121,7 +125,7 @@ import type { SwatchType, StyleGuideOptions, ValueFormat, StyleGuideCatalog, Sty
  *  `shadow` and `gradient` (#2353 batch 2a), its effect styles and its gradient paint styles; and `grid` (#3171), its grid
  *  styles with the layout variables they copy. Everything else is named in the result as a later phase. Matched in any
  *  case. */
-export const PHASE_TYPES = ['color', 'dimension', 'borderWidth', 'opacity', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'typography', 'shadow', 'gradient', 'grid'] as const;
+export const PHASE_TYPES = ['color', 'dimension', 'borderWidth', 'opacity', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'typography', 'shadow', 'gradient', 'grid', 'animation'] as const;
 /** The font-variable kinds, each its own table (proposed, owner to confirm: one table per kind). */
 export const FONT_KINDS = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing'] as const;
 export type FontKind = (typeof FONT_KINDS)[number];
@@ -199,6 +203,9 @@ export type SgSpecimen =
   /** A fill swatch filled with the paint style (#2353 batch 2a): the `type=default` member filling its cell edge to edge,
    *  as a color's fill swatch does, its fill the style. */
   | { kind: 'gradient' }
+  /** A card playing the animation style (#2857 motion phase 3): the swatches set's type=default member, the style applied
+   *  to it, so it previews what the style plays; a pattern with no style draws the card alone. */
+  | { kind: 'animation' }
   /** A grid style drawn at 1:8 (#3171, Q3171.2 A): a frame `frame` px wide, its `columns` columns `gutter` apart inside a
    *  `margin` either side, as the style lays them out, and the content cap shaded where the frame is wider than `cap`.
    *  Plain frames, redrawn on rerun, as the value text is. */
@@ -573,6 +580,7 @@ export const planStyleGuide = (catalog: SgCatalog, contract: SgContract | null, 
   if (wantTypes.includes('shadow') && !wantCollections) tables.push(...planEffectStyles(catalog, options, format));
   if (wantTypes.includes('gradient') && !wantCollections) tables.push(...planGradientStyles(catalog, ix, options, format));
   if (wantTypes.includes('grid') && !wantCollections) tables.push(...planGridTable(catalog, ix, options));
+  if (wantTypes.includes('animation') && !wantCollections) tables.push(...planAnimationStyles(catalog, options));
   // PHASE 2 TITLES ARE UNIQUE (proposed, owner to confirm): two collections can both hold a font-size table (`core`
   // and `type-sets`), so a title two phase-2 tables share names its collection, "Font size (core)". The tables filter
   // matches a title, so a shared one would draw both. Color titles are phase 1's and unchanged.
@@ -1132,6 +1140,60 @@ const planGradientStyles = (catalog: SgCatalog, ix: Index, options: StyleGuideOp
   }];
 };
 
+/** The pseudo-collection the animation table's key names (#2857 motion phase 3): styles belong to no collection. */
+export const ANIMATION_STYLES_ID = 'animation-styles';
+/** Every pattern is a folder holding its `default` and `reduced` styles (Q-PT20 as revised 2026-11-26). */
+const DEFAULT_LEAF = / \/ default$/;
+const listOf = (xs: readonly string[]): string => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/**
+ * THE ANIMATION-STYLE TABLE (#2857 motion phase 3, Q-PT22 A): one row per animation style the file holds, its reduced
+ * sibling in the same row, then one row per pattern that is style-guide only (hover and press until a style can carry a
+ * fill color, Q-PT18 A). The specimen is a card playing the style. DRAFT copy, for the owner: the title, the column
+ * names "Plays" and "Reduced", "Style guide only", and "—".
+ */
+const planAnimationStyles = (catalog: SgCatalog, options: StyleGuideOptions): SgTable[] => {
+  const all = catalog.animationStyles ?? [];
+  if (!all.length) return [];
+  const byName = new Map(all.map((s) => [s.name, s] as const));
+  // A row is a folder: its default style is the specimen, and its reduced sibling's words sit in the same row.
+  const styles = all.filter((s) => DEFAULT_LEAF.test(s.name)).map((s) => ({ ...s, folder: s.name.replace(DEFAULT_LEAF, '') }));
+  const guide = animationGuideOnlyRows().filter((g) => !byName.has(`${g.name} / default`));
+  const prefix = commonPrefix([...styles.map((s) => s.folder), ...guide.map((g) => g.name)].map((n) => n.split(' / ').slice(0, -1)));
+  const row = (id: string, name: string, plays: string, reduced: string, description: string): SgRow => {
+    const token = name.split(' / ').slice(prefix.length).join(' / ');
+    return {
+      variableId: id, name, token, tokenCell: tokenCellOf(options, name, token), label: humanizeName(name.split(' / ').slice(prefix.length), prefix[prefix.length - 1]),
+      description, display: 'default', specimen: { kind: 'animation' },
+      cells: [{ modeId: STYLE_SPECIMEN.modeId, modeName: STYLE_SPECIMEN.name, value: plays, alias: null, raw: JSON.stringify([id, plays]), groundId: null, contrast: null }],
+      extra: [{ value: plays, alias: null, always: true }, { value: reduced, alias: null, always: true }],
+    };
+  };
+  const rows: SgRow[] = [
+    // A style's Plays cell says what it doesn't carry yet (#4608 review, finding 3), and a folder with no reduced style
+    // says what reduced motion does to its element (the owner's decision of 2026-11-26 on #4608). DRAFT copy.
+    ...styles.map((s) => {
+      const plays = `${s.entries.join(' · ') || '—'}${s.notCarried?.length ? ` (not carried yet: ${listOf(s.notCarried)})` : ''}`;
+      const reduced = byName.get(`${s.folder} / reduced`)?.description || animationReducedWords(s.folder) || '—';
+      return row(s.id, s.folder, plays, reduced, s.description ?? '');
+    }),
+    ...guide.map((g) => row('', g.name, 'Style guide only', g.reduced, g.description)),
+  ];
+  const n = styles.length;
+  return [{
+    key: `animation|${ANIMATION_STYLES_ID}|${prefix.join(' / ')}`,
+    type: 'animation',
+    kind: 'semantic',
+    page: SEMANTIC_PAGE,
+    collectionId: ANIMATION_STYLES_ID,
+    title: 'Animation styles',
+    description: `${n} animation style${n === 1 ? '' : 's'} in this file`,
+    modes: [STYLE_SPECIMEN],
+    columns: ['Token', STYLE_SPECIMEN.name, 'Plays', 'Reduced', ...(options.description === false ? [] : ['Description'])],
+    rows,
+  }];
+};
+
 /** The pseudo-collection the Grids table's key names (#3171): grid styles belong to no collection. */
 export const GRID_STYLES_ID = 'grid-styles';
 /** The scale a grid specimen is drawn at (Q3171.2 A), and its height. */
@@ -1415,6 +1477,8 @@ export interface SgNode extends CellNode {
   textStyleId?: unknown;
   /** #2353 batch 2a: apply an effect style or a fill (paint) style to a node (the dynamic-page forms). */
   setEffectStyleIdAsync?(id: string): Promise<void>;
+  /** Applies an animation style to the node (#2857 motion phase 3), where this Figma has Motion. */
+  applyAnimationStyle?(styleId: string, data?: { type: 'CUSTOM' }): string;
   setFillStyleIdAsync?(id: string): Promise<void>;
   effectStyleId?: unknown;
   fillStyleId?: unknown;
@@ -1450,6 +1514,8 @@ export interface StyleGuideApi {
   /** #3171: the file's local grid styles, in the file's order. Optional: without it, the Grids table reads the layout
    *  variables alone. */
   getLocalGridStylesAsync?(): Promise<readonly unknown[]>;
+  /** The file's custom animation styles (#2857 motion phase 3), where this Figma has them. */
+  getLocalCustomAnimationStylesAsync?(): Promise<readonly unknown[]>;
   /** The fonts the host has, for the face a family specimen is set in (#2371). Optional: without it, the faces the
    *  file's text styles use and the cell's own style are tried. */
   listAvailableFontsAsync?(): Promise<ReadonlyArray<{ fontName: { family: string; style: string } }>>;
@@ -1560,13 +1626,14 @@ export const CELLS_PER_YIELD = 28;
  *  Every variable, not only COLOR: phase 2 reads FLOAT and STRING ones (the #146 lesson — a type-filtered fetch
  *  misses the font family and size variables). The effect and paint styles too (#2353 batch 2a), when asked for. */
 export const readCatalog = async (vars: StyleGuideApi['variables'], textStyles?: () => Promise<readonly unknown[]>,
-  styles: { effect?: () => Promise<readonly unknown[]>; paint?: () => Promise<readonly unknown[]>; grid?: () => Promise<readonly unknown[]> } = {}): Promise<{ catalog: SgCatalog; collectionById: Map<string, unknown>; variableById: Map<string, unknown> }> => {
+  styles: { effect?: () => Promise<readonly unknown[]>; paint?: () => Promise<readonly unknown[]>; grid?: () => Promise<readonly unknown[]>; animation?: () => Promise<readonly unknown[]> } = {}): Promise<{ catalog: SgCatalog; collectionById: Map<string, unknown>; variableById: Map<string, unknown> }> => {
   const cols = (await vars.getLocalVariableCollectionsAsync()) as readonly (SgCollection & { id: string })[];
   const vs = (await vars.getLocalVariablesAsync()) as readonly SgVariable[];
   const ts = (textStyles ? await textStyles() : []) as readonly SgTextStyle[];
   const es = (styles.effect ? await styles.effect() : []) as readonly SgEffectStyle[];
   const ps = (styles.paint ? await styles.paint() : []) as readonly SgPaintStyle[];
   const gs = (styles.grid ? await styles.grid() : []) as readonly SgGridStyle[];
+  const as = (styles.animation ? await styles.animation() : []) as readonly { id: string; name: string; description?: string; animationEntries?: readonly { name: string }[]; getSharedPluginData?(ns: string, key: string): string }[];
   const catalog: SgCatalog = {
     collections: cols.map((c) => ({ id: c.id, name: c.name, modes: c.modes.map((m) => ({ modeId: m.modeId, name: m.name })), defaultModeId: c.defaultModeId })),
     variables: vs.map((v) => ({ id: v.id, name: v.name, variableCollectionId: v.variableCollectionId, resolvedType: v.resolvedType, description: v.description, valuesByMode: v.valuesByMode, scopes: v.scopes ? [...v.scopes] : undefined })),
@@ -1586,6 +1653,12 @@ export const readCatalog = async (vars: StyleGuideApi['variables'], textStyles?:
       id: t.id, name: t.name, description: t.description,
       layoutGrids: (t.layoutGrids ?? []).map((g) => ({ pattern: g.pattern, count: g.count, gutterSize: g.gutterSize, offset: g.offset, color: g.color })),
     })),
+    animationStyles: as.map((t) => {
+      // What the style doesn't carry yet, as the animation writer stamps it (#4608 review, finding 3).
+      let notCarried: string[] = [];
+      try { const raw = t.getSharedPluginData?.('prism3', 'animation-not-carried'); if (raw) notCarried = JSON.parse(raw) as string[]; } catch { /* unreadable: none said */ }
+      return { id: t.id, name: t.name, description: t.description, entries: (t.animationEntries ?? []).map((e) => e.name), ...(notCarried.length ? { notCarried } : {}) };
+    }),
   };
   return { catalog, collectionById: new Map(cols.map((c) => [c.id, c])), variableById: new Map(vs.map((v) => [v.id, v])) };
 };
@@ -1731,7 +1804,7 @@ export const categoryOfKey = (key: string): string => {
 };
 /** Rows in this order down a page; a later phase's category after them, by name. The effect and gradient styles (#2353
  *  batch 2a) each start a row of their own after the text styles'. Owner-approved (Q272 A). */
-const CATEGORY_ORDER = ['color', 'dimension', 'font', 'typography', 'shadow', 'gradient', 'grid'];
+const CATEGORY_ORDER = ['color', 'dimension', 'font', 'typography', 'shadow', 'gradient', 'grid', 'animation'];
 const categoryRank = (cat: string): number => { const i = CATEGORY_ORDER.indexOf(cat); return i < 0 ? CATEGORY_ORDER.length : i; };
 /** The radius swatch's four corners, each bound to the radius variable. */
 const RADIUS_CORNERS = ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'] as const;
@@ -2226,6 +2299,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
     effect: api.getLocalEffectStylesAsync ? () => api.getLocalEffectStylesAsync!() : undefined,
     paint: api.getLocalPaintStylesAsync ? () => api.getLocalPaintStylesAsync!() : undefined,
     grid: api.getLocalGridStylesAsync ? () => api.getLocalGridStylesAsync!() : undefined,
+    animation: api.getLocalCustomAnimationStylesAsync ? () => api.getLocalCustomAnimationStylesAsync!() : undefined,
   });
   const plan = planStyleGuide(catalog, contract, options);
   const misses: string[] = [];
@@ -2975,6 +3049,26 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
         place(box, r, c);
         return;
       }
+      if (spec.kind === 'animation') {
+        // AN ANIMATION STYLE'S SPECIMEN (#2857 motion phase 3): the swatches set's type=default member, painted the cell's
+        // white, its own layers hidden, with the style applied, so it plays what the style plays. A style-guide-only row
+        // (no style) draws the card alone. A Figma with no Motion keeps the card, and the miss is named.
+        const v = variantOf(swatches, { type: 'default' }, 'type=default');
+        if (!v?.createInstance) { missAt(noLayer, 'type=default', where); return; }
+        const inst = v.createInstance() as SgNode;
+        for (const k of (inst.children ?? []) as SgNode[]) k.visible = false;
+        inst.fills = CELL_FILL;
+        if (row.variableId) {
+          let bound = false;
+          try { if (inst.applyAnimationStyle) { inst.applyAnimationStyle(row.variableId, { type: 'CUSTOM' }); bound = true; } } catch { /* named below */ }
+          if (!bound) missAt(unboundSpec, 'animation-style', where);
+        }
+        const box = cellBox(true);
+        box.appendChild?.(inst);
+        keepSize({ inst, w: num(v.width), h: num(v.height) });
+        place(box, r, c);
+        return;
+      }
       if (spec.kind === 'effect' || spec.kind === 'gradient') {
         // A STYLE'S SPECIMEN (#2353 batch 2a) is the swatches set's type=default member with the style applied, so it
         // stays bound to the style and follows an edit to it. Its own layers are hidden, as a fill swatch's are.
@@ -3692,7 +3786,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
   for (const [variant, n] of unboundIn) misses.push(`${n} ${n === 1 ? 'swatch' : 'swatches'} in ${variant} have no layer that takes a fill, so they show the component's own color`);
   // Q272 A (#2353): an effect or gradient style's miss names the style in plain words ("15 effect styles are not bound
   // to their style"), never the internal kind key. The older kinds' wording is approved and stays as it was.
-  const plainStyle: Readonly<Record<string, string>> = { 'effect-style': 'effect style', 'gradient-style': 'gradient style' };
+  const plainStyle: Readonly<Record<string, string>> = { 'effect-style': 'effect style', 'gradient-style': 'gradient style', 'animation-style': 'animation style' };
   for (const [what, ws] of unboundSpec) { const n = ws.length; misses.push(`${n} ${plainStyle[what] ?? `${what} specimen`}${plural(n, ' is', 's are')} not bound to ${plural(n, 'its', 'their')} ${what.endsWith('-style') ? 'style' : 'variable'}, so ${plural(n, 'it shows', 'they show')} the cell component's own value (${placesOf(ws)})`); }
   for (const [what, ws] of unsized) { const n = ws.length; misses.push(`${n} ${what} spacing specimen${plural(n, ' is', 's are')} not sized to ${plural(n, 'its', 'their')} value: bound by ${plural(n, 'its', 'their')} left padding, the layer did not take the value's width (${placesOf(ws)})`); }
   // THE OWNER'S FIXED-WIDTH CELLS: said ONCE for the run, in the terms of the fix, not once per specimen.
@@ -3723,6 +3817,7 @@ export const removeRetiredTables = async (api: StyleGuideApi, contract: SgContra
     effect: api.getLocalEffectStylesAsync ? () => api.getLocalEffectStylesAsync!() : undefined,
     paint: api.getLocalPaintStylesAsync ? () => api.getLocalPaintStylesAsync!() : undefined,
     grid: api.getLocalGridStylesAsync ? () => api.getLocalGridStylesAsync!() : undefined,
+    animation: api.getLocalCustomAnimationStylesAsync ? () => api.getLocalCustomAnimationStylesAsync!() : undefined,
   });
   const plan = planStyleGuide(catalog, contract, {});
   const planned = new Set(plan.tables.map((t) => t.key));
@@ -3860,7 +3955,7 @@ export const isSetUp = (root: StyleGuideApi['root']): boolean => {
  *  are a kind each, as the text styles are. */
 const KIND_OF_TYPE = (type: string): StyleGuideKind =>
   type === 'color' ? 'color' : type === 'dimension' || type === 'borderWidth' || type === 'opacity' ? 'dimension' : type === 'typography' ? 'text'
-    : type === 'shadow' ? 'effect' : type === 'gradient' ? 'gradient' : type === 'grid' ? 'grid' : 'font';
+    : type === 'shadow' ? 'effect' : type === 'gradient' ? 'gradient' : type === 'grid' ? 'grid' : type === 'animation' ? 'animation' : 'font';
 /** The variable kinds whose number is a length, printed in px in the tree. */
 const LENGTH_KINDS: ReadonlySet<VarKind> = new Set<VarKind>(['spacing', 'size', 'radius', 'scale', 'fontSize', 'lineHeight', 'letterSpacing',
   'paragraphSpacing', 'paragraphIndent', 'borderWidth', 'iconSize', 'breakpoint', 'grid', 'container']);

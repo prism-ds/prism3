@@ -293,7 +293,7 @@ export interface StyleGuideOptions {
 /** The kinds of table the Build style guides page groups by (owner decision H8): color; spacing and size (every
  *  `dimension` table, radius included); the five font-variable kinds; the text styles; (#2353 batch 2a) the effect
  *  styles and the gradient paint styles; and (#3171) the grid styles. */
-export type StyleGuideKind = 'color' | 'dimension' | 'font' | 'text' | 'effect' | 'gradient' | 'grid';
+export type StyleGuideKind = 'color' | 'dimension' | 'font' | 'text' | 'effect' | 'gradient' | 'grid' | 'animation';
 /** One table a run with no filter would draw, in the order it draws them. */
 export interface StyleGuideCatalogTable {
   /** The table's key (`<type>|<collection id>|<group path>`): what the `tables` option matches besides the title. */
