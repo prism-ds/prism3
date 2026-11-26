@@ -452,7 +452,7 @@ const kindsOf = (x: unknown, total: number): { kinds?: ChangeKinds } => {
   const [breaks, retired, leaves] = [count(c.breaks), count(c.retired), count(c.leaves)];
   return breaks !== null && retired !== null && leaves !== null && breaks + retired + leaves === total ? { kinds: { breaks, retired, leaves } } : {};
 };
-const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid'];
+const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid', 'animation'];
 /** The style guide's catalog (S11.2), checked entry by entry: an entry with a field of the wrong type is dropped, and
  *  an item whose table index points at no table reads as one no phase draws (-1), so the page never offers a table
  *  the host did not name. `null` when the shape is not a catalog at all. */

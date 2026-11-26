@@ -42,6 +42,8 @@ export const ANIMATION_STYLE_SWITCHES: {
 /** The patterns under "State /" in the picker (Q-PT19 A): changes of a control's state, not a component arriving. Typed:
  *  a new state pattern is named here on purpose. */
 export const STATE_PATTERNS: readonly string[] = ['hover', 'pressed', 'pressed/release'];
+/** Why a state pattern has no style yet (Q-PT18 A). */
+const GUIDE_ONLY_WHY = "a state change, which is a style only if an animation style can carry a fill color (JOB 102, Q-PT18 A)";
 
 /** What an entry animates. The host maps each to one of its own animation kinds (`write-animation-styles.ts`). */
 export type AnimationEntryKind = 'opacity' | 'scale' | 'slide' | 'travel' | 'turn' | 'size' | 'color';
@@ -129,7 +131,7 @@ export const buildAnimationStylesPlan = (theme: Theme, sw = ANIMATION_STYLE_SWIT
   for (const p of patterns) {
     // Hover and press are styles only if a style can carry their color (Q-PT18 A); until then, style-guide rows only.
     if (!sw.colorEntries && STATE_PATTERNS.includes(p.name)) {
-      const why = "a state change, which is a style only if an animation style can carry a fill color (JOB 102, Q-PT18 A)";
+      const why = GUIDE_ONLY_WHY;
       guideOnly.push({ pattern: p.name, reduced: false, why }, { pattern: p.name, reduced: true, why });
       continue;
     }
@@ -158,4 +160,20 @@ export const buildAnimationStylesPlan = (theme: Theme, sw = ANIMATION_STYLE_SWIT
     if (!wroteReduced) guideOnly.push({ pattern: p.name, reduced: true, why: wrote ? "under reduced motion its cue is a color change, and an animation style carries no fill color (JOB 102, Q-PT18 A)" : why });
   }
   return { styles, guideOnly };
+};
+
+/** The style guide's rows for the patterns with no style (Q-PT18 A, Q-PT22 A): what each does, in the same plain words a
+ *  style's description uses, and why it has no style. One row per pattern, its reduced behavior in the same row. */
+export const animationGuideOnlyRows = (sw = ANIMATION_STYLE_SWITCHES): { pattern: string; name: string; description: string; reduced: string; why: string }[] => {
+  if (sw.colorEntries) return [];
+  return MOTION_PATTERNS.filter((p) => STATE_PATTERNS.includes(p.name)).map((p) => {
+    const els = [...new Set(p.tracks.map((tr) => tr.element))];
+    return {
+      pattern: p.name,
+      name: animationStyleName(p.name, null, false, sw),
+      description: els.map((e) => motionPlainWords(p, e)).join(" "),
+      reduced: els.map((e) => motionPlainWords(p, e, true)).join(" "),
+      why: GUIDE_ONLY_WHY,
+    };
+  });
 };
