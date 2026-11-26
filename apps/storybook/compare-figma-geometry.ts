@@ -57,6 +57,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { load, ARM_1, boxedParts } from './arm-contract';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = import.meta.dirname ?? '';
 const FIGMA = resolve(HERE, 'figma-geometry.json');
@@ -423,7 +424,7 @@ const SELF: { name: string; plant: (f: FigmaRecord) => void; plantCode?: (c: Cod
     mustName: /^password-field error .*: container\/message \(.*\) is drawn in Figma, not in code/, missedByDrawn: true },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'compare-figma-geometry.ts')) {
+if (isEntry(import.meta.url)) {
   if (!existsSync(CODE)) { console.error('FAIL setup: storybook-static/geometry.code.json is missing. Run: npx tsx apps/storybook/check-geometry.ts'); process.exit(1); }
   const code: CodeRecord = JSON.parse(readFileSync(CODE, 'utf8'));
   if (process.argv.includes('--self-test')) {

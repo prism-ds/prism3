@@ -24,6 +24,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from '../css/emission';
 import { bundle, sourceOf } from './bundle';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -265,7 +266,7 @@ const MUTANTS: { name: string; id: Id; source?: string; manifest?: string; mustN
   { name: 'a dropped value in the manifest (autoComplete new-password)', id: 'password-field', manifest: swap(MANIFEST, /'current-password' \| 'new-password'/g, "'current-password'", 'dropped value'), mustName: /password-field prop autoComplete: custom-elements\.json's type lacks 'new-password'/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const browser = await chromium.launch();
   let fail = 0;
   try {

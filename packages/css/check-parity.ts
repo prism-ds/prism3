@@ -38,6 +38,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
 import { ARM_1, load, tokenProperty } from '../../apps/storybook/arm-contract';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -377,7 +378,7 @@ const MUTANTS: { name: string; css: string; markup: Markup; mustName: RegExp }[]
     css: CSS.replace(/\n\s*letter-spacing: [^;]+;/g, ''), markup: MARKUP, mustName: /container\/label letterSpacing binds \(no token: ls:NaN\), the spec names core\.font\.letter-spacing-role\.normal/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();
   let bad = 0;

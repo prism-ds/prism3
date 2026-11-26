@@ -21,6 +21,7 @@ import { createRequire } from 'node:module';
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -134,7 +135,7 @@ const MUTANTS: { name: string; src: () => Sources; mustName: RegExp }[] = [
     mustName: /^exports: "\.\/p3-button\.js" is not an expected entry/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();
   let fail = 0;

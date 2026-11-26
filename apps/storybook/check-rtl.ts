@@ -51,6 +51,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { at, context, dirsFor, DROPPED, main, open, result, stateOf, STATIC, stories, type Dir, type Plant, type Story, type Result } from './a11y-harness.ts';
+import { isEntry } from '@prism3/engine/harness';
 
 /** A mutant here may also plant CSS text as if the build (`built`) or `@prism3/css` (`source`) had written it. */
 type RtlPlant = Plant & { built?: string; source?: string };
@@ -338,6 +339,6 @@ const MUTANTS = [
   },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   await main('rtl', 'Every story, both forms, left to right and right to left: the computed direction, each start/end pair in order, the Show/Hide button at the row\'s end, no blanket glyph flip, the text field\'s dir="auto", and no :dir() the build rewrites.', run as never, [...MUTANTS, ...DROPPED('rtl')]);
 }

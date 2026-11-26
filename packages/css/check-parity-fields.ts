@@ -28,6 +28,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
 import { ARM_1, load, tokenProperty } from '../../apps/storybook/arm-contract';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -407,7 +408,7 @@ const MUTANTS: { name: string; css: Css; contracts: typeof CONTRACTS; mustName: 
     css: withFile('password-field.css', SHIPPED['password-field.css'].replace(/\n\s*outline-color: [^;]+;/g, '')), contracts: CONTRACTS, mustName: /password-field status=default state=focus-visible: focus edge outline-color .* binds .*, the spec names color\.border\.focus/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();
   let bad = 0;

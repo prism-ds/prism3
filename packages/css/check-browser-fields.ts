@@ -33,6 +33,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildOracle } from '../../tools/agent-adherence/score-code';
 import { TOKEN_TREE, TOKEN_BASE, TOKEN_OVERLAYS, COMPONENTS } from '../../tools/agent-adherence/oracle';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -375,7 +376,7 @@ const MUTANTS: { name: string; opts: Opts; mustName: RegExp }[] = [
     mustName: /Show\/Hide: the caret moved to 0,0, not 2,5, after pressing Show on an input that had focus/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   if (!existsSync(TOKENS_CSS)) { console.error('FAIL browser (fields): no token CSS. Run first: npm run -w @prism3/tokens build'); process.exit(1); }
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();

@@ -26,6 +26,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from '../css/emission';
 import { bundle, ELEMENT_SOURCE } from './bundle';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -213,7 +214,7 @@ const MUTANTS: { name: string; source?: string; manifest?: string; mustName: Reg
   { name: 'a renamed attribute (fullWidth)', source: swap(ELEMENT_SOURCE, 'attribute: "data-prop-fullwidth"', 'attribute: "data-prop-full-width"', 'renamed'), mustName: /prop fullWidth: fullWidth's attribute is data-prop-full-width/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const browser = await chromium.launch();
   let fail = 0;
   try {

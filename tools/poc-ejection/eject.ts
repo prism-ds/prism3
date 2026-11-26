@@ -33,13 +33,14 @@
  * a CI gate: it needs the npm registry for Lit and esbuild (the npm cache serves them when warm), and Chromium for the render check.
  */
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { localeFreeCompare } from '../../packages/engine/locale-free-order';
 import { byKind, countRefs, KIND, readRepo, scanFile, type Count, type Repo } from './refs';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = import.meta.dirname ?? '';
 const REPO = resolve(HERE, '../..');
@@ -66,7 +67,7 @@ export type Result = {
 
 // ------------------------------------------------------------------------------------------------ the run
 export const eject = (mode: Mode, opts: { plant?: string; keep?: boolean } = {}): Result => {
-  const tmp = mkdtempSync(join(tmpdir(), `prism3-eject-${mode}-`));
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), `prism3-eject-${mode}-`));
   const outside = relative(REPO, tmp);
   const client = join(tmp, 'client');
   const tarballs = join(tmp, 'tarballs');
@@ -276,7 +277,7 @@ export const summarize = (r: Pick<Result, 'mode' | 'steps' | 'seconds' | 'count'
 
 // ------------------------------------------------------------------------------------------------ self-test
 const fixture = (files: Record<string, string>): string => {
-  const d = mkdtempSync(join(tmpdir(), 'prism3-eject-fixture-'));
+  const d = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-eject-fixture-'));
   for (const [p, t] of Object.entries(files)) { mkdirSync(join(d, p, '..'), { recursive: true }); writeFileSync(join(d, p), t); }
   return d;
 };
@@ -386,7 +387,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
   // provenance line. Run against the real packages: the expectation comes from the sources (which files open with that
   // header) and from the counter, never from the copy script's own patterns.
   { name: 'source mode\'s copies open with a provenance line naming the package and version, and their header names no repo path', check: () => {
-    const to = mkdtempSync(join(tmpdir(), 'prism3-eject-copies-'));
+    const to = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-eject-copies-'));
     try {
       const r = spawnSync('node', [join(HERE, 'copy-source.mjs'), '--from', REPO, '--to', to], { encoding: 'utf8' });
       if (r.status !== 0) return `the copy script exited ${r.status}: ${stepError(r.stderr, r.stdout)}`;
@@ -426,7 +427,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
 ];
 
 // ------------------------------------------------------------------------------------------------ CLI
-if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'eject.ts')) {
+if (isEntry(import.meta.url)) {
   const arg = (n: string) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
   if (process.argv.includes('--self-test')) {
     let bad = 0;

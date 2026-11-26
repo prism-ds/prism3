@@ -8867,10 +8867,11 @@ arm: {
     ok(/aria-hidden="true" on the embedded spinner/.test(def.accessibility.aria ?? ''),
       `spinner 2026-09-27: ${def.id}'s accessibility.aria hides its embedded spinner (aria-hidden="true"), so isPending announces once`);
   }
-  const enterRole = /`motion\.duration\.([a-z-]+)`/.exec(spinner.motion?.enter ?? '')?.[1];
+  // Since #3408 (#2857) the fade binds the quick-arrival preset, `pop`, whose default is that same `fast` step on the enter role.
+  const enterRole = /`motion\.preset\.([a-z-]+)`/.exec(spinner.motion?.enter ?? '')?.[1];
   const builtMotion = buildTree(brandTheme({ id: 'spinfade', primary: { l: 0.55, c: 0.18, h: 285 }, neutral: { hue: 285, chroma: 0.01 } } as unknown as BrandInput)).tree.prism.motion;
-  ok(enterRole === 'fast' && builtMotion.duration.fast !== undefined && builtMotion['duration-reduced'].fast !== undefined && /motion\.duration-reduced\.fast/.test(spinner.motion?.reduceMotion ?? ''),
-    `spinner 2026-09-27: motion.enter is a fade on the existing motion.duration.fast, kept under reduced motion on its reduced twin (enter binds ${enterRole ?? 'nothing'})`);
+  ok(enterRole === 'pop' && /motion\.duration\.fast\}$/.test(String(builtMotion.preset?.pop?.duration?.$value)) && builtMotion.preset?.pop?.['duration-reduced'] !== undefined && /motion\.preset\.pop\.duration-reduced/.test(spinner.motion?.reduceMotion ?? ''),
+    `spinner 2026-09-27: motion.enter is a fade on the pop preset (by default motion.duration.fast), kept under reduced motion on its reduced duration (enter binds ${enterRole ?? 'nothing'}; pop's duration ${String(builtMotion.preset?.pop?.duration?.$value)})`);
   const contested = (spinner.notes?.contested ?? []).join('\n');
   const deferred = ['labelPosition', 'staticColor', 'OVERLAY / MASK', '`spinning` PROP'].filter((k) => !contested.split('\n').some((line) => line.includes(k) && line.includes('deferred by owner (2026-09-27)')));
   ok(deferred.length === 0 && /END STATE — declined by owner \(2026-09-27\)/.test(contested),

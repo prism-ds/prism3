@@ -8,7 +8,7 @@
  * `packages/tokens/check-specs.mjs` does. Running it as a process keeps the parity check's EXPECTED an emitted file,
  * not an engine import (docs/34). The temp dir is removed when the process exits.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
@@ -20,7 +20,7 @@ let dir: string | undefined;
 /** Reads one uncommitted component export by its name under `out/components/` (e.g. `specs.json`). */
 export const readUncommitted = (name: 'specs.json' | 'component-defs.json' | 'component-defs.specs.json') => {
   if (!dir) {
-    const d = mkdtempSync(resolve(tmpdir(), 'prism3-css-emission-'));
+    const d = mkdtempSync(resolve(realpathSync(tmpdir()), 'prism3-css-emission-'));
     process.on('exit', () => rmSync(d, { recursive: true, force: true }));
     const r = spawnSync('npx', ['tsx', resolve(HERE, '../engine/emit-component-docs.ts'), '--uncommitted', '--out', d], { cwd: resolve(HERE, '../..'), encoding: 'utf8' });
     if (r.status !== 0) {

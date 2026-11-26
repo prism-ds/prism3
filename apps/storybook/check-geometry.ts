@@ -39,6 +39,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { load, ARM_1, boxedParts, contractStories, kpiStories, readIndex } from './arm-contract';
 import { open, context, result, main, at, dirsFor, DROPPED, STATIC, stateOf, type Plant, type Result, type Story, type Dir } from './a11y-harness';
+import { isEntry } from '@prism3/engine/harness';
 
 const arg = (name: string) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
 const CONTRACT_FILE = arg('--contract') ? resolve(arg('--contract')!) : ARM_1;
@@ -254,7 +255,7 @@ const contractMutants = () => {
   return out;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname ?? '', 'check-geometry.ts')) {
+if (isEntry(import.meta.url)) {
   const recordTo = arg('--record') ? resolve(arg('--record')!) : IS_ARM_1 ? resolve(STATIC, 'geometry.code.json') : undefined;
   process.on('exit', (code) => {
     if (code !== 0 || !Object.keys(record).length || !recordTo) return;

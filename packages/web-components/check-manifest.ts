@@ -3,7 +3,7 @@
  * fields since S4 for the fields) (#3408 S4). Runs the analyzer into a temp dir and compares, so a hand edit to the manifest, or an element regenerated
  * without its manifest, fails by name. Regenerate both with `npm run -w @prism3/web-components generate`.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, relative } from 'node:path';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // The analyzer joins --outdir onto its cwd, so it is given the temp dir relative to this folder.
-const dir = mkdtempSync(resolve(tmpdir(), 'prism3-cem-'));
+const dir = mkdtempSync(resolve(realpathSync(tmpdir()), 'prism3-cem-'));
 try {
   const r = spawnSync('npx', ['cem', 'analyze', '--outdir', relative(HERE, dir)], { cwd: HERE, encoding: 'utf8' });
   if (r.status !== 0) { console.error(`FAIL manifest: the analyzer exited ${r.status}: ${(r.stderr || r.stdout).trim()}`); process.exit(1); }

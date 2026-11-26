@@ -41,6 +41,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle, sourceOf } from './bundle';
 import { COPY, ICON, fieldHtml, type FieldOpts } from '../css/demo-fields';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -388,7 +389,7 @@ const MUTANTS: { name: string; src: () => Sources; mustName: RegExp }[] = [
   { name: '@prism3/css\'s script no longer standing aside', src: () => ({ ...REAL, cssScript: swap(CSS_SCRIPT, "const owned = (button) => !!button.closest('p3-password-field:defined');", 'const owned = () => false;', 'owned')}), mustName: /^upgrade: with both scripts, one click did not show the value once/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const browser = await chromium.launch();
   let fail = 0;
   try {

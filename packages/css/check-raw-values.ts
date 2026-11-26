@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
 import { scoreR1, scoreR2, buildOracle, type Violation } from '../../tools/agent-adherence/score-code';
 import { TOKEN_TREE, TOKEN_BASE, TOKEN_OVERLAYS, COMPONENTS } from '../../tools/agent-adherence/oracle';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -108,7 +109,7 @@ const MUTANTS: { name: string; css: Record<string, string>; mustName: RegExp }[]
   { name: 'a tracking primitive outside letter-spacing', css: plant('word-spacing: calc(var(--pds3-core-font-letter-spacing-role-normal) * 1em)'), mustName: /primitive core\.font\.letter-spacing-role\.normal in word-spacing/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   let fail = 0;
   const real = scan(FILES, DEMO);
   if (real.bad.length || real.stale.length) {
