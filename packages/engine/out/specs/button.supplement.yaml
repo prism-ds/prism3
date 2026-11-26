@@ -473,25 +473,25 @@ $extensions:
     motion:
       enter: "none (present on mount)"
       exit: none
-      reduceMotion: "State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
+      reduceMotion: "State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
       tokens:
         motion.state:
-          dtcg: pds3.motion.duration.fast
-          css: "--pds3-motion-duration-fast"
-          figma: motion/pds3/motion/duration/fast
+          dtcg: pds3.motion.preset.state.duration
+          css: "--pds3-motion-preset-state-duration"
+          figma: motion/pds3/motion/preset/state/duration
         motion.state-easing:
-          dtcg: pds3.motion.easing-role.default
-          css: "--pds3-motion-easing-role-default"
-          figma: motion/pds3/motion/easing-role/default
+          dtcg: pds3.motion.preset.state.easing
+          css: "--pds3-motion-preset-state-easing"
+          figma: motion/pds3/motion/preset/state/easing
         motion.state-reduced:
-          dtcg: pds3.motion.duration-reduced.fast
-          css: "--pds3-motion-duration-reduced-fast"
-          figma: motion/pds3/motion/duration-reduced/fast
+          dtcg: pds3.motion.preset.state.duration-reduced
+          css: "--pds3-motion-preset-state-duration-reduced"
+          figma: motion/pds3/motion/preset/state/duration-reduced
         motion.press:
-          dtcg: pds3.motion.duration.fast
-          css: "--pds3-motion-duration-fast"
-          figma: motion/pds3/motion/duration/fast
+          dtcg: pds3.motion.preset.press.duration
+          css: "--pds3-motion-preset-press-duration"
+          figma: motion/pds3/motion/preset/press/duration
         motion.press-easing:
-          dtcg: pds3.motion.easing-role.default
-          css: "--pds3-motion-easing-role-default"
-          figma: motion/pds3/motion/easing-role/default
+          dtcg: pds3.motion.preset.press.easing
+          css: "--pds3-motion-preset-press-easing"
+          figma: motion/pds3/motion/preset/press/easing

@@ -3039,7 +3039,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "enter fade — the spinner fades in when it mounts: `opacity` 0 → 1 over `var(--motion-duration-fast)` on `var(--motion-easing-role-enter)`, and under reduced motion over `var(--motion-duration-reduced-fast)`, because a change of opacity is not vestibular motion. Figma holds the visible member."
+          "description": "enter fade — the spinner fades in when it mounts: `opacity` 0 → 1 over `var(--motion-preset-pop-duration)` on `var(--motion-preset-pop-easing)`, and under reduced motion over `var(--motion-preset-pop-duration-reduced)`, because a change of opacity is not vestibular motion. Figma holds the visible member."
         },
         {
           "class": "runtime-behavior",

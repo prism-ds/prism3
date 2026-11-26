@@ -1,6 +1,6 @@
 # Token usage
 
-Where each token is bound: by which component, on which part, and at which variants and states. 292 of 969 emitted tokens are bound by at least one component.
+Where each token is bound: by which component, on which part, and at which variants and states. 300 of 969 emitted tokens are bound by at least one component.
 
 Two sources feed each entry. **Keys** are the binding keys in the component definition. **Parts** are where the design-file projection draws the token; "where" lists the axis values a part is bound at, leaves out any axis bound at every value, and counts the members. A key marked "not drawn" names the token but no member draws it; another key on the row does.
 
@@ -2865,16 +2865,12 @@ Type: dimension. Bound by 21 component(s).
 
 ### `motion.duration-reduced.fast`
 
-Type: duration. Bound by 8 component(s).
+Type: duration. Bound by 4 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
-| button | `motion.state-reduced` | (not drawn) | — |
-| button-destructive | `motion.state-reduced` | (not drawn) | — |
-| button-neutral | `motion.state-reduced` | (not drawn) | — |
 | image | `motion.reveal-reduced` | (not drawn) | — |
 | skeleton | `motion.swap-reduced` | (not drawn) | — |
-| spinner | `motion.enter-reduced` | (not drawn) | — |
 | toggle-button | `motion.state-reduced` | (not drawn) | — |
 | toggle-icon-button | `motion.state-reduced` | (not drawn) | — |
 
@@ -2888,16 +2884,12 @@ Type: duration. Bound by 1 component(s).
 
 ### `motion.duration.fast`
 
-Type: duration. Bound by 8 component(s).
+Type: duration. Bound by 4 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
-| button | `motion.press`, `motion.state` | (not drawn) | — |
-| button-destructive | `motion.press`, `motion.state` | (not drawn) | — |
-| button-neutral | `motion.press`, `motion.state` | (not drawn) | — |
 | image | `motion.reveal` | (not drawn) | — |
 | skeleton | `motion.swap` | (not drawn) | — |
-| spinner | `motion.enter` | (not drawn) | — |
 | toggle-button | `motion.press`, `motion.state` | (not drawn) | — |
 | toggle-icon-button | `motion.press`, `motion.state` | (not drawn) | — |
 
@@ -2919,26 +2911,96 @@ Type: duration. Bound by 1 component(s).
 
 ### `motion.easing-role.default`
 
-Type: cubicBezier. Bound by 6 component(s).
+Type: cubicBezier. Bound by 3 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
-| button | `motion.press-easing`, `motion.state-easing` | (not drawn) | — |
-| button-destructive | `motion.press-easing`, `motion.state-easing` | (not drawn) | — |
-| button-neutral | `motion.press-easing`, `motion.state-easing` | (not drawn) | — |
 | skeleton | `motion.pulse-easing` | (not drawn) | — |
 | toggle-button | `motion.press-easing`, `motion.state-easing` | (not drawn) | — |
 | toggle-icon-button | `motion.press-easing`, `motion.state-easing` | (not drawn) | — |
 
 ### `motion.easing-role.enter`
 
-Type: cubicBezier. Bound by 3 component(s).
+Type: cubicBezier. Bound by 2 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | image | `motion.reveal-easing` | (not drawn) | — |
 | skeleton | `motion.swap-easing` | (not drawn) | — |
+
+### `motion.preset.pop.duration`
+
+Type: duration. Bound by 1 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| spinner | `motion.enter` | (not drawn) | — |
+
+### `motion.preset.pop.duration-reduced`
+
+Type: duration. Bound by 1 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| spinner | `motion.enter-reduced` | (not drawn) | — |
+
+### `motion.preset.pop.easing`
+
+Type: cubicBezier. Bound by 1 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
 | spinner | `motion.enter-easing` | (not drawn) | — |
+
+### `motion.preset.press.duration`
+
+Type: duration. Bound by 3 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| button | `motion.press` | (not drawn) | — |
+| button-destructive | `motion.press` | (not drawn) | — |
+| button-neutral | `motion.press` | (not drawn) | — |
+
+### `motion.preset.press.easing`
+
+Type: cubicBezier. Bound by 3 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| button | `motion.press-easing` | (not drawn) | — |
+| button-destructive | `motion.press-easing` | (not drawn) | — |
+| button-neutral | `motion.press-easing` | (not drawn) | — |
+
+### `motion.preset.state.duration`
+
+Type: duration. Bound by 3 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| button | `motion.state` | (not drawn) | — |
+| button-destructive | `motion.state` | (not drawn) | — |
+| button-neutral | `motion.state` | (not drawn) | — |
+
+### `motion.preset.state.duration-reduced`
+
+Type: duration. Bound by 3 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| button | `motion.state-reduced` | (not drawn) | — |
+| button-destructive | `motion.state-reduced` | (not drawn) | — |
+| button-neutral | `motion.state-reduced` | (not drawn) | — |
+
+### `motion.preset.state.easing`
+
+Type: cubicBezier. Bound by 3 component(s).
+
+| Component | Keys | Part | Where |
+|---|---|---|---|
+| button | `motion.state-easing` | (not drawn) | — |
+| button-destructive | `motion.state-easing` | (not drawn) | — |
+| button-neutral | `motion.state-easing` | (not drawn) | — |
 
 ### `radius.2xl`
 
@@ -4098,21 +4160,21 @@ Declared, not drawn: `color.border.focus`
 
 ### button
 
-67 token(s); 576 design-file member(s).
+69 token(s); 576 design-file member(s).
 
-`border-width.hairline`, `color.border.focus`, `color.disabled.border`, `color.disabled.fill`, `color.disabled.icon`, `color.disabled.on-fill`, `color.disabled.text`, `color.interactive.primary.border.hover`, `color.interactive.primary.border.pressed`, `color.interactive.primary.border.rest`, `color.interactive.primary.fill.hover`, `color.interactive.primary.fill.pressed`, `color.interactive.primary.fill.rest`, `color.interactive.primary.icon.hover`, `color.interactive.primary.icon.pressed`, `color.interactive.primary.icon.rest`, `color.interactive.primary.on-fill`, `color.interactive.primary.overlay.hover`, `color.interactive.primary.overlay.pressed`, `color.interactive.primary.text.hover`, `color.interactive.primary.text.pressed`, `color.interactive.primary.text.rest`, `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.primary.border.hover`, `color.inverse.interactive.primary.border.pressed`, `color.inverse.interactive.primary.border.rest`, `color.inverse.interactive.primary.fill.hover`, `color.inverse.interactive.primary.fill.pressed`, `color.inverse.interactive.primary.fill.rest`, `color.inverse.interactive.primary.icon.hover`, `color.inverse.interactive.primary.icon.pressed`, `color.inverse.interactive.primary.icon.rest`, `color.inverse.interactive.primary.on-fill`, `color.inverse.interactive.primary.overlay.hover`, `color.inverse.interactive.primary.overlay.pressed`, `color.inverse.interactive.primary.text.hover`, `color.inverse.interactive.primary.text.pressed`, `color.inverse.interactive.primary.text.rest`, `focus.ring.offset`, `focus.ring.width`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.default`, `radius.md`, `size.lg.height`, `size.md.height`, `size.sm.height`, `space.0`, `space.075`, `space.100`, `space.150`, `space.200`, `space.300`, `space.550`, `type.label.lg.emphasis`, `type.label.lg.emphasis-link`, `type.label.md.emphasis`, `type.label.md.emphasis-link`, `type.label.sm.emphasis`, `type.label.sm.emphasis-link`
+`border-width.hairline`, `color.border.focus`, `color.disabled.border`, `color.disabled.fill`, `color.disabled.icon`, `color.disabled.on-fill`, `color.disabled.text`, `color.interactive.primary.border.hover`, `color.interactive.primary.border.pressed`, `color.interactive.primary.border.rest`, `color.interactive.primary.fill.hover`, `color.interactive.primary.fill.pressed`, `color.interactive.primary.fill.rest`, `color.interactive.primary.icon.hover`, `color.interactive.primary.icon.pressed`, `color.interactive.primary.icon.rest`, `color.interactive.primary.on-fill`, `color.interactive.primary.overlay.hover`, `color.interactive.primary.overlay.pressed`, `color.interactive.primary.text.hover`, `color.interactive.primary.text.pressed`, `color.interactive.primary.text.rest`, `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.primary.border.hover`, `color.inverse.interactive.primary.border.pressed`, `color.inverse.interactive.primary.border.rest`, `color.inverse.interactive.primary.fill.hover`, `color.inverse.interactive.primary.fill.pressed`, `color.inverse.interactive.primary.fill.rest`, `color.inverse.interactive.primary.icon.hover`, `color.inverse.interactive.primary.icon.pressed`, `color.inverse.interactive.primary.icon.rest`, `color.inverse.interactive.primary.on-fill`, `color.inverse.interactive.primary.overlay.hover`, `color.inverse.interactive.primary.overlay.pressed`, `color.inverse.interactive.primary.text.hover`, `color.inverse.interactive.primary.text.pressed`, `color.inverse.interactive.primary.text.rest`, `focus.ring.offset`, `focus.ring.width`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.preset.press.duration`, `motion.preset.press.easing`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `radius.md`, `size.lg.height`, `size.md.height`, `size.sm.height`, `space.0`, `space.075`, `space.100`, `space.150`, `space.200`, `space.300`, `space.550`, `type.label.lg.emphasis`, `type.label.lg.emphasis-link`, `type.label.md.emphasis`, `type.label.md.emphasis-link`, `type.label.sm.emphasis`, `type.label.sm.emphasis-link`
 
-Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.default`, `space.550`
+Declared, not drawn: `color.border.focus`, `motion.preset.press.duration`, `motion.preset.press.easing`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `space.550`
 
 Drawn, not declared: `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.primary.border.hover`, `color.inverse.interactive.primary.border.pressed`, `color.inverse.interactive.primary.border.rest`, `color.inverse.interactive.primary.fill.hover`, `color.inverse.interactive.primary.fill.pressed`, `color.inverse.interactive.primary.fill.rest`, `color.inverse.interactive.primary.icon.hover`, `color.inverse.interactive.primary.icon.pressed`, `color.inverse.interactive.primary.icon.rest`, `color.inverse.interactive.primary.on-fill`, `color.inverse.interactive.primary.overlay.hover`, `color.inverse.interactive.primary.overlay.pressed`, `color.inverse.interactive.primary.text.hover`, `color.inverse.interactive.primary.text.pressed`, `color.inverse.interactive.primary.text.rest`
 
 ### button-destructive
 
-67 token(s); 576 design-file member(s).
+69 token(s); 576 design-file member(s).
 
-`border-width.hairline`, `color.border.focus`, `color.disabled.border`, `color.disabled.fill`, `color.disabled.icon`, `color.disabled.on-fill`, `color.disabled.text`, `color.interactive.destructive.border.hover`, `color.interactive.destructive.border.pressed`, `color.interactive.destructive.border.rest`, `color.interactive.destructive.fill.hover`, `color.interactive.destructive.fill.pressed`, `color.interactive.destructive.fill.rest`, `color.interactive.destructive.icon.hover`, `color.interactive.destructive.icon.pressed`, `color.interactive.destructive.icon.rest`, `color.interactive.destructive.on-fill`, `color.interactive.destructive.overlay.hover`, `color.interactive.destructive.overlay.pressed`, `color.interactive.destructive.text.hover`, `color.interactive.destructive.text.pressed`, `color.interactive.destructive.text.rest`, `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.destructive.border.hover`, `color.inverse.interactive.destructive.border.pressed`, `color.inverse.interactive.destructive.border.rest`, `color.inverse.interactive.destructive.fill.hover`, `color.inverse.interactive.destructive.fill.pressed`, `color.inverse.interactive.destructive.fill.rest`, `color.inverse.interactive.destructive.icon.hover`, `color.inverse.interactive.destructive.icon.pressed`, `color.inverse.interactive.destructive.icon.rest`, `color.inverse.interactive.destructive.on-fill`, `color.inverse.interactive.destructive.overlay.hover`, `color.inverse.interactive.destructive.overlay.pressed`, `color.inverse.interactive.destructive.text.hover`, `color.inverse.interactive.destructive.text.pressed`, `color.inverse.interactive.destructive.text.rest`, `focus.ring.offset`, `focus.ring.width`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.default`, `radius.md`, `size.lg.height`, `size.md.height`, `size.sm.height`, `space.0`, `space.075`, `space.100`, `space.150`, `space.200`, `space.300`, `space.550`, `type.label.lg.emphasis`, `type.label.lg.emphasis-link`, `type.label.md.emphasis`, `type.label.md.emphasis-link`, `type.label.sm.emphasis`, `type.label.sm.emphasis-link`
+`border-width.hairline`, `color.border.focus`, `color.disabled.border`, `color.disabled.fill`, `color.disabled.icon`, `color.disabled.on-fill`, `color.disabled.text`, `color.interactive.destructive.border.hover`, `color.interactive.destructive.border.pressed`, `color.interactive.destructive.border.rest`, `color.interactive.destructive.fill.hover`, `color.interactive.destructive.fill.pressed`, `color.interactive.destructive.fill.rest`, `color.interactive.destructive.icon.hover`, `color.interactive.destructive.icon.pressed`, `color.interactive.destructive.icon.rest`, `color.interactive.destructive.on-fill`, `color.interactive.destructive.overlay.hover`, `color.interactive.destructive.overlay.pressed`, `color.interactive.destructive.text.hover`, `color.interactive.destructive.text.pressed`, `color.interactive.destructive.text.rest`, `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.destructive.border.hover`, `color.inverse.interactive.destructive.border.pressed`, `color.inverse.interactive.destructive.border.rest`, `color.inverse.interactive.destructive.fill.hover`, `color.inverse.interactive.destructive.fill.pressed`, `color.inverse.interactive.destructive.fill.rest`, `color.inverse.interactive.destructive.icon.hover`, `color.inverse.interactive.destructive.icon.pressed`, `color.inverse.interactive.destructive.icon.rest`, `color.inverse.interactive.destructive.on-fill`, `color.inverse.interactive.destructive.overlay.hover`, `color.inverse.interactive.destructive.overlay.pressed`, `color.inverse.interactive.destructive.text.hover`, `color.inverse.interactive.destructive.text.pressed`, `color.inverse.interactive.destructive.text.rest`, `focus.ring.offset`, `focus.ring.width`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.preset.press.duration`, `motion.preset.press.easing`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `radius.md`, `size.lg.height`, `size.md.height`, `size.sm.height`, `space.0`, `space.075`, `space.100`, `space.150`, `space.200`, `space.300`, `space.550`, `type.label.lg.emphasis`, `type.label.lg.emphasis-link`, `type.label.md.emphasis`, `type.label.md.emphasis-link`, `type.label.sm.emphasis`, `type.label.sm.emphasis-link`
 
-Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.default`, `space.550`
+Declared, not drawn: `color.border.focus`, `motion.preset.press.duration`, `motion.preset.press.easing`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `space.550`
 
 Drawn, not declared: `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.destructive.border.hover`, `color.inverse.interactive.destructive.border.pressed`, `color.inverse.interactive.destructive.border.rest`, `color.inverse.interactive.destructive.fill.hover`, `color.inverse.interactive.destructive.fill.pressed`, `color.inverse.interactive.destructive.fill.rest`, `color.inverse.interactive.destructive.icon.hover`, `color.inverse.interactive.destructive.icon.pressed`, `color.inverse.interactive.destructive.icon.rest`, `color.inverse.interactive.destructive.on-fill`, `color.inverse.interactive.destructive.overlay.hover`, `color.inverse.interactive.destructive.overlay.pressed`, `color.inverse.interactive.destructive.text.hover`, `color.inverse.interactive.destructive.text.pressed`, `color.inverse.interactive.destructive.text.rest`
 
@@ -4124,11 +4186,11 @@ Drawn, not declared: `color.inverse.disabled.border`, `color.inverse.disabled.fi
 
 ### button-neutral
 
-67 token(s); 576 design-file member(s).
+69 token(s); 576 design-file member(s).
 
-`border-width.hairline`, `color.border.focus`, `color.disabled.border`, `color.disabled.fill`, `color.disabled.icon`, `color.disabled.on-fill`, `color.disabled.text`, `color.interactive.neutral.border.hover`, `color.interactive.neutral.border.pressed`, `color.interactive.neutral.border.rest`, `color.interactive.neutral.fill.hover`, `color.interactive.neutral.fill.pressed`, `color.interactive.neutral.fill.rest`, `color.interactive.neutral.icon.hover`, `color.interactive.neutral.icon.pressed`, `color.interactive.neutral.icon.rest`, `color.interactive.neutral.on-fill`, `color.interactive.neutral.overlay.hover`, `color.interactive.neutral.overlay.pressed`, `color.interactive.neutral.text.hover`, `color.interactive.neutral.text.pressed`, `color.interactive.neutral.text.rest`, `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.neutral.border.hover`, `color.inverse.interactive.neutral.border.pressed`, `color.inverse.interactive.neutral.border.rest`, `color.inverse.interactive.neutral.fill.hover`, `color.inverse.interactive.neutral.fill.pressed`, `color.inverse.interactive.neutral.fill.rest`, `color.inverse.interactive.neutral.icon.hover`, `color.inverse.interactive.neutral.icon.pressed`, `color.inverse.interactive.neutral.icon.rest`, `color.inverse.interactive.neutral.on-fill`, `color.inverse.interactive.neutral.overlay.hover`, `color.inverse.interactive.neutral.overlay.pressed`, `color.inverse.interactive.neutral.text.hover`, `color.inverse.interactive.neutral.text.pressed`, `color.inverse.interactive.neutral.text.rest`, `focus.ring.offset`, `focus.ring.width`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.default`, `radius.md`, `size.lg.height`, `size.md.height`, `size.sm.height`, `space.0`, `space.075`, `space.100`, `space.150`, `space.200`, `space.300`, `space.550`, `type.label.lg.emphasis`, `type.label.lg.emphasis-link`, `type.label.md.emphasis`, `type.label.md.emphasis-link`, `type.label.sm.emphasis`, `type.label.sm.emphasis-link`
+`border-width.hairline`, `color.border.focus`, `color.disabled.border`, `color.disabled.fill`, `color.disabled.icon`, `color.disabled.on-fill`, `color.disabled.text`, `color.interactive.neutral.border.hover`, `color.interactive.neutral.border.pressed`, `color.interactive.neutral.border.rest`, `color.interactive.neutral.fill.hover`, `color.interactive.neutral.fill.pressed`, `color.interactive.neutral.fill.rest`, `color.interactive.neutral.icon.hover`, `color.interactive.neutral.icon.pressed`, `color.interactive.neutral.icon.rest`, `color.interactive.neutral.on-fill`, `color.interactive.neutral.overlay.hover`, `color.interactive.neutral.overlay.pressed`, `color.interactive.neutral.text.hover`, `color.interactive.neutral.text.pressed`, `color.interactive.neutral.text.rest`, `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.neutral.border.hover`, `color.inverse.interactive.neutral.border.pressed`, `color.inverse.interactive.neutral.border.rest`, `color.inverse.interactive.neutral.fill.hover`, `color.inverse.interactive.neutral.fill.pressed`, `color.inverse.interactive.neutral.fill.rest`, `color.inverse.interactive.neutral.icon.hover`, `color.inverse.interactive.neutral.icon.pressed`, `color.inverse.interactive.neutral.icon.rest`, `color.inverse.interactive.neutral.on-fill`, `color.inverse.interactive.neutral.overlay.hover`, `color.inverse.interactive.neutral.overlay.pressed`, `color.inverse.interactive.neutral.text.hover`, `color.inverse.interactive.neutral.text.pressed`, `color.inverse.interactive.neutral.text.rest`, `focus.ring.offset`, `focus.ring.width`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.preset.press.duration`, `motion.preset.press.easing`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `radius.md`, `size.lg.height`, `size.md.height`, `size.sm.height`, `space.0`, `space.075`, `space.100`, `space.150`, `space.200`, `space.300`, `space.550`, `type.label.lg.emphasis`, `type.label.lg.emphasis-link`, `type.label.md.emphasis`, `type.label.md.emphasis-link`, `type.label.sm.emphasis`, `type.label.sm.emphasis-link`
 
-Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.default`, `space.550`
+Declared, not drawn: `color.border.focus`, `motion.preset.press.duration`, `motion.preset.press.easing`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `space.550`
 
 Drawn, not declared: `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.disabled.text`, `color.inverse.interactive.neutral.border.hover`, `color.inverse.interactive.neutral.border.pressed`, `color.inverse.interactive.neutral.border.rest`, `color.inverse.interactive.neutral.fill.hover`, `color.inverse.interactive.neutral.fill.pressed`, `color.inverse.interactive.neutral.fill.rest`, `color.inverse.interactive.neutral.icon.hover`, `color.inverse.interactive.neutral.icon.pressed`, `color.inverse.interactive.neutral.icon.rest`, `color.inverse.interactive.neutral.on-fill`, `color.inverse.interactive.neutral.overlay.hover`, `color.inverse.interactive.neutral.overlay.pressed`, `color.inverse.interactive.neutral.text.hover`, `color.inverse.interactive.neutral.text.pressed`, `color.inverse.interactive.neutral.text.rest`
 
@@ -4452,9 +4514,9 @@ Declared, not drawn: `motion.duration-reduced.fast`, `motion.duration.fast`, `mo
 
 10 token(s); 4 design-file member(s).
 
-`color.icon.primary`, `icon.size.lg`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.duration-reduced.fast`, `motion.duration-reduced.spin`, `motion.duration.fast`, `motion.duration.spin`, `motion.easing-role.enter`
+`color.icon.primary`, `icon.size.lg`, `icon.size.md`, `icon.size.sm`, `icon.size.xs`, `motion.duration-reduced.spin`, `motion.duration.spin`, `motion.preset.pop.duration`, `motion.preset.pop.duration-reduced`, `motion.preset.pop.easing`
 
-Declared, not drawn: `motion.duration-reduced.fast`, `motion.duration-reduced.spin`, `motion.duration.fast`, `motion.duration.spin`, `motion.easing-role.enter`
+Declared, not drawn: `motion.duration-reduced.spin`, `motion.duration.spin`, `motion.preset.pop.duration`, `motion.preset.pop.duration-reduced`, `motion.preset.pop.easing`
 
 ### step-item
 
@@ -4566,7 +4628,7 @@ Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `moti
 
 ## Tokens no component binds
 
-356 semantic token(s) and 321 primitive(s). Primitives (`core.*`) are listed apart — components bind semantic roles, which alias the primitives, so an unbound primitive is expected.
+348 semantic token(s) and 321 primitive(s). Primitives (`core.*`) are listed apart — components bind semantic roles, which alias the primitives, so an unbound primitive is expected.
 
 ### Semantic
 
@@ -4585,7 +4647,7 @@ Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `moti
 - **control** — `control.size.lg.inset`, `control.size.lg.track`, `control.size.lg.width`
 - **gradient** — `gradient.brand`, `gradient.glow`
 - **grid** — `grid.2xl.columns`, `grid.2xl.gutter`, `grid.2xl.margin`, `grid.lg.columns`, `grid.lg.gutter`, `grid.lg.margin`, `grid.md.columns`, `grid.md.gutter`, `grid.md.margin`, `grid.sm.columns`, `grid.sm.gutter`, `grid.sm.margin`, `grid.xl.columns`, `grid.xl.gutter`, `grid.xl.margin`
-- **motion** — `motion.delay.hide`, `motion.delay.min-show`, `motion.delay.show`, `motion.delay.skip`, `motion.distance.nudge`, `motion.duration-ms.0`, `motion.duration-ms.100`, `motion.duration-ms.1100`, `motion.duration-ms.1300`, `motion.duration-ms.1600`, `motion.duration-ms.200`, `motion.duration-ms.2600`, `motion.duration-ms.300`, `motion.duration-ms.40`, `motion.duration-ms.400`, `motion.duration-ms.50`, `motion.duration-ms.500`, `motion.duration-ms.800`, `motion.duration-ms.900`, `motion.duration-reduced.instant`, `motion.duration-reduced.long`, `motion.duration-reduced.longer`, `motion.duration-reduced.longest`, `motion.duration-reduced.moderate`, `motion.duration-reduced.normal`, `motion.duration-reduced.slow`, `motion.duration-reduced.slower`, `motion.duration-reduced.sweep`, `motion.duration.instant`, `motion.duration.long`, `motion.duration.longer`, `motion.duration.longest`, `motion.duration.moderate`, `motion.duration.normal`, `motion.duration.slow`, `motion.duration.slower`, `motion.easing-role.emphasized`, `motion.easing-role.exit`, `motion.easing.accelerate`, `motion.easing.calm`, `motion.easing.decelerate`, `motion.easing.expressive`, `motion.easing.linear`, `motion.easing.standard`, `motion.preset.crossfade.delay`, `motion.preset.crossfade.duration`, `motion.preset.crossfade.duration-reduced`, `motion.preset.crossfade.easing`, `motion.preset.crossfade.transition`, `motion.preset.draw.delay`, `motion.preset.draw.duration`, `motion.preset.draw.duration-reduced`, `motion.preset.draw.easing`, `motion.preset.draw.transition`, `motion.preset.expand.delay`, `motion.preset.expand.duration`, `motion.preset.expand.duration-reduced`, `motion.preset.expand.easing`, `motion.preset.expand.transition`, `motion.preset.fade.delay`, `motion.preset.fade.duration`, `motion.preset.fade.duration-reduced`, `motion.preset.fade.easing`, `motion.preset.fade.exit.delay`, `motion.preset.fade.exit.duration`, `motion.preset.fade.exit.duration-reduced`, `motion.preset.fade.exit.easing`, `motion.preset.fade.exit.transition`, `motion.preset.fade.transition`, `motion.preset.move.delay`, `motion.preset.move.duration`, `motion.preset.move.duration-reduced`, `motion.preset.move.easing`, `motion.preset.move.transition`, `motion.preset.pop.delay`, `motion.preset.pop.duration`, `motion.preset.pop.duration-reduced`, `motion.preset.pop.easing`, `motion.preset.pop.exit.delay`, `motion.preset.pop.exit.duration`, `motion.preset.pop.exit.duration-reduced`, `motion.preset.pop.exit.easing`, `motion.preset.pop.exit.transition`, `motion.preset.pop.transition`, `motion.preset.press.delay`, `motion.preset.press.duration`, `motion.preset.press.duration-reduced`, `motion.preset.press.easing`, `motion.preset.press.transition`, `motion.preset.reveal.delay`, `motion.preset.reveal.duration`, `motion.preset.reveal.duration-reduced`, `motion.preset.reveal.easing`, `motion.preset.reveal.exit.delay`, `motion.preset.reveal.exit.duration`, `motion.preset.reveal.exit.duration-reduced`, `motion.preset.reveal.exit.easing`, `motion.preset.reveal.exit.transition`, `motion.preset.reveal.transition`, `motion.preset.settle.delay`, `motion.preset.settle.duration`, `motion.preset.settle.duration-reduced`, `motion.preset.settle.easing`, `motion.preset.settle.exit.delay`, `motion.preset.settle.exit.duration`, `motion.preset.settle.exit.duration-reduced`, `motion.preset.settle.exit.easing`, `motion.preset.settle.exit.transition`, `motion.preset.settle.transition`, `motion.preset.state.delay`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `motion.preset.state.transition`, `motion.preset.step.delay`, `motion.preset.step.duration`, `motion.preset.step.duration-reduced`, `motion.preset.step.easing`, `motion.preset.step.transition`, `motion.preset.surface.delay`, `motion.preset.surface.duration`, `motion.preset.surface.duration-reduced`, `motion.preset.surface.easing`, `motion.preset.surface.exit.delay`, `motion.preset.surface.exit.duration`, `motion.preset.surface.exit.duration-reduced`, `motion.preset.surface.exit.easing`, `motion.preset.surface.exit.transition`, `motion.preset.surface.transition`, `motion.spring-duration.bouncy`, `motion.spring-duration.effects`, `motion.spring-duration.gentle`, `motion.spring-duration.snappy`, `motion.spring-easing.bouncy`, `motion.spring-easing.effects`, `motion.spring-easing.gentle`, `motion.spring-easing.snappy`, `motion.spring.bouncy`, `motion.spring.effects`, `motion.spring.gentle`, `motion.spring.snappy`, `motion.stagger`
+- **motion** — `motion.delay.hide`, `motion.delay.min-show`, `motion.delay.show`, `motion.delay.skip`, `motion.distance.nudge`, `motion.duration-ms.0`, `motion.duration-ms.100`, `motion.duration-ms.1100`, `motion.duration-ms.1300`, `motion.duration-ms.1600`, `motion.duration-ms.200`, `motion.duration-ms.2600`, `motion.duration-ms.300`, `motion.duration-ms.40`, `motion.duration-ms.400`, `motion.duration-ms.50`, `motion.duration-ms.500`, `motion.duration-ms.800`, `motion.duration-ms.900`, `motion.duration-reduced.instant`, `motion.duration-reduced.long`, `motion.duration-reduced.longer`, `motion.duration-reduced.longest`, `motion.duration-reduced.moderate`, `motion.duration-reduced.normal`, `motion.duration-reduced.slow`, `motion.duration-reduced.slower`, `motion.duration-reduced.sweep`, `motion.duration.instant`, `motion.duration.long`, `motion.duration.longer`, `motion.duration.longest`, `motion.duration.moderate`, `motion.duration.normal`, `motion.duration.slow`, `motion.duration.slower`, `motion.easing-role.emphasized`, `motion.easing-role.exit`, `motion.easing.accelerate`, `motion.easing.calm`, `motion.easing.decelerate`, `motion.easing.expressive`, `motion.easing.linear`, `motion.easing.standard`, `motion.preset.crossfade.delay`, `motion.preset.crossfade.duration`, `motion.preset.crossfade.duration-reduced`, `motion.preset.crossfade.easing`, `motion.preset.crossfade.transition`, `motion.preset.draw.delay`, `motion.preset.draw.duration`, `motion.preset.draw.duration-reduced`, `motion.preset.draw.easing`, `motion.preset.draw.transition`, `motion.preset.expand.delay`, `motion.preset.expand.duration`, `motion.preset.expand.duration-reduced`, `motion.preset.expand.easing`, `motion.preset.expand.transition`, `motion.preset.fade.delay`, `motion.preset.fade.duration`, `motion.preset.fade.duration-reduced`, `motion.preset.fade.easing`, `motion.preset.fade.exit.delay`, `motion.preset.fade.exit.duration`, `motion.preset.fade.exit.duration-reduced`, `motion.preset.fade.exit.easing`, `motion.preset.fade.exit.transition`, `motion.preset.fade.transition`, `motion.preset.move.delay`, `motion.preset.move.duration`, `motion.preset.move.duration-reduced`, `motion.preset.move.easing`, `motion.preset.move.transition`, `motion.preset.pop.delay`, `motion.preset.pop.exit.delay`, `motion.preset.pop.exit.duration`, `motion.preset.pop.exit.duration-reduced`, `motion.preset.pop.exit.easing`, `motion.preset.pop.exit.transition`, `motion.preset.pop.transition`, `motion.preset.press.delay`, `motion.preset.press.duration-reduced`, `motion.preset.press.transition`, `motion.preset.reveal.delay`, `motion.preset.reveal.duration`, `motion.preset.reveal.duration-reduced`, `motion.preset.reveal.easing`, `motion.preset.reveal.exit.delay`, `motion.preset.reveal.exit.duration`, `motion.preset.reveal.exit.duration-reduced`, `motion.preset.reveal.exit.easing`, `motion.preset.reveal.exit.transition`, `motion.preset.reveal.transition`, `motion.preset.settle.delay`, `motion.preset.settle.duration`, `motion.preset.settle.duration-reduced`, `motion.preset.settle.easing`, `motion.preset.settle.exit.delay`, `motion.preset.settle.exit.duration`, `motion.preset.settle.exit.duration-reduced`, `motion.preset.settle.exit.easing`, `motion.preset.settle.exit.transition`, `motion.preset.settle.transition`, `motion.preset.state.delay`, `motion.preset.state.transition`, `motion.preset.step.delay`, `motion.preset.step.duration`, `motion.preset.step.duration-reduced`, `motion.preset.step.easing`, `motion.preset.step.transition`, `motion.preset.surface.delay`, `motion.preset.surface.duration`, `motion.preset.surface.duration-reduced`, `motion.preset.surface.easing`, `motion.preset.surface.exit.delay`, `motion.preset.surface.exit.duration`, `motion.preset.surface.exit.duration-reduced`, `motion.preset.surface.exit.easing`, `motion.preset.surface.exit.transition`, `motion.preset.surface.transition`, `motion.spring-duration.bouncy`, `motion.spring-duration.effects`, `motion.spring-duration.gentle`, `motion.spring-duration.snappy`, `motion.spring-easing.bouncy`, `motion.spring-easing.effects`, `motion.spring-easing.gentle`, `motion.spring-easing.snappy`, `motion.spring.bouncy`, `motion.spring.effects`, `motion.spring.gentle`, `motion.spring.snappy`, `motion.stagger`
 - **opacity** — `opacity.0`, `opacity.10`, `opacity.100`, `opacity.20`, `opacity.30`, `opacity.40`, `opacity.5`, `opacity.50`, `opacity.60`, `opacity.70`, `opacity.80`, `opacity.90`
 - **radius** — `radius.3xl`, `radius.hairline`
 - **shadow** — `shadow.2xl`, `shadow.inset`, `shadow.md`, `shadow.sm`, `shadow.xs`

@@ -1022,7 +1022,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
+        "reduceMotion": "State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
       },
       "composition": {
         "composesWith": [
@@ -1354,7 +1354,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
+        "reduceMotion": "State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
       },
       "composition": {
         "composesWith": [
@@ -1679,7 +1679,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
+        "reduceMotion": "State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless."
       },
       "composition": {
         "composesWith": [
@@ -7844,9 +7844,9 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "A quick fade in on mount: opacity over `motion.duration.fast` on the `motion.easing-role.enter` curve. The host decides when to mount it.",
+        "enter": "A quick fade in on mount: opacity on the `motion.preset.pop` preset. The host decides when to mount it.",
         "exit": "none",
-        "reduceMotion": "The turn runs `motion.duration.spin` per turn, linear and infinite. Under prefers-reduced-motion it runs `motion.duration-reduced.spin` per turn instead — slower, never stopped. The enter fade stays, on `motion.duration-reduced.fast` — a change of opacity is not vestibular motion."
+        "reduceMotion": "The turn runs `motion.duration.spin` per turn, linear and infinite. Under prefers-reduced-motion it runs `motion.duration-reduced.spin` per turn instead — slower, never stopped. The enter fade stays, on `motion.preset.pop.duration-reduced` — a change of opacity is not vestibular motion."
       },
       "composition": {
         "composesWith": [],

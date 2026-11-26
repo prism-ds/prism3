@@ -307,16 +307,17 @@ const makeButton = (id: string, name: string, summary: string, description: stri
     'focus-ring': 'color.border.focus',
     'ring-width': 'focus.ring.width',
     'ring-offset': 'focus.ring.offset',
-    // THE MOTION, AS BINDINGS (#3408 Q146 A, after Q-MD4 A named them in prose). The state change (fill, border, ink,
-    // shadow) and the press both run on the ramp's `fast` step with the default curve: the brief's ~100–150ms, and
-    // prism3-motion R6 (a control's state change is `instant` or `fast`). Under reduced motion the color change keeps
-    // its reduced twin and the press scale resolves to none, so the press has no reduced binding. The press's 0.98
-    // MAGNITUDE is not a timing and no token holds it: it stays in `motion.reduceMotion` (OWNER DECISION on the PR).
-    'motion.state': 'motion.duration.fast',
-    'motion.state-easing': 'motion.easing-role.default',
-    'motion.state-reduced': 'motion.duration-reduced.fast',
-    'motion.press': 'motion.duration.fast',
-    'motion.press-easing': 'motion.easing-role.default',
+    // THE MOTION, AS BINDINGS (#3408 Q146 A, after Q-MD4 A named them in prose). Since the motion presets (#2857) they
+    // bind the presets the `hover` and `pressed` patterns name: the state change (fill, border, ink, shadow) on
+    // `motion.preset.state`, the press on `motion.preset.press`, both R6-quick by default (`fast` and `instant`). Under
+    // reduced motion the color change keeps the preset's reduced duration and the press scale resolves to none, so the
+    // press has no reduced binding. The press's 0.98 MAGNITUDE is not a timing and no token holds it: it stays in
+    // `motion.reduceMotion` (OWNER DECISION on the PR).
+    'motion.state': 'motion.preset.state.duration',
+    'motion.state-easing': 'motion.preset.state.easing',
+    'motion.state-reduced': 'motion.preset.state.duration-reduced',
+    'motion.press': 'motion.preset.press.duration',
+    'motion.press-easing': 'motion.preset.press.easing',
     // A flush button's padding (#2350): the zero step, bound rather than left a literal 0, so the designer reads
     // `space/0` on both sides and a brand cannot move it. Zero by meaning: a pinned icon sits at the edge.
     'inset.flush': 'space.0',
@@ -834,9 +835,9 @@ const makeButton = (id: string, name: string, summary: string, description: stri
   motion: {
     enter: 'none (present on mount)',
     exit: 'none',
-    // Q-MD4 A (#3555): the brief's ~100–150ms maps to motion.duration.fast. Since #3408 Q146 A the tokens are bound in
+    // Q-MD4 A (#3555): the brief's ~100–150ms maps to motion.duration.fast, now behind motion.preset.state. Since #3408 Q146 A the tokens are bound in
     // `tokens` (`motion.state*`, `motion.press*`), and `test.ts` holds the bindings; this prose names the same ones.
-    reduceMotion: 'State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.',
+    reduceMotion: 'State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.',
   },
 
   notes: {

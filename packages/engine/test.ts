@@ -45574,7 +45574,7 @@ arm: {
       `#3506: Button's container carries radius radius.md and stroke border-width.hairline (${JSON.stringify(bc.radius)}, ${JSON.stringify(bc.strokeWidth)})`);
     ok(JSON.stringify(bs?.focusRing) === JSON.stringify([{ part: 'container/focusRing', offset: 'focus.ring.offset', width: 'focus.ring.width', style: 'focus.ring.style' }]),
       `#3506: Button's focus ring is offset focus.ring.offset, width focus.ring.width, style focus.ring.style (${JSON.stringify(bs?.focusRing)})`);
-    ok(JSON.stringify(specsJson.components?.spinner?.motion) === JSON.stringify({ 'motion.turn': 'motion.duration.spin', 'motion.turn-reduced': 'motion.duration-reduced.spin', 'motion.enter': 'motion.duration.fast', 'motion.enter-reduced': 'motion.duration-reduced.fast', 'motion.enter-easing': 'motion.easing-role.enter' }),
+    ok(JSON.stringify(specsJson.components?.spinner?.motion) === JSON.stringify({ 'motion.turn': 'motion.duration.spin', 'motion.turn-reduced': 'motion.duration-reduced.spin', 'motion.enter': 'motion.preset.pop.duration', 'motion.enter-reduced': 'motion.preset.pop.duration-reduced', 'motion.enter-easing': 'motion.preset.pop.easing' }),
       `#3506: Spinner's motion is its five tokens, by binding (${JSON.stringify(specsJson.components?.spinner?.motion)})`);
   }
 }
@@ -45931,14 +45931,15 @@ arm: {
 // ---- #3408 Q146 A: BUTTON'S STATE TRANSITION AND PRESS BIND MOTION TOKENS ----
 //
 // The brief's ~100–150ms state change and the 0.98 press were prose (Q-MD4 A), so nothing could read or gate them. The
-// three Button defs now bind them in `tokens`. EXPECTED is typed here: the five bindings, and prism3-motion R6's rule
-// that a control's state change takes `instant` or `fast` (a literal set, not read from the skill or the ramp). ACTUAL
-// is each def's own `tokens`, and every bound path must resolve in every committed brand's emitted tree.
+// three Button defs now bind them in `tokens`, on the presets the `hover` and `pressed` patterns name (#2857). EXPECTED
+// is typed here: the five bindings, and prism3-motion R6's rule that a control's state change takes `instant` or `fast`
+// (a literal set, not read from the skill or the ramp), checked on the duration step each brand's preset points at.
+// ACTUAL is each def's own `tokens`, and every bound path must resolve in every committed brand's emitted tree.
 {
   const WANT: Record<string, string> = {
-    'motion.state': 'motion.duration.fast', 'motion.state-easing': 'motion.easing-role.default',
-    'motion.state-reduced': 'motion.duration-reduced.fast',
-    'motion.press': 'motion.duration.fast', 'motion.press-easing': 'motion.easing-role.default',
+    'motion.state': 'motion.preset.state.duration', 'motion.state-easing': 'motion.preset.state.easing',
+    'motion.state-reduced': 'motion.preset.state.duration-reduced',
+    'motion.press': 'motion.preset.press.duration', 'motion.press-easing': 'motion.preset.press.easing',
   };
   const R6 = new Set(['motion.duration.instant', 'motion.duration.fast']);
   const trees = readdirSync(resolve(HERE, 'out')).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f) && !f.includes('.base.'))
@@ -45947,10 +45948,16 @@ arm: {
     const tok = componentDefs.find((d) => d.id === id)?.tokens ?? {};
     const got = Object.fromEntries(Object.entries(tok).filter(([k]) => k.startsWith('motion.')));
     ok(JSON.stringify(got) === JSON.stringify(WANT), `#3408 Q146 A ${id}: binds the state transition and the press to motion tokens (${JSON.stringify(got)})`);
-    const slow = ['motion.state', 'motion.press'].filter((k) => !R6.has(tok[k]));
-    ok(slow.length === 0, `#3408 Q146 A ${id}: the state change and the press are R6-quick, instant or fast (${slow.map((k) => `${k} → ${tok[k]}`).join(', ') || 'both'})`);
-    ok(tok['motion.state-reduced'] === tok['motion.state']?.replace('motion.duration.', 'motion.duration-reduced.'),
-      `#3408 Q146 A ${id}: the reduced state change is the reduced twin of its duration (${tok['motion.state-reduced']} for ${tok['motion.state']})`);
+    // The step a preset's duration points at, per brand: `{<root>.motion.duration.fast}` → `motion.duration.fast`.
+    const stepOf = (t: any, ref: string) => {
+      const root = Object.keys(t)[0];
+      const v = ref.split('.').reduce((n: any, k) => n?.[k], t[root])?.$value;
+      return typeof v === 'string' ? v.replace(/^\{[^.]+\./, '').replace(/\}$/, '') : String(v);
+    };
+    const slow = trees.flatMap(({ f, t }) => ['motion.state', 'motion.press'].filter((k) => !R6.has(stepOf(t, tok[k]))).map((k) => `${k} → ${stepOf(t, tok[k])} in ${f}`));
+    ok(trees.length >= 4 && slow.length === 0, `#3408 Q146 A ${id}: the state change and the press are R6-quick, instant or fast, in every brand (${slow.slice(0, 3).join(', ') || 'both'})`);
+    ok(tok['motion.state-reduced'] === tok['motion.state']?.replace(/\.duration$/, '.duration-reduced'),
+      `#3408 Q146 A ${id}: the reduced state change is its preset's reduced duration (${tok['motion.state-reduced']} for ${tok['motion.state']})`);
     const unresolved = trees.flatMap(({ f, t }) => {
       const root = Object.keys(t)[0];
       return Object.values(got).filter((ref) => ref.split('.').reduce((n: any, k) => n?.[k], t[root])?.$value === undefined).map((ref) => `${ref} in ${f}`);
