@@ -80,6 +80,33 @@ pattern, play its tracks as listed, on their presets; the recipes below are thos
 | `fade/in`, `fade/out`, `hover`, `pressed`, `pressed/release` | Any element that fades, and any control's hover and press |
 
 
+## From plain words to a preset
+
+People describe motion loosely. Find the row that matches what they said and bind its token; don't ask
+for a number or translate one. When someone does name a number, bind the preset that does the job
+anyway: the brand's value may differ from the number asked for, and that's the point (R1).
+
+| Someone says | Bind | Why |
+|---|---|---|
+| "fade it in", "make it appear softly" | `motion.preset.fade` (pattern `fade/in`); it leaves on `motion.preset.fade.exit` | An opacity change, arriving. |
+| "the little pop when a popover or menu opens", "the bouncy thing" | `motion.preset.pop` (patterns `popover/open`, `tooltip/show`) | A small surface arriving quickly, from a little under full size (R10). It doesn't overshoot: `motion.spring.bouncy` is for a release a person drives (R4). |
+| "slide the dialog in", "bring up the sheet", "open the drawer" | `motion.preset.surface` (the `dialog/*` patterns) | A large surface arriving over the page. |
+| "open the section smoothly", "grow the height" | `motion.preset.expand` (patterns `accordion/expand`, `accordion/collapse`) | A height change in place, the R5 exception. |
+| "slide the underline across", "move the thumb over" | `motion.preset.move` (patterns `tabs/select`, `switch/toggle`, `segmented/select`) | A change of position within the layout. |
+| "swap one panel for the other", "dissolve between them" | `motion.preset.crossfade` | One thing replaced by another in the same place. |
+| "the color change on hover", "feedback when I check it" | `motion.preset.state` (pattern `hover`) | A small state change on a control (R6). |
+| "the button squishes when I press it" | `motion.preset.press` (pattern `pressed`); it lets go on `motion.preset.state` (pattern `pressed/release`) | A control pressed down. |
+| "content comes into view" | `motion.preset.reveal` | Content arriving as it's shown. |
+| "draw the line on" | `motion.preset.draw` | A line or stroke drawn in place. |
+| "go to the next slide" | `motion.preset.step` | A carousel advancing one item. |
+| "it lands", "it settles into place" | `motion.preset.settle` | A moved thing coming to rest. |
+| "the items cascade in one after another" | `motion.stagger`, each item on `motion.preset.fade` | Siblings in reading order (R11), with a cap (choreography, below). |
+| "wait a moment before the tooltip shows" | `motion.delay.show` | The wait before a tooltip or a busy indicator, so a quick result shows nothing. |
+| "let me fling it and have it spring back" | `motion.spring.snappy` | Motion a person's hand starts (R4). |
+
+If nothing in the table matches, read the preset descriptions in the `.ai.json` sidecar. If still
+nothing fits, say so in your report (R1).
+
 ## The rules
 
 **R1. Every timing is a token.** A duration, a delay, a curve or a spring is a reference to a
@@ -174,6 +201,44 @@ an anchor jump lands at once, and a chained sequence shows its last step on the 
 can't stand in for them.
 *Grounding:* owner decision Q-MP17 A (#2857); KB `18-motion-foundations`, the reduce-motion contract;
 WCAG 2.3.3.
+
+## Choreography: when several things move together
+
+A pattern already orders its own tracks. These rules cover what patterns don't: several elements, or
+several components, moving because of one change. Left alone, choreography grows by addition: a delay
+on every child, a panel that waits for its content, and a person who waits for the interface to finish.
+
+**C1. Cut moving parts first.** Before you give an element its own track, check that the change needs
+it. Keep the track that shows what changed and where it went; let everything else take its new state
+at once. Each moving part asks for the person's attention, so fewer parts read faster.
+
+**C2. Run the rest in parallel.** What's left starts at the same moment, each on its own preset, as a
+dialog's backdrop, panel and content do. Parallel tracks end close together because their presets
+share one duration ramp.
+
+**C3. Sequence only when the order carries meaning.** Three orders do: reading order (items in a list
+or grid, first to last), cause and effect (the control a person touched answers before what it
+opens), and arrival (room opens before what fills it, as a banner's space is reserved before it fades
+in). In a sequence, each element starts `motion.stagger` after the one before it, on its own preset,
+without waiting for that one to finish. Everything else runs in parallel (C2).
+
+**C4. A stagger uses the brand's tokens and has a cap.** Siblings start `motion.stagger` apart (R11),
+and the last staggered sibling starts no later than one `motion.preset.fade.duration` after the first.
+Siblings past that point arrive with the last staggered one, so a long list takes no longer to arrive
+than a short one. Both values are the brand's, so the cap moves with its tempo. `motion.delay.*` is
+for a tooltip's or a busy indicator's wait, not for ordering.
+
+**C5. Exits are shorter than entrances and don't wait on their children.** Every track of an exit
+binds its `.exit` half where one exists (R3), and all of them start at once: a panel closes while its
+content fades, never after, and a list leaves together instead of staggering out. The person who
+dismissed it has already moved on.
+
+**C6. What the person is working with stays still.** The control they pressed, the field they're
+typing in and the page behind a dialog don't move while the rest of the change plays. The backdrop
+dims the page; nothing on the page moves.
+
+Under reduced motion there is no stagger and no sequence: every element arrives at once on its own
+preset's `.duration-reduced`, and a chained sequence shows its last step (R12).
 
 ## Recipes
 

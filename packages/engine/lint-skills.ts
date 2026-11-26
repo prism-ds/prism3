@@ -1120,6 +1120,59 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/list, then get/i, /`list_components`/, /`get_component`/, /before you compose/i],
     resolve: [],
   },
+  // #4615 (owner direction, 2026-11-26): `prism3-motion` gets a choreography section and a plain-words-to-preset
+  // table, phrased only in Prism3 presets and tokens (`lint-motion-literals` holds the no-number half). One rule per
+  // choreography point, each held to its section, so dropping or moving any one fails by its own id.
+  {
+    id: '#4615 choreography: cut moving parts first',
+    skills: ['prism3-motion'],
+    section: '## Choreography',
+    roles: [],
+    must: [/\*\*C1\. Cut moving parts first\.\*\*/, /at once/i],
+    resolve: [],
+  },
+  {
+    id: '#4615 choreography: run the rest in parallel',
+    skills: ['prism3-motion'],
+    section: '## Choreography',
+    roles: [],
+    must: [/\*\*C2\. Run the rest in parallel\.\*\*/, /same moment/i],
+    resolve: [],
+  },
+  {
+    id: '#4615 choreography: sequence only when the order carries meaning',
+    skills: ['prism3-motion'],
+    section: '## Choreography',
+    roles: [],
+    must: [/\*\*C3\. Sequence only when the order carries meaning\.\*\*/, /reading order/i, /cause and effect/i, /arrival/i, /`motion\.stagger`/],
+    resolve: [],
+  },
+  {
+    id: '#4615 choreography: a stagger uses tokens and has a cap',
+    skills: ['prism3-motion'],
+    section: '## Choreography',
+    roles: [],
+    must: [/\*\*C4\. A stagger uses the brand's tokens and has a cap\.\*\*/, /`motion\.stagger`/, /no later than one `motion\.preset\.fade\.duration`/],
+    resolve: ['motion.stagger', 'motion.preset.fade.duration'],
+  },
+  {
+    id: "#4615 choreography: exits are shorter and don't wait on their children",
+    skills: ['prism3-motion'],
+    section: '## Choreography',
+    roles: [],
+    must: [/\*\*C5\. Exits are shorter than entrances and don't wait on their children\.\*\*/, /`\.exit` half/, /start at once/i],
+    resolve: [],
+  },
+  {
+    // The table is one block, so every row below must sit in it. `pop` is held beside "bouncy": the row that
+    // answers the issue's own example, and says the preset doesn't overshoot.
+    id: '#4615 plain words to a preset',
+    skills: ['prism3-motion'],
+    section: '## From plain words to a preset',
+    roles: [],
+    must: [/^\| Someone says \| Bind \| Why \|/m, /^\|[^\n]*bouncy[^\n]*`motion\.preset\.pop`[^\n]*\|/m, /^\|[^\n]*`motion\.preset\.surface`[^\n]*\|/m, /^\|[^\n]*`motion\.preset\.press`[^\n]*\|/m, /^\|[^\n]*`motion\.stagger`[^\n]*\|/m],
+    resolve: ['motion.preset.pop', 'motion.preset.surface', 'motion.preset.press', 'motion.stagger'],
+  },
 ];
 const blocks = (text: string): string[] => text.split(/\n(?=\s*\n|- |\d+\. )/);
 export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => string | undefined, color: Record<string, { avoid_when?: string }>, paths: Set<string>): Finding[] => {
