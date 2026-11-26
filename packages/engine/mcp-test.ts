@@ -811,6 +811,44 @@ await new Promise((r) => setTimeout(r, 3000));
     && !!fillValue && typeof fillValue === 'object' && (b.brand.modes as string[]).every((m: string) => /^#[0-9a-f]{6}$/i.test(fillValue[m] ?? '')),
     `#4467: with a pill brand, get_component binds radius.capsule (999px) where brand-neutral binds radius.md, and resolves the fill to a hex in every mode (neutral ${JSON.stringify(radiusOf(n))}, brand ${JSON.stringify(radiusOf(b))}, fill ${fill} → ${JSON.stringify(fillValue)})`);
 
+  // THE BRAND'S VALUES, held to an oracle outside mcp-components.ts (#4606 review; docs/34). The brand's own token tree,
+  // from `theme_brand include:["tokens"]`, walked by THIS file's alias resolution: the first mode's value is `$value`,
+  // every other mode's is `$extensions.prism3.modes.<mode>.$value`, and a `{…}` reference is followed to its leaf. Every
+  // color the button binds is compared in every mode, and every other value in the first mode. Three values are typed:
+  // the pill brand's primary is pinned at `primary.550`, so the rest fill is `#0065b4` in light; and two aliased sizes.
+  const tokenTree = (await server.call('theme_brand', { brand: pill, include: ['tokens'] })).structuredContent?.tokens ?? {};
+  const treeRoot = Object.keys(tokenTree).find((k) => !k.startsWith('$')) ?? '';
+  const brandModes: string[] = b.brand?.modes ?? [];
+  const node = (path: string): any => path.split('.').reduce((n: any, k) => n?.[k], tokenTree);
+  const resolveIn = (path: string, mode: string, hops = 0): unknown => {
+    const n = node(path);
+    if (!n || hops > 20) return undefined;
+    const v = mode === brandModes[0] ? n.$value : (n.$extensions?.prism3?.modes?.[mode]?.$value ?? n.$value);
+    const ref = typeof v === 'string' ? v.match(/^\{(.+)\}$/) : null;
+    return ref ? resolveIn(ref[1], mode, hops + 1) : v;
+  };
+  const values: Record<string, unknown> = b.values ?? {};
+  const colorRefs = Object.keys(values).filter((k) => k.startsWith('color.'));
+  const otherRefs = Object.keys(values).filter((k) => !k.startsWith('color.'));
+  const wrong: string[] = [];
+  for (const ref of colorRefs) for (const m of brandModes) {
+    const want = String(resolveIn(`${treeRoot}.${ref}`, m) ?? '').toLowerCase(), got = String((values[ref] as Record<string, string>)?.[m] ?? '').toLowerCase();
+    if (!want || got !== want) wrong.push(`${ref} ${m}: ${got || 'none'}, the brand's tokens say ${want || 'nothing'}`);
+  }
+  for (const ref of otherRefs) {
+    const want = JSON.stringify(resolveIn(`${treeRoot}.${ref}`, brandModes[0])), got = JSON.stringify(values[ref]);
+    if (want === undefined || got !== want) wrong.push(`${ref}: ${got}, the brand's tokens say ${want}`);
+  }
+  ok(treeRoot !== '' && brandModes.length > 1 && colorRefs.length >= 10 && otherRefs.length >= 5 && wrong.length === 0,
+    `#4467: with a brand, every value get_component gives the button matches the brand's own tokens: ${colorRefs.length} colors in ${brandModes.length} modes and ${otherRefs.length} other tokens (wrong: ${wrong.slice(0, 4).join('; ') || 'none'}${wrong.length > 4 ? ` and ${wrong.length - 4} more` : ''})`);
+  const typed: [string, unknown, unknown][] = [
+    ['color.interactive.primary.fill.rest (light), the pinned primary', (values['color.interactive.primary.fill.rest'] as Record<string, string> | undefined)?.light, '#0065b4'],
+    ['size.md.height', values['size.md.height'], '44px'],
+    ['space.200', values['space.200'], '16px'],
+  ];
+  const typedOff = typed.filter(([, got, want]) => got !== want).map(([what, got, want]) => `${what} is ${JSON.stringify(got)}, not ${JSON.stringify(want)}`);
+  ok(typedOff.length === 0, `#4467: with a brand, get_component resolves aliased tokens to their values, as typed here (${typedOff.join('; ') || 'all three'})`);
+
   // refusals, by name
   const unknown = await server.callJson('get_component', { id: 'carousel' });
   ok(unknown.isError && /no component has the id "carousel"/.test(unknown.payload?.error ?? ''),
@@ -838,12 +876,21 @@ await new Promise((r) => setTimeout(r, 3000));
   const ceiling = Number((desc('get_component').match(/At most ([\d,]+) characters/)?.[1] ?? 'NaN').replace(/,/g, ''));
   const over: string[] = [];
   let largest = 0;
+  const allWrong: string[] = [];
+  let allColors = 0, allOthers = 0;
   for (const id of catalogIds) for (const args of [{ id }, { id, brand: pill }]) {
     const r = await server.call('get_component', args);
     const chars = r.content?.[0]?.text?.length ?? Infinity;
     largest = Math.max(largest, chars);
     if (r.isError === true || chars > ceiling) over.push(`${id}${'brand' in args ? ' (brand)' : ''} ${r.isError ? 'refused' : chars.toLocaleString('en-US')}`);
+    // and, for the brand, every value it gives held to the brand's own tokens, as the button's are above
+    if ('brand' in args) for (const [ref, val] of Object.entries((r.structuredContent?.values ?? {}) as Record<string, unknown>)) {
+      if (ref.startsWith('color.')) { allColors++; for (const m of brandModes) { const want = String(resolveIn(`${treeRoot}.${ref}`, m) ?? '').toLowerCase(); if (!want || String((val as Record<string, string>)?.[m] ?? '').toLowerCase() !== want) allWrong.push(`${id} ${ref} ${m}`); } }
+      else { allOthers++; if (JSON.stringify(val) !== JSON.stringify(resolveIn(`${treeRoot}.${ref}`, brandModes[0]))) allWrong.push(`${id} ${ref}`); }
+    }
   }
+  ok(allColors >= 300 && allOthers >= 300 && allWrong.length === 0,
+    `#4467: with a brand, every component's values match the brand's own tokens: ${allColors} colors in ${brandModes.length} modes and ${allOthers} other tokens (wrong: ${allWrong.slice(0, 6).join(', ') || 'none'}${allWrong.length > 6 ? ` and ${allWrong.length - 6} more` : ''})`);
   ok(ceiling === 25_000 && over.length === 0,
     `#4467: every component's get_component result, brand-neutral and for a brand, is at most the 25,000 characters its description states (stated ${Number.isNaN(ceiling) ? 'nothing' : ceiling.toLocaleString('en-US')}; largest ${largest.toLocaleString('en-US')}; over: ${over.join(', ') || 'none'})`);
 }

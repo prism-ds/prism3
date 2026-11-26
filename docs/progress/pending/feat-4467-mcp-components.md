@@ -26,3 +26,8 @@
 - the list's stated size within 15%, and every component, neutral and for a brand, at or under the ceiling its description states.
 
 Dropping a def from the list fails by its id.
+
+**After review.** The review (CHANGES at `4d3ac099`) found `mcp-test` checked a brand's colors only by format: every color resolved to the page background, or an alias left as its `{…}` reference, passed.
+- **The oracle now:** `mcp-test` holds every value `get_component` gives, for every component with a brand, to the brand's own token tree from `theme_brand include:["tokens"]`, walked by the test's own alias resolution: each color in every mode, and every other token in the first mode. It also types three values: the pinned primary `#0065b4`, `size.md.height` → `44px`, and `space.200` → `16px`.
+- **The defect it found:** a translucent color lost its alpha. `color.interactive.primary.overlay.hover` came back `#000000` where the tokens say `#0000001a`; `field.fill` and the subtle fills likewise. `resolveAllModes` gives a role's opaque `hex`. The value now keeps the alpha as the tree writes it: a translucent palette leaf as it is, and an alpha a role applies, quantized by `emittedAlpha`.
+- **Measured:** 651 colors in 4 modes and 714 other values across the 74 components match.

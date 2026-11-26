@@ -10,8 +10,9 @@
  * WITH A BRAND, `get_component` builds the entry the way a brand's export does: the def resolved against the brand's
  * component settings (`brandMaterializer`), so its token NAMES are the ones this brand binds (a pill brand's Button
  * binds `radius.capsule`, not `radius.md`). Then it adds `values`: each named token's value for that brand, a color's
- * hex in every mode (`resolveAllModes`, the resolver `score_consumption` checks contrast with) and any other token's
- * value at the end of its alias chain (`deref`). A composite (a text style) has no single value, so it is named only.
+ * hex in every mode (`resolveAllModes`, the resolver `score_consumption` checks contrast with; a translucent role's
+ * alpha appended, as the token tree writes it) and any other token's
+ * value at the end of its alias chain (`deref`). A color's hex is its palette leaf's, so an alpha survives. A composite (a text style) has no single value, so it is named only.
  * WITHOUT A BRAND, the answer is brand-neutral: token names only, at the default settings.
  *
  * MOTION: the def's prose, its `motion.*` bindings, and its patterns (#4601): each pattern it names, with the tracks
@@ -22,6 +23,7 @@ import type { ComponentDef } from './component-schema';
 import type { ComponentSpec } from './component-specs';
 import { exportComponentDefs } from './component-defs-export';
 import { resolveAllModes } from './modes';
+import { emittedAlpha } from './color';
 import { at, deref } from './tree';
 import { MOTION_PATTERNS, type MotionPattern } from './motion-patterns';
 
@@ -94,7 +96,18 @@ export const getComponent = (defs: readonly ComponentDef[], id: string, brand?: 
   let values: Record<string, unknown> | undefined;
   if (brand) {
     const colors = new Map<string, Record<string, string>>();
-    for (const m of resolveAllModes(brand.theme)) for (const [role, r] of Object.entries(m.roles)) if (r?.hex) (colors.get(role) ?? colors.set(role, {}).get(role)!)[m.mode] = r.hex;
+    // A translucent role keeps its alpha, as the token tree writes it: a translucent palette leaf (`transparent`, an
+    // `*-alpha.*` step) as the leaf is, and an alpha a role applies to an opaque leaf (a subtle fill) quantized by
+    // `emittedAlpha`. So an overlay is `#0000001a`, not the opaque `#000000` its `hex` alone names.
+    for (const m of resolveAllModes(brand.theme)) for (const [role, r] of Object.entries(m.roles)) {
+      if (!r?.hex) continue;
+      // a palette leaf that already carries its alpha (`transparent`, the `*-alpha.*` ramps) is read as the tree has it
+      const leaf = r.path ? at(brand.tree, r.path)?.$value : undefined;
+      const a = (r as { alpha?: number }).alpha;
+      const hex = typeof leaf === 'string' && /^#[0-9a-f]{8}$/i.test(leaf) ? leaf
+        : a !== undefined && a < 1 ? `${r.hex}${Math.round(emittedAlpha(a, 'hex') * 255).toString(16).padStart(2, '0')}` : r.hex;
+      (colors.get(role) ?? colors.set(role, {}).get(role)!)[m.mode] = hex;
+    }
     values = {};
     for (const ref of named) { const v = valueOf(ref, brand.tree, brand.theme.root, colors); if (v !== undefined) values[ref] = v; }
   }
