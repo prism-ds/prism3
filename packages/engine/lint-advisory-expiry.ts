@@ -107,9 +107,10 @@
  * the run says so on its first line, so a bypass is visible in the log rather than silent.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../..');
@@ -256,10 +257,7 @@ const FORM_SAMPLES: { label: string; text: string }[] = [
 // Guarded, so the predicates above can be imported and exercised without a filesystem scan and a
 // `process.exit` happening as a side effect of the import. The self-checks are deliberately OUTSIDE
 // the guard, same as `verify.ts`: an importer gets a broken detector reported, not inherited.
-const isMain = (() => {
-  try { return !!process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]); }
-  catch { return false; }
-})();
+const isMain = isEntry(import.meta.url);
 
 const main = (): never => {
   const injected = process.env.PRISM3_TODAY;

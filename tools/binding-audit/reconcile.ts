@@ -81,6 +81,7 @@
  * a self-check the author runs, not a wired gate — the gate count stays 60.
  */
 import { readFileSync } from 'node:fs';
+import { isEntry } from '../../packages/engine/entry-point';
 import { componentDefs } from '../../packages/engine/components/index';
 import type { ComponentDef } from '../../packages/engine/component-schema';
 import { buildLedger, type BindField, type Ledger } from './ledger';
@@ -657,8 +658,8 @@ const selftest = (): void => {
 };
 
 // ── ENTRY (guarded so `audit.ts` can import runReconcile without triggering this main) ─────────────
-const isEntry = !!process.argv[1] && /reconcile\.ts$/.test(process.argv[1]);
-if (isEntry) {
+const isMain = isEntry(import.meta.url);
+if (isMain) {
   if (process.argv.includes('--selftest')) {
     selftest();
   } else {

@@ -100,7 +100,7 @@ import { ICON_NAMES, ICON_PATHS, ICON_FILL_RULES, ICON_VIEWBOX } from './icon-gl
 import { PROVIDER_LOGO_BOXES, PROVIDER_LOGO_DOCUMENTS } from './provider-logo-glyphs';
 import { makeTextField } from './components/text-field';
 import { canonicalShape, GlyphPathError } from './glyph-shape';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { hexToAnchor, formatAnchor, HEX_ANCHOR } from './hex-anchors';
 import { spawnSync } from 'node:child_process';
@@ -108,6 +108,7 @@ import { readListing } from './files-listing';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isEntry } from './entry-point';
 import { resolve, dirname, join, relative } from 'node:path';
 // #1946 5b C: what a design.md round trip owes back: the brand as sent, plus `surfaces.<name>` as {} for each custom mode
 // with none (the export writes the key so an import can tell a file written before #1946). Typed here, not imported.
@@ -169,7 +170,13 @@ if (!import.meta.url.endsWith('?cov')) {
   await session.post('Profiler.startPreciseCoverage', { callCount: false, detailed: true });
   await import(`${import.meta.url}?cov`);
   // #1870's fixture, measured by the same session: a `break`-skipped block with sites after a nested range.
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'prism3-1870-'));
+  // #4586: the fixture is reached THROUGH A SYMLINK on every OS, then resolved. V8 reports a module under its real
+  // path, and macOS's temp root sits behind a symlink (/var → /private/var), so a fixture kept as the link's path
+  // never matched its own coverage entry. Making the link here means Linux CI holds the resolve too.
+  const fixtureReal = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-1870-'));
+  const fixtureLink = `${fixtureReal}-link`;
+  symlinkSync(fixtureReal, fixtureLink, 'dir');
+  const fixtureDir = realpathSync(fixtureLink);
   const fixtureFile = join(fixtureDir, 'fixture.mjs');
   writeFileSync(fixtureFile, [
     'const chk = () => {};', 'const x = false, a = 1, b = 2, c = 3;',
@@ -245,6 +252,7 @@ if (!import.meta.url.endsWith('?cov')) {
     const fx = result.find((r) => r.url === pathToFileURL(fixtureFile).href);
     const fxSrc = readFileSync(fixtureFile, 'utf8');
     rmSync(fixtureDir, { recursive: true, force: true });
+    rmSync(fixtureLink, { force: true });
     if (!fx) siteFails.push('#1870 the coverage fixture reported no coverage — the self-check measured nothing');
     else {
       const fxCount = makeCountAt(fxSrc, fx.functions.flatMap((fn) => fn.ranges));
@@ -3842,7 +3850,7 @@ for (const b of brands) {
       const root = Object.keys(tr).find((k) => !k.startsWith('$'))!;
       for (const g of Object.keys(tr[root]?.type ?? {})) typeLeaves(tr[root].type[g], g);
     }
-    const pageDir = mkdtempSync(join(tmpdir(), 'prism3-tokens-html-'));
+    const pageDir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-tokens-html-'));
     let page = '';
     try {
       const r = spawnSync('npx', ['tsx', resolve(HERE, 'visualize.ts'), '--out', pageDir], { cwd: HERE, encoding: 'utf8' });
@@ -10375,7 +10383,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
   // import of `aliasRows`; regen was the one module that never got it.
   {
     const src = readFileSync(new URL('./regen.ts', import.meta.url), 'utf8');
-    const guard = src.indexOf('resolve(process.argv[1]) === fileURLToPath(import.meta.url)');
+    const guard = src.indexOf('isEntry(import.meta.url)');
     const dispatch = src.indexOf("process.argv.includes('--check')");
     ok(guard !== -1 && dispatch > guard,
       '[#349] regen.ts guards its CLI dispatch behind an entry-point check — importing it for the ARTIFACTS constants must not regenerate');
@@ -10389,7 +10397,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
     const restoreTree = (regenModule as Record<string, unknown>).restoreTree as ((snap: string, live: string) => void) | undefined;
     ok(typeof restoreTree === 'function', '#2029: regen.ts exports restoreTree, the in-place restore --check uses');
     if (typeof restoreTree === 'function') {
-      const root = mkdtempSync(join(tmpdir(), 'prism3-2029-'));
+      const root = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-2029-'));
       try {
         const snap = join(root, 'snap'), live = join(root, 'live');
         const put = (dir: string, rel: string, body: string, mtimeS: number) => {
@@ -10462,7 +10470,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
     const dir = new URL('./', import.meta.url);
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
     const sources = new Map(files.map((f) => [f, readFileSync(new URL(`./${f}`, dir), 'utf8')]));
-    const GUARD = 'resolve(process.argv[1]) === fileURLToPath(import.meta.url)';
+    const GUARD = 'isEntry(import.meta.url)';
     const offenders: string[] = [];
     let scanned = 0;
     for (const [f, src] of sources) {
@@ -10483,6 +10491,134 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
     // Shape 9: if the scan stops finding scripts of this shape, it is measuring an empty set. The
     // engine has many; a collapse to zero means the detection moved, not that the repo got tidy.
     ok(scanned >= 5, `[#988] the import-safety scan still finds scripts of the risky shape to check (${scanned})`);
+  }
+  // #4583 / #4586 — A SYMLINKED PATH DECIDES NOTHING. macOS's temp root sits behind a symlink (/var → /private/var,
+  // and /tmp → /private/tmp), and two things broke on it while Linux CI, whose temp root is real, saw nothing:
+  //   #4583, the entry guard. `resolve(process.argv[1]) === fileURLToPath(import.meta.url)` compares the path as typed
+  //     with the path V8 loaded, its real one; through a symlink they differ, so the script skipped its whole check and
+  //     exited 0. `isEntry` (`entry-point.ts`) compares the real paths of both.
+  //   #4586, the temp root. `tmpdir()` is the root as the environment spells it, so a path made under it never matched
+  //     a path the runtime reports (a module URL, a resolved package): the #1870 fixture below, and `check-package.mjs`.
+  //     Every temp root is taken as `realpathSync(tmpdir())`.
+  // These arms MAKE their own symlink, so the class is reproduced on Linux too, not only on a Mac.
+  {
+    const repo4583 = resolve(fileURLToPath(new URL('./', import.meta.url)), '..', '..');
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-4583-'));
+    const realDir = join(root, 'real'), linkDir = join(root, 'link'), otherDir = join(root, 'other');
+    mkdirSync(realDir); mkdirSync(otherDir); symlinkSync(realDir, linkDir, 'dir');
+    try {
+      const helper = new URL('./entry-point.ts', import.meta.url).href;
+      const self = join(realDir, 'guarded.ts');
+      writeFileSync(self, `import { isEntry } from ${JSON.stringify(helper)};\nif (isEntry(import.meta.url)) console.log('BODY RAN');\n`);
+      writeFileSync(join(otherDir, 'guarded.ts'), 'export {};\n');
+      const url = pathToFileURL(self).href;
+      const viaLink = join(linkDir, 'guarded.ts');
+      // Each in-process probe is wrapped (#4602 review nit): a guard that throws where it should answer records as THIS
+      // arm's failure, by name, instead of aborting the suite and taking every later assertion with it.
+      const probe = (argv1: string | undefined): boolean | string => {
+        try { return isEntry(url, argv1); } catch (e) { return `threw: ${(e as Error).message.slice(0, 120)}`; }
+      };
+      // the old guard, as it was written, on the same two paths: the oracle for "this is the case that used to skip"
+      const oldGuard = resolve(viaLink) === fileURLToPath(url);
+      ok(probe(viaLink) === true && !oldGuard,
+        `#4583: isEntry reads a run through a symlinked directory as the entry point, where the old guard read it as not and skipped the check (isEntry ${probe(viaLink)}, old guard ${oldGuard})`);
+      ok(probe(self) === true && probe(undefined) === false && probe(join(root, 'missing.ts')) === false && probe(join(repo4583, 'package.json')) === false,
+        `#4583: isEntry is true for the file by its own path, and false with no argv[1], for a file that does not exist, and for another file (${JSON.stringify([probe(self), probe(undefined), probe(join(root, 'missing.ts')), probe(join(repo4583, 'package.json'))])})`);
+      // #4602 review: the extension left off. node and tsx load `guarded` as `guarded.ts`, but argv[1] stays the
+      // extensionless path, which names no file; read as "does not exist", it skipped the check and exited 0.
+      const bare = join(realDir, 'guarded'), bareViaLink = join(linkDir, 'guarded');
+      ok(probe(bare) === true && probe(bareViaLink) === true && probe(join(root, 'missing')) === false,
+        `#4602: isEntry reads a run with the extension left off as the entry point, directly and through a symlink, and still false for a name with no file (${JSON.stringify([probe(bare), probe(bareViaLink), probe(join(root, 'missing'))])})`);
+      let threw = '';
+      try { isEntry(url, join(otherDir, 'guarded.ts')); } catch (e) { threw = (e as Error).message; }
+      let threwBare = '';
+      try { isEntry(url, join(otherDir, 'guarded')); } catch (e) { threwBare = (e as Error).message; }
+      const NAMED = /^entry guard \(#4583\): node was started with .*, which has this module's name but is not this module/;
+      ok(NAMED.test(threw) && NAMED.test(threwBare),
+        `#4583: a run of a DIFFERENT file with this module's name throws by name rather than skip the check, with or without its extension (threw ${JSON.stringify(threw.slice(0, 90))}; extensionless ${JSON.stringify(threwBare.slice(0, 90))})`);
+      // the whole path, in a child: V8 loads the real file while argv[1] is the link's path
+      const child = spawnSync(process.execPath, [...process.execArgv, viaLink], { cwd: repo4583, encoding: 'utf8' });
+      ok(child.status === 0 && child.stdout.includes('BODY RAN'),
+        `#4583: a guarded file run through a symlinked directory runs its body (exit ${child.status}, stdout ${JSON.stringify(child.stdout.trim())}, stderr ${JSON.stringify((child.stderr ?? '').trim().slice(0, 160))})`);
+      // a REAL gate, through a symlink to this repo: the replay #4583 found failing (`lint-push-base` runs it this way)
+      const repoLink = join(root, 'repo');
+      symlinkSync(repo4583, repoLink, 'dir');
+      const gate = spawnSync(process.execPath, [...process.execArgv, join(repoLink, 'packages/engine/shadcn-vars.ts'), '--check'], { cwd: repo4583, encoding: 'utf8' });
+      ok(gate.status === 0 && /✓ projection variable sets/.test(gate.stdout),
+        `#4583: shadcn-vars.ts --check, run through a symlink to the repo, runs its check rather than exit 0 having run nothing (exit ${gate.status}, ${gate.stdout.trim() ? 'printed its result' : 'PRINTED NOTHING'})`);
+      // #4602 review: a REAL gate with its extension left off, the reviewer's own replay. `token-contract` decided by a
+      // `/token-contract\.ts$/` test of argv[1] and printed nothing; it now decides by `isEntry`.
+      const bareGate = spawnSync(process.execPath, [...process.execArgv, join(repo4583, 'packages/engine/token-contract'), '--check'], { cwd: repo4583, encoding: 'utf8' });
+      ok(bareGate.status === 0 && /✓ token contract unchanged/.test(bareGate.stdout),
+        `#4602: token-contract --check, run with its extension left off, runs its check rather than exit 0 having run nothing (exit ${bareGate.status}, ${bareGate.stdout.trim() ? 'printed its result' : 'PRINTED NOTHING'}${bareGate.stderr ? `, stderr ${JSON.stringify(bareGate.stderr.trim().slice(0, 120))}` : ''})`);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+
+    // THE SCAN: no copy of the old guard and no unresolved temp root comes back. Over every script git tracks under
+    // packages/, apps/, tools/ and verify.ts (`.claude/hooks/`, `docs/superpowers/` and shell scripts are not engine
+    // checks, and are left out by name).
+    const tracked = spawnSync('git', ['ls-files', 'packages', 'apps', 'tools', 'verify.ts'], { cwd: repo4583, encoding: 'utf8' }).stdout
+      .split('\n').filter((f) => /\.(ts|mts|mjs|js|cjs)$/.test(f) && !/(^|\/)(node_modules|dist|release|release-offline)\//.test(f));
+    // THE GUARD RULE (#4602 review). A `.ts` entry point decides by `isEntry` alone, so outside `entry-point.ts` a `.ts`
+    // line that reads `process.argv[1]` is its own guard, whatever its shape: the old comparison, the same comparison
+    // split over two lines (the URL on the line above), or a `/name\.ts$/` test, which a run with the extension left
+    // off never matches. A plain-node `.mjs` or `.js` cannot import the `.ts` helper; its guard must compare real paths
+    // on the line that reads argv[1] (and such a file run without its extension fails to load, loudly). This file is
+    // left out of the guard rule by name, and only that rule: it quotes the old shapes as data, and nothing guards it.
+    // Its temp roots are scanned like any other file's.
+    // THE TEMP-ROOT RULE: any `tmpdir()` call, bare or namespace-qualified (`os.tmpdir()`), unless it is the argument of
+    // `realpathSync(`.
+    const scanSource = (f: string, src: string) => {
+      const out = { badGuards: [] as string[], badTmp: [] as string[], guards: 0, roots: 0 };
+      const ts = /\.(ts|mts|cts)$/.test(f);
+      // A match inside a string literal is prose about the guard, not a guard (an odd count of quotes before it).
+      const inString = (line: string, at: number): boolean => (line.slice(0, at).match(/['"`]/g) ?? []).length % 2 === 1;
+      src.split('\n').forEach((line, i) => {
+        if (/^\s*(\*|\/\/|\/\*)/.test(line)) return;
+        if (/\bisEntry\((?:import\.meta\.url)?\)/.test(line) && !/(?:const|function) isEntry\b/.test(line)) out.guards++;
+        const argv = [...line.matchAll(/process\.argv\[1\]/g)].filter((m) => !inString(line, m.index!));
+        if (argv.length && f !== 'packages/engine/entry-point.ts' && f !== 'packages/engine/test.ts'
+          && (ts || !/realpathSync\(process\.argv\[1\]\)[^;]*===[^;]*realpathSync\(|realpathSync\([^;]*===[^;]*realpathSync\(process\.argv\[1\]\)/.test(line))) out.badGuards.push(`${f}:${i + 1}`);
+        for (const m of line.matchAll(/(?<![\w$'"`.])(?:[A-Za-z_$][\w$]*\.)?tmpdir\(\)/g)) {
+          if (inString(line, m.index!)) continue;
+          if (line.slice(Math.max(0, m.index! - 'realpathSync('.length), m.index) === 'realpathSync(') out.roots++;
+          else out.badTmp.push(`${f}:${i + 1}`);
+        }
+      });
+      return out;
+    };
+    // The scan judges planted sources first, with verdicts typed here (docs/34): the reviewer's two blind spots (M2, a
+    // namespace-qualified temp root; M3, the old guard over two lines) and the regex guard must be named, and the
+    // shapes that are right must not be.
+    const planted: [string, string, string, 'guard' | 'tmp' | 'clean'][] = [
+      ['M2: os.tmpdir(), namespace-qualified', 'x.ts', "import * as os from 'node:os';\nconst d = mkdtempSync(join(os.tmpdir(), 'p-'));", 'tmp'],
+      ['M3: the old guard split over two lines', 'x.ts', "const SELF = fileURLToPath(import.meta.url);\nif (process.argv[1] && resolve(process.argv[1]) === SELF) main();", 'guard'],
+      ['a name test of argv[1]', 'x.ts', "if (process.argv[1] && /x\\.ts$/.test(process.argv[1])) main();", 'guard'],
+      ['a bare tmpdir()', 'x.ts', "const d = join(tmpdir(), 'p-');", 'tmp'],
+      ['an .mjs guard comparing unresolved paths', 'x.mjs', "const isMain = process.argv[1] === fileURLToPath(import.meta.url);", 'guard'],
+      ['isEntry, and a resolved os.tmpdir()', 'x.ts', "if (isEntry(import.meta.url)) main();\nconst d = join(realpathSync(os.tmpdir()), 'p-');", 'clean'],
+      ['argv[1] named inside a string', 'x.ts', "const why = 'reads process.argv[1] to tell a run from an import';", 'clean'],
+      ['an .mjs guard comparing real paths', 'x.mjs', "try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }", 'clean'],
+    ];
+    const plantedOff = planted.filter(([, f, src, want]) => {
+      const r = scanSource(f, src);
+      const got = r.badGuards.length ? 'guard' : r.badTmp.length ? 'tmp' : 'clean';
+      return got !== want;
+    }).map(([label, , , want]) => `${label} (want ${want})`);
+    ok(plantedOff.length === 0,
+      `#4602: the scan names each planted old shape, the namespace-qualified temp root and the split guard among them, and passes the right ones${plantedOff.length ? ` — wrong: ${plantedOff.join('; ')}` : ''}`);
+    const badGuards: string[] = [], badTmp: string[] = [];
+    let guards = 0, roots = 0;
+    for (const f of tracked) {
+      const r = scanSource(f, readFileSync(join(repo4583, f), 'utf8'));
+      badGuards.push(...r.badGuards); badTmp.push(...r.badTmp); guards += r.guards; roots += r.roots;
+    }
+    ok(badGuards.length === 0,
+      `#4583: every entry guard compares real paths (isEntry, or realpathSync on both sides), none the typed argv[1] with the loaded URL${badGuards.length ? ` — ${badGuards.slice(0, 6).join(', ')}${badGuards.length > 6 ? ` and ${badGuards.length - 6} more` : ''}` : ''}`);
+    ok(badTmp.length === 0,
+      `#4586: every temp root is resolved, realpathSync(tmpdir()), never the root as the environment spells it${badTmp.length ? ` — ${badTmp.slice(0, 6).join(', ')}${badTmp.length > 6 ? ` and ${badTmp.length - 6} more` : ''}` : ''}`);
+    // Floors (docs/34 shape 9): the scan reads the corpus it was written against.
+    ok(tracked.length >= 500 && guards >= 30 && roots >= 50,
+      `#4583/#4586: the scan reads ${tracked.length} scripts, ${guards} isEntry guards and ${roots} resolved temp roots (floors 500, 30, 50)`);
   }
   // Reading/UI text is the boundary the preset exists to respect — it must NOT move.
   for (const scale of ['compact', 'expressive'] as const) {
@@ -10524,7 +10660,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
       };
       // #4371: the checks run with the temp root pointed at a PRIVATE directory, and the count reads only that, so
       // another `regen --check` on the machine (its own `prism3-regen-*` in the shared tmpdir) is not counted.
-      const sharedTmp = tmpdir();
+      const sharedTmp = realpathSync(tmpdir());
       const privateTmp = mkdtempSync(join(sharedTmp, 'prism3-4371-'));
       const temps = (): number => readdirSync(privateTmp).filter((f) => f.startsWith('prism3-regen-')).length;
       const neighbor4371 = join(sharedTmp, `prism3-regen-4371-neighbor-${process.pid}`);
@@ -10532,7 +10668,7 @@ ok(tBrand('eb', {}).typography.composites.find((c) => c.group === 'eyebrow')?.te
       const envWas = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP };
       try {
         for (const k of Object.keys(envWas)) process.env[k] = privateTmp;
-        ok(tmpdir() === privateTmp, `#4371: the regen --check arms run under a private temp root (tmpdir() is ${tmpdir()})`);
+        ok(realpathSync(tmpdir()) === privateTmp, `#4371: the regen --check arms run under a private temp root (tmpdir() is ${tmpdir()})`);
         const quiet = join(stubs, 'quiet.ts'), rewrite = join(stubs, 'rewrite.ts'), fail = join(stubs, 'fail.ts');
         writeFileSync(quiet, 'export {};\n');
         writeFileSync(rewrite, "import { appendFileSync } from 'node:fs';\nappendFileSync(process.argv[2], '\\n');\n");
@@ -12012,7 +12148,7 @@ arm: {
     try { conv = standardToBrandInput(parseStandardDesignMd(brief2678)); } catch { /* recorded below */ }
     ok(!!conv && conv.xWarnings?.join(' | ') === "x-prism3: ignored unknown setting 'controlShape' | x-prism3: ignored unknown setting 'linkPalette'" && conv.xApplied.join(' | ') === 'root=uk',
       `#2678 unknown keys: each unknown x-prism3 key is warned by name, in file order, and the known one still applies (warnings ${JSON.stringify(conv?.xWarnings)}; applied ${JSON.stringify(conv?.xApplied)})`);
-    const dir2678 = mkdtempSync(join(tmpdir(), 'p3-2678-'));
+    const dir2678 = mkdtempSync(join(realpathSync(tmpdir()), 'p3-2678-'));
     try {
       const file = join(dir2678, 'unknown-keys.design.md');
       writeFileSync(file, brief2678);
@@ -33044,7 +33180,7 @@ arm: {
   // recorded version is the only variable, with that version set to a literal chosen here. The first run
   // is the control — at CONTRACT_VERSION it must pass, or a failure below proves nothing about the number.
   {
-    const dir = mkdtempSync(join(tmpdir(), 'prism3-contract-'));
+    const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-contract-'));
     const fixture = join(dir, 'token-contract.json');
     const runCli = (mode: '--check' | '--accept', recorded: string, extra: Record<string, unknown> = {}) => {
       const bytes = JSON.stringify({ ...live, contractVersion: recorded, ...extra }, null, 2) + '\n';
@@ -33215,7 +33351,7 @@ arm: {
     ok(exDefs.engineVersion === ENGINE_VERSION && exDefs.build === want,
       `version: export_theme's component-defs.json carries the build identity (#3698 R1) — expected ${want}, got ${exDefs.build}`);
     // The CLI, as a user runs it: a brief in, the tree and the defs export out.
-    const cliOut = mkdtempSync(join(tmpdir(), 'prism3-cli-build-'));
+    const cliOut = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-cli-build-'));
     try {
       const r = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), resolve(HERE, 'examples', 'harbor.design.md'), '--out', cliOut, '--component-specs'], { cwd: HERE, encoding: 'utf8' });
       // `<id>.tokens.json` is the whole tree; the base and overlay projections beside it carry no generator block.
@@ -40404,7 +40540,7 @@ arm: {
 //        m5 folds all four (newest merge first: Bravo, Alpha, Pre two, Pre one).
 // Every expected line below is a literal, line numbers included: heading k of a fold sits at line 3 + 4k.
 {
-  const scratch = mkdtempSync(join(tmpdir(), 'prism3-progress-order-'));
+  const scratch = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-progress-order-'));
   const scrubbed = (extra: Record<string, string>): NodeJS.ProcessEnv => {
     const env: NodeJS.ProcessEnv = {};
     for (const [k, v] of Object.entries(process.env)) if (!k.startsWith('GIT_') && !k.startsWith('GITHUB_')) env[k] = v;
@@ -40581,7 +40717,7 @@ arm: {
 // their call · the `ahead` test inverted (the ordinary-PR control).
 {
   const REPO = resolve(HERE, '..', '..');
-  const work = mkdtempSync(join(tmpdir(), 'prism3-integration-base-'));
+  const work = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-integration-base-'));
   const clone = join(work, 'r');
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(process.env)) if (!k.startsWith('GIT_') && !k.startsWith('GITHUB_')) env[k] = v;
@@ -40860,7 +40996,7 @@ arm: {
   const runner = readFileSync(join(resolve(HERE, '..', '..'), 'run-suites.ts'), 'utf8');
   const broken = runner.replace(/(export const countOf = \(stdout: string\): number \| null => \{)/, '$1\n  return 99999;');
   ok(broken !== runner, '#4197: the mutation (countOf returns 99999) applies to run-suites.ts — the anchor still matches');
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-4197-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-4197-'));
   try {
     const app = join(dir, 'app');
     mkdirSync(app);
@@ -46559,7 +46695,7 @@ const MIN_ASSERTIONS = 1800;
 // 4,000 lines (~150 KiB) overfill it. The old way of printing must lose lines here (else this harness reproduces
 // nothing), `printListing` must not, and `readListing` must name each loss rather than hand back what arrived.
 {
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-files-listing-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-files-listing-'));
   const helper = JSON.stringify(resolve(HERE, 'files-listing.ts'));
   const N = 4000;
   const lines = `Array.from({ length: ${N} }, (_, i) => 'packages/engine/schema/listing-probe-' + String(i).padStart(5, '0') + '.json')`;
@@ -46876,7 +47012,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
       `#3875 the schema and brandTheme agree on the id ${JSON.stringify(id)}: ${refused ? 'both refuse it' : 'both accept it'} (brandTheme ${engine ? 'refused' : 'accepted'}; schema ${JSON.stringify(errs)})`);
   }
 
-  const dir = mkdtempSync(join(tmpdir(), 'p3-3875-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-3875-'));
   try {
     // The backstop: a theme that reaches emitTheme with an escaping id (a caller that skipped brandTheme's check).
     const out = join(dir, 'out');
@@ -46950,7 +47086,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
     ok(errs.length === 0 && refusal(() => brandTheme({ ...base, id } as unknown as BrandInput)) === '',
       `#4214 the schema and brandTheme still accept the id ${JSON.stringify(id)}; only the write refuses it (schema ${JSON.stringify(errs)})`);
   }
-  const dir = mkdtempSync(join(tmpdir(), 'p3-4214-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-4214-'));
   try {
     for (const id of ['nul', 'a?b']) {
       const out = join(dir, `out-${id === 'nul' ? 'nul' : 'q'}`);
@@ -47103,7 +47239,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
     `#1325 component contract: the surface is represented (${Object.keys(liveCc.components).length} components, ${liveCc.schema.shape.length} schema facts; floors 60 and 700)`);
 
   // The call site: the CLI over an injected baseline that dropped one prop the defs still have, so --check must name it.
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-component-contract-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-component-contract-'));
   const fixture = join(dir, 'component-contract.json');
   try {
     const run = (b: unknown) => {
@@ -47752,7 +47888,7 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
 // Chromium gates. A planted web base is skipped, and every brand the walk returns over the committed handoff reads.
 // BY-NAME MUTATION: drop the `.web.base.tokens.json` exclusion from `handoffBrands` → both arms below fail.
 {
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-4428-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-4428-'));
   try {
     for (const f of ['acme.tokens.json', 'acme.base.tokens.json', 'acme.dark.overlay.tokens.json', 'acme.web.base.tokens.json']) {
       writeFileSync(join(dir, f), '{"acme":{}}\n');

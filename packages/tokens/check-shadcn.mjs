@@ -29,7 +29,7 @@
  * `[COLLIDE] … --pds3-shadow-md is also written by the shipped token CSS` by name.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -61,7 +61,7 @@ for (const name of ['tailwindcss', '@tailwindcss/cli']) {
   if (got !== pinned[name]) fail(`[PIN] ${name} ${got} installed, ${pinned[name]} pinned`);
 }
 
-const tmp = mkdtempSync(join(tmpdir(), 'prism3-tailwind-'));
+const tmp = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-tailwind-'));
 process.on('exit', () => rmSync(tmp, { recursive: true, force: true }));
 const gen = spawnSync('npx', ['tsx', 'packages/engine/emit-tailwind.ts', '--out', tmp], { cwd: repo, encoding: 'utf8' });
 if (gen.status !== 0) { console.error(`✗ emit-tailwind.ts --out exited ${gen.status}: ${(gen.stderr || gen.stdout).trim()}`); process.exit(1); }

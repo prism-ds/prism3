@@ -28,6 +28,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadPin, sha256, writePin } from './oracle';
 import { ARMS, buildPacket, packetPath } from './packets';
+import { isEntry } from '../../packages/engine/entry-point';
 
 export const CAPTURE_FILES = ['index.html', 'REPORT.md'];
 
@@ -146,7 +147,7 @@ const capture = (dir: string, id: string, finalFile: string, transcriptFile: str
   console.log(`${id}: captured ${Object.keys(shas).join(', ') || 'no files'}${contamination.length ? `; VOID: ${contamination.join('; ')}` : ''}`);
 };
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isEntry(import.meta.url)) {
   const [cmd, ...a] = process.argv.slice(2);
   const flag = (k: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
   if (cmd === 'pin' && a[0]) { const pin = writePin(a[0]); console.log(`pinned ${pin.commit}; now run packets.ts`); }

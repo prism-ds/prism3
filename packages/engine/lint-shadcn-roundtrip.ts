@@ -36,7 +36,7 @@
  * draws `lg` under `shadow-md`. Add a rung to the map only and this fails `TAILWIND_SHADOWS names shadow-3xl, which
  * EXPECTED_SHADOWS does not` by name. Skip the arm and this fails `shadow arm read 0 theme modes, expected 10`.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +45,7 @@ import { emitTailwind } from './emit-tailwind.ts';
 import { SHADCN_COLOR_VARS } from './projections/shadcn.ts';
 import { TAILWIND_SHADOWS } from './projections/tailwind.ts';
 import { openShadcnPage } from './shadcn-browser.ts';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, 'out');
@@ -112,8 +113,8 @@ export const expectedRgba = (value: string): [number, number, number, number] =>
 
 const hex = (c: readonly number[]): string => `#${c.slice(0, 3).map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const tmp = mkdtempSync(join(tmpdir(), 'prism3-shadcn-'));
+if (isEntry(import.meta.url)) {
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-shadcn-'));
   process.on('exit', () => rmSync(tmp, { recursive: true, force: true }));
   emitShadcn(tmp);
   emitTailwind(tmp);

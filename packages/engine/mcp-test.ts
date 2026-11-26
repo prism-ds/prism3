@@ -22,7 +22,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { HANDSHAKE_PROBES, MCP_SERVERS } from './mcp-handshake-probes';
 
@@ -233,7 +233,7 @@ await new Promise((r) => setTimeout(r, 3000));
   const examples = lines.map((l) => { try { return JSON.parse(l) as { name: string; arguments: unknown }; } catch { return { name: `(unparsed) ${l.slice(0, 60)}`, arguments: undefined }; } });
   ok(/npx --yes tsx@4 packages\/engine\/mcp\.ts/.test(section) && lines.length > 0,
     `#4156: llms.txt says how to start the MCP server and gives example calls (${lines.length} example lines)`);
-  const scratch = mkdtempSync(join(tmpdir(), 'p3-llms-'));
+  const scratch = mkdtempSync(join(realpathSync(tmpdir()), 'p3-llms-'));
   const proc = spawn(resolve(HERE, '../../node_modules/.bin/tsx'), [resolve(HERE, 'mcp.ts')], { cwd: scratch });
   let out = ''; const got = new Map<number, Rpc>();
   proc.stdout.setEncoding('utf8');

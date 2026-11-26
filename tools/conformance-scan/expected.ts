@@ -112,6 +112,7 @@ import {
   type StyleProp,
   type VarState,
 } from './state';
+import { isEntry } from '../../packages/engine/entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const engineDir = resolve(here, '../../packages/engine');
@@ -865,7 +866,7 @@ const selftest = (): boolean => {
   return ok;
 };
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const arg = process.argv[2];
   if (!arg || arg === '--brands' || arg === '--help' || arg === '-h') {

@@ -22,7 +22,7 @@
  * themes, with what it read instead. `resolve` (`chrome/tokens.mjs`) not following a member's alias → both arms,
  * the duration reading the alias string itself and the curve the error it threw.
  */
-import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,7 +84,7 @@ for (const mode of ['light', 'dark'] as const) {
 // not left as a bare JSON error. The fixture copies the real emission, then cuts one file, so the other parses.
 {
   const realOut = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'packages', 'engine', 'out');
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-3914-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-3914-'));
   try {
     const full = readFileSync(join(realOut, 'prism3.tokens.json'), 'utf8');
     copyFileSync(join(realOut, 'prism3.dark.overlay.tokens.json'), join(dir, 'prism3.dark.overlay.tokens.json'));
@@ -107,7 +107,7 @@ for (const mode of ['light', 'dark'] as const) {
 // prints. The fixture copies every top-level JSON in out/, then cuts one file: the default theme's, or another brand's.
 {
   const realOut = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'packages', 'engine', 'out');
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-3914-build-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-3914-build-'));
   try {
     const files = readdirSync(realOut).filter((n) => n.endsWith('.json'));
     for (const n of files) copyFileSync(join(realOut, n), join(dir, n));

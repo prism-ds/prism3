@@ -46,6 +46,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from '../../packages/engine/entry-point';
 
 /** The read-only commands the Mac sends, in order, and the closing `status` it sends again. */
 export const CANARY_COMMANDS = ['status', 'readback', 'update-components', 'prune', 'set-override'] as const;
@@ -233,7 +234,7 @@ export const commands = async (): Promise<{ cmd: string; args: Record<string, un
   ];
 };
 
-const isMain = !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const argv = process.argv.slice(2);
   const opt = (n: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };

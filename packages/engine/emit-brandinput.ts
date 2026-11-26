@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { parseDesignMd } from './design-md';
 import { EXAMPLE_DESCRIPTIONS, EXAMPLE_IDS } from './example-registry';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const EX = resolve(here, './examples');
@@ -39,7 +40,7 @@ export const exampleBrands = (): Record<string, unknown> => {
 
 export const exampleBrandsJson = (): string => JSON.stringify(exampleBrands(), null, 2) + '\n';
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   writeFileSync(OUT, exampleBrandsJson());
   console.log(`[written] ${OUT}`);

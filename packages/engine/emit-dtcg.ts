@@ -30,6 +30,7 @@ import { buildOverlaySet, buildWebBase, buildCssOnly } from './emit-dtcg-overlay
 import { buildAiMetadata } from './ai-metadata';
 import { parseDesignMd } from './design-md';
 import { buildTree, Stats } from './tree';
+import { isEntry } from './entry-point';
 export { buildTree };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -269,7 +270,7 @@ export const readExampleBrand = (relPath: string): BrandInput =>
 // (examples/*.design.md). Those files are the
 // single source of truth: out/*.tokens.json is faithful to the CLI path by
 // construction, and test.ts confirms it byte-for-byte.
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const prism3Input = readExampleBrand('./examples/prism3.design.md');
   const auroraInput = readExampleBrand('./examples/aurora.design.md');

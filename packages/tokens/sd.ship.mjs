@@ -40,10 +40,16 @@
  * `check-package.mjs` asserts the promised ones by name.
  */
 import StyleDictionary from 'style-dictionary';
-import { readdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** #4583: is this file the one node was started with? Real paths on both sides, so a symlinked path (macOS's /var
+ *  and /tmp) cannot make a direct run skip its check. The engine's `isEntry` (entry-point.ts), inline for plain node. */
+function isEntry() {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT_ROOT = resolve(here, '../engine/out');
@@ -106,7 +112,7 @@ const buildMode = async (mode, systemDir) => {
 
 export const buildShip = async () => {
   rmSync(DIST, { recursive: true, force: true });
-  const systemDir = mkdtempSync(join(tmpdir(), 'prism3-ship-system-'));
+  const systemDir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-ship-system-'));
   const files = [];
   try {
     for (const mode of discoverModes()) files.push(await buildMode(mode, systemDir));
@@ -117,6 +123,6 @@ export const buildShip = async () => {
   return resolve(DIST, `${BRAND}.css`);
 };
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isEntry()) {
   console.error(`built ${await buildShip()}`);
 }

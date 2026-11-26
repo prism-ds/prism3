@@ -32,7 +32,7 @@
  *                  mapping table, and a projector that drifts from the table fails here by name. A coordinate is
  *                  also one variant: two variants with the same configuration fail here.
  */
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -43,7 +43,7 @@ import Ajv from 'ajv';
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 // #3698 R3: generated first, never read from `out/` (CI's checkout holds no copy, and a local one may be stale).
-const genDir = mkdtempSync(resolve(tmpdir(), 'prism3-specs-'));
+const genDir = mkdtempSync(resolve(realpathSync(tmpdir()), 'prism3-specs-'));
 process.on('exit', () => rmSync(genDir, { recursive: true, force: true }));
 const gen = spawnSync('npx', ['tsx', resolve(here, '..', 'engine', 'emit-component-docs.ts'), '--uncommitted', '--out', genDir], { cwd: resolve(here, '..', '..'), encoding: 'utf8' });
 if (gen.status !== 0) {

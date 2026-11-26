@@ -74,6 +74,7 @@ import { ENGINE_VERSION } from './version';
 import { DISPOSITION_NAMES } from './code-only-register';
 import { projectDef } from './project-def';
 import { exportComponentDefs, toSpecsComponents, componentDefsFileNames } from './component-defs-export';
+import { isEntry } from './entry-point';
 
 /** The sidecar's schema id. `schema/component-docs.schema.json` carries the same `$id`; both move together. */
 // 1.3 (#2857 phase 2): `motion.patterns`, the motion patterns a def plays, by name.
@@ -262,14 +263,14 @@ export const writeUncommittedExports = (dir: string): void => {
   writeFileSync(resolve(dir, names.specs), JSON.stringify(toSpecsComponents(defsExport), null, 2) + '\n');
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv.includes('--uncommitted')) {
+if (isEntry(import.meta.url) && process.argv.includes('--uncommitted')) {
   // `--uncommitted --out <dir>`: only the uncommitted exports, into `<dir>/components/`, for a reader that
   // generates them first (`renderUncommitted`, `packages/tokens/check-specs.mjs`). Writes nothing under `out/`.
   const at = process.argv.indexOf('--out');
   const dir = at > 0 ? process.argv[at + 1] : undefined;
   if (!dir) { console.error('[emit-component-docs] --uncommitted needs --out <dir>'); process.exit(1); }
   writeUncommittedExports(resolve(dir, 'components'));
-} else if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+} else if (isEntry(import.meta.url)) {
   // Cleared first, so a def that leaves the registry leaves no stale page behind for `regen --check` to miss.
   rmSync(COMPONENT_DOCS_DIR, { recursive: true, force: true });
   mkdirSync(COMPONENT_DOCS_DIR, { recursive: true });

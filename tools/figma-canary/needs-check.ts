@@ -27,6 +27,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from '../../packages/engine/entry-point';
 
 /** Never triggers alone. Each with why it is safe to skip, in the decision's words where it has them. */
 export const SKIP: { pattern: RegExp; why: string }[] = [
@@ -77,7 +78,7 @@ const FIGMA_API = /\bfigma\.[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/g;
 /** The `figma.` paths named in some text. */
 export const figmaApis = (text: string): Set<string> => new Set(text.match(FIGMA_API) ?? []);
 
-const isMain = !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const [from, to] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   if (!from || !to) { console.error('usage: needs-check.ts <last-checked-commit> <candidate-commit>'); process.exit(2); }

@@ -35,6 +35,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RUN_FORMAT, RUN_KEYS, SCRATCH_FILE, sameCommit, stampCommit } from './judge';
+import { isEntry } from '../../packages/engine/entry-point';
 
 /**
  * The stamp check on the first `status` response, as `figma_run` returned it. Pure. `go` only when the response is a
@@ -77,7 +78,7 @@ const readRequest = (runDir: string): { commit: string } => {
   } catch (e) { return refuse(`no request.json with a commit in ${runDir} (run prepare first): ${(e as Error).message}`); }
 };
 
-const isMain = !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const [mode, ...argv] = process.argv.slice(2);
   const opt = (n: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };

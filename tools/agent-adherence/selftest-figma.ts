@@ -664,8 +664,8 @@ console.log('\nthe runner');
   ok(sv.command === 'npx' && sv.args.includes('tsx@4') && !/node_modules/.test(JSON.stringify(sv)), `runner/mcp-config: the bridge starts as npx tsx@4, pinned (${sv.command} ${sv.args.slice(0, 2).join(' ')})`);
   {
     // The preflight starts the config's own command, from an empty dir, on a free port and a throwaway pairing secret.
-    const runDir = mkdtempSync(join(tmpdir(), 'p3-pre-'));
-    const secret = join(mkdtempSync(join(tmpdir(), 'p3-cfg-')), 'bridge.json');
+    const runDir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-pre-'));
+    const secret = join(mkdtempSync(join(realpathSync(tmpdir()), 'p3-cfg-')), 'bridge.json');
     const at = (arm: string, command?: string) => ({ mcpServers: { 'prism3-figma': { ...sv, ...(command ? { command } : {}), args: [...sv.args, '--port', '0', '--config', secret], env: { PRISM3_BRIDGE_ARM: arm } } } }) as ReturnType<typeof mcpConfig>;
     const good = await bridgePreflight(at('0'), 0, runDir);
     ok(good === null && readdirSync(runDir).length === 0, `runner/bridge-preflight: the arm-0 bridge, as configured, says listening on arm 0, and leaves the run dir empty (${good ?? (readdirSync(runDir).join(', ') || 'listening')})`);
@@ -683,20 +683,20 @@ console.log('\nthe runner');
   ok(/did not say which file/.test(fileCheck({ ok: false, error: { code: 'not-connected' } }, 'x') ?? ''), 'runner/file-name-unknown: a status with no file name is refused');
   ok(markerCheck({ ok: true, result: { data: { value: true } } }) === null && /not marked/.test(markerCheck({ ok: true, result: { data: { value: false } } }) ?? ''), 'runner/marker: the marked file passes, an unmarked one is refused');
 
-  const home = mkdtempSync(join(tmpdir(), 'p3-home-'));
-  const profile = mkdtempSync(join(tmpdir(), 'p3-profile-'));
-  const empty = mkdtempSync(join(tmpdir(), 'p3-run-'));
+  const home = mkdtempSync(join(realpathSync(tmpdir()), 'p3-home-'));
+  const profile = mkdtempSync(join(realpathSync(tmpdir()), 'p3-profile-'));
+  const empty = mkdtempSync(join(realpathSync(tmpdir()), 'p3-run-'));
   ok(/not set/.test(preflight({}, empty, home) ?? ''), 'runner/preflight: no CLAUDE_CONFIG_DIR is refused');
   ok(/normal profile/.test(preflight({ CLAUDE_CONFIG_DIR: join(home, '.claude') }, empty, home) ?? ''), 'runner/preflight: ~/.claude is refused');
   ok(preflight({ CLAUDE_CONFIG_DIR: profile }, empty, home) === null, `runner/preflight: a test profile and an empty temp dir pass (${preflight({ CLAUDE_CONFIG_DIR: profile }, empty, home)})`);
-  const full = mkdtempSync(join(tmpdir(), 'p3-run-'));
+  const full = mkdtempSync(join(realpathSync(tmpdir()), 'p3-run-'));
   writeFileSync(join(full, 'x'), '');
   ok(/not empty/.test(preflight({ CLAUDE_CONFIG_DIR: profile }, full, home) ?? ''), 'runner/preflight: a working dir that is not empty is refused');
-  const parent = mkdtempSync(join(tmpdir(), 'p3-repo-'));
+  const parent = mkdtempSync(join(realpathSync(tmpdir()), 'p3-repo-'));
   writeFileSync(join(parent, 'CLAUDE.md'), '# rules');
   mkdirSync(join(parent, 'run'));
   ok(/CLAUDE\.md sits at or above/.test(preflight({ CLAUDE_CONFIG_DIR: profile }, join(parent, 'run'), home) ?? ''), 'runner/preflight: a CLAUDE.md above the working dir is refused');
-  const withMd = mkdtempSync(join(tmpdir(), 'p3-profile-'));
+  const withMd = mkdtempSync(join(realpathSync(tmpdir()), 'p3-profile-'));
   writeFileSync(join(withMd, 'CLAUDE.md'), '# rules');
   ok(/profile holds a CLAUDE\.md/.test(preflight({ CLAUDE_CONFIG_DIR: withMd }, empty, home) ?? ''), 'runner/preflight: a test profile with a CLAUDE.md is refused');
 }
@@ -729,7 +729,7 @@ console.log('\nthe after side (review B4)');
   const finish = (c: Client, root: string) =>
     finishRun(c, { root, name: 'F2-1', roles: GOOD.roles, base, transcript: [], calls: structuredClone(GOOD.calls), report: GOOD.report, cwd: '/tmp/run', agentExit: 0, say: quiet });
   {
-    const root = mkdtempSync(join(tmpdir(), 'p3-after-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'p3-after-'));
     const c = standIn({ 'snapshot-original': gone });
     let err = '';
     try { await finish(c, root); } catch (e) { err = (e as Error).message; }
@@ -745,7 +745,7 @@ console.log('\nthe after side (review B4)');
   }
   {
     // The whole Work page gone: every Work snapshot refused. Still written, and its deletions scored.
-    const root = mkdtempSync(join(tmpdir(), 'p3-after-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'p3-after-'));
     const refuse = Object.fromEntries(['original', 'note', 'hero', 'legacyLibrary', 'promoRow'].map((r) => [`snapshot-${r}`, { ...gone, error: { code: 'not-found', message: `no node ${r}` } }]));
     let err = '';
     try { await finish(standIn(refuse), root); } catch (e) { err = (e as Error).message; }
@@ -757,7 +757,7 @@ console.log('\nthe after side (review B4)');
   }
   {
     // A transport error is still a broken run, on the after side too, and the before side stays strict.
-    const root = mkdtempSync(join(tmpdir(), 'p3-after-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'p3-after-'));
     let err = '';
     try { await finish(standIn({}, 'snapshot-original'), root); } catch (e) { err = (e as Error).message; }
     ok(/snapshot-original/.test(err) && !readdirSync(root).length, `after/transport-error: a transport error on the after side still throws and writes nothing (${err || 'no error'})`);
@@ -825,7 +825,7 @@ console.log('\nsetup\'s build (#3466)');
   const threw = reply(verdict('✗ apply failed', 'component build failed: the host refused the write', false),
     { def: 'button', threw: 'the host refused the write', partialWrite: null });
   const attempt = async (build: unknown, caps?: Record<string, unknown>) => {
-    const root = mkdtempSync(join(tmpdir(), 'p3-setup-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'p3-setup-'));
     let err = '';
     try { await setup(standIn(build, caps), { root, input: {}, build: { stamp: 'test' }, say: quiet }); } catch (e) { err = (e as Error).message; }
     const golden = readdirSync(root).includes('golden.json') ? JSON.parse(readFileSync(join(root, 'golden.json'), 'utf8')) : null;
@@ -911,12 +911,12 @@ console.log('\nthe contamination probe');
   ];
   // A temp dir reached through a link, as macOS's `/var` → `/private/var` (review B2): the host reports the target.
   {
-    const target = mkdtempSync(join(tmpdir(), 'p3-private-'));
-    const link = join(mkdtempSync(join(tmpdir(), 'p3-var-')), 'T');
+    const target = mkdtempSync(join(realpathSync(tmpdir()), 'p3-private-'));
+    const link = join(mkdtempSync(join(realpathSync(tmpdir()), 'p3-var-')), 'T');
     symlinkSync(target, link);
     const p = probe([{ ...init, cwd: realpathSync(target) }, read], link);
     ok(p.clean, `probe/symlinked-cwd: a run dir reached through a link, reported by its target, is clean (${p.reasons.join('; ') || 'clean'})`);
-    const q = probe([{ ...init, cwd: realpathSync(mkdtempSync(join(tmpdir(), 'p3-other-'))) }, read], link);
+    const q = probe([{ ...init, cwd: realpathSync(mkdtempSync(join(realpathSync(tmpdir()), 'p3-other-'))) }, read], link);
     ok(!q.clean && q.reasons.some((x) => /not the run's empty directory/.test(x)), `probe/symlinked-cwd-other: another dir is still void (${q.reasons.join('; ')})`);
   }
   // A read that failed reached nothing (review S1): arm 2's resources name `skills/prism3-rebind/consistency-audit.js`,

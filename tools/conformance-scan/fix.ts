@@ -113,6 +113,7 @@ import {
   type BindState,
   type State,
 } from './state';
+import { isEntry } from '../../packages/engine/entry-point';
 
 export const FIX_FORMAT = 'prism3-conformance-fix' as const;
 export const FIX_VERSION = 1 as const;
@@ -669,7 +670,7 @@ const selftest = (): number => {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────────────────────
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const args = process.argv.slice(2);
   if (args[0] === '--selftest') process.exit(selftest());

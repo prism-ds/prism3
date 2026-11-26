@@ -61,6 +61,7 @@ import {
   type Axis,
   type AxisClassification,
 } from './axes.ts';
+import { isEntry } from '../../packages/engine/entry-point';
 
 const OUT = 'packages/engine/out';
 const BRANDS_DEFAULT = ['nb', 'aurora'];
@@ -1749,7 +1750,7 @@ const main = async (): Promise<void> => {
  *  this guard that import would print the entire five-category report as a side effect of the gate
  *  starting up — the repo's established convention for a module that is both a library and a CLI
  *  (`emit-dtcg.ts`, `mcp.ts`, `regen.ts`, `token-contract.ts` all take this shape). */
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   main().catch((e) => {
     console.error(`comparison failed: ${e instanceof Error ? e.message : String(e)}`);
