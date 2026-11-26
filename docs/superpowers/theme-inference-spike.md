@@ -64,7 +64,7 @@ serves both:
 
 | Lever | Evidence | V | S | R | Notes |
 |---|---|---|---|---|---|
-| `primary` | Hue family weight plus name hints (`facts-seed/1` COLOR). | high | medium | medium–low | R relies on button-like fills, and the role rule calls a button in a frame named "Frame 12" a background. The anchor *rung* is the weak part: actions often sit a step darker than the brand color (#2075's two "close" rows). |
+| `primary` | Hue family weight plus name hints (`facts-seed/1` COLOR). | high | medium | medium–low | R relies on button-like fills, and the role rule calls a button in a frame named "Frame 12" a background. The anchor *rung* is the weak part: the accent rung can sit darker than the brand color (#2075's two "close" rows were both on the accent pick, one rung and two rungs dark). |
 | `brandColors` (accent and others) | A second hue family ≥ 15° away. The accent rule exists. Further families need a weight floor. | high | medium | low | In pitch files, a hero illustration or photo-overlay color can pose as an accent. Image fills are not colors, but a flat illustration's vectors are counted (as `icon`). |
 | `neutral.hue`, `neutral.chroma` | Weighted grays (`facts-seed/1` NEUTRAL). | high | high | medium | Grays are the most used colors in any file, so the evidence is plentiful. A pure-gray file reads chroma 0, which is valid. |
 | `neutral.anchor` | A gray the file holds as a named variable at a fixed step. | medium | low | defaulted | Pin only when the file names the step. Otherwise the ramp derives it. |
@@ -85,7 +85,7 @@ serves both:
 | `density` | The medium control height (36 / 44 / 56px), else the median padding (`facts-seed/1` DENSITY). | high | medium | low–medium | A raw file's buttons come in every height. Take the most common button-like height, and pass the spread as evidence. |
 | `fieldStyle`, `searchFieldStyle` | Field-like layers (named `input`, `field` or `search`) with a full stroke, or a bottom stroke only. | medium | low | low | Needs stroke sides, which the facts report doesn't read (§2). |
 | `tagStyle`, `bannerStyle`, `currentIndicator`, `radioDot`, `buttonIcons`, `buttonContentSize`, `buttonLabelWeight`, `buttonTextHover`, `buttonBorderWeight`, `buttonMinWidthMultiplier`, `dialogTitleSize` | Each needs that component to be present and recognized. | medium (component sets) | low | defaulted | Component-specific. Read these from recognized component instances (§1.6). Otherwise they default, listed as "not seen in scope". `buttonLabelWeight` is the exception: it's the weight on button-like text, often readable even on R files. |
-| `radiusHairline` | 1px corners on controls. | medium | medium | medium | Tied to `controlShape: hairline`. |
+| `radiusHairline` | Retired in #2053: it changes nothing, so the scan doesn't infer it. | — | — | — | Listed only because it still appears in the manifest. |
 
 ### 1.3 Spacing (no lever of its own)
 
@@ -107,7 +107,7 @@ frames had auto layout).
 | Lever | Evidence | V | S | R | Notes |
 |---|---|---|---|---|---|
 | `typography.families` | Text style and usage families, display vs body by name (`facts-seed/1` FAMILIES). | high | high | medium–high | On R files, display vs body falls back to size: the family on the largest sizes is display, the most-used family on 14–18px text is body. Icon fonts are dropped. |
-| `typography.weightRoles` | Observed weights, mapped onto the five roles in order (subtle, regular, emphasis, strong, max; defaults 300 / 400 / 600 / 700 / 900). The body text weight is `regular`, and the heading weight is `strong` or `emphasis`. | high | medium | medium | A file using 500 for emphasis and 800 for headings maps cleanly. A file with seven weights reports the ones that don't fit as conflicts. |
+| `typography.weightRoles` | Observed weights, mapped onto the five roles in order (subtle, default, emphasis, strong, max; defaults 300 / 400 / 600 / 700 / 900). The body text weight is `default`, and the heading weight is `strong` or `emphasis`. | high | medium | medium | A file using 500 for emphasis and 800 for headings maps cleanly. A file with seven weights reports the ones that don't fit as conflicts. |
 | `typography.typeScale` | Rank the heading sizes in use (largest is display, next titles), then pick the enum shift (−1, 0, +1) whose ladder positions fit them with the least error. | medium | medium | low | A judgment call whenever two shifts fit about equally well. Report the file's measured ratio alongside (for example "about 1.25 between heading ranks") as context for the owner. No lever takes it. |
 | `typography.sizes` (heading pins) | Heading sizes that are ladder steps but not where the enum puts them. | medium | medium | low | Pins are absolute. Propose them only when one enum leaves a heading two or more steps off. |
 | Size snaps | Every observed size not on the ladder snaps to the nearest step: 45 → 48, 15 → 14 or 16 (a tie), 13 → 12 or 14 (a tie). | — | — | — | The snap list. Body text at 14px or 15px is a **body-size conflict**: body `md` is fixed at 16px, so the choice is between `body.sm` as the file's body text and a 16px body (owner question Q3). |
@@ -163,11 +163,11 @@ It never places or swaps a component (rebind does that, and rebind is a separate
 - **`apps/plugin/src/read-figma.ts`** is the pattern for reading `figma.variables.*` under
   `documentAccess: dynamic-page`, with alias targets resolved to names and honest `null`s for dangling ones. It reads
   only Prism3's own collections, positionally, so it's the right reader for file state one (and two, #1145), not
-  three. Its test pattern carries over directly: an in-memory shim plus a write-logging check.
+  three. Its test pattern carries over directly: an in-memory shim. (The write-logging check belongs to `test-file-facts.ts`.)
 - **The rebind skill's mapping pass** (`skills/prism3-rebind/SKILL.md` §2.1) supplies the table shape (one row per
   distinct value, mapped once, referenced by id) and the confidence labels. Its §6 sorting (Prism3 improvement,
   Prism3 gap, brand-only) is the right split for the "no home" list.
-- **`fidelity.ts`** compares observed and generated values for color today, and #3022 extends it to every category.
+- **`fidelity.ts`** already compares observed and generated values for color, typography, spacing, radius and elevation.
   The conflict report is the same comparison run *before* compile instead of after.
 
 **What the facts scan lacks for #2853** (each is an addition to `file-facts.ts` under `0.x`, which allows fields to
@@ -199,7 +199,7 @@ primary: { l: 0.56, c: 0.19, h: 254 }   # P-01 inferred · medium 0.71 · 412 bu
 density: comfortable                     # P-07 snapped · high 0.86 · 44px medium buttons (38 of 41 layers)
 radiusScale: 1.5                         # P-08 inferred · medium 0.64 · fit over 9 corners, 2 snapped (C-03, C-04)
 typography:
-  typeScale: expressive                  # P-11 judgment · low 0.42 · default fits within 0.4 steps (Q-T1)
+  typeScale: expressive                  # P-11 judgment · low 0.42 · default fits within 0.4 steps
 ---
 ```
 
@@ -393,7 +393,7 @@ value cites its source (for example "B: variable `…/radius/md`", or "owner, fr
 | Modes | the set of modes, and pairs found vs pairs in the key | equal | a subset | otherwise |
 | Shadow softness | slider value | ±0.2 | ±0.5 | otherwise |
 
-Each row also gets three scores that are not per lever:
+Each row also gets scores that are not per lever:
 - **Conflict recall and precision.** The key lists the snaps a careful designer would raise (for file E, the
   kit's off-ladder values against the stock theme). Recall = key conflicts the scan raised. Precision = raised
   conflicts the key agrees are real. A silently snapped value that the key lists as a conflict is a **miss by
@@ -450,7 +450,7 @@ and the wording, entry point and layout are all the owner's.
 - **The role rule is name-based.** `name-and-type/1` calls an unnamed button a background. Geometry-aware roles
   (a small, rounded, filled frame with one centered text child is button-like) would lift kind R. That is a change
   to the facts scan, measured on file C before it's adopted.
-- **The anchor rung.** Both #2075 "close" verdicts were the action rung sitting darker than the brand color. On a
+- **The accent rung.** Both #2075 "close" verdicts were the accent pick sitting darker than the brand color (one rung, then two). On a
   raw file there's no ramp to read, so the darkest common button fill may be the hover state. The seed should
   prefer the most-used button fill over the darkest.
 - **Pitch files lie about the system.** A pitch file is art-directed: one-off sizes, a hero font, photo-led color.
