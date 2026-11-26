@@ -189,9 +189,9 @@ Install a brand's theme into a shadcn/ui project:
 npx shadcn add https://prism3-ds.vercel.app/r/<brand>.json
 ```
 
-That URL serves the hosted brands. For a brand of your own, Export's **shadcn/ui theme** downloads the same two files
-the registry and `out/shadcn/` hold, `<brand>.shadcn.css` and `<brand>.shadcn.registry-item.json`, and **Tailwind
-theme** downloads `<brand>.tailwind.theme.css`. Install the registry item with `npx shadcn add ./<brand>.shadcn.registry-item.json`.
+That URL serves the hosted brands. For a brand of your own, choose Export, then Design tokens, and set **Format** to
+**shadcn/ui theme**: it downloads the same two files the registry and `out/shadcn/` hold, `<brand>.shadcn.css` and
+`<brand>.shadcn.registry-item.json`. **Tailwind theme** downloads `<brand>.tailwind.theme.css`. Install the registry item with `npx shadcn add ./<brand>.shadcn.registry-item.json`.
 The command line writes them with `cli.ts <brief> --out <dir> --shadcn --tailwind`, and the MCP's `export_theme` with
 `include: ["shadcn", "tailwind"]`. All of them run the projector regen does, so a brand gets the same bytes on every
 surface.

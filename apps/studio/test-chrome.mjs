@@ -23136,7 +23136,7 @@ if (runs('3553-md')) {
           files: files && caps.length ? { caps: caps.map((c) => ({ text: c.textContent, l: textLeft(c) })), edge: textLeft(files) } : null,
         };
       });
-      ok(m.tabs.length === 5, `${where}: premise, the switcher draws five artifact tabs (${m.tabs.map((t) => t.t).join(' | ')})`);
+      ok(m.tabs.length === 3, `${where}: premise, the switcher draws three artifact tabs (${m.tabs.map((t) => t.t).join(' | ')})`);
       const out = m.tabs.filter((t) => t.l < m.col.l - ALIGN_TOLERANCE || t.r > m.col.r + ALIGN_TOLERANCE);
       ok(out.length === 0, `#3553 M8 ${where}: every artifact tab lies inside its column (${Math.round(m.col.l)}–${Math.round(m.col.r)}; outside ${JSON.stringify(out.map((t) => [t.t, Math.round(t.l), Math.round(t.r)]))})`);
       ok(!!m.files && m.files.caps.some((c) => /^\d+ files?$/.test(c.text)) && m.files.caps.some((c) => c.text.startsWith('A few tokens')), `${where}: premise, Export shows its files list and both captions, "You get…" and "A few tokens…" (${JSON.stringify(m.files)})`);

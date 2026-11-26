@@ -172,8 +172,9 @@ const consumerSet = (id) => readdirSync(OUT).filter((f) => f === `${id}.base.tok
 const strip = (n) => Array.isArray(n) ? n.map(strip) : n && typeof n === 'object'
   ? Object.fromEntries(Object.entries(n).filter(([k]) => k !== '$extensions').map(([k, v]) => [k, strip(v)])) : n;
 const METADATA_LABEL = 'Include build metadata';
-/** The two web-theme tabs (DRAFT labels for the owner), and each download name mapped to the committed file it must be
- *  byte for byte. Typed here, never read from the subject. */
+/** The tokens' Format option (DRAFT wording for the owner), each web theme's option label, and each download name
+ *  mapped to the committed file it must be byte for byte. Typed here, never read from the subject. */
+const FORMAT_LABEL = 'Format';
 const WEB_THEMES = {
   shadcn: { tab: 'shadcn/ui theme', files: (id) => ({ [`${id}.shadcn.css`]: `shadcn/${id}.css`, [`${id}.shadcn.registry-item.json`]: `shadcn/${id}.registry-item.json` }) },
   tailwind: { tab: 'Tailwind theme', files: (id) => ({ [`${id}.tailwind.theme.css`]: `tailwind/${id}.theme.css` }) },
@@ -204,8 +205,9 @@ const exportFrom = async (host, id, metadataOn = false, theme = null) => {
     const off = metaOpt('Off');
     const metadataDefault = (await off.count()) === 1 ? await off.getAttribute('aria-checked') : 'absent';
     if (metadataOn) await hooks.click(metaOpt('On'));
-    // A web theme: its tab, by the label a person reads, before the download.
-    if (theme) await hooks.click(page.locator(`[data-p3="${box}"] [data-p3="export-artifact"]`).filter({ hasText: new RegExp(`^${WEB_THEMES[theme].tab}$`) }));
+    // A web theme: the tokens' Format option, by its row's label and the option's own words, before the download.
+    if (theme) await hooks.click(page.locator('.p3-export-set').filter({ has: page.locator('.p3-export-lab', { hasText: FORMAT_LABEL }) })
+      .locator('[data-p3="export-setting"]').filter({ hasText: new RegExp(`^${WEB_THEMES[theme].tab}$`) }));
     const want = theme ? Object.keys(WEB_THEMES[theme].files(id)).length : consumerSet(id).length;
     const got = new Map();
     // The listener stays attached through the beat below: detaching it at `want` files left the beat listening to

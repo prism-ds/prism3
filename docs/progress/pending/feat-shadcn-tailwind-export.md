@@ -9,7 +9,8 @@
   - `shadcnFiles` and `tailwindFiles`, each file's path, download name and bytes.
 
   `emit-shadcn.ts` and `emit-tailwind.ts` are now disk shells over it, and `regen --check` is in sync, so the move is output-preserving.
-- **Studio and the plugin:** Export gains "shadcn/ui theme" (`<id>.shadcn.css`, `<id>.shadcn.registry-item.json`) and "Tailwind theme" (`<id>.tailwind.theme.css`), for the brand on screen, off the last-good theme. They're off after a failed restore, as the tokens are. The plugin's iframe is Studio's UI, so both hosts gain them together.
+- **Studio and the plugin:** Export's Design tokens gains a **Format** option: "Token files" (the default, the files as before), "shadcn/ui theme" (`<id>.shadcn.css`, `<id>.shadcn.registry-item.json`) or "Tailwind theme" (`<id>.tailwind.theme.css`). It works for the brand on screen, off the last-good theme, and is off after a failed restore, as the tokens are. With a theme chosen, the token files' shape settings and the metadata option don't apply, and aren't shown. The plugin's iframe is Studio's UI, so both hosts gain it together.
+  - **Why an option, not two more tabs:** the first build added two artifact tabs. `test:chrome` showed they don't fit: the switcher is one row of underline tabs (#3553 Q-UI11 A), and at the plugin's 380 three already fill it. The fourth and fifth ran to x=564 in a column ending at 368. The placement is an owner question on the PR.
 - **The MCP and the CLI:** `export_theme` gains the `shadcn` and `tailwind` sections, and `cli.ts` the `--shadcn` and `--tailwind` flags. Both write the committed relative paths, `shadcn/<id>.css`, `shadcn/<id>.registry-item.json` and `tailwind/<id>.theme.css`. The CLI's writes go through `fileInDir`.
 - **The focus-ring rule and the `docs` pointer:** they ride in the registry item exactly as the hosted one carries them. The plain CSS carries neither, as built; that's an owner question on the PR.
 - **Follow-ups:**

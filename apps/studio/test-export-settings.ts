@@ -20,7 +20,7 @@
  * from the real trees disagreeing (the top-level `$extensions` sibling, and camelCase's `padding-x-`
  * collision). If this file is ever given a hand-written tree "for speed", it stops being a check.
  */
-import {
+import { FORMAT_OPTION, FORMAT_DESC,
   ALL_SETTINGS, ALL_SOURCES, AVAILABLE_SOURCES, ARTIFACTS, DTCG_SETTINGS, DESIGN_MD_SETTINGS,
   SAMPLE_CRITERIA, defaultSettings, visibleSettings, projectDtcg, mergeFiles,
   fileNames, previewFiles, sampleLeaves, leavesOf, rootKeyOf, renameSegment, unrenameSegment,
@@ -89,8 +89,11 @@ ok(allSegments.length > 100, `${allSegments.length} distinct path segments acros
 console.log('\n=== 1. declarations ===');
 none(declarationDefects(), 'every setting declares a usable source, artifact, default and options');
 none(jargonDefects(), 'no label or description reads as an engine identifier');
-ok(ARTIFACTS.map((a) => a.id).join(',') === 'dtcg,design-md,component-specs,shadcn,tailwind', `five artifacts (${ARTIFACTS.map((a) => a.id).join(', ')}): the tokens, the brief, the component specs (#3425), and the shadcn/ui and Tailwind themes (the lane after #2997); Style-Dictionary-native is not one (#720)`);
-ok(ALL_SETTINGS.every((s) => s.artifact !== 'shadcn' && s.artifact !== 'tailwind'), 'the web themes carry no shape settings: the projector writes each one way, the bytes regen commits');
+ok(ARTIFACTS.map((a) => a.id).join(',') === 'dtcg,design-md,component-specs', `three artifacts (${ARTIFACTS.map((a) => a.id).join(', ')}) — the third is the component specs (#3425); Style-Dictionary-native is not one (#720)`);
+// The format (the lane after #2997): an option of the tokens' artifact, the switcher staying three tabs (#3553 Q-UI11 A).
+ok(FORMAT_OPTION.artifact === 'dtcg' && FORMAT_OPTION.options.map((o) => o.value).join(',') === 'dtcg,shadcn,tailwind' && FORMAT_OPTION.def === 'dtcg',
+  `the tokens' format is design tokens by default, or a shadcn/ui or Tailwind theme (${FORMAT_OPTION.options.map((o) => o.value).join(', ')}; default ${FORMAT_OPTION.def})`);
+ok(Object.keys(FORMAT_DESC).sort().join(',') === 'shadcn,tailwind', 'each theme format has the description shown in place of the tokens\' when it is chosen');
 ok(ALL_SETTINGS.every((s) => s.artifact !== 'component-specs'), 'component specs carry no shape settings — the brand\'s component settings shape them (#3425)');
 ok(DTCG_SETTINGS.length === 4, `DTCG carries four shape settings (${DTCG_SETTINGS.map((s) => s.key).join(', ')})`);
 ok(DESIGN_MD_SETTINGS.length === 0, 'design.md carries no shape settings — each candidate #720 named fails its own rules');

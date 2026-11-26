@@ -84,7 +84,7 @@ export const AVAILABLE_SOURCES: readonly ExportSource[] = ['generated'];
 // Artifacts — the first level. Which output, then its settings.
 // ===========================================================================================
 
-export type ArtifactId = 'dtcg' | 'design-md' | 'component-specs' | 'shadcn' | 'tailwind';
+export type ArtifactId = 'dtcg' | 'design-md' | 'component-specs';
 
 export interface ArtifactDef {
   readonly id: ArtifactId;
@@ -124,21 +124,6 @@ export const ARTIFACTS: readonly ArtifactDef[] = [
     id: 'component-specs',
     label: 'Component specs',
     desc: "Every component's contract: its props, states, parts and the tokens each part binds, built with this brand's component settings. As Prism3 JSON and in the Specs format.",
-  },
-  {
-    // The shadcn/ui theme for the brand on screen (the lane after #2997; DRAFT wording for the owner): the plain CSS and
-    // the registry item, from the projector regen writes `out/shadcn/**` with (`web-themes.ts`), so a committed brand
-    // downloads exactly its committed files. Only the registry item carries the focus-ring rule and the README pointer.
-    id: 'shadcn',
-    label: 'shadcn/ui theme',
-    desc: "This brand as a shadcn/ui theme: its colors for light and dark as CSS variables, and a registry item a shadcn/ui project installs. The registry item also keeps every focus ring at full strength.",
-  },
-  {
-    // The Tailwind v4 theme for the brand on screen (DRAFT wording for the owner), from the projector regen writes
-    // `out/tailwind/**` with.
-    id: 'tailwind',
-    label: 'Tailwind theme',
-    desc: "This brand as a Tailwind v4 theme: one CSS file to import after Tailwind, with its colors for light and dark, and its radii, fonts and shadows.",
   },
 ];
 
@@ -671,6 +656,41 @@ export const METADATA_OPTION: MetadataOptionDef = {
   def: 'off',
 };
 
+/**
+ * THE FORMAT (the lane after #2997; DRAFT wording and placement for the owner). The tokens' artifact writes one of three
+ * formats: the W3C design-token files (the default), or this brand as a shadcn/ui theme or a Tailwind v4 theme, from
+ * `web-themes.ts`, the projector regen writes `out/shadcn/**` and `out/tailwind/**` with. An option of the tokens'
+ * artifact rather than two more artifacts, because the switcher is one row of tabs (#3553 Q-UI11 A) and at the plugin's
+ * 380 three already fill it. A theme writes one way, so with one chosen the shape settings and the metadata option do
+ * not apply and are not shown. Like `METADATA_OPTION`, not one of `DTCG_SETTINGS`: it chooses which files, not their shape.
+ */
+export type ExportFormat = 'dtcg' | 'shadcn' | 'tailwind';
+export interface FormatOptionDef {
+  readonly key: 'exportFormat';
+  readonly artifact: ArtifactId;
+  readonly label: string;
+  readonly desc: string;
+  readonly options: readonly { readonly value: ExportFormat; readonly label: string }[];
+  readonly def: ExportFormat;
+}
+export const FORMAT_OPTION: FormatOptionDef = {
+  key: 'exportFormat',
+  artifact: 'dtcg',
+  label: 'Format',
+  desc: 'Which files to write: the token files a build reads, or this brand as a shadcn/ui or Tailwind v4 theme for a web project.',
+  options: [
+    { value: 'dtcg', label: 'Token files' },
+    { value: 'shadcn', label: 'shadcn/ui theme' },
+    { value: 'tailwind', label: 'Tailwind theme' },
+  ],
+  def: 'dtcg',
+};
+/** What each theme format writes, shown in place of the tokens' description when it is chosen (DRAFT wording). */
+export const FORMAT_DESC: Readonly<Record<Exclude<ExportFormat, 'dtcg'>, string>> = {
+  shadcn: 'This brand as a shadcn/ui theme: its colors for light and dark as CSS variables, and a registry item a shadcn/ui project installs. The registry item also keeps every focus ring at full strength.',
+  tailwind: 'This brand as a Tailwind v4 theme: one CSS file to import after Tailwind, with its colors for light and dark, and its radii, fonts and shadows.',
+};
+
 /** The tree with every `$extensions` key removed, at any depth. */
 export { stripExtensions };
 
@@ -810,6 +830,9 @@ export const jargonDefects = (): string[] => {
   }
   check(`${METADATA_OPTION.key} label`, METADATA_OPTION.label);
   check(`${METADATA_OPTION.key} desc`, METADATA_OPTION.desc);
+  check(`${FORMAT_OPTION.key} label`, FORMAT_OPTION.label);
+  check(`${FORMAT_OPTION.key} desc`, FORMAT_OPTION.desc);
+  for (const [k, d] of Object.entries(FORMAT_DESC)) check(`format ${k} desc`, d);
   return out;
 };
 
