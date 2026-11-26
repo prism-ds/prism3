@@ -68,7 +68,9 @@
  *   · TokenPress, which exports a FIGMA FILE rather than a brand, and is gap 2's subject
  *     (`apps/plugin/test-readback-parity.ts`).
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, join } from 'node:path';
@@ -182,15 +184,15 @@ const WEB_THEMES = {
 
 /** Load `id` from the start screen the way a person does, then Export › Download at the default settings, collecting
  *  every file the download writes. With `metadataOn`, the metadata option is switched On first. */
-const exportFrom = async (host, id, metadataOn = false, theme = null) => {
+const exportFrom = async (host, id, metadataOn = false, theme = null, source = null) => {
   const { ctx, page, errors } = await openStart(host);
   try {
-    const src = SOURCES[id];
+    const src = source ?? SOURCES[id];
     if (src.chip) {
       await hooks.click(page.locator('[data-p3="start-example"]').filter({ hasText: src.chip }));
     } else {
       await hooks.need(page, '[data-p3="start-paste"]');
-      await page.fill('[data-p3="start-paste"]', readFileSync(join(EXAMPLES, src.paste), 'utf8'));
+      await page.fill('[data-p3="start-paste"]', src.text ?? readFileSync(join(EXAMPLES, src.paste), 'utf8'));
       await hooks.click(page.locator('[data-p3="start-import"]'));
     }
     await hooks.need(page, '[data-p3="frame"]');
@@ -296,6 +298,37 @@ for (const id of GATED) for (const theme of Object.keys(WEB_THEMES)) {
     const a = web.files.get(name), b = figma.files.get(name);
     ok(a !== undefined && a === b, `${id}: PARITY — web and plugin ${name} are byte-identical (${a?.length ?? 0} / ${b?.length ?? 0} bytes)`);
   }
+}
+
+// ── the brand's name is the same on every surface (#4609 review) ───────────────────────────────────────────────
+// A brand whose id is not a slug ("  Acme Brand "), pasted as a brief in both hosts. Each theme's download is named
+// `Acme-Brand.*` (typed here), the two hosts write the same bytes, and those are the bytes the CLI writes for the same
+// brief, which this suite runs itself. So Studio, the plugin and the CLI agree; `test.ts` holds `export_theme` to the
+// CLI's files and to Studio's projector for the same id.
+{
+  const rawId = '  Acme Brand ';
+  const brief = `---\nid: "${rawId}"\nprimary: { l: 0.55, c: 0.18, h: 265 }\nneutral: { hue: cool, chroma: 0.01 }\n---\n`;
+  const tmpDir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-parity-spaced-'));
+  try {
+    writeFileSync(join(tmpDir, 'spaced.design.md'), brief);
+    const cli = spawnSync('npx', ['tsx', join(REPO, 'packages/engine/cli.ts'), join(tmpDir, 'spaced.design.md'), '--out', join(tmpDir, 'out'), '--shadcn', '--tailwind'], { cwd: REPO, encoding: 'utf8' });
+    ok(cli.status === 0, `spaced id: cli.ts writes the web themes for ${JSON.stringify(rawId)} (exit ${cli.status}${cli.status ? `: ${(cli.stderr || '').trim().slice(0, 160)}` : ''})`);
+    const CLI_FILES = { 'Acme-Brand.shadcn.css': 'shadcn/Acme-Brand.css', 'Acme-Brand.shadcn.registry-item.json': 'shadcn/Acme-Brand.registry-item.json', 'Acme-Brand.tailwind.theme.css': 'tailwind/Acme-Brand.theme.css' };
+    for (const theme of Object.keys(WEB_THEMES)) {
+      const want = Object.fromEntries(Object.entries(CLI_FILES).filter(([n]) => n.includes(`.${theme}.`)));
+      let web, figma;
+      try { web = await exportFrom('web', 'Acme-Brand', false, theme, { text: brief }); } catch (e) { ok(false, `spaced id: the web ${theme} export ran — ${e.message.split('\n')[0]}`); continue; }
+      try { figma = await exportFrom('figma', 'Acme-Brand', false, theme, { text: brief }); } catch (e) { ok(false, `spaced id: the plugin ${theme} export ran — ${e.message.split('\n')[0]}`); continue; }
+      for (const [host, x] of [['web', web], ['plugin', figma]]) {
+        ok(JSON.stringify(names(x.files)) === JSON.stringify(Object.keys(want).sort()), `spaced id: ${host} names the ${theme} files ${Object.keys(want).sort().join(', ')} (${names(x.files).join(', ') || 'nothing'})`);
+        for (const [name, cliPath] of Object.entries(want)) {
+          let cliText; try { cliText = readFileSync(join(tmpDir, 'out', cliPath), 'utf8'); } catch { cliText = undefined; }
+          const body = x.files.get(name);
+          ok(body !== undefined && body === cliText, `spaced id: the ${host} ${name} is the CLI's ${cliPath}, byte for byte (${body?.length ?? 0} / ${cliText?.length ?? 0} bytes)${body !== undefined && cliText !== undefined && body !== cliText ? ` — ${firstDiff(body, cliText)}` : ''}`);
+        }
+      }
+    }
+  } finally { rmSync(tmpDir, { recursive: true, force: true }); }
 }
 
 // ── the option does what it says: On writes the same files with the metadata kept ─────────────────────

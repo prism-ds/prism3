@@ -24,3 +24,7 @@
 - `regen --check`, for regen.
 
 The expected side is always the committed `out/shadcn/**` and `out/tailwind/**`. A change to the projector without a regen fails every surface by name.
+
+**After review.** The review (CHANGES at `1c8cd770`) found a brand whose id isn't already a slug named two ways. Studio wrote `Acme-Brand` (its `slug()`), while `export_theme` and the CLI wrote the raw id: `Acme Brand`, or `  acme  `, in the file names, the CSS header and the registry item's `name` and `title`.
+- **The fix:** `brandSlug` in `web-themes.ts` is now the one rule, Studio's slug exactly. `handoffOf` applies it, so every surface names the brand the same way, and Studio's `slug()` is defined through it. A committed brand's id is already a slug, so `regen --check` stays in sync.
+- **Held by:** for `"  Acme Brand "`, `test.ts` holds Studio's projector call, `export_theme` and the CLI to the same three files under the same names, byte for byte. `test:export-parity` holds both hosts' downloads to the CLI's bytes. Giving one surface the raw id back fails it by name.

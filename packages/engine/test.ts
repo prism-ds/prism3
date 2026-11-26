@@ -33418,6 +33418,40 @@ arm: {
   ok(held >= (memoryBrands.length + 1 + 2) * 3 && wrong.length === 0,
     `web themes: every surface writes the committed shadcn/ui and Tailwind files byte for byte (${held} files held: in memory for ${memoryBrands.map(([id]) => id).join(', ')}, export_theme, cli.ts${wrong.length ? `; wrong: ${wrong.slice(0, 6).join(', ')}${wrong.length > 6 ? ` and ${wrong.length - 6} more` : ''}` : ''})`);
 }
+// THE BRAND'S NAME, THE SAME ON EVERY SURFACE (#4609 review). A brand whose id is not already a slug ("  Acme Brand ")
+// once got `Acme-Brand` from Studio and `Acme Brand` / `  acme  ` from `export_theme` and the CLI: in the file names,
+// the CSS header and the registry item's `name` and `title`. `brandSlug` is the one rule now. Held here: Studio's own
+// call (`webThemeHandoff` with the raw id, which is what `main.ts` passes through `slug()`), `export_theme`, and the CLI
+// on a brief, each writing the same three files under the same names, byte for byte, and the name typed here.
+// `test:export-parity` holds the web and plugin downloads to the CLI's bytes. BY-NAME MUTATION: one surface given the
+// raw id back → this arm fails.
+{
+  const wt = await import('./web-themes') as typeof import('./web-themes');
+  const rawId = '  Acme Brand ';
+  const spaced = { id: rawId, primary: { l: 0.55, c: 0.18, h: 265 }, neutral: { hue: 'cool', chroma: 0.01 } } as BrandInput;
+  const want = ['shadcn/Acme-Brand.css', 'shadcn/Acme-Brand.registry-item.json', 'tailwind/Acme-Brand.theme.css'];
+  const studioSide = (() => { const h = wt.webThemeHandoff(buildTree(brandTheme(spaced)).tree, rawId); return new Map([...wt.shadcnFiles(h), ...wt.tailwindFiles(h)].map((f) => [f.path, f.text])); })();
+  const mcpSide = new Map<string, string>();
+  callTool('export_theme', { brand: spaced, outDir: './sp', include: ['shadcn', 'tailwind'] }, undefined, { mkdir: () => {}, writeFile: (q: string, c: string) => { mcpSide.set(q.replace(/^\.\/sp\//, ''), c); } });
+  const cliSide = new Map<string, string>();
+  const spDir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-spaced-id-'));
+  try {
+    writeFileSync(join(spDir, 'spaced.design.md'), `---\nid: "${rawId}"\nprimary: { l: 0.55, c: 0.18, h: 265 }\nneutral: { hue: cool, chroma: 0.01 }\n---\n`);
+    const r = spawnSync('npx', ['tsx', resolve(HERE, 'cli.ts'), join(spDir, 'spaced.design.md'), '--out', join(spDir, 'out'), '--shadcn', '--tailwind'], { cwd: HERE, encoding: 'utf8' });
+    ok(r.status === 0, `brand name: cli.ts writes the web themes for the id ${JSON.stringify(rawId)} (exit ${r.status}: ${(r.stderr || '').trim().slice(0, 160)})`);
+    for (const p of want) { try { cliSide.set(p, readFileSync(join(spDir, 'out', p), 'utf8')); } catch { /* absent: named below */ } }
+  } finally { rmSync(spDir, { recursive: true, force: true }); }
+  const surfaces: Array<[string, Map<string, string>]> = [['Studio (in memory)', studioSide], ['export_theme', mcpSide], ['cli.ts', cliSide]];
+  const names = (m: Map<string, string>) => [...m.keys()].sort().join(', ');
+  const wrongNames = surfaces.filter(([, m]) => names(m) !== [...want].sort().join(', ')).map(([w, m]) => `${w} wrote ${names(m) || 'nothing'}`);
+  const wrongBytes = want.flatMap((p) => surfaces.slice(1).filter(([, m]) => m.get(p) !== studioSide.get(p)).map(([w]) => `${w} ${p}`));
+  ok(wrongNames.length === 0 && wrongBytes.length === 0,
+    `brand name: for the id ${JSON.stringify(rawId)}, Studio, export_theme and cli.ts write the same three files under the same names, byte for byte (${want.join(', ')}${wrongNames.length ? `; names: ${wrongNames.join('; ')}` : ''}${wrongBytes.length ? `; differ from Studio's: ${wrongBytes.join(', ')}` : ''})`);
+  const css = studioSide.get('shadcn/Acme-Brand.css') ?? '';
+  const item = JSON.parse(studioSide.get('shadcn/Acme-Brand.registry-item.json') ?? '{}');
+  ok(css.startsWith('/* Acme-Brand — ') && item.name === 'Acme-Brand' && item.title === 'Acme-Brand' && (studioSide.get('tailwind/Acme-Brand.theme.css') ?? '').startsWith('/* Acme-Brand — '),
+    `brand name: the CSS headers and the registry item's name and title read Acme-Brand (header ${JSON.stringify(css.split('\n')[0]?.slice(0, 40))}, name ${JSON.stringify(item.name)}, title ${JSON.stringify(item.title)})`);
+}
 {
   // #4145: three exports had no reader and a comment claiming one. Each claim is now true or gone.
   // 1. SPECS_SCHEMA_VERSION is held equal to the Specs pin `packages/tokens/package.json` installs (the pin

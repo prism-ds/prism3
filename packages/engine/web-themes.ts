@@ -35,6 +35,15 @@ export type ShadcnMode = keyof typeof SHADCN_MODES;
 export type Handoff = { brand: string; root: string; base: Tree; overlays: Partial<Record<string, Tree>> };
 
 /**
+ * THE BRAND'S NAME IN ITS THEME FILES (#4609 review): the one rule every surface names a brand by, in the file names,
+ * the CSS header and the registry item's `name` and `title`. Studio's slug, word for word: the id trimmed, each run of
+ * whitespace one `-`, and `brand` for an empty one. So `"  Acme Brand "` is `Acme-Brand` in Studio, in the plugin, in
+ * `export_theme` and from the CLI alike, and a registry item's name is a slug. A committed brand's id already is one,
+ * so its files do not move. `handoffOf` applies it, so no surface can build a handoff under another name.
+ */
+export const brandSlug = (id: unknown): string => String(id || 'brand').trim().replace(/\s+/g, '-') || 'brand';
+
+/**
  * A handoff from the consumer set's files as objects: the base file (`{ <root>: … }`) and each mode's overlay file, as
  * `buildOverlaySet` returns them and as `<brand>.base.tokens.json` and its overlays hold them. Every mode shadcn needs
  * must have its overlay, and the base must have one root; either missing throws, naming the brand.
@@ -52,7 +61,7 @@ export const handoffOf = (brand: string, base: unknown, overlays: ReadonlyArray<
     if (!t) throw new Error(`${brand}: no ${brand}.${m}.overlay.tokens.json in the handoff`);
     out[m] = (t[root] ?? {}) as Tree;
   }
-  return { brand, root, base: baseFile[root] as Tree, overlays: out };
+  return { brand: brandSlug(brand), root, base: baseFile[root] as Tree, overlays: out };
 };
 
 /** A brand's handoff, built in memory from its token tree (`buildTree(theme).tree`) with the consumer set's own

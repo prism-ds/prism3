@@ -19,7 +19,7 @@
  * volatile region (ramps or preview), so knob focus is never lost; a failed brand
  * combination is caught and surfaced with the last-good render preserved.
  */
-import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION, webThemeHandoff, shadcnFiles, tailwindFiles, type WebThemeFile } from '@prism3/engine';
+import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION, webThemeHandoff, shadcnFiles, tailwindFiles, brandSlug, type WebThemeFile } from '@prism3/engine';
 import { componentSpecsFileNames, loadComponentSpecsExporter } from './state/component-specs-export';
 import { hostCommit, type CheckedSetView, type HostCommit } from './write-adapter';
 import { AGENT_OP, initialHostSession, reduce, topicsFor, brandEffectFor, type HostSession, type OpKey } from './state/host-session';
@@ -1403,7 +1403,8 @@ const download = (filename: string, text: string, mime: string): void => {
 /** The brand a post to the host carries: `lastGoodInput`, its words added to the session's first (#3883). A rename
  *  skips `rebuild()` (`syncIdentity`), so a post is the one moment the brand an Activity line will name is known. */
 const posted = postedInput;   // the note is the store's (`postedInput`), where `test-report.ts` runs it
-const slug = (): string => String(lastGoodInput.id || 'brand').trim().replace(/\s+/g, '-') || 'brand';
+// The brand's file name: the engine's one rule (`brandSlug`, `web-themes.ts`), which every export surface names a brand by.
+const slug = (): string => brandSlug(lastGoodInput.id);
 
 // Both exports run off the LAST-GOOD state, never the live one (M-15). Previously tokens.json
 // re-ran `brandTheme(brandState)` uncaught — a failing edit threw in the click handler (no

@@ -73,7 +73,7 @@ export { TRAITS, TRAIT_OPPOSITES } from './vocabulary';
 export { colorVariablesOutOfOrder } from './color-order';
 export { buildBase, buildOverlaySet, stripExtensions } from './emit-dtcg-overlay';
 // The shadcn/ui and Tailwind themes for a brand in view: one pure projector, the one regen runs too (`web-themes.ts`).
-export { webThemeHandoff, shadcnFiles, tailwindFiles, type WebThemeFile } from './web-themes';
+export { webThemeHandoff, shadcnFiles, tailwindFiles, brandSlug, type WebThemeFile } from './web-themes';
 export { BUTTON_SPACING } from './button-spacing';
 export { default as EXAMPLE_BRANDS_JSON } from './schema/example-brands.json';
 export { EXAMPLE_DESCRIPTIONS } from './example-registry';
