@@ -7,7 +7,7 @@ What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows ho
 - Web Studio: Studio in a browser. <!-- src: apps/studio/build-site.mjs@"/**\n * Site build (#104). Produces the directory Vercel publishes.".."* plus the repo's `docs"#b1876ee9 -->
 - Figma plugin: the same studio inside Figma <!-- src: apps/plugin/src/ui/entry.ts@"import './component-catalog".."mountAgentLink();"#6258203d -->, plus **Update file**, which writes to the file. <!-- src: apps/studio/src/state/update-file.ts@"button: 'Update file" -->
 - Agent, through the agent link: an AI agent driving the open plugin. See [Use the agent link](agent-link.md). <!-- src: apps/plugin/src/agent-protocol.ts@"export const AGENT_COMMANDS"#6bb39596 -->
-- Agent, through the Prism3 MCP server: an AI agent using the engine directly, with no Figma file. <!-- src: packages/engine/mcp.ts@"*\n *  `validate_brand` does NOT re-inline the 52KB brand schema. Two copies made `tools/list` 91,528".."// this annotation to"#a2dae559 -->
+- Agent, through the Prism3 MCP server: an AI agent using the engine directly, with no Figma file. <!-- src: packages/engine/mcp.ts@"*\n *  `validate_brand` does NOT re-inline the 52KB brand schema. Two copies made `tools/list` 91,528".."// this annotation to"#ad039113 -->
 
 ✓ means the surface can do it. – means it can't.
 
@@ -22,7 +22,7 @@ What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows ho
 | Import a `design.md` brief | ✓ | ✓ | – | ✓ `theme_from_brief` |
 | Export a `design.md` brief | ✓ <!-- src: apps/studio/src/main.ts@"const exportDesignMd" --> | ✓ | – | – |
 
-<!-- src: apps/studio/src/shell/start.ts@"const c1 = card('Start".."const c4 = card('Import" --> <!-- src: packages/engine/mcp.ts@"name: 'list_levers',".."required: ['valid', 'errors'],\n    },\n    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },\n  },"#121e0c8c -->
+<!-- src: apps/studio/src/shell/start.ts@"const c1 = card('Start".."const c4 = card('Import" --> <!-- src: packages/engine/mcp.ts@"name: 'list_levers',".."required: ['valid', 'errors'],\n    },\n    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },\n  }," -->
 
 ## Figma file
 
@@ -47,7 +47,7 @@ What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows ho
 | Write the token files, the agent metadata and the Figma variable files to a folder | – | – | – | ✓ `export_theme` <!-- src: packages/engine/README.md@"\u007c `export_theme` \u007c Writes" --> |
 | Score how generated UI used the tokens | – | – | – | ✓ `score_consumption` |
 
-<!-- src: packages/engine/mcp.ts@"name: 'export_theme'".."annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },\n  },"#2d429c3c --> <!-- src: packages/engine/mcp.ts@"name: 'score_consumption".."annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },\n  },"#171b17f0 -->
+<!-- src: packages/engine/mcp.ts@"name: 'export_theme'".."annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },\n  },"#2d429c3c --> <!-- src: packages/engine/mcp.ts@"name: 'score_consumption".."annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },\n  }," -->
 
 TokenPress, a separate Figma plugin, exports any Figma file's variables and styles as DTCG token files. See [Export tokens](export-tokens.md#export-any-figma-file-with-tokenpress). <!-- src: apps/tokenpress/README.md@"A Figma plugin that "#9efac648 -->
 

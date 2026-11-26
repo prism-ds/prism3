@@ -9976,7 +9976,7 @@ for (const reduced of [false, true]) {
     await openDepth(page);
     const tag = reduced ? 'under reduced motion' : 'without reduced motion';
     const mount = await dotAnims(page);
-    ok(mount.length === 10 && mount.every((a) => !a), `D9: ${tag}, the ten preset traces (#2857) are at rest when the page opens (${JSON.stringify(mount)})`);
+    ok(mount.length === 12 && mount.every((a) => !a), `D9: ${tag}, the twelve preset traces (#2857; pop and press joined in phase 2) are at rest when the page opens (${JSON.stringify(mount)})`);
     await slide(page, 'shadow-softness', 0.4);
     const elev = await dotAnims(page);
     ok(elev.every((a) => !a), `D9: ${tag}, an Elevation edit plays nothing (${JSON.stringify(elev)})`);
@@ -9987,7 +9987,7 @@ for (const reduced of [false, true]) {
     const after = await dotAnims(page);
     const label = await page.evaluate(() => document.querySelector('[data-p3="motion-play"]')?.textContent ?? null);
     if (reduced) ok(after.every((a) => !a) && label === 'Play', `D9: under reduced motion, a Motion edit plays nothing, and the button still says Play (${JSON.stringify(after)}, "${label}")`);
-    else ok(after.length === 10 && after.every((a) => /mo-trace-y/.test(a) && /\d+ms cubic-bezier/.test(a)) && label === 'Replay', `D9: without reduced motion, a Motion edit plays the ten preset traces once, and the button says Replay (${JSON.stringify(after)}, "${label}")`);
+    else ok(after.length === 12 && after.every((a) => /mo-trace-y/.test(a) && /\d+ms cubic-bezier/.test(a)) && label === 'Replay', `D9: without reduced motion, a Motion edit plays the twelve preset traces once, and the button says Replay (${JSON.stringify(after)}, "${label}")`);
     // Real speed: the surface preset's trace runs its relaxed duration (moderate 300 × 1.3 = 390ms) at Off, on its enter
     // role's curve, decelerate (0, 0, 0.2, 1). #2857: the presets replaced the transitions, and none is on emphasized.
     const brand0 = JSON.stringify(await persisted(page));

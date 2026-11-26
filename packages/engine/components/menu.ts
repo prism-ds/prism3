@@ -32,6 +32,7 @@
  * own `leading` toggle (held for the owner): on, it shows the check column and the icon each behind their own toggle.
  */
 import { ComponentDef, PartDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 // ── Menu.Item ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -260,7 +261,7 @@ export const menuItem: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — the highlight moves with no transition, so a person arrowing through sees it land at once, and a check appears at once. The menu itself opens and closes on the Popover / open and Popover / close pattern.',
+          'motion — the highlight moves with no transition, so a person arrowing through sees it land at once, and a check appears at once. The menu itself opens and closes on the `popover/open` and `popover/close` patterns.',
       },
       {
         class: 'right-to-left',
@@ -683,7 +684,7 @@ export const menu: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — the Popover / open and Popover / close pattern: opening fades in and scales up from a little under full size from the trigger\'s side, on `motion.duration.fast` and `motion.easing-role.enter`; closing fades out on `motion.duration.instant` and `motion.easing-role.exit`. A submenu fades only, on the same timings. Under `prefers-reduced-motion` it fades only, on `motion.duration-reduced.fast` to open and to close.',
+          'motion — the `popover/open` and `popover/close` patterns: opening fades in and scales up from 95% from the trigger\'s side, on `motion.preset.pop`; closing fades out on `motion.preset.pop.exit`. A submenu fades only, on the same presets. Under `prefers-reduced-motion` it fades only, on each preset\'s `.duration-reduced`.',
       },
       {
         class: 'right-to-left',
@@ -758,11 +759,8 @@ export const menu: ComponentDef = {
     planned: ['split-button', 'listbox'],
   },
 
-  motion: {
-    enter: 'Fades in and scales up from a little under full size, from the trigger\'s side (motion.duration.fast, motion.easing-role.enter). A submenu fades only.',
-    exit: 'Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.',
-    reduceMotion: 'Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that the menu opened or closed.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['popover/open', 'popover/close'], { enter: 'It scales from the trigger\'s side. A submenu fades only.', reduceMotion: 'A fade is not movement, and it keeps the cue that the menu opened or closed.' }),
 
   notes: {
     contested: [
@@ -770,7 +768,7 @@ export const menu: ComponentDef = {
       'A split button is a Menu variant in the brief; it gets its own issue, #4296 (planned here).',
     ],
     unverified: [
-      'The Popover / open and Popover / close motion preset is described here but not built: the starter set exists only as a wireframe.',
+      'The `popover/open` and `popover/close` motion patterns are built since #2857 phase 2, on `motion.preset.pop` and its exit half; the Figma style per pattern waits on phase 3.',
     ],
     evolution: [
       'Owner decision Q-FL2 (2026-11-19, on #4007): every OD at its recommendation, with K1 B (menubar kept as an alias), K2 measured and so A, K3 B. OD-X1 A: the panel binds Popover\'s five raised-surface roles, and test.ts holds them equal.',

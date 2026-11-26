@@ -186,7 +186,7 @@ for (const k of usedKinds) {
 for (const k of new Set(PROBES.map((p) => p.kind))) if (!usedKinds.has(k)) failures.push(`kind '${k}' is probed but no shipped def uses it — a probe of a kind nothing writes guards no def`);
 
 // One file per probe, named relative to the directory tsc runs in, which is how it prints them.
-const dir = mkdtempSync(join(tmpdir(), 'p3-part-union-'));
+const dir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-part-union-'));
 const files: { probe: Probe; file: string }[] = [];
 PROBES.forEach((probe, i) => {
   const file = `probe-${String(i).padStart(3, '0')}-${probe.kind}-${probe.field || 'part'}-${probe.legal ? 'legal' : 'illegal'}.ts`;

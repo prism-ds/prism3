@@ -14,7 +14,7 @@
  * calls reports that revision's sets as `error`, which reads as "not measured", never as "not reached".
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,7 @@ const revAt = (c: string): number => Number(/EXECUTOR_REVISION\s*=\s*(\d+)/.exec
 
 const commits = git('log', '--format=%H', '--', REVISION).split('\n').filter(Boolean)
   .map((c) => ({ c, to: revAt(c), from: revAt(`${c}^`) })).filter((x) => x.to > x.from).slice(0, LAST);
-const scratch = mkdtempSync(join(tmpdir(), 'prism3-reach-history-'));
+const scratch = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-reach-history-'));
 const exportTo = (c: string, dir: string, paths: string[]): void => {
   mkdirSync(dir, { recursive: true });
   const a = spawnSync('git', ['-C', REPO, 'archive', '--format=tar', c, ...paths], { maxBuffer: 1024 * 1024 * 1024 });

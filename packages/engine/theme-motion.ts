@@ -12,6 +12,7 @@
 // (Apple "substitute, don't delete": small informational motion preserved/floored,
 // large/vestibular motion eliminated) — not a hand-maintained second list.
 import { springSettleMs } from './spring';
+import type { MotionPattern } from './motion-patterns';
 
 export type Bezier = [number, number, number, number];
 /** One preset's slots as a brand re-points them (#2857, Q-MS3 A), each a `motion` path. Absent slots keep the default.
@@ -19,7 +20,9 @@ export type Bezier = [number, number, number, number];
  *  - `easing`: `easing-role.<role>` (the default kind), `easing.<curve>`, a brand curve included, or `spring.<spring>`.
  *  - `delay`: `delay.<step>`. Absent, the preset starts at once.
  *  The reduced duration is derived from the duration slot (Q-MS6 A) and cannot be set. */
-export type MotionPresetInput = { duration?: string; easing?: string; delay?: string };
+export type MotionPresetSlotsInput = { duration?: string; easing?: string; delay?: string };
+/** An arriving preset also takes `exit`, its closing half (#2857, Q-PT3 A), written with the same slots. */
+export type MotionPresetInput = MotionPresetSlotsInput & { exit?: MotionPresetSlotsInput };
 export type MotionPersonality = {
   tempo?: 'snappy' | 'standard' | 'relaxed';   // scales the base duration ramp
   // Which CURVE each motion role resolves to, brand-wide (#522 follow-up). The per-mode re-point in
@@ -37,10 +40,18 @@ export type MotionPersonality = {
   // Absent entries keep the engine's default (`MOTION_PRESET_DEFAULTS`). An unknown preset, slot or target is
   // refused by name.
   presets?: Partial<Record<string, MotionPresetInput>>;
+  // A brand's overrides of the engine's motion patterns (#2857, Q-PT15 A), per track: its preset, distance, start
+  // scale and reduced kind, never which tracks exist. Keyed by pattern name, then by track key (`<element>.<property>`).
+  // Checked and applied in `motion-patterns.ts`.
+  patterns?: Record<string, Record<string, MotionTrackInput>>;
   // The brand-only motion group (#2857, Q-MP7 option 3 item 3): true one-offs that are not part of the guaranteed
   // contract. Each entry is emitted under `motion.brand.<name>` for this brand only. Omitted, nothing is emitted.
   brandOnly?: Record<string, MotionBrandOnly>;
 };
+/** One track's brand override (#2857, Q-PT15 A). `preset` is a path, `preset.<name>` or `preset.<name>.exit` (Q-P3 A).
+ *  `distance` is a token path (`distance.nudge`, `space.<step>`) or a number of px (Q-PT9 A). `scale` is the start scale,
+ *  above 0 and at most 1 (Q-PT10 A). `reduced` is the reduced-motion kind (Q-PT11 A). */
+export type MotionTrackInput = { preset?: string; distance?: string | number; scale?: number; reduced?: 'fade' | 'keep' | 'off' };
 /** One brand-only motion value (#2857). The three shapes the owner named: a spring, a duration that scales with the
  *  distance travelled, and gesture physics. The fields are DRAFT. No example brand sets one. */
 export type MotionBrandOnly =
@@ -56,7 +67,9 @@ export type PresetEasing = { role: string } | { curve: string } | { spring: stri
 export type PresetReduced = { step: string } | { ms: number };
 /** A motion preset resolved through the brand's mapping (#2857, Q-MS1 A): what each of its slots aliases. A `delay`
  *  of null starts at once (0ms). */
-export type MotionPreset = { preset: string; duration: PresetDuration; easing: PresetEasing; delay: string | null; reduced: PresetReduced };
+export type MotionPresetHalf = { duration: PresetDuration; easing: PresetEasing; delay: string | null; reduced: PresetReduced };
+/** An arriving preset's `exit` is its closing half (#2857, Q-PT3 A): by default one step shorter, on the `exit` role. */
+export type MotionPreset = { preset: string } & MotionPresetHalf & { exit?: MotionPresetHalf };
 export type MotionAxis = {
   tempo: 'snappy' | 'standard' | 'relaxed';
   duration: Record<string, number>;            // ms, semantic roles (tempo-scaled)
@@ -83,6 +96,9 @@ export type MotionAxis = {
   // Every preset (the ten of Q-MP2 A), resolved through the brand's mapping (#2857). Emitted to the tree as the
   // `motion.preset.<name>.*` alias tier (Q-MS1 A, Q-MS8 A), to Figma as published variables, and named in the sidecar.
   presets: MotionPreset[];
+  // The motion patterns (#2857 phase 2, Q-PT1 A): what each component's motion moves, as tracks naming presets, with
+  // the brand's track overrides applied (`motion-patterns.ts`). Set by the theme builders, beside the presets.
+  patterns?: MotionPattern[];
   // The brand-only group, validated, in input order. Absent when the brand sets none.
   brandOnly?: Record<string, MotionBrandOnly>;
 };
@@ -126,34 +142,54 @@ export const SPRINGS: Readonly<Record<string, { damping: number; stiffness: numb
 };
 /** The delay steps (G6 B): how long a tooltip or a busy indicator waits before it shows, and the least time a shown
  *  one stays, so a fast result flashes nothing. Perception thresholds, not pace: the same at every tempo. */
-export const MOTION_DELAYS: Readonly<Record<string, number>> = { show: 400, 'min-show': 500 };
+export const MOTION_DELAYS: Readonly<Record<string, number>> = { show: 400, 'min-show': 500, hide: 300, skip: 300 };
+// `hide` (Q-PT13 A): how long a tooltip stays after the pointer leaves, so the pointer can move onto it (WCAG 1.4.13).
+// `skip` (Q-PT14 A): after one tooltip closes, how long the next shows at once, with no delay and no animation.
+/** The eleventh preset's name (#2857, Q-PT4 A). The preset is approved; its NAME is still the owner's (the field
+ *  offers the KB's "pop", `popup` and `contextual`), so it lives in this one constant: renaming it is mechanical. */
+export const QUICK_ARRIVAL_PRESET = 'pop';
+/** The `motion.distance.*` names the tree emits (Q-MP6 A): a pattern track's distance names one of these, a space step,
+ *  or a number of px (#4601 review). `tree.ts` writes the tokens; the phase 1 test holds `nudge` at `space.100`. */
+export const MOTION_DISTANCE_NAMES: readonly string[] = ['nudge'];
 /**
- * The default preset slots (#2857): the ten presets of Q-MP2 A on the rows approved in Q-MP8 A, each slot aliasing
+ * The default preset slots (#2857): the ten presets of Q-MP2 A on the rows approved in Q-MP8 A, and phase 2's `pop`
+ * (Q-PT4 A) and `press` (Q-PT7 A), with `move` on normal (Q-PT5 A), each slot aliasing
  * the role it plays on (Q-MS1 A). A brand re-points any slot with `motionPersonality.presets`. Every preset starts at
  * once (no delay), and its reduced duration follows its duration slot (Q-MS6 A).
  * - state: a micro state change or press → `fast`, in place.
  * - fade: an opacity change → `normal`, arriving.
  * - crossfade: one thing replaced by another in place → `normal`.
- * - move: a change of position within the layout → `moderate`, in place.
+ * - move: a change of position within the layout → `normal`, in place (Q-PT5 A: the in-place travels, the tab underline,
+ *   the switch thumb, the segmented pill, the accordion indicator, and Studio's eased scroll, Q-PT6 A).
  * - reveal: content arriving on view → `slow`, arriving.
  * - draw: a line drawn on → `slow`, in place. Under reduced motion it fades in (owner decision, 2026-11-20).
  * - surface: a dialog, sheet or drawer arriving → `moderate`, arriving.
  * - expand: a height change → `normal`, in place (owner decision, 2026-11-20).
  * - step: a carousel advancing one item → `moderate`, in place.
  * - settle: a moved thing coming to rest → `slow`, arriving.
+ * - pop (the name is a placeholder, `QUICK_ARRIVAL_PRESET`; Q-PT4 A): a small surface or element arriving quickly, such
+ *   as a tooltip, popover or menu → `fast`, arriving.
+ * - press: a control pressed down → `instant`, in place (Q-PT7 A). Its release is `state`.
  */
 export const MOTION_PRESET_DEFAULTS: readonly { preset: string; step: string; role: string }[] = [
   { preset: 'state', step: 'fast', role: 'default' },
   { preset: 'fade', step: 'normal', role: 'enter' },
   { preset: 'crossfade', step: 'normal', role: 'default' },
-  { preset: 'move', step: 'moderate', role: 'default' },
+  { preset: 'move', step: 'normal', role: 'default' },
   { preset: 'reveal', step: 'slow', role: 'enter' },
   { preset: 'draw', step: 'slow', role: 'default' },
   { preset: 'surface', step: 'moderate', role: 'enter' },
   { preset: 'expand', step: 'normal', role: 'default' },
   { preset: 'step', step: 'moderate', role: 'default' },
   { preset: 'settle', step: 'slow', role: 'enter' },
+  { preset: QUICK_ARRIVAL_PRESET, step: 'fast', role: 'enter' },
+  { preset: 'press', step: 'instant', role: 'default' },
 ];
+/** The presets that bring something in, each with an exit half (#2857, Q-PT3 A). An in-place preset has none: it
+ *  plays the same both ways (an accordion collapses on `expand`). */
+export const ARRIVING_PRESETS: readonly string[] = ['fade', 'reveal', 'surface', 'settle', QUICK_ARRIVAL_PRESET];
+/** An exit half's default step: one shorter than its entrance (rule R3), never below the first step. */
+export const exitStepOf = (step: string): string => DURATION_STEPS[Math.max(0, DURATION_STEPS.indexOf(step) - 1)]!;
 /** The slots a brand may set on a preset. The reduced duration is derived, never set (Q-MS6 A). */
 export const PRESET_SLOTS = ['duration', 'easing', 'delay'] as const;
 /** The fields each brand-only kind takes, and which are required. */
@@ -228,16 +264,10 @@ export const checkCurveForRole = (role: string, curve: string, easing: Record<st
   if (role === 'enter' && half < 0.5) throw new Error(`${at}: the brand curve '${curve}' accelerates (it is ${Math.round(half * 100)}% of the way at half its time), and the enter role decelerates`);
   if (role === 'exit' && half > 0.5) throw new Error(`${at}: the brand curve '${curve}' decelerates (it is ${Math.round(half * 100)}% of the way at half its time), and the exit role accelerates`);
 };
-/** A preset's slots, resolved: the default row, then the brand's re-points, each checked by name (Q-MS3 A), and the
- *  spring rule held: a preset eased by a spring plays for that spring's settle time, so the two slots go together. */
-const resolvePreset = (d: { preset: string; step: string; role: string }, given: unknown, easing: Record<string, Bezier>,
-  springs: Record<string, { damping: number; stiffness: number }>, roles: readonly string[]): MotionPreset => {
-  const at = `motionPersonality.presets.${d.preset}`;
-  if (given !== undefined && (typeof given !== 'object' || given === null || Array.isArray(given)))
-    throw new Error(`${at}: a preset is an object of slots, { ${PRESET_SLOTS.join(', ')} }, each a motion path (got ${JSON.stringify(given)})`);
-  const g = (given ?? {}) as Record<string, unknown>;
-  for (const k of Object.keys(g)) if (!(PRESET_SLOTS as readonly string[]).includes(k))
-    throw new Error(`${at}: unknown slot '${k}' (have: ${PRESET_SLOTS.join(', ')}; the reduced duration follows the duration)`);
+/** One half's slots, resolved: the defaults, then the brand's re-points, each checked by name (Q-MS3 A), and the
+ *  spring rule held: a half eased by a spring plays for that spring's settle time, so the two slots go together. */
+const resolveHalf = (at: string, d: { step: string; role: string }, g: Record<string, unknown>, easing: Record<string, Bezier>,
+  springs: Record<string, { damping: number; stiffness: number }>, roles: readonly string[]): MotionPresetHalf => {
   const path = (slot: string): string | undefined => {
     const v = g[slot];
     if (v === undefined) return undefined;
@@ -274,7 +304,33 @@ const resolvePreset = (d: { preset: string; step: string; role: string }, given:
   // The reduced duration follows the duration slot (Q-MS6 A): a step's own reduced twin, or for a spring the short
   // fade it becomes under reduced motion (G3 B), `min(settle, 100ms)`.
   const reduced: PresetReduced = 'step' in duration ? { step: duration.step } : { ms: Math.min(springSettleMs(springs[duration.spring]!), REDUCED_CAP_MS) };
-  return { preset: d.preset, duration, easing: ease, delay: de === undefined ? null : de.slice(6), reduced };
+  return { duration, easing: ease, delay: de === undefined ? null : de.slice(6), reduced };
+};
+/** A preset, resolved: its own half, and for an arriving preset its exit half (Q-PT3 A), whose default is one step
+ *  shorter than the entrance as resolved (so a brand that lengthens the entrance lengthens the exit with it), on the
+ *  `exit` role. A brand re-points the exit half's slots under `exit`, checked the same way. */
+const resolvePreset = (d: { preset: string; step: string; role: string }, given: unknown, easing: Record<string, Bezier>,
+  springs: Record<string, { damping: number; stiffness: number }>, roles: readonly string[]): MotionPreset => {
+  const at = `motionPersonality.presets.${d.preset}`;
+  const arriving = ARRIVING_PRESETS.includes(d.preset);
+  const slots = arriving ? [...PRESET_SLOTS, 'exit'] : [...PRESET_SLOTS];
+  if (given !== undefined && (typeof given !== 'object' || given === null || Array.isArray(given)))
+    throw new Error(`${at}: a preset is an object of slots, { ${slots.join(', ')} }, each a motion path (got ${JSON.stringify(given)})`);
+  const g = (given ?? {}) as Record<string, unknown>;
+  for (const k of Object.keys(g)) if (!slots.includes(k))
+    throw new Error(k === 'exit'
+      ? `${at}.exit: only a preset that brings something in has an exit half (${ARRIVING_PRESETS.join(', ')}); '${d.preset}' plays the same both ways`
+      : `${at}: unknown slot '${k}' (have: ${slots.join(', ')}; the reduced duration follows the duration)`);
+  const own = resolveHalf(at, d, g, easing, springs, roles);
+  if (!arriving) return { preset: d.preset, ...own };
+  const ge = g.exit;
+  if (ge !== undefined && (typeof ge !== 'object' || ge === null || Array.isArray(ge)))
+    throw new Error(`${at}.exit: an exit half is an object of slots, { ${PRESET_SLOTS.join(', ')} }, each a motion path (got ${JSON.stringify(ge)})`);
+  const gx = (ge ?? {}) as Record<string, unknown>;
+  for (const k of Object.keys(gx)) if (!(PRESET_SLOTS as readonly string[]).includes(k))
+    throw new Error(`${at}.exit: unknown slot '${k}' (have: ${PRESET_SLOTS.join(', ')}; the reduced duration follows the duration)`);
+  const exitStep = exitStepOf('step' in own.duration ? own.duration.step : d.step);
+  return { preset: d.preset, ...own, exit: resolveHalf(`${at}.exit`, { step: exitStep, role: 'exit' }, gx, easing, springs, roles) };
 };
 
 export const buildMotion = (p: MotionPersonality = {}): MotionAxis => {

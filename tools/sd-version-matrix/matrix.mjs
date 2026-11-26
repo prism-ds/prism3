@@ -22,7 +22,7 @@
  * what that consumer would still be missing after it.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
@@ -32,7 +32,7 @@ import { outcomesFor, readDeclarations, readPlatform, PLATFORMS, TYPES, OUTCOMES
 
 const here = dirname(fileURLToPath(import.meta.url));
 const REPORT = resolve(here, '../../packages/tokens/sd-version-matrix.md');
-const WORK = resolve(tmpdir(), 'prism3-sd-matrix');
+const WORK = resolve(realpathSync(tmpdir()), 'prism3-sd-matrix');
 
 /** The latest of each major the issue names, plus the first release of 4 and 5 so the minimum is
  *  bounded from below rather than inferred, and the version this repo's lockfile pins. */

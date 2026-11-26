@@ -74,9 +74,11 @@ import { ENGINE_VERSION } from './version';
 import { DISPOSITION_NAMES } from './code-only-register';
 import { projectDef } from './project-def';
 import { exportComponentDefs, toSpecsComponents, componentDefsFileNames } from './component-defs-export';
+import { isEntry } from './entry-point';
 
 /** The sidecar's schema id. `schema/component-docs.schema.json` carries the same `$id`; both move together. */
-export const COMPONENT_DOCS_SCHEMA = 'prism3-component-docs/1.2';
+// 1.3 (#2857 phase 2): `motion.patterns`, the motion patterns a def plays, by name.
+export const COMPONENT_DOCS_SCHEMA = 'prism3-component-docs/1.3';
 
 // `projectDef` moved to its own I/O-free module (#3425) so a surface can bundle it; re-exported for existing readers.
 export { projectDef };
@@ -146,6 +148,7 @@ export const renderMarkdown = (def: ComponentDef): string => {
   // A row's later paragraphs are indented under its bullet, so they stay part of that row.
   const fields = (fs: readonly DocField[]) => {
     for (const f of fs) {
+      if (f.list) { out.push(`- **${f.label}:** ${f.text.map((t) => `\`${t}\``).join(', ')}`); continue; }
       out.push(`- **${f.label}:** ${mdEscape(f.text[0])}`);
       for (const t of f.text.slice(1)) out.push('', `  ${mdEscape(t)}`);
     }
@@ -260,14 +263,14 @@ export const writeUncommittedExports = (dir: string): void => {
   writeFileSync(resolve(dir, names.specs), JSON.stringify(toSpecsComponents(defsExport), null, 2) + '\n');
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv.includes('--uncommitted')) {
+if (isEntry(import.meta.url) && process.argv.includes('--uncommitted')) {
   // `--uncommitted --out <dir>`: only the uncommitted exports, into `<dir>/components/`, for a reader that
   // generates them first (`renderUncommitted`, `packages/tokens/check-specs.mjs`). Writes nothing under `out/`.
   const at = process.argv.indexOf('--out');
   const dir = at > 0 ? process.argv[at + 1] : undefined;
   if (!dir) { console.error('[emit-component-docs] --uncommitted needs --out <dir>'); process.exit(1); }
   writeUncommittedExports(resolve(dir, 'components'));
-} else if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+} else if (isEntry(import.meta.url)) {
   // Cleared first, so a def that leaves the registry leaves no stale page behind for `regen --check` to miss.
   rmSync(COMPONENT_DOCS_DIR, { recursive: true, force: true });
   mkdirSync(COMPONENT_DOCS_DIR, { recursive: true });

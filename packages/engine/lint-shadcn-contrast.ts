@@ -32,13 +32,14 @@
  * fails `<brand> <mode>: an invalid field lost its destructive/20 ring with the rule …` by name. Raise a `FADED` entry's floor in `KNOWN` above its measured ratio (or lower the ratio
  * under it) and it fails `… destructive/90 on card … — BELOW ACCEPTED …` by name.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { emitShadcn, handoffBrands } from './emit-shadcn.ts';
 import { SHADCN_COLOR_VARS } from './projections/shadcn.ts';
 import { floor2, openShadcnPage, wcagRatio, type RingProbe } from './shadcn-browser.ts';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, 'out');
@@ -215,8 +216,8 @@ const engineMin = (tree: Record<string, unknown>, role: string, mode: 'light' | 
   return typeof m === 'number' ? m : 0;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const tmp = mkdtempSync(join(tmpdir(), 'prism3-shadcn-'));
+if (isEntry(import.meta.url)) {
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-shadcn-'));
   process.on('exit', () => rmSync(tmp, { recursive: true, force: true }));
   emitShadcn(tmp);
   const failures: string[] = [], known: string[] = [], accepted: string[] = [];

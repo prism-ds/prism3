@@ -970,19 +970,20 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "nests": []
   },
   {
-    "id": "image-placeholder",
-    "name": "ImagePlaceholder",
+    "id": "image",
+    "name": "Image",
     "category": "foundations",
-    "summary": "Empty media frame locked to a ratio, from 2:3 portrait to 16:9. Drop an image fill onto it.",
+    "summary": "Image in a frame locked to a ratio, with empty, loading, loaded and error states.",
     "unit": "variants",
     "spacing": [],
-    "page": "Image Placeholder",
+    "page": "Image",
     "section": "Subcomponents",
     "buildable": true,
     "reason": null,
-    "members": 7,
+    "members": 28,
     "nests": [
-      "icon"
+      "icon",
+      "skeleton"
     ]
   },
   {

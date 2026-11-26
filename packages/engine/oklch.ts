@@ -12,8 +12,9 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HEX_ANCHOR, hexToAnchor, formatAnchor } from './hex-anchors';
+import { isEntry } from './entry-point';
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const args = process.argv.slice(2);
   if (args.length === 0 || args.some((a) => !HEX_ANCHOR.test(a))) {

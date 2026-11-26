@@ -55,7 +55,7 @@
  * base rule's second selector, so it is held to the base values, and `base.css` holds that one rule.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, realpathSync, symlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, join, relative, isAbsolute } from 'node:path';
@@ -198,7 +198,13 @@ const sameValue = (want, got, type) => {
 
 console.log('\nPackage gate — pack @prism3/tokens, install the tarball outside the repo, read the CSS\n');
 
-const tmp = mkdtempSync(join(tmpdir(), 'prism3-tokens-pack-'));
+// #4586: the install folder is reached THROUGH A SYMLINK on every OS, then resolved. macOS's temp root sits behind
+// one (/var → /private/var), and the resolved CSS is a real path, so a folder kept as the link's path never contained
+// it. Making the link here means Linux CI holds the resolve too.
+const tmpReal = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-tokens-pack-'));
+const tmpLink = `${tmpReal}-link`;
+symlinkSync(tmpReal, tmpLink, 'dir');
+const tmp = realpathSync(tmpLink);
 const outside = relative(REPO, tmp);
 ok(outside.startsWith('..') || isAbsolute(outside), `the install folder is outside the repo (${tmp})`);
 
@@ -316,6 +322,7 @@ try {
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+  rmSync(tmpLink, { force: true });
 }
 
 if (fail.length) {

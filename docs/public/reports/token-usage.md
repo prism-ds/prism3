@@ -1,6 +1,6 @@
 # Token usage
 
-Where each token is bound: by which component, on which part, and at which variants and states. 292 of 932 emitted tokens are bound by at least one component.
+Where each token is bound: by which component, on which part, and at which variants and states. 292 of 969 emitted tokens are bound by at least one component.
 
 Two sources feed each entry. **Keys** are the binding keys in the component definition. **Parts** are where the design-file projection draws the token; "where" lists the axis values a part is bound at, leaves out any axis bound at every value, and counts the members. A key marked "not drawn" names the token but no member draws it; another key on the row does.
 
@@ -140,7 +140,7 @@ Type: color. Bound by 3 component(s).
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | banner | `neutral.fill` | container | tone: neutral (2 of 10) |
-| image-placeholder | `fill` | frame | every member (7 of 7) |
+| image | `fill` | frame | every member (28 of 28) |
 | segmented-control | `fill` | track | every member (3 of 3) |
 
 ### `color.background.tertiary`
@@ -720,7 +720,8 @@ Type: color. Bound by 2 component(s).
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | icon | `tone.tertiary` | (not drawn) | — |
-| image-placeholder | `icon` | markerGlyph | every member (7 of 7) |
+| image | `icon` | errorGlyph | status: error (7 of 28) |
+|  |  | markerGlyph | status: empty (7 of 28) |
 
 ### `color.icon.warning`
 
@@ -2284,7 +2285,7 @@ Type: dimension. Bound by 3 component(s).
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | divider | `horizontal.false.width`, `horizontal.true.width` | container | orientation: horizontal (8 of 14) |
-| image-placeholder | `nominal-side` | frame | every member (7 of 7) |
+| image | `nominal-side` | frame | every member (28 of 28) |
 | veil | `nominal-side` | wash | every member (30 of 30) |
 
 ### `control.size.lg.dot`
@@ -2864,13 +2865,14 @@ Type: dimension. Bound by 21 component(s).
 
 ### `motion.duration-reduced.fast`
 
-Type: duration. Bound by 7 component(s).
+Type: duration. Bound by 8 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | button | `motion.state-reduced` | (not drawn) | — |
 | button-destructive | `motion.state-reduced` | (not drawn) | — |
 | button-neutral | `motion.state-reduced` | (not drawn) | — |
+| image | `motion.reveal-reduced` | (not drawn) | — |
 | skeleton | `motion.swap-reduced` | (not drawn) | — |
 | spinner | `motion.enter-reduced` | (not drawn) | — |
 | toggle-button | `motion.state-reduced` | (not drawn) | — |
@@ -2886,13 +2888,14 @@ Type: duration. Bound by 1 component(s).
 
 ### `motion.duration.fast`
 
-Type: duration. Bound by 7 component(s).
+Type: duration. Bound by 8 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
 | button | `motion.press`, `motion.state` | (not drawn) | — |
 | button-destructive | `motion.press`, `motion.state` | (not drawn) | — |
 | button-neutral | `motion.press`, `motion.state` | (not drawn) | — |
+| image | `motion.reveal` | (not drawn) | — |
 | skeleton | `motion.swap` | (not drawn) | — |
 | spinner | `motion.enter` | (not drawn) | — |
 | toggle-button | `motion.press`, `motion.state` | (not drawn) | — |
@@ -2929,10 +2932,11 @@ Type: cubicBezier. Bound by 6 component(s).
 
 ### `motion.easing-role.enter`
 
-Type: cubicBezier. Bound by 2 component(s).
+Type: cubicBezier. Bound by 3 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
+| image | `motion.reveal-easing` | (not drawn) | — |
 | skeleton | `motion.swap-easing` | (not drawn) | — |
 | spinner | `motion.enter-easing` | (not drawn) | — |
 
@@ -2989,7 +2993,7 @@ Type: dimension. Bound by 17 component(s).
 
 ### `radius.none`
 
-Type: dimension. Bound by 6 component(s).
+Type: dimension. Bound by 7 component(s).
 
 | Component | Keys | Part | Where |
 |---|---|---|---|
@@ -2999,6 +3003,7 @@ Type: dimension. Bound by 6 component(s).
 | flush-icon-button | `radius.flush` | container | shape: flush (30 of 60) |
 | flush-icon-button-destructive | `radius.flush` | container | shape: flush (30 of 60) |
 | flush-icon-button-neutral | `radius.flush` | container | shape: flush (30 of 60) |
+| image | `frame-radius` | frame | every member (28 of 28) |
 
 ### `radius.round`
 
@@ -4273,11 +4278,13 @@ Declared, not drawn: `color.border.focus`
 
 Drawn, not declared: `color.inverse.disabled.border`, `color.inverse.disabled.fill`, `color.inverse.disabled.icon`, `color.inverse.disabled.on-fill`, `color.inverse.interactive.neutral.border.hover`, `color.inverse.interactive.neutral.border.pressed`, `color.inverse.interactive.neutral.border.rest`, `color.inverse.interactive.neutral.fill.hover`, `color.inverse.interactive.neutral.fill.pressed`, `color.inverse.interactive.neutral.fill.rest`, `color.inverse.interactive.neutral.icon.hover`, `color.inverse.interactive.neutral.icon.pressed`, `color.inverse.interactive.neutral.icon.rest`, `color.inverse.interactive.neutral.on-fill`, `color.inverse.interactive.neutral.overlay.hover`, `color.inverse.interactive.neutral.overlay.pressed`
 
-### image-placeholder
+### image
 
-3 token(s); 7 design-file member(s).
+7 token(s); 28 design-file member(s).
 
-`color.background.secondary`, `color.icon.tertiary`, `container.narrow`
+`color.background.secondary`, `color.icon.tertiary`, `container.narrow`, `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.enter`, `radius.none`
+
+Declared, not drawn: `motion.duration-reduced.fast`, `motion.duration.fast`, `motion.easing-role.enter`
 
 ### link
 
@@ -4559,7 +4566,7 @@ Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `moti
 
 ## Tokens no component binds
 
-319 semantic token(s) and 321 primitive(s). Primitives (`core.*`) are listed apart — components bind semantic roles, which alias the primitives, so an unbound primitive is expected.
+356 semantic token(s) and 321 primitive(s). Primitives (`core.*`) are listed apart — components bind semantic roles, which alias the primitives, so an unbound primitive is expected.
 
 ### Semantic
 
@@ -4578,7 +4585,7 @@ Declared, not drawn: `color.border.focus`, `motion.duration-reduced.fast`, `moti
 - **control** — `control.size.lg.inset`, `control.size.lg.track`, `control.size.lg.width`
 - **gradient** — `gradient.brand`, `gradient.glow`
 - **grid** — `grid.2xl.columns`, `grid.2xl.gutter`, `grid.2xl.margin`, `grid.lg.columns`, `grid.lg.gutter`, `grid.lg.margin`, `grid.md.columns`, `grid.md.gutter`, `grid.md.margin`, `grid.sm.columns`, `grid.sm.gutter`, `grid.sm.margin`, `grid.xl.columns`, `grid.xl.gutter`, `grid.xl.margin`
-- **motion** — `motion.delay.min-show`, `motion.delay.show`, `motion.distance.nudge`, `motion.duration-ms.0`, `motion.duration-ms.100`, `motion.duration-ms.1100`, `motion.duration-ms.1300`, `motion.duration-ms.1600`, `motion.duration-ms.200`, `motion.duration-ms.2600`, `motion.duration-ms.300`, `motion.duration-ms.40`, `motion.duration-ms.400`, `motion.duration-ms.50`, `motion.duration-ms.500`, `motion.duration-ms.800`, `motion.duration-ms.900`, `motion.duration-reduced.instant`, `motion.duration-reduced.long`, `motion.duration-reduced.longer`, `motion.duration-reduced.longest`, `motion.duration-reduced.moderate`, `motion.duration-reduced.normal`, `motion.duration-reduced.slow`, `motion.duration-reduced.slower`, `motion.duration-reduced.sweep`, `motion.duration.instant`, `motion.duration.long`, `motion.duration.longer`, `motion.duration.longest`, `motion.duration.moderate`, `motion.duration.normal`, `motion.duration.slow`, `motion.duration.slower`, `motion.easing-role.emphasized`, `motion.easing-role.exit`, `motion.easing.accelerate`, `motion.easing.calm`, `motion.easing.decelerate`, `motion.easing.expressive`, `motion.easing.linear`, `motion.easing.standard`, `motion.preset.crossfade.delay`, `motion.preset.crossfade.duration`, `motion.preset.crossfade.duration-reduced`, `motion.preset.crossfade.easing`, `motion.preset.crossfade.transition`, `motion.preset.draw.delay`, `motion.preset.draw.duration`, `motion.preset.draw.duration-reduced`, `motion.preset.draw.easing`, `motion.preset.draw.transition`, `motion.preset.expand.delay`, `motion.preset.expand.duration`, `motion.preset.expand.duration-reduced`, `motion.preset.expand.easing`, `motion.preset.expand.transition`, `motion.preset.fade.delay`, `motion.preset.fade.duration`, `motion.preset.fade.duration-reduced`, `motion.preset.fade.easing`, `motion.preset.fade.transition`, `motion.preset.move.delay`, `motion.preset.move.duration`, `motion.preset.move.duration-reduced`, `motion.preset.move.easing`, `motion.preset.move.transition`, `motion.preset.reveal.delay`, `motion.preset.reveal.duration`, `motion.preset.reveal.duration-reduced`, `motion.preset.reveal.easing`, `motion.preset.reveal.transition`, `motion.preset.settle.delay`, `motion.preset.settle.duration`, `motion.preset.settle.duration-reduced`, `motion.preset.settle.easing`, `motion.preset.settle.transition`, `motion.preset.state.delay`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `motion.preset.state.transition`, `motion.preset.step.delay`, `motion.preset.step.duration`, `motion.preset.step.duration-reduced`, `motion.preset.step.easing`, `motion.preset.step.transition`, `motion.preset.surface.delay`, `motion.preset.surface.duration`, `motion.preset.surface.duration-reduced`, `motion.preset.surface.easing`, `motion.preset.surface.transition`, `motion.spring-duration.bouncy`, `motion.spring-duration.effects`, `motion.spring-duration.gentle`, `motion.spring-duration.snappy`, `motion.spring-easing.bouncy`, `motion.spring-easing.effects`, `motion.spring-easing.gentle`, `motion.spring-easing.snappy`, `motion.spring.bouncy`, `motion.spring.effects`, `motion.spring.gentle`, `motion.spring.snappy`, `motion.stagger`
+- **motion** — `motion.delay.hide`, `motion.delay.min-show`, `motion.delay.show`, `motion.delay.skip`, `motion.distance.nudge`, `motion.duration-ms.0`, `motion.duration-ms.100`, `motion.duration-ms.1100`, `motion.duration-ms.1300`, `motion.duration-ms.1600`, `motion.duration-ms.200`, `motion.duration-ms.2600`, `motion.duration-ms.300`, `motion.duration-ms.40`, `motion.duration-ms.400`, `motion.duration-ms.50`, `motion.duration-ms.500`, `motion.duration-ms.800`, `motion.duration-ms.900`, `motion.duration-reduced.instant`, `motion.duration-reduced.long`, `motion.duration-reduced.longer`, `motion.duration-reduced.longest`, `motion.duration-reduced.moderate`, `motion.duration-reduced.normal`, `motion.duration-reduced.slow`, `motion.duration-reduced.slower`, `motion.duration-reduced.sweep`, `motion.duration.instant`, `motion.duration.long`, `motion.duration.longer`, `motion.duration.longest`, `motion.duration.moderate`, `motion.duration.normal`, `motion.duration.slow`, `motion.duration.slower`, `motion.easing-role.emphasized`, `motion.easing-role.exit`, `motion.easing.accelerate`, `motion.easing.calm`, `motion.easing.decelerate`, `motion.easing.expressive`, `motion.easing.linear`, `motion.easing.standard`, `motion.preset.crossfade.delay`, `motion.preset.crossfade.duration`, `motion.preset.crossfade.duration-reduced`, `motion.preset.crossfade.easing`, `motion.preset.crossfade.transition`, `motion.preset.draw.delay`, `motion.preset.draw.duration`, `motion.preset.draw.duration-reduced`, `motion.preset.draw.easing`, `motion.preset.draw.transition`, `motion.preset.expand.delay`, `motion.preset.expand.duration`, `motion.preset.expand.duration-reduced`, `motion.preset.expand.easing`, `motion.preset.expand.transition`, `motion.preset.fade.delay`, `motion.preset.fade.duration`, `motion.preset.fade.duration-reduced`, `motion.preset.fade.easing`, `motion.preset.fade.exit.delay`, `motion.preset.fade.exit.duration`, `motion.preset.fade.exit.duration-reduced`, `motion.preset.fade.exit.easing`, `motion.preset.fade.exit.transition`, `motion.preset.fade.transition`, `motion.preset.move.delay`, `motion.preset.move.duration`, `motion.preset.move.duration-reduced`, `motion.preset.move.easing`, `motion.preset.move.transition`, `motion.preset.pop.delay`, `motion.preset.pop.duration`, `motion.preset.pop.duration-reduced`, `motion.preset.pop.easing`, `motion.preset.pop.exit.delay`, `motion.preset.pop.exit.duration`, `motion.preset.pop.exit.duration-reduced`, `motion.preset.pop.exit.easing`, `motion.preset.pop.exit.transition`, `motion.preset.pop.transition`, `motion.preset.press.delay`, `motion.preset.press.duration`, `motion.preset.press.duration-reduced`, `motion.preset.press.easing`, `motion.preset.press.transition`, `motion.preset.reveal.delay`, `motion.preset.reveal.duration`, `motion.preset.reveal.duration-reduced`, `motion.preset.reveal.easing`, `motion.preset.reveal.exit.delay`, `motion.preset.reveal.exit.duration`, `motion.preset.reveal.exit.duration-reduced`, `motion.preset.reveal.exit.easing`, `motion.preset.reveal.exit.transition`, `motion.preset.reveal.transition`, `motion.preset.settle.delay`, `motion.preset.settle.duration`, `motion.preset.settle.duration-reduced`, `motion.preset.settle.easing`, `motion.preset.settle.exit.delay`, `motion.preset.settle.exit.duration`, `motion.preset.settle.exit.duration-reduced`, `motion.preset.settle.exit.easing`, `motion.preset.settle.exit.transition`, `motion.preset.settle.transition`, `motion.preset.state.delay`, `motion.preset.state.duration`, `motion.preset.state.duration-reduced`, `motion.preset.state.easing`, `motion.preset.state.transition`, `motion.preset.step.delay`, `motion.preset.step.duration`, `motion.preset.step.duration-reduced`, `motion.preset.step.easing`, `motion.preset.step.transition`, `motion.preset.surface.delay`, `motion.preset.surface.duration`, `motion.preset.surface.duration-reduced`, `motion.preset.surface.easing`, `motion.preset.surface.exit.delay`, `motion.preset.surface.exit.duration`, `motion.preset.surface.exit.duration-reduced`, `motion.preset.surface.exit.easing`, `motion.preset.surface.exit.transition`, `motion.preset.surface.transition`, `motion.spring-duration.bouncy`, `motion.spring-duration.effects`, `motion.spring-duration.gentle`, `motion.spring-duration.snappy`, `motion.spring-easing.bouncy`, `motion.spring-easing.effects`, `motion.spring-easing.gentle`, `motion.spring-easing.snappy`, `motion.spring.bouncy`, `motion.spring.effects`, `motion.spring.gentle`, `motion.spring.snappy`, `motion.stagger`
 - **opacity** — `opacity.0`, `opacity.10`, `opacity.100`, `opacity.20`, `opacity.30`, `opacity.40`, `opacity.5`, `opacity.50`, `opacity.60`, `opacity.70`, `opacity.80`, `opacity.90`
 - **radius** — `radius.3xl`, `radius.hairline`
 - **shadow** — `shadow.2xl`, `shadow.inset`, `shadow.md`, `shadow.sm`, `shadow.xs`

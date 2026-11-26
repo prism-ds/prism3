@@ -1367,11 +1367,12 @@ section('add, order — members an update adds take their plan place, so the set
 {
   // #2386's own case: the image placeholder as built before #2345 (three ratios), updated to today's seven. The oracle is
   // a fresh build of the same plan, read off the shim's set (`variantOptions` follows member order, as #2386 measured).
-  const IP = 'image-placeholder';
-  const full = plansOf(IP);
+  // #4113: Image carries a status axis now; the scenario reads its empty members, the old placeholder's.
+  const IP = 'image';
+  const full = plansOf(IP).filter((p) => p.coord.status === 'empty');
   const ratios = (set: Node): string => JSON.stringify((set.componentPropertyDefinitions as Record<string, { variantOptions?: string[] }>).ratio?.variantOptions);
   const fresh = ratios((await world(IP, full)).set());
-  const three = new Set(['ratio=1:1', 'ratio=4:3', 'ratio=16:9']);
+  const three = new Set(['ratio=1:1, status=empty', 'ratio=4:3, status=empty', 'ratio=16:9, status=empty']);
   {
     const w = await world(IP, full.filter((p) => three.has(planComponentName(p))));
     const before = identityOf(w.set());
@@ -1387,11 +1388,11 @@ section('add, order — members an update adds take their plan place, so the set
     // 1:1 leaves the plan as the others join: kept and marked deprecated (Q2), it holds the slot it had, and the planned
     // members fill the rest in plan order.
     const w = await world(IP, full.filter((p) => three.has(planComponentName(p))));
-    const next = full.filter((p) => planComponentName(p) !== 'ratio=1:1');
+    const next = full.filter((p) => planComponentName(p) !== 'ratio=1:1, status=empty');
     const { res } = await confirm(w, [{ def: IP, plans: next }]);
     const names = membersOf(w.set()).map((m) => String(m.name));
-    const want = ['ratio=4:3', 'ratio=1:1', ...next.map(planComponentName).filter((n) => n !== 'ratio=4:3')];
-    ok(res.outcomes[0]?.deprecated.includes('ratio=1:1') && JSON.stringify(names) === JSON.stringify(want),
+    const want = ['ratio=4:3, status=empty', 'ratio=1:1, status=empty', ...next.map(planComponentName).filter((n) => n !== 'ratio=4:3, status=empty')];
+    ok(res.outcomes[0]?.deprecated.includes('ratio=1:1, status=empty') && JSON.stringify(names) === JSON.stringify(want),
       `add, order/kept member: the deprecated 1:1 keeps its slot and the planned members fill the rest in plan order (${names.join(', ')})`);
   }
 }
@@ -3358,12 +3359,12 @@ section('property — a default the plan changed is edited in place, keeping the
 
 /* ── property rename (#2759) ─────────────────────────────────────────────────────────────────────────── */
 section('property rename — each of the ledger\'s property renames renames the set\'s property in place, and an instance keeps its value (#2759)');
-// The four renames owner decision Q345 A made, typed here rather than read off COMPONENT_RENAMES: the ledger is
-// the subject, so deleting any shipped entry fails this section by its def's name (`docs/34` shape 1).
+// The renames owner decision Q345 A made, typed here rather than read off COMPONENT_RENAMES: the ledger is
+// the subject, so deleting any shipped entry fails this section by its def's name (`docs/34` shape 1). Image
+// placeholder's `Marker` → `marker` left with the boolean itself (#4113, OD-I2 A); the image section holds its drop.
 const PROPERTY_RENAMES_Q345: readonly (readonly [def: string, from: string, to: string])[] = [
   ['tag', 'Check icon', 'check icon'],
   ['switch-control', 'State icon', 'state icon'],
-  ['image-placeholder', 'Marker', 'marker'],
   ['segmented-control', 'Label', 'label'],
 ];
 for (const [def, from, to] of PROPERTY_RENAMES_Q345) {
@@ -3881,7 +3882,7 @@ section('default member — Q347\'s three reorders reach an existing set in plac
   const OLD: [string, string, string[], string][] = [
     ['icon-button', 'appearance', ['filled', 'outline', 'ghost'], 'appearance=ghost'],
     ['veil', 'intensity', ['subtle', 'medium', 'strong'], 'intensity=medium'],
-    ['image-placeholder', 'ratio', ['2:3', '3:4', '4:5', '1:1', '4:3', '3:2', '16:9'], 'ratio=4:3'],
+    ['image', 'ratio', ['2:3', '3:4', '4:5', '1:1', '4:3', '3:2', '16:9'], 'ratio=4:3'],
   ];
   /** Figma's default variant: the top-left-most member, spatially. Topmost row first, then leftmost in it. */
   const insertedOf = (set: Node): string => String([...membersOf(set)].sort((a, b) => Number(a.y) - Number(b.y) || Number(a.x) - Number(b.x))[0]?.name);
@@ -5624,68 +5625,64 @@ section('corpus — every def, re-applied in place by an executor revision bump,
   ok(bad.length === 0 && ran === defs.length, `corpus/in place: all ${defs.length} defs re-applied with every key and id kept, read back clean, and current after (${ran} clean; ${bad.slice(0, 4).join(' || ')})`);
 }
 
-/* ── image-placeholder (#2345) ───────────────────────────────────────────────────────────────────────── */
-section('image-placeholder — the NB master\'s 3-member set reaches 7 ratios, a scaling marker and the Marker boolean in place (#2345)');
+/* ── image-placeholder → image (#4113) ─────────────────────────────────────────────────────────────── */
+section('image — a file\'s 7-member Image placeholder set is renamed Image in place, each member on status=empty, 21 added, the marker boolean gone (#4113)');
 {
-  // THE FILE AS THE NB MASTER HOLDS IT: built from the def as it was before #2345 — three ratios, the marker in
-  // the flow, no boolean. Reconstructed from today's def by putting those three facts back, so the subject is the
-  // real def's projection on both sides.
-  const IMG = 'image-placeholder';
-  const now = componentDefs.find((x) => x.id === IMG)!;
-  const { optional: _o, scaleWithParent: _s, ...oldMarker } = now.anatomy.parts.markerGlyph;
-  void _o; void _s;
-  const before2345 = {
+  // THE FILE AS #2345 LEFT IT: the set named `image-placeholder`, seven ratio members, the marker in every member behind
+  // the Figma-only `marker` boolean, and square corners with no radius binding. Reconstructed from today's def by putting
+  // those facts back, so the subject is the real def's projection on both sides. Every expectation is typed here from
+  // the owner decisions (OD-I1 A: renamed in place; OD-I2 A: `empty` leads, the boolean retires), never read from the def.
+  const OLD = 'image-placeholder', NEW = 'image';
+  const now = componentDefs.find((x) => x.id === NEW)!;
+  const { presentWhen: _w, ...oldMarker } = now.anatomy.parts.markerGlyph;
+  void _w;
+  const { radius: _r, ...oldFrame } = now.anatomy.parts.frame as typeof now.anatomy.parts.frame & { radius?: string };
+  void _r;
+  const before4113 = {
     ...now,
-    variants: { ratio: ['1:1', '4:3', '16:9'] },
-    anatomy: { ...now.anatomy, parts: { ...now.anatomy.parts, markerGlyph: oldMarker } },
-    figmaProperties: { ...now.figmaProperties, booleans: {} },
+    id: OLD,
+    variants: { ratio: now.variants.ratio },
+    axisKinds: { ratio: 'authoring' },
+    anatomy: { ...now.anatomy, parts: { frame: { ...oldFrame, children: ['markerGlyph'] }, markerGlyph: { ...oldMarker, optional: true } } },
+    figmaProperties: { ...now.figmaProperties, variantAxes: ['ratio'], booleans: { marker: { part: 'markerGlyph', default: true, figmaName: 'marker', figmaOnly: true } } },
   } as typeof now;
-  const oldPlans = figmaAnatomySet(before2345, { swapTarget: SWAP_TARGET });
-  const newPlans = plansOf(IMG);
-  const w = await world(IMG, oldPlans);
-  const NAMES_BEFORE = ['ratio=1:1', 'ratio=4:3', 'ratio=16:9'];
-  ok(JSON.stringify(membersOf(w.set()).map((m) => String(m.name)).sort()) === JSON.stringify([...NAMES_BEFORE].sort()),
-    `premise: the file holds the three pre-#2345 members (${membersOf(w.set()).map((m) => m.name).join(', ')})`);
+  const oldPlans = figmaAnatomySet(before4113, { swapTarget: SWAP_TARGET });
+  const newPlans = plansOf(NEW);
+  // The file holds what today's plans bind and nest that the old set did not: the corner variable and Skeleton.
+  const w = await world(NEW, oldPlans, { extraComps: ['skeleton'], extraVars: ['radius/none'] });
+  const RATIOS = ['4:3', '2:3', '3:4', '4:5', '1:1', '3:2', '16:9'];
+  ok(String(w.set().name) === OLD && JSON.stringify(membersOf(w.set()).map((m) => String(m.name))) === JSON.stringify(RATIOS.map((r) => `ratio=${r}`)),
+    `premise: the file holds the set as '${OLD}', its seven ratio members (${String(w.set().name)}: ${membersOf(w.set()).map((m) => m.name).join(', ')})`);
+  const oldProps = Object.keys((w.set().componentPropertyDefinitions ?? {}) as object).map((k) => k.split('#')[0]);
+  ok(oldProps.includes('marker'), `premise: the file's set declares the marker boolean (${oldProps.join(', ')})`);
   const before = identityOf(w.set());
-  const { pre, res } = await confirm(w, [{ def: IMG, plans: newPlans }]);
+  const { pre, res } = await confirm(w, [{ def: NEW, plans: newPlans }]);
   const p = pre.sets[0];
-  ok(p.counts.update === 3 && p.counts.add === 4 && p.counts.drop === 0 && p.renames.length === 0 && !p.blockers.length,
-    `img/dry run: the three existing members read update, four are added, none dropped or renamed (${JSON.stringify(p.counts)}, ${p.renames.length} renames, ${p.blockers.length} blockers)`);
-  // `absoluteScale` by name: the read-back has to see that the file's marker is not SCALE-constrained, or a marker
-  // the update failed to constrain would read current.
-  ok(p.changes.some((c) => c.part === 'markerGlyph' && c.field === 'absoluteScale' && c.members === 3),
-    `img/dry run: the marker's SCALE placement is a named difference on all three (${JSON.stringify(p.changes.map((c) => [c.part, c.field, c.members])).slice(0, 200)})`);
+  ok(!!p && p.setRename?.from === OLD && p.setRename.to === NEW && p.counts.rename === 7 && p.counts.add === 21 && p.counts.drop === 0 && !p.blockers.length,
+    `img/dry run: read under '${OLD}', to be renamed '${NEW}'; the seven members renamed onto status=empty, 21 added, none dropped (${JSON.stringify(p ? { setRename: p.setRename, counts: p.counts, blockers: p.blockers } : null)})`);
   const v = applyVerdict(res);
   ok(v.ok, `img/verdict: ${v.headline} (${v.lines.slice(0, 2).join(' | ').slice(0, 240)})`);
+  ok(String(w.set().name) === NEW && w.page.children.filter((n) => n.type === 'COMPONENT_SET').length === 1, `img/in place: one set, now named '${NEW}' (${w.page.children.filter((n) => n.type === 'COMPONENT_SET').map((n) => String(n.name)).join(', ')})`);
   const after = identityOf(w.set());
-  // Typed here: the seven names the issue asks for.
-  const NAMES_AFTER = ['ratio=2:3', 'ratio=3:4', 'ratio=4:5', 'ratio=1:1', 'ratio=4:3', 'ratio=3:2', 'ratio=16:9'];
-  ok(JSON.stringify([...after.members.keys()].sort()) === JSON.stringify([...NAMES_AFTER].sort()) && res.outcomes[0].added === 4,
-    `img/added: the set holds the seven ratios, four of them added (${[...after.members.keys()].join(', ')}; added ${res.outcomes[0].added})`);
   ok(JSON.stringify(after.set) === JSON.stringify(before.set), 'img/set kept: the set keeps its key and id');
-  const moved = [...before.members].filter(([name, b]) => after.members.get(name)?.key !== b.key || after.members.get(name)?.id !== b.id).map(([n]) => n);
-  ok(moved.length === 0, `img/members kept: the three existing members keep their keys and ids (${moved.join(', ') || 'none moved'})`);
+  // Each old member is now its ratio's empty member, keeping its key and id, so a placed instance looks as it did.
+  const moved = [...before.members].filter(([name, b]) => {
+    const to = `${name}, status=empty`;
+    return after.members.get(to)?.key !== b.key || after.members.get(to)?.id !== b.id;
+  }).map(([n]) => n);
+  ok(moved.length === 0, `img/members kept: each ratio member is now its status=empty member, key and id kept (${moved.join(', ') || 'none moved'})`);
   const markerMoved = [...before.members].filter(([name, b]) => {
     const was = [...b.kids].find(([path]) => path.startsWith('markerGlyph#'))?.[1];
-    return !was || ![...(after.members.get(name)?.kids.values() ?? [])].includes(was);
+    return !was || ![...(after.members.get(`${name}, status=empty`)?.kids.values() ?? [])].includes(was);
   }).map(([n]) => n);
-  ok(markerMoved.length === 0, `img/marker kept: each existing member's marker keeps its node id (${markerMoved.join(', ') || 'none replaced'})`);
-  // Read off the shim's nodes: every member's marker lifted out of the flow and constrained SCALE/SCALE.
-  const placement = membersOf(w.set()).map((m) => {
-    const k = childNamed(m, 'markerGlyph');
-    const c = k?.constraints as { horizontal?: string; vertical?: string } | null;
-    return `${String(m.name)}:${String(k?.layoutPositioning)} ${c?.horizontal}/${c?.vertical}`;
-  });
-  ok(placement.every((s) => s.endsWith(':ABSOLUTE SCALE/SCALE')), `img/marker scales: every member's marker is ABSOLUTE, SCALE/SCALE (${placement.filter((s) => !s.endsWith(':ABSOLUTE SCALE/SCALE')).join('; ') || 'all seven'})`);
-  // The Marker boolean: declared on the set, default on, and every member's marker wired to it.
-  const defs = (w.set().componentPropertyDefinitions ?? {}) as Record<string, { type: string; defaultValue: unknown }>;
-  const markerProp = Object.entries(defs).find(([k]) => k.split('#')[0] === 'marker');
-  ok(!!markerProp && markerProp[1].type === 'BOOLEAN' && markerProp[1].defaultValue === true,
-    `img/property: the set declares the BOOLEAN 'marker', default on (${JSON.stringify(defs)})`);
-  const unwired = membersOf(w.set()).filter((m) => String(((childNamed(m, 'markerGlyph')?.componentPropertyReferences ?? {}) as Record<string, string>).visible ?? '').split('#')[0] !== 'marker').map((m) => String(m.name));
-  ok(unwired.length === 0, `img/property wired: every member's marker visibility follows 'marker' (${unwired.join(', ') || 'all seven'})`);
-  const post = (await previewUpdate(w.host, [{ def: IMG, plans: newPlans }])).sets[0];
-  ok(post.counts.current === 7 && post.handEdits.length === 0, `img/current: the next dry run reads all seven current (${JSON.stringify(post.counts)})`);
+  ok(markerMoved.length === 0, `img/marker kept: each empty member's marker keeps its node id (${markerMoved.join(', ') || 'none replaced'})`);
+  const WANT = RATIOS.flatMap((r) => ['empty', 'loading', 'loaded', 'error'].map((st) => `ratio=${r}, status=${st}`));
+  ok(JSON.stringify([...after.members.keys()].sort()) === JSON.stringify([...WANT].sort()) && res.outcomes[0].added === 21,
+    `img/added: the set holds the 28 ratio × status members, 21 of them added (${after.members.size}; added ${res.outcomes[0].added})`);
+  const props = Object.keys((w.set().componentPropertyDefinitions ?? {}) as object).map((k) => k.split('#')[0]);
+  ok(!props.includes('marker'), `img/property: the marker boolean is gone from the set (${props.join(', ')})`);
+  const post = (await previewUpdate(w.host, [{ def: NEW, plans: newPlans }])).sets[0];
+  ok(!!post && !post.setRename && post.counts.current === 28 && post.handEdits.length === 0, `img/current: the next dry run finds the set under '${NEW}' and reads all 28 current (${JSON.stringify(post?.counts)})`);
 }
 
 /* ── inline glyph → icon instance (#2380) ────────────────────────────────────────────────────────────── */
@@ -5994,7 +5991,7 @@ section('accordion — a set built before the header row (#2594, owner Q276 A) t
 {
   // THE FILE AS A BUILD AT MAIN BEFORE #2594 LEFT IT: the header top-aligned, holding the indicators and the title
   // directly with the gap on itself, and no `titleRow`. Reconstructed from today's def by putting those facts back,
-  // so the subject is the real def's projection on both sides (as `image-placeholder` above does).
+  // so the subject is the real def's projection on both sides (as `image` above does).
   const ACC = 'accordion';
   const now = componentDefs.find((x) => x.id === ACC)!;
   const { titleRow, ...restParts } = now.anatomy.parts;
@@ -6357,7 +6354,7 @@ section('segmented control — sets built with the tinted, outlined look (#2418)
   // THE FILE AS A BUILD AT MAIN BEFORE #2724 LEFT IT: the selected indicator tinted in the overlay slot with a 2px
   // primary outline stepping per state, a disabled outline, and the control's track a 1px neutral outline with no
   // fill. Reconstructed from today's defs by putting those facts back, so the subject is the real defs' projection on
-  // both sides (as `image-placeholder` and `accordion` above do). Every expectation below is read off the shim's
+  // both sides (as `image` and `accordion` above do). Every expectation below is read off the shim's
   // nodes by the test. Mutations: the executor's in-place stroke clear skipped → `seg/border removed`,
   // `seg/track outline removed`.
   const SEG = 'segmented-control-segment', CTL = 'segmented-control';
@@ -7770,10 +7767,10 @@ section('dialog size — a set built with the width-only size axis leaves 16 mem
   const SMALL = 'placement=center, footer=inline, size=small', LARGE = 'placement=center, footer=stacked, size=large';
   const MED = 'placement=center, footer=inline, size=medium', MED2 = 'placement=center, footer=stacked, size=medium';
   // The rebuilt def projects exactly the set main shipped: origin/main's `component-surface.json` records dialog at
-  // 24 members, sha256 529ad20a… over its sorted `name|stamp` rows (typed here, from that baseline; it was 5a835955… until #4057 moved main's Dialog projection, and 17ff3a9b… until #4084).
+  // 24 members, sha256 529ad20a… over its sorted `name|stamp` rows (typed here, from that baseline; it was 5a835955… until #4057 moved main's Dialog projection, 17ff3a9b… until #4084, and 529ad20a… until #2857 phase 2 rewrote its motion notes).
   const oldPlans = figmaAnatomySet(oldDef, { swapTarget: SWAP_TARGET });
   const oldSha = createHash('sha256').update(figmaAnatomySet(oldDef).map((x) => `${planComponentName(x)}|${planStamp(x)}`).sort().join('\n')).digest('hex');
-  ok(oldPlans.length === 24 && oldSha === '529ad20a03c8de6f3621ef34f4f9219e4af1b6873cbbe3aea9c5bd8028e1e14f',
+  ok(oldPlans.length === 24 && oldSha === '4891dd310957be2d327c63206d8c85eb29a794a90bc6a4f0c9efedfd2d00e1a0',
     `premise: the old def rebuilt here projects main's 24-member Dialog set exactly (${oldPlans.length}, ${oldSha.slice(0, 12)}…)`);
   ok(names.length === 24 && names.includes(SMALL) && names.includes(LARGE) && names.filter((n) => n.includes('size=')).length === 24,
     `premise: dialog holds the 24 members of the old set, ${SMALL} among them (${names.length})`);

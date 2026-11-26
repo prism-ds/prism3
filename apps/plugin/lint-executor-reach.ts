@@ -44,7 +44,7 @@
  * no new entry says `"all"`; every other run is a read of two files.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, realpathSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -142,7 +142,7 @@ const run = async (): Promise<void> => {
   console.log(`  revision ${baseRev} → ${headRev}: ${named.size} set(s) named (${[...named].join(', ') || 'none'}); drawing the other ${todo.length} with both executors`);
   if (!todo.length) return;
 
-  const scratch = mkdtempSync(join(tmpdir(), 'prism3-reach-'));
+  const scratch = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-reach-'));
   try {
     const archive = spawnSync('git', ['-C', REPO, 'archive', '--format=tar', base, 'apps/plugin/src', 'apps/studio/src', 'docs/public'], { maxBuffer: 512 * 1024 * 1024 });
     if (archive.status !== 0) die([`could not export the base's executor (git archive) — this check CANNOT RUN.`, `    ${String(archive.stderr).trim()}`]);

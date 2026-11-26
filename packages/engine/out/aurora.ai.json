@@ -1,8 +1,8 @@
 {
-  "$schema": "prism3-ai-metadata/0.8",
+  "$schema": "prism3-ai-metadata/0.9",
   "brand": "aurora",
   "generated": true,
-  "note": "Agent-readable metadata, companion to aurora.tokens.json. Every token in that tree has one entry here, keyed by its path below the brand root; color roles drop the leading `color.` segment. Tiers: `color` (semantic color roles), `typography` (type styles and font roles), `layout` (space, size, radius, border-width, background-blur, focus-ring, icon, control and grid roles, and the type line boxes), `motion` (motion roles), `gradient` when the brand has one, and `primitives` (the raw values the roles resolve to). The primitive families are `core.palette`, `core.dimension`, `core.font`, `opacity`, `motion.duration-ms`, `motion.easing`, `motion.spring`, `motion.spring-duration`, `motion.spring-easing`, `shadow`, `breakpoint`, `container`. Not every one sits under `core`: a family outside it is still a primitive, so read the tier, not the path. A primitive carries `aliased_by`, every token that resolves to it directly or through another alias, recomputed on every build. On a color role, `sits_on` names the grounds an ink or edge is placed on and `carries` the inks placed on a ground; both are measured in every mode. `tracks` names companion roles and implies no contrast. `contrast_with` is the role's contrast contract: `requirement` states it as a check that resolves both roles in every mode, and `ratio` is the light-mode measurement. `usage_limit` marks an ink that is for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, its `motion.preset.<name>` tokens (the transition composite and its duration, easing, delay and reduced duration), and in `resolves_to` the step, role, curve or spring each slot points at for this brand. Bind the preset tokens. Field definitions: the JSON Schema whose `$id` is this file's `$schema`.",
+  "note": "Agent-readable metadata, companion to aurora.tokens.json. Every token in that tree has one entry here, keyed by its path below the brand root; color roles drop the leading `color.` segment. Tiers: `color` (semantic color roles), `typography` (type styles and font roles), `layout` (space, size, radius, border-width, background-blur, focus-ring, icon, control and grid roles, and the type line boxes), `motion` (motion roles), `gradient` when the brand has one, and `primitives` (the raw values the roles resolve to). The primitive families are `core.palette`, `core.dimension`, `core.font`, `opacity`, `motion.duration-ms`, `motion.easing`, `motion.spring`, `motion.spring-duration`, `motion.spring-easing`, `shadow`, `breakpoint`, `container`. Not every one sits under `core`: a family outside it is still a primitive, so read the tier, not the path. A primitive carries `aliased_by`, every token that resolves to it directly or through another alias, recomputed on every build. On a color role, `sits_on` names the grounds an ink or edge is placed on and `carries` the inks placed on a ground; both are measured in every mode. `tracks` names companion roles and implies no contrast. `contrast_with` is the role's contrast contract: `requirement` states it as a check that resolves both roles in every mode, and `ratio` is the light-mode measurement. `usage_limit` marks an ink that is for large text, icons and non-essential text only. `motion_presets` names, for each motion preset, its `motion.preset.<name>` tokens (the transition composite and its duration, easing, delay and reduced duration), and in `resolves_to` the step, role, curve or spring each slot points at for this brand. A preset that brings something in has an `exit` half, its closing timing. Bind the preset tokens. `motion_patterns` names, for each component motion (`dialog/enter`), its tracks: the element, the property it moves, the preset that times it, and what it does under reduced motion. Field definitions: the JSON Schema whose `$id` is this file's `$schema`.",
   "color_fields": [
     "$description",
     "meaning",
@@ -8925,6 +8925,18 @@
       "when_to_use": "The least time a shown busy indicator stays, so it does not flash. The same at every tempo.",
       "resolves_to": "{ads.motion.duration-ms.500}"
     },
+    "motion.delay.hide": {
+      "$description": "delay hide — 300ms a tooltip stays after the pointer leaves, so the pointer can move onto it; the same at every tempo",
+      "meaning": "Motion delay — hide",
+      "when_to_use": "How long a tooltip stays after the pointer leaves, so the pointer can move onto it. The same at every tempo.",
+      "resolves_to": "{ads.motion.duration-ms.300}"
+    },
+    "motion.delay.skip": {
+      "$description": "delay skip — 300ms after one tooltip closes in which the next shows at once, with no delay or animation; the same at every tempo",
+      "meaning": "Motion delay — skip",
+      "when_to_use": "After one tooltip closes, how long the next shows at once, with no delay and no animation. The same at every tempo.",
+      "resolves_to": "{ads.motion.duration-ms.300}"
+    },
     "motion.easing-role.default": {
       "$description": "easing role 'default' → standard — the intent a transition names, so a mode can substitute a curve without redefining one",
       "meaning": "Easing role — default",
@@ -9017,6 +9029,40 @@
         "delay": "{ads.motion.preset.fade.delay}"
       }
     },
+    "motion.preset.fade.exit.duration": {
+      "$description": "preset fade exit duration — the fast step",
+      "meaning": "Motion preset fade, exit — duration",
+      "when_to_use": "How long a fade exit runs, shorter than its entrance by default. Under reduced motion, use `motion.preset.fade.exit.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.fast}"
+    },
+    "motion.preset.fade.exit.easing": {
+      "$description": "preset fade exit easing — the exit role (accelerate)",
+      "meaning": "Motion preset fade, exit — easing",
+      "when_to_use": "The easing of a fade exit. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.exit}"
+    },
+    "motion.preset.fade.exit.delay": {
+      "$description": "preset fade exit delay — none, it starts at once",
+      "meaning": "Motion preset fade, exit — delay",
+      "when_to_use": "How long a fade exit waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.fade.exit.duration-reduced": {
+      "$description": "preset fade exit reduced duration — the fast step's reduced twin, derived from the duration",
+      "meaning": "Motion preset fade, exit — reduced-motion duration",
+      "when_to_use": "The duration of a fade exit when the user prefers reduced motion: a short fade, derived from the exit's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.fast}"
+    },
+    "motion.preset.fade.exit.transition": {
+      "$description": "preset fade exit — the fast step on the exit role (accelerate), at once",
+      "meaning": "Motion preset fade, exit — its transition composite",
+      "when_to_use": "A whole fade exit, the change that takes the thing away: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.fade.exit.duration}",
+        "timingFunction": "{ads.motion.preset.fade.exit.easing}",
+        "delay": "{ads.motion.preset.fade.exit.delay}"
+      }
+    },
     "motion.preset.crossfade.duration": {
       "$description": "preset crossfade duration — the normal step",
       "meaning": "Motion preset crossfade — duration",
@@ -9052,10 +9098,10 @@
       }
     },
     "motion.preset.move.duration": {
-      "$description": "preset move duration — the moderate step",
+      "$description": "preset move duration — the normal step",
       "meaning": "Motion preset move — duration",
       "when_to_use": "How long a move change runs. Under reduced motion, use `motion.preset.move.duration-reduced`.",
-      "resolves_to": "{ads.motion.duration.moderate}"
+      "resolves_to": "{ads.motion.duration.normal}"
     },
     "motion.preset.move.easing": {
       "$description": "preset move easing — the default role (standard)",
@@ -9070,13 +9116,13 @@
       "resolves_to": "{ads.motion.duration-ms.0}"
     },
     "motion.preset.move.duration-reduced": {
-      "$description": "preset move reduced duration — the moderate step's reduced twin, derived from the duration",
+      "$description": "preset move reduced duration — the normal step's reduced twin, derived from the duration",
       "meaning": "Motion preset move — reduced-motion duration",
       "when_to_use": "The duration of a move change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
-      "resolves_to": "{ads.motion.duration-reduced.moderate}"
+      "resolves_to": "{ads.motion.duration-reduced.normal}"
     },
     "motion.preset.move.transition": {
-      "$description": "preset move — the moderate step on the default role (standard), at once",
+      "$description": "preset move — the normal step on the default role (standard), at once",
       "meaning": "Motion preset move — its transition composite",
       "when_to_use": "A whole move change: its duration, easing and delay together. Apply it whole.",
       "resolves_to": {
@@ -9117,6 +9163,40 @@
         "duration": "{ads.motion.preset.reveal.duration}",
         "timingFunction": "{ads.motion.preset.reveal.easing}",
         "delay": "{ads.motion.preset.reveal.delay}"
+      }
+    },
+    "motion.preset.reveal.exit.duration": {
+      "$description": "preset reveal exit duration — the moderate step",
+      "meaning": "Motion preset reveal, exit — duration",
+      "when_to_use": "How long a reveal exit runs, shorter than its entrance by default. Under reduced motion, use `motion.preset.reveal.exit.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.moderate}"
+    },
+    "motion.preset.reveal.exit.easing": {
+      "$description": "preset reveal exit easing — the exit role (accelerate)",
+      "meaning": "Motion preset reveal, exit — easing",
+      "when_to_use": "The easing of a reveal exit. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.exit}"
+    },
+    "motion.preset.reveal.exit.delay": {
+      "$description": "preset reveal exit delay — none, it starts at once",
+      "meaning": "Motion preset reveal, exit — delay",
+      "when_to_use": "How long a reveal exit waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.reveal.exit.duration-reduced": {
+      "$description": "preset reveal exit reduced duration — the moderate step's reduced twin, derived from the duration",
+      "meaning": "Motion preset reveal, exit — reduced-motion duration",
+      "when_to_use": "The duration of a reveal exit when the user prefers reduced motion: a short fade, derived from the exit's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.moderate}"
+    },
+    "motion.preset.reveal.exit.transition": {
+      "$description": "preset reveal exit — the moderate step on the exit role (accelerate), at once",
+      "meaning": "Motion preset reveal, exit — its transition composite",
+      "when_to_use": "A whole reveal exit, the change that takes the thing away: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.reveal.exit.duration}",
+        "timingFunction": "{ads.motion.preset.reveal.exit.easing}",
+        "delay": "{ads.motion.preset.reveal.exit.delay}"
       }
     },
     "motion.preset.draw.duration": {
@@ -9185,6 +9265,40 @@
         "duration": "{ads.motion.preset.surface.duration}",
         "timingFunction": "{ads.motion.preset.surface.easing}",
         "delay": "{ads.motion.preset.surface.delay}"
+      }
+    },
+    "motion.preset.surface.exit.duration": {
+      "$description": "preset surface exit duration — the normal step",
+      "meaning": "Motion preset surface, exit — duration",
+      "when_to_use": "How long a surface exit runs, shorter than its entrance by default. Under reduced motion, use `motion.preset.surface.exit.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.normal}"
+    },
+    "motion.preset.surface.exit.easing": {
+      "$description": "preset surface exit easing — the exit role (accelerate)",
+      "meaning": "Motion preset surface, exit — easing",
+      "when_to_use": "The easing of a surface exit. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.exit}"
+    },
+    "motion.preset.surface.exit.delay": {
+      "$description": "preset surface exit delay — none, it starts at once",
+      "meaning": "Motion preset surface, exit — delay",
+      "when_to_use": "How long a surface exit waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.surface.exit.duration-reduced": {
+      "$description": "preset surface exit reduced duration — the normal step's reduced twin, derived from the duration",
+      "meaning": "Motion preset surface, exit — reduced-motion duration",
+      "when_to_use": "The duration of a surface exit when the user prefers reduced motion: a short fade, derived from the exit's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.normal}"
+    },
+    "motion.preset.surface.exit.transition": {
+      "$description": "preset surface exit — the normal step on the exit role (accelerate), at once",
+      "meaning": "Motion preset surface, exit — its transition composite",
+      "when_to_use": "A whole surface exit, the change that takes the thing away: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.surface.exit.duration}",
+        "timingFunction": "{ads.motion.preset.surface.exit.easing}",
+        "delay": "{ads.motion.preset.surface.exit.delay}"
       }
     },
     "motion.preset.expand.duration": {
@@ -9289,6 +9403,142 @@
         "delay": "{ads.motion.preset.settle.delay}"
       }
     },
+    "motion.preset.settle.exit.duration": {
+      "$description": "preset settle exit duration — the moderate step",
+      "meaning": "Motion preset settle, exit — duration",
+      "when_to_use": "How long a settle exit runs, shorter than its entrance by default. Under reduced motion, use `motion.preset.settle.exit.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.moderate}"
+    },
+    "motion.preset.settle.exit.easing": {
+      "$description": "preset settle exit easing — the exit role (accelerate)",
+      "meaning": "Motion preset settle, exit — easing",
+      "when_to_use": "The easing of a settle exit. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.exit}"
+    },
+    "motion.preset.settle.exit.delay": {
+      "$description": "preset settle exit delay — none, it starts at once",
+      "meaning": "Motion preset settle, exit — delay",
+      "when_to_use": "How long a settle exit waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.settle.exit.duration-reduced": {
+      "$description": "preset settle exit reduced duration — the moderate step's reduced twin, derived from the duration",
+      "meaning": "Motion preset settle, exit — reduced-motion duration",
+      "when_to_use": "The duration of a settle exit when the user prefers reduced motion: a short fade, derived from the exit's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.moderate}"
+    },
+    "motion.preset.settle.exit.transition": {
+      "$description": "preset settle exit — the moderate step on the exit role (accelerate), at once",
+      "meaning": "Motion preset settle, exit — its transition composite",
+      "when_to_use": "A whole settle exit, the change that takes the thing away: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.settle.exit.duration}",
+        "timingFunction": "{ads.motion.preset.settle.exit.easing}",
+        "delay": "{ads.motion.preset.settle.exit.delay}"
+      }
+    },
+    "motion.preset.pop.duration": {
+      "$description": "preset pop duration — the fast step",
+      "meaning": "Motion preset pop — duration",
+      "when_to_use": "How long a pop change runs. Under reduced motion, use `motion.preset.pop.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.fast}"
+    },
+    "motion.preset.pop.easing": {
+      "$description": "preset pop easing — the enter role (decelerate)",
+      "meaning": "Motion preset pop — easing",
+      "when_to_use": "The easing of a pop change. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.enter}"
+    },
+    "motion.preset.pop.delay": {
+      "$description": "preset pop delay — none, it starts at once",
+      "meaning": "Motion preset pop — delay",
+      "when_to_use": "How long a pop change waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.pop.duration-reduced": {
+      "$description": "preset pop reduced duration — the fast step's reduced twin, derived from the duration",
+      "meaning": "Motion preset pop — reduced-motion duration",
+      "when_to_use": "The duration of a pop change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.fast}"
+    },
+    "motion.preset.pop.transition": {
+      "$description": "preset pop — the fast step on the enter role (decelerate), at once",
+      "meaning": "Motion preset pop — its transition composite",
+      "when_to_use": "A whole pop change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.pop.duration}",
+        "timingFunction": "{ads.motion.preset.pop.easing}",
+        "delay": "{ads.motion.preset.pop.delay}"
+      }
+    },
+    "motion.preset.pop.exit.duration": {
+      "$description": "preset pop exit duration — the instant step",
+      "meaning": "Motion preset pop, exit — duration",
+      "when_to_use": "How long a pop exit runs, shorter than its entrance by default. Under reduced motion, use `motion.preset.pop.exit.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.instant}"
+    },
+    "motion.preset.pop.exit.easing": {
+      "$description": "preset pop exit easing — the exit role (accelerate)",
+      "meaning": "Motion preset pop, exit — easing",
+      "when_to_use": "The easing of a pop exit. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.exit}"
+    },
+    "motion.preset.pop.exit.delay": {
+      "$description": "preset pop exit delay — none, it starts at once",
+      "meaning": "Motion preset pop, exit — delay",
+      "when_to_use": "How long a pop exit waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.pop.exit.duration-reduced": {
+      "$description": "preset pop exit reduced duration — the instant step's reduced twin, derived from the duration",
+      "meaning": "Motion preset pop, exit — reduced-motion duration",
+      "when_to_use": "The duration of a pop exit when the user prefers reduced motion: a short fade, derived from the exit's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.instant}"
+    },
+    "motion.preset.pop.exit.transition": {
+      "$description": "preset pop exit — the instant step on the exit role (accelerate), at once",
+      "meaning": "Motion preset pop, exit — its transition composite",
+      "when_to_use": "A whole pop exit, the change that takes the thing away: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.pop.exit.duration}",
+        "timingFunction": "{ads.motion.preset.pop.exit.easing}",
+        "delay": "{ads.motion.preset.pop.exit.delay}"
+      }
+    },
+    "motion.preset.press.duration": {
+      "$description": "preset press duration — the instant step",
+      "meaning": "Motion preset press — duration",
+      "when_to_use": "How long a press change runs. Under reduced motion, use `motion.preset.press.duration-reduced`.",
+      "resolves_to": "{ads.motion.duration.instant}"
+    },
+    "motion.preset.press.easing": {
+      "$description": "preset press easing — the default role (standard)",
+      "meaning": "Motion preset press — easing",
+      "when_to_use": "The easing of a press change. Reference the preset, not what it points at.",
+      "resolves_to": "{ads.motion.easing-role.default}"
+    },
+    "motion.preset.press.delay": {
+      "$description": "preset press delay — none, it starts at once",
+      "meaning": "Motion preset press — delay",
+      "when_to_use": "How long a press change waits before it starts.",
+      "resolves_to": "{ads.motion.duration-ms.0}"
+    },
+    "motion.preset.press.duration-reduced": {
+      "$description": "preset press reduced duration — the instant step's reduced twin, derived from the duration",
+      "meaning": "Motion preset press — reduced-motion duration",
+      "when_to_use": "The duration of a press change when the user prefers reduced motion: a short fade, derived from the preset's duration.",
+      "resolves_to": "{ads.motion.duration-reduced.instant}"
+    },
+    "motion.preset.press.transition": {
+      "$description": "preset press — the instant step on the default role (standard), at once",
+      "meaning": "Motion preset press — its transition composite",
+      "when_to_use": "A whole press change: its duration, easing and delay together. Apply it whole.",
+      "resolves_to": {
+        "duration": "{ads.motion.preset.press.duration}",
+        "timingFunction": "{ads.motion.preset.press.easing}",
+        "delay": "{ads.motion.preset.press.delay}"
+      }
+    },
     "motion.stagger": {
       "$description": "stagger standard — 30ms between siblings",
       "meaning": "Stagger delay role",
@@ -9327,6 +9577,19 @@
         "easing": "motion.easing-role.enter",
         "delay": "motion.duration-ms.0",
         "duration_reduced": "motion.duration-reduced.normal"
+      },
+      "exit": {
+        "token": "motion.preset.fade.exit.transition",
+        "duration": "motion.preset.fade.exit.duration",
+        "easing": "motion.preset.fade.exit.easing",
+        "delay": "motion.preset.fade.exit.delay",
+        "duration_reduced": "motion.preset.fade.exit.duration-reduced",
+        "resolves_to": {
+          "duration": "motion.duration.fast",
+          "easing": "motion.easing-role.exit",
+          "delay": "motion.duration-ms.0",
+          "duration_reduced": "motion.duration-reduced.fast"
+        }
       }
     },
     "crossfade": {
@@ -9349,10 +9612,10 @@
       "delay": "motion.preset.move.delay",
       "duration_reduced": "motion.preset.move.duration-reduced",
       "resolves_to": {
-        "duration": "motion.duration.moderate",
+        "duration": "motion.duration.normal",
         "easing": "motion.easing-role.default",
         "delay": "motion.duration-ms.0",
-        "duration_reduced": "motion.duration-reduced.moderate"
+        "duration_reduced": "motion.duration-reduced.normal"
       }
     },
     "reveal": {
@@ -9366,6 +9629,19 @@
         "easing": "motion.easing-role.enter",
         "delay": "motion.duration-ms.0",
         "duration_reduced": "motion.duration-reduced.slow"
+      },
+      "exit": {
+        "token": "motion.preset.reveal.exit.transition",
+        "duration": "motion.preset.reveal.exit.duration",
+        "easing": "motion.preset.reveal.exit.easing",
+        "delay": "motion.preset.reveal.exit.delay",
+        "duration_reduced": "motion.preset.reveal.exit.duration-reduced",
+        "resolves_to": {
+          "duration": "motion.duration.moderate",
+          "easing": "motion.easing-role.exit",
+          "delay": "motion.duration-ms.0",
+          "duration_reduced": "motion.duration-reduced.moderate"
+        }
       }
     },
     "draw": {
@@ -9392,6 +9668,19 @@
         "easing": "motion.easing-role.enter",
         "delay": "motion.duration-ms.0",
         "duration_reduced": "motion.duration-reduced.moderate"
+      },
+      "exit": {
+        "token": "motion.preset.surface.exit.transition",
+        "duration": "motion.preset.surface.exit.duration",
+        "easing": "motion.preset.surface.exit.easing",
+        "delay": "motion.preset.surface.exit.delay",
+        "duration_reduced": "motion.preset.surface.exit.duration-reduced",
+        "resolves_to": {
+          "duration": "motion.duration.normal",
+          "easing": "motion.easing-role.exit",
+          "delay": "motion.duration-ms.0",
+          "duration_reduced": "motion.duration-reduced.normal"
+        }
       }
     },
     "expand": {
@@ -9431,7 +9720,471 @@
         "easing": "motion.easing-role.enter",
         "delay": "motion.duration-ms.0",
         "duration_reduced": "motion.duration-reduced.slow"
+      },
+      "exit": {
+        "token": "motion.preset.settle.exit.transition",
+        "duration": "motion.preset.settle.exit.duration",
+        "easing": "motion.preset.settle.exit.easing",
+        "delay": "motion.preset.settle.exit.delay",
+        "duration_reduced": "motion.preset.settle.exit.duration-reduced",
+        "resolves_to": {
+          "duration": "motion.duration.moderate",
+          "easing": "motion.easing-role.exit",
+          "delay": "motion.duration-ms.0",
+          "duration_reduced": "motion.duration-reduced.moderate"
+        }
       }
+    },
+    "pop": {
+      "token": "motion.preset.pop.transition",
+      "duration": "motion.preset.pop.duration",
+      "easing": "motion.preset.pop.easing",
+      "delay": "motion.preset.pop.delay",
+      "duration_reduced": "motion.preset.pop.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.fast",
+        "easing": "motion.easing-role.enter",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.fast"
+      },
+      "exit": {
+        "token": "motion.preset.pop.exit.transition",
+        "duration": "motion.preset.pop.exit.duration",
+        "easing": "motion.preset.pop.exit.easing",
+        "delay": "motion.preset.pop.exit.delay",
+        "duration_reduced": "motion.preset.pop.exit.duration-reduced",
+        "resolves_to": {
+          "duration": "motion.duration.instant",
+          "easing": "motion.easing-role.exit",
+          "delay": "motion.duration-ms.0",
+          "duration_reduced": "motion.duration-reduced.instant"
+        }
+      }
+    },
+    "press": {
+      "token": "motion.preset.press.transition",
+      "duration": "motion.preset.press.duration",
+      "easing": "motion.preset.press.easing",
+      "delay": "motion.preset.press.delay",
+      "duration_reduced": "motion.preset.press.duration-reduced",
+      "resolves_to": {
+        "duration": "motion.duration.instant",
+        "easing": "motion.easing-role.default",
+        "delay": "motion.duration-ms.0",
+        "duration_reduced": "motion.duration-reduced.instant"
+      }
+    }
+  },
+  "motion_patterns": {
+    "dialog/enter": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "scrim",
+          "property": "opacity",
+          "preset": "motion.preset.surface",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "opacity",
+          "preset": "motion.preset.surface",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "transform",
+          "transform": "scale",
+          "preset": "motion.preset.surface",
+          "scale": 0.96,
+          "reduced": "off"
+        },
+        {
+          "element": "content",
+          "property": "opacity",
+          "preset": "motion.preset.fade",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "dialog/exit": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "scrim",
+          "property": "opacity",
+          "preset": "motion.preset.surface.exit",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "opacity",
+          "preset": "motion.preset.surface.exit",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "transform",
+          "transform": "scale",
+          "preset": "motion.preset.surface.exit",
+          "scale": 0.96,
+          "reduced": "off"
+        },
+        {
+          "element": "content",
+          "property": "opacity",
+          "preset": "motion.preset.fade.exit",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "dialog/bottom/enter": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "scrim",
+          "property": "opacity",
+          "preset": "motion.preset.surface",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "transform",
+          "transform": "slide",
+          "preset": "motion.preset.surface",
+          "distance": "self",
+          "from": "bottom",
+          "reduced": "fade"
+        },
+        {
+          "element": "content",
+          "property": "opacity",
+          "preset": "motion.preset.fade",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "dialog/bottom/exit": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "scrim",
+          "property": "opacity",
+          "preset": "motion.preset.surface.exit",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "transform",
+          "transform": "slide",
+          "preset": "motion.preset.surface.exit",
+          "distance": "self",
+          "from": "bottom",
+          "reduced": "fade"
+        },
+        {
+          "element": "content",
+          "property": "opacity",
+          "preset": "motion.preset.fade.exit",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "dialog/end/enter": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "scrim",
+          "property": "opacity",
+          "preset": "motion.preset.surface",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "transform",
+          "transform": "slide",
+          "preset": "motion.preset.surface",
+          "distance": "self",
+          "from": "end",
+          "reduced": "fade"
+        }
+      ]
+    },
+    "dialog/end/exit": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "scrim",
+          "property": "opacity",
+          "preset": "motion.preset.surface.exit",
+          "reduced": "keep"
+        },
+        {
+          "element": "panel",
+          "property": "transform",
+          "transform": "slide",
+          "preset": "motion.preset.surface.exit",
+          "distance": "self",
+          "from": "end",
+          "reduced": "fade"
+        }
+      ]
+    },
+    "toast/enter": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "toast",
+          "property": "opacity",
+          "preset": "motion.preset.fade",
+          "reduced": "keep"
+        },
+        {
+          "element": "toast",
+          "property": "transform",
+          "transform": "slide",
+          "preset": "motion.preset.fade",
+          "distance": "motion.distance.nudge",
+          "from": "below",
+          "reduced": "off"
+        }
+      ]
+    },
+    "toast/exit": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "toast",
+          "property": "opacity",
+          "preset": "motion.preset.fade.exit",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "tooltip/show": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "tooltip",
+          "property": "opacity",
+          "preset": "motion.preset.pop",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "tooltip/hide": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "tooltip",
+          "property": "opacity",
+          "preset": "motion.preset.pop.exit",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "popover/open": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "popover",
+          "property": "opacity",
+          "preset": "motion.preset.pop",
+          "reduced": "keep"
+        },
+        {
+          "element": "popover",
+          "property": "transform",
+          "transform": "scale",
+          "preset": "motion.preset.pop",
+          "scale": 0.95,
+          "reduced": "off"
+        }
+      ]
+    },
+    "popover/close": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "popover",
+          "property": "opacity",
+          "preset": "motion.preset.pop.exit",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "accordion/expand": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "panel",
+          "property": "size",
+          "preset": "motion.preset.expand",
+          "reduced": "off"
+        },
+        {
+          "element": "panel",
+          "property": "opacity",
+          "preset": "motion.preset.expand",
+          "reduced": "keep"
+        },
+        {
+          "element": "indicator",
+          "property": "transform",
+          "transform": "turn",
+          "preset": "motion.preset.move",
+          "reduced": "off"
+        }
+      ]
+    },
+    "accordion/collapse": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "panel",
+          "property": "size",
+          "preset": "motion.preset.expand",
+          "reduced": "off"
+        },
+        {
+          "element": "panel",
+          "property": "opacity",
+          "preset": "motion.preset.expand",
+          "reduced": "keep"
+        },
+        {
+          "element": "indicator",
+          "property": "transform",
+          "transform": "turn",
+          "preset": "motion.preset.move",
+          "reduced": "off"
+        }
+      ]
+    },
+    "fade/in": {
+      "half": "enter",
+      "tracks": [
+        {
+          "element": "element",
+          "property": "opacity",
+          "preset": "motion.preset.fade",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "fade/out": {
+      "half": "exit",
+      "tracks": [
+        {
+          "element": "element",
+          "property": "opacity",
+          "preset": "motion.preset.fade.exit",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "hover": {
+      "half": "change",
+      "tracks": [
+        {
+          "element": "control",
+          "property": "color",
+          "preset": "motion.preset.state",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "pressed": {
+      "half": "change",
+      "tracks": [
+        {
+          "element": "control",
+          "property": "transform",
+          "transform": "scale",
+          "preset": "motion.preset.press",
+          "scale": 0.98,
+          "reduced": "off"
+        },
+        {
+          "element": "control",
+          "property": "color",
+          "preset": "motion.preset.press",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "pressed/release": {
+      "half": "change",
+      "tracks": [
+        {
+          "element": "control",
+          "property": "transform",
+          "transform": "scale",
+          "preset": "motion.preset.state",
+          "scale": 0.98,
+          "reduced": "off"
+        },
+        {
+          "element": "control",
+          "property": "color",
+          "preset": "motion.preset.state",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "tabs/select": {
+      "half": "change",
+      "tracks": [
+        {
+          "element": "underline",
+          "property": "transform",
+          "transform": "travel",
+          "preset": "motion.preset.move",
+          "reduced": "off"
+        },
+        {
+          "element": "panel",
+          "property": "opacity",
+          "preset": "motion.preset.crossfade",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "switch/toggle": {
+      "half": "change",
+      "tracks": [
+        {
+          "element": "thumb",
+          "property": "transform",
+          "transform": "travel",
+          "preset": "motion.preset.move",
+          "reduced": "off"
+        },
+        {
+          "element": "track",
+          "property": "color",
+          "preset": "motion.preset.move",
+          "reduced": "keep"
+        }
+      ]
+    },
+    "segmented/select": {
+      "half": "change",
+      "tracks": [
+        {
+          "element": "pill",
+          "property": "transform",
+          "transform": "travel",
+          "preset": "motion.preset.move",
+          "reduced": "off"
+        },
+        {
+          "element": "label",
+          "property": "color",
+          "preset": "motion.preset.move",
+          "reduced": "keep"
+        }
+      ]
     }
   },
   "gradient_fields": [
@@ -12832,18 +13585,32 @@
         "motion.preset.expand.delay",
         "motion.preset.expand.transition",
         "motion.preset.fade.delay",
+        "motion.preset.fade.exit.delay",
+        "motion.preset.fade.exit.transition",
         "motion.preset.fade.transition",
         "motion.preset.move.delay",
         "motion.preset.move.transition",
+        "motion.preset.pop.delay",
+        "motion.preset.pop.exit.delay",
+        "motion.preset.pop.exit.transition",
+        "motion.preset.pop.transition",
+        "motion.preset.press.delay",
+        "motion.preset.press.transition",
         "motion.preset.reveal.delay",
+        "motion.preset.reveal.exit.delay",
+        "motion.preset.reveal.exit.transition",
         "motion.preset.reveal.transition",
         "motion.preset.settle.delay",
+        "motion.preset.settle.exit.delay",
+        "motion.preset.settle.exit.transition",
         "motion.preset.settle.transition",
         "motion.preset.state.delay",
         "motion.preset.state.transition",
         "motion.preset.step.delay",
         "motion.preset.step.transition",
         "motion.preset.surface.delay",
+        "motion.preset.surface.exit.delay",
+        "motion.preset.surface.exit.transition",
         "motion.preset.surface.transition"
       ]
     },
@@ -12863,7 +13630,13 @@
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
         "motion.duration-reduced.instant",
-        "motion.duration.instant"
+        "motion.duration.instant",
+        "motion.preset.pop.exit.duration",
+        "motion.preset.pop.exit.duration-reduced",
+        "motion.preset.pop.exit.transition",
+        "motion.preset.press.duration",
+        "motion.preset.press.duration-reduced",
+        "motion.preset.press.transition"
       ]
     },
     "motion.duration-ms.80": {
@@ -12874,6 +13647,12 @@
       "aliased_by": [
         "motion.duration-reduced.fast",
         "motion.duration.fast",
+        "motion.preset.fade.exit.duration",
+        "motion.preset.fade.exit.duration-reduced",
+        "motion.preset.fade.exit.transition",
+        "motion.preset.pop.duration",
+        "motion.preset.pop.duration-reduced",
+        "motion.preset.pop.transition",
         "motion.preset.state.duration",
         "motion.preset.state.duration-reduced",
         "motion.preset.state.transition"
@@ -12898,9 +13677,12 @@
         "motion.preset.fade.duration-reduced",
         "motion.preset.move.duration-reduced",
         "motion.preset.reveal.duration-reduced",
+        "motion.preset.reveal.exit.duration-reduced",
         "motion.preset.settle.duration-reduced",
+        "motion.preset.settle.exit.duration-reduced",
         "motion.preset.step.duration-reduced",
-        "motion.preset.surface.duration-reduced"
+        "motion.preset.surface.duration-reduced",
+        "motion.preset.surface.exit.duration-reduced"
       ]
     },
     "motion.duration-ms.160": {
@@ -12915,7 +13697,11 @@
         "motion.preset.expand.duration",
         "motion.preset.expand.transition",
         "motion.preset.fade.duration",
-        "motion.preset.fade.transition"
+        "motion.preset.fade.transition",
+        "motion.preset.move.duration",
+        "motion.preset.move.transition",
+        "motion.preset.surface.exit.duration",
+        "motion.preset.surface.exit.transition"
       ]
     },
     "motion.duration-ms.240": {
@@ -12925,12 +13711,24 @@
       "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
       "aliased_by": [
         "motion.duration.moderate",
-        "motion.preset.move.duration",
-        "motion.preset.move.transition",
+        "motion.preset.reveal.exit.duration",
+        "motion.preset.reveal.exit.transition",
+        "motion.preset.settle.exit.duration",
+        "motion.preset.settle.exit.transition",
         "motion.preset.step.duration",
         "motion.preset.step.transition",
         "motion.preset.surface.duration",
         "motion.preset.surface.transition"
+      ]
+    },
+    "motion.duration-ms.300": {
+      "$description": "duration primitive — 300ms (literal; the semantic tier names the use)",
+      "meaning": "Motion duration primitive",
+      "tier": "primitive",
+      "consume": "Private primitive — reference a `motion.duration.*` role (or its `motion.duration-reduced.*` twin), not the raw step.",
+      "aliased_by": [
+        "motion.delay.hide",
+        "motion.delay.skip"
       ]
     },
     "motion.duration-ms.400": {
@@ -13043,6 +13841,8 @@
         "motion.preset.expand.transition",
         "motion.preset.move.easing",
         "motion.preset.move.transition",
+        "motion.preset.press.easing",
+        "motion.preset.press.transition",
         "motion.preset.state.easing",
         "motion.preset.state.transition",
         "motion.preset.step.easing",
@@ -13058,6 +13858,8 @@
         "motion.easing-role.enter",
         "motion.preset.fade.easing",
         "motion.preset.fade.transition",
+        "motion.preset.pop.easing",
+        "motion.preset.pop.transition",
         "motion.preset.reveal.easing",
         "motion.preset.reveal.transition",
         "motion.preset.settle.easing",
@@ -13072,7 +13874,17 @@
       "tier": "primitive",
       "consume": "Consumable — easing shapes and springs are used directly where no role fits; transitions compose them.",
       "aliased_by": [
-        "motion.easing-role.exit"
+        "motion.easing-role.exit",
+        "motion.preset.fade.exit.easing",
+        "motion.preset.fade.exit.transition",
+        "motion.preset.pop.exit.easing",
+        "motion.preset.pop.exit.transition",
+        "motion.preset.reveal.exit.easing",
+        "motion.preset.reveal.exit.transition",
+        "motion.preset.settle.exit.easing",
+        "motion.preset.settle.exit.transition",
+        "motion.preset.surface.exit.easing",
+        "motion.preset.surface.exit.transition"
       ]
     },
     "motion.easing.expressive": {

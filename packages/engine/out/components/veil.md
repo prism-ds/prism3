@@ -68,7 +68,7 @@ The veil holds no copy. Where its variants surface in a UI, name the polarity an
 
 ## Related components
 
-- **Often used with:** `icon`, `button`, `image-placeholder`
+- **Often used with:** `icon`, `button`, `image`
 - **Replaces:**
   - a hand-tuned semi-transparent rectangle over an image with an ad-hoc opacity
 

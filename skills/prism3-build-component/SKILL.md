@@ -400,7 +400,7 @@ each member's ratio and both executors resize the frame and call `lockAspectRati
 derives the second dimension from the first. Binding two dimensions cannot hold a lock — the
 second `setBoundVariable` evicts the first — so the validator refuses `aspectRatio` alongside a
 second bound dimension and requires exactly one of `size`/`width`/`height`.
-`packages/engine/components/image-placeholder.ts` is the worked example: a `ratio` axis of
+`packages/engine/components/image.ts` is the worked example: a `ratio` axis of
 seven proportions (`2:3` through `16:9`), `width` bound to the standalone-extent idiom below, and `clipsContent: true`.
 The read-back gate `test:roundtrip` builds each projected def, reads the built `targetAspectRatio`
 back out of the host shim, and diffs it against the declared proportion — the one component check
@@ -409,8 +409,8 @@ whose actual value comes from the host, not from the plan.
 ## 5. Idioms the corpus reaches for
 
 - **Standalone extent → `container.narrow`.** A part with no cell of its own — a focus ring,
-  a veil, an image-placeholder frame — still needs a buildable size when nobody nests it. Bind
-  a nominal side to a semantic role (`container.narrow` is 720px in veil and image-placeholder;
+  a veil, an image frame — still needs a buildable size when nobody nests it. Bind
+  a nominal side to a semantic role (`container.narrow` is 720px in veil and image;
   focus-ring uses `size.md.height`) and treat it as a placeholder a host overwrites with its
   own bounds. It is nominal, not a chosen rung — a raw primitive would fail the floor gate.
 - **Status border.** A validated field swaps its border for every non-default status —

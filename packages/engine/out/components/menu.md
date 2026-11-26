@@ -69,9 +69,10 @@ Use a Menu for a set of actions that do not fit on the page: the actions on a ro
 
 ### Motion
 
-- **Enter:** Fades in and scales up from a little under full size, from the trigger's side (motion.duration.fast, motion.easing-role.enter). A submenu fades only.
-- **Exit:** Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.
-- **Reduced motion:** Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that the menu opened or closed.
+- **Patterns:** `popover/open`, `popover/close`
+- **Enter:** The popover fades in and scales up from 95% on motion.preset.pop. It scales from the trigger's side. A submenu fades only.
+- **Exit:** The popover fades out on motion.preset.pop.exit.
+- **Reduced motion:** Under prefers-reduced-motion, the popover fades in on motion.preset.pop.duration-reduced, with no scale. The popover fades out on motion.preset.pop.exit.duration-reduced. A fade is not movement, and it keeps the cue that the menu opened or closed.
 
 ## Content guidelines
 

@@ -1,5 +1,5 @@
 {
-  "$schema": "prism3-component-docs/1.2",
+  "$schema": "prism3-component-docs/1.3",
   "generated": true,
   "engineVersion": "0.240.0",
   "note": "Documentation for every registered component, projected from its definition — the same source the design-file component and a coded component are built from. Brand-independent: a definition binds token names, and each brand's `<brand>.ai.json` resolves them. Field names mirror the definition schema. `ai` is the decision surface for choosing a component; the other fields are usage guidance and the code API. `syncBoundary` lists what the design file does not fully carry, each item a class and a disposition.",
@@ -249,7 +249,8 @@
         "composesWith": [],
         "alternativeTo": [
           "provider-logo",
-          "avatar"
+          "avatar",
+          "image"
         ],
         "supersedes": [],
         "supersededBy": [],
@@ -6676,9 +6677,12 @@
         "generationPriority": 6
       },
       "motion": {
-        "enter": "none (present on mount)",
-        "exit": "none",
-        "reduceMotion": "The thumb travels across the track on motion.duration.normal with motion.easing-role.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back."
+        "patterns": [
+          "switch/toggle"
+        ],
+        "enter": "None. On a change, the thumb travels to its new place and the track changes color on motion.preset.move. The thumb travel is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it.",
+        "exit": "None.",
+        "reduceMotion": "Under prefers-reduced-motion, the thumb takes its new place at once; the track fades to its new color on motion.preset.move.duration-reduced. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back."
       },
       "composition": {
         "composesWith": [
@@ -6907,7 +6911,7 @@
       "motion": {
         "enter": "none (present on mount)",
         "exit": "none",
-        "reduceMotion": "The nested control carries the thumb travel (motion.duration.normal with motion.easing-role.default; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears."
+        "reduceMotion": "The nested control carries the thumb travel (motion.preset.move; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears."
       },
       "composition": {
         "composesWith": [
@@ -7394,7 +7398,7 @@
         "commonPartners": [
           "icon",
           "button",
-          "image-placeholder"
+          "image"
         ],
         "triggerKeywords": [
           "veil",
@@ -7439,21 +7443,37 @@
         }
       ]
     },
-    "image-placeholder": {
-      "id": "image-placeholder",
-      "name": "ImagePlaceholder",
+    "image": {
+      "id": "image",
+      "name": "Image",
       "aliases": [
         "media-frame",
         "image-frame",
         "photo-placeholder",
         "empty-image",
-        "image-slot"
+        "image-slot",
+        "img",
+        "picture",
+        "thumbnail",
+        "figure"
       ],
       "category": "foundations",
       "status": "draft",
-      "summary": "Empty media frame locked to a ratio, from 2:3 portrait to 16:9. Drop an image fill onto it.",
-      "description": "An empty-state media frame that holds a photograph at a fixed aspect ratio. Pick a ratio (portrait 2:3, 3:4 or 4:5; square 1:1; landscape 4:3, 3:2 or 16:9) and the frame keeps that proportion while its size flexes to its container; a designer drops an image fill onto it (not a modeled slot). Before an image arrives it shows a neutral fill and a centered \"no image\" marker that scales with the frame, and it clips its content so a mismatched photo cannot overflow the frame. Turn the marker off once an image is in.",
+      "summary": "Image in a frame locked to a ratio, with empty, loading, loaded and error states.",
+      "description": "Content imagery, such as a photograph, an illustration, a product shot or a logo, in a frame whose box is known before the file loads, so nothing shifts when it arrives. Pick a ratio (portrait 2:3, 3:4 or 4:5; square 1:1; landscape 4:3, 3:2 or 16:9) and the frame keeps that proportion while its size flexes to its container. It shows one of four states: empty, with a neutral fill and a \"no image\" marker; loading, with a skeleton; loaded, with the image; and error, with an \"image unavailable\" marker and no text. Every image needs a decision about its alt text: describe an informative image, and give a decorative one an empty alt.",
       "props": [
+        {
+          "name": "src",
+          "type": "string",
+          "required": false,
+          "description": "The image file. With no source the frame shows its empty state."
+        },
+        {
+          "name": "alt",
+          "type": "string",
+          "required": true,
+          "description": "The text alternative. Describe what the image does, not what it shows; inside a link, name the destination. An empty string marks the image as decorative and hides it from assistive technology. Leaving it out is an error, because a screen reader may read the file name instead."
+        },
         {
           "name": "ratio",
           "type": "enum: '2:3' | '3:4' | '4:5' | '1:1' | '4:3' | '3:2' | '16:9'",
@@ -7468,7 +7488,84 @@
             "3:2",
             "16:9"
           ],
-          "description": "The width-to-height proportion the frame holds while its actual size flexes — portrait (2:3, 3:4 for apparel tiles, 4:5), a square (1:1), or landscape (the classic photo ratio 4:3, 3:2, widescreen 16:9). It is an aspect-ratio lock, not a pair of fixed dimensions: the frame derives its height from its width (or the reverse) so the shape survives being resized. Pick it from the media the frame will hold."
+          "description": "The width-to-height proportion the frame holds while its size flexes: portrait (2:3, 3:4, 4:5), square (1:1) or landscape (4:3, 3:2, 16:9). Pick it from the media the frame will hold."
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "required": false,
+          "description": "The image file's intrinsic width, passed to the image element when it is known, so the browser reserves the box before the file loads."
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "required": false,
+          "description": "The image file's intrinsic height, passed to the image element with the width."
+        },
+        {
+          "name": "fit",
+          "type": "enum: 'cover' | 'contain'",
+          "default": "cover",
+          "required": false,
+          "values": [
+            "cover",
+            "contain"
+          ],
+          "description": "How the image fills the frame. Cover fills it and crops what falls outside; contain shows the whole image and leaves the fill around it."
+        },
+        {
+          "name": "position",
+          "type": "string",
+          "default": "center",
+          "required": false,
+          "description": "The focal point a cropped image keeps in view, as a CSS object position."
+        },
+        {
+          "name": "loading",
+          "type": "enum: 'eager' | 'lazy'",
+          "default": "eager",
+          "required": false,
+          "values": [
+            "eager",
+            "lazy"
+          ],
+          "description": "When the browser fetches the file. Lazy-load an image below the fold; leave the largest image at the top of the page eager."
+        },
+        {
+          "name": "fetchPriority",
+          "type": "enum: 'high' | 'low' | 'auto'",
+          "default": "auto",
+          "required": false,
+          "values": [
+            "high",
+            "low",
+            "auto"
+          ],
+          "description": "How urgently the browser fetches the file. Give the page's hero image high."
+        },
+        {
+          "name": "srcSet",
+          "type": "string",
+          "required": false,
+          "description": "Candidate files at other widths or densities, passed through to the image element."
+        },
+        {
+          "name": "sizes",
+          "type": "string",
+          "required": false,
+          "description": "The width the image takes at each breakpoint, passed through with the candidate files."
+        },
+        {
+          "name": "onLoad",
+          "type": "function",
+          "required": false,
+          "description": "Called when the image has loaded."
+        },
+        {
+          "name": "onError",
+          "type": "function",
+          "required": false,
+          "description": "Called when the image fails to load, after the frame has switched to its error state."
         }
       ],
       "states": [],
@@ -7484,51 +7581,80 @@
             "16:9"
           ],
           "kind": "authoring"
+        },
+        "status": {
+          "values": [
+            "empty",
+            "loading",
+            "loaded",
+            "error"
+          ],
+          "kind": "runtime"
         }
       },
       "accessibility": {
-        "role": "img once it holds an image: with a descriptive accessible name when the image is informative, or an empty `alt` (`alt=\"\"`) when it is decorative, which removes it from the accessibility tree. The empty frame is presentational. The \"no image\" marker inside it is decorative and `aria-hidden`; it is a visual affordance, not the accessible content.",
+        "role": "img: an informative image takes an accessible name from its alt, and a decorative one an empty alt (`alt=\"\"`), which removes it from the accessibility tree. The markers and the loading skeleton are decorative and hidden.",
         "wcag": [
-          "1.1.1 Non-text Content — an image placeholder that ships as a real image needs a text alternative describing it, or an empty alt=\"\" when the image is decorative (an omitted alt and an empty one behave oppositely); the empty-state marker is decorative and is hidden from assistive tech",
-          "1.4.11 Non-text Contrast — where the frame edge is a meaningful boundary, verify it against the surface behind it; the neutral fill is a background, not a UI boundary carrying meaning",
-          "1.4.1 Use of Color — the marker signals \"no image\" by shape and position, not by color alone"
+          "1.1.1 Non-text Content (targets: every image carries a decision about its text alternative, and a failed informative image keeps its name)",
+          "1.4.5 Images of Text (targets: text in an image only for a logo)",
+          "1.4.1 Use of Color (an image is never the only carrier of a status; each marker signals by shape)",
+          "2.3.3 Animation from Interactions (targets: no zoom or parallax on load; the fade is opacity only)",
+          "1.4.11 Non-text Contrast (only where the frame edge is a meaningful boundary)"
         ],
-        "focus": "None of its own — the frame is not focusable as an empty placeholder. If it becomes an interactive media element (a button that opens a picker), that control carries its own focus; the placeholder frame does not invent one.",
-        "aria": "Once the frame holds a real image, decide whether the image is informative or decorative. Informative: an img role and an accessible name that describes its function, not the picture. Decorative: an empty alt (alt=\"\"), never an omitted one — some screen readers announce the file name when alt is missing. Mark the \"no image\" marker aria-hidden — it is a decorative affordance, and announcing it would add nothing. Do not rely on the marker as the accessible description of the eventual image."
+        "focus": "None of its own. An image that is a link takes the link's focus.",
+        "aria": "Informative: an `<img>` whose alt describes the function, not the picture; inside a link, the alt names the destination. Never start it with \"image of\". Decorative: `alt=\"\"`, which also hides the broken-image icon if it fails. On error, an informative image keeps its name on the fallback (`role=\"img\"` with `aria-label` set to the alt); a decorative one stays hidden. Set `aria-hidden=\"true\"` on both markers and on the loading skeleton. One image loading announces nothing; a region of many images loading carries its own status message. A chart or a diagram needs a long description beside it, not a longer alt. The alt is translatable text."
       },
       "content": {
-        "labelPattern": "An image placeholder carries no text of its own. Where its ratio variants surface in a UI, name the proportion plainly — \"16:9\", \"Square\" — rather than a pixel dimension, because the frame holds a ratio and not a fixed size."
+        "labelPattern": "Image carries no visible text. Its alt text describes what the image does in context, in a short phrase: \"Red running shoe, side view\" for a product, the destination for a link. Leave out \"image of\" and \"photo of\".",
+        "errorPattern": "The error state draws no text: the \"image unavailable\" marker is the visible cue, and an informative image keeps its alt as its accessible name.",
+        "emptyPattern": "The empty state draws the \"no image\" marker and no text."
       },
       "docs": {
-        "usage": "Use an image placeholder wherever a layout reserves space for a photograph before one is chosen — a card's media slot, a hero, a gallery cell. Pick the ratio from the media it will hold (3:4, 4:5 or 2:3 for portrait product and apparel shots, 1:1 for square thumbnails, 4:3 or 3:2 for standard photography, 16:9 for video stills and wide banners); the frame keeps that proportion while it flexes to its container, so a row of cards stays aligned even as their widths change. Drop a photograph onto the frame as an image fill. Turn the marker property off so the \"no image\" marker does not sit on the photo. The marker scales with the frame, so a small thumbnail shows a small marker. The frame clips its content, so a mismatched image stays inside the ratio rather than overflowing.",
+        "usage": "Use Image for content imagery: a card's media, a product shot, a hero, a gallery cell. Pick the ratio from the media it will hold (3:4, 4:5 or 2:3 for portrait product shots, 1:1 for square thumbnails, 4:3 or 3:2 for standard photography, 16:9 for video stills and wide banners); the frame keeps that proportion while it flexes to its container, so a row of cards stays aligned and nothing shifts when the files load. A thumbnail is a small Image, not a different component. Pick the state the mockup shows: empty before an image is chosen, loading while it arrives, loaded with the photo, and error when it fails. For the loaded state, drop the photo on the frame as an image fill. Decide the alt text for every image: describe an informative image and mark a decorative one empty.",
         "do": [
           "Pick the ratio from the media the frame will hold, and let the lock keep it while the size flexes",
-          "Drop the photograph on as an image fill — the frame is the container, not a swappable slot — and turn the marker property off once it is in",
-          "Give an informative image an accessible name and a decorative one an empty `alt`; keep the empty-state marker decorative and `aria-hidden`",
-          "Let the frame clip — a photo cropped to the ratio reads better than one that overflows the layout"
+          "Show the loaded state with the photo dropped on the frame as an image fill",
+          "Show the error state in a design that covers failures, so the frame is not left blank",
+          "Write alt text that says what the image does in context; give a decorative image an empty alt",
+          "Put a long description beside a chart or a diagram, not into the alt"
         ],
         "dont": [
-          "Hard-code a width and a height to fake a ratio — the frame holds the ratio and derives the second dimension, so two fixed sizes fight the lock and break on resize",
-          "Treat the \"no image\" marker as the image's description — it is a placeholder affordance, turned off when a photograph arrives",
-          "Leave the marker on over a supplied image — the frame cannot tell that a fill is a photo, so the marker property is how the marker goes away",
-          "Reach for an image placeholder as a decorative wash over a photo — that is the veil component (a follow-up may compose the two)",
-          "Expect a play overlay yet — that is not built yet; this is the core empty-state frame (a legibility scrim over media is the veil component)"
+          "Hard-code a width and a height to fake a ratio: two fixed sizes fight the lock and break on resize",
+          "Put text that matters inside an image, other than a logo",
+          "Mirror a photo for a right-to-left layout; supply a mirrored file only for directional artwork",
+          "Use Image for an icon (Icon), a person's picture (Avatar) or a decorative background",
+          "Expect a play overlay or a scrim over the image yet; a legibility scrim over media is Veil"
         ],
-        "implementation": [],
-        "contentGuidelines": "The frame holds no copy. Where its ratio surfaces in a UI, name the proportion (\"16:9\", \"Square\"), not a pixel size — the frame holds a ratio, not a fixed dimension."
+        "implementation": [
+          "Render an `<img>` inside a frame that sets `aspect-ratio` to the ratio and clips what overflows it, and set `object-fit` from the fit prop; pass the intrinsic width and height through when they are known",
+          "Make `alt` a required string prop that may be empty; never fall back to the file name",
+          "Derive the status from the source and the load and error events; it is not a prop",
+          "On error, keep an informative image's name with `role=\"img\"` and `aria-label` on the fallback, and keep a decorative one hidden",
+          "Set `aria-hidden=\"true\"` on both markers and on the loading skeleton",
+          "Fade the image in over the skeleton on `motion.duration.fast`, with opacity only",
+          "Leave delivery (candidate files, sizes, `<picture>`, formats) to the framework's image component, which Image wraps"
+        ],
+        "contentGuidelines": "The frame holds no copy. Alt text describes the function, not the picture: a short phrase, no \"image of\", and the destination when the image is a link. Text baked into an image fails readers who zoom or translate, except for a logo."
       },
       "ai": {
-        "primaryPurpose": "Reserve space for a photograph at a fixed aspect ratio, holding the proportion while the frame flexes to its container, and show a neutral empty state until an image is dropped in.",
-        "whenToUse": "A layout needs a media slot at a known proportion before the image is chosen — a card's photo area, a hero, a gallery cell. Pick a ratio from the media it will hold (2:3, 3:4 or 4:5 portrait, 1:1, 4:3, 3:2 or 16:9 landscape); the frame keeps that ratio as it resizes and clips whatever image is dropped onto it.",
-        "avoidWhen": "The surface is a decorative wash over an existing photo (that is the veil component), the image is already present and fixed (place it directly), or the space needs a play button over the media (not built yet — this is the core empty-state frame only) or a legibility scrim over it (the veil component).",
+        "primaryPurpose": "Show content imagery in a frame locked to a ratio, so the layout holds its box before the file loads, with empty, loading, loaded and error states and a required alt decision.",
+        "whenToUse": "A layout shows a photograph, an illustration, a product shot or a logo: a card's media, a hero, a gallery cell, a thumbnail. Pick the ratio from the media (2:3, 3:4 or 4:5 portrait, 1:1, 4:3, 3:2 or 16:9 landscape) and the state the screen shows.",
+        "avoidWhen": "The picture is a symbol for an action or a concept (use Icon), it stands for a person or an organization (use Avatar), it is a decorative background (a CSS background, not a component), it is a wash over a photo for legibility (use Veil), or the space is a loading placeholder for content other than an image (use Skeleton).",
         "commonPartners": [
-          "icon",
-          "veil"
+          "veil",
+          "list-item"
         ],
         "triggerKeywords": [
-          "image placeholder",
+          "image",
+          "img",
+          "picture",
+          "photo",
+          "thumbnail",
+          "figure",
+          "product image",
+          "hero image",
           "media frame",
-          "photo frame",
+          "image placeholder",
           "aspect ratio",
           "16:9",
           "4:3",
@@ -7536,26 +7662,38 @@
           "3:4",
           "4:5",
           "2:3",
-          "portrait image",
-          "product image",
           "square image",
           "empty image",
           "image slot",
           "no image",
-          "media slot"
+          "broken image",
+          "image error",
+          "image loading"
         ],
         "generationPriority": 3
       },
+      "motion": {
+        "enter": "On load the image fades in over the skeleton on `motion.duration.fast` with `motion.easing-role.enter`. No scale, zoom or parallax.",
+        "exit": "None of its own: the image stays until the frame is removed.",
+        "reduceMotion": "The fade stays, on `motion.duration-reduced.fast`: it is opacity only, not vestibular motion. The skeleton's pulse stops, as Skeleton does everywhere."
+      },
       "composition": {
-        "composesWith": [],
+        "composesWith": [
+          "skeleton"
+        ],
         "alternativeTo": [
+          "icon",
           "avatar"
         ],
         "supersedes": [],
         "supersededBy": [],
-        "planned": [],
+        "planned": [
+          "card"
+        ],
         "replacesPatterns": [
-          "a hand-drawn rectangle with a fixed width and height standing in for an image, which breaks its ratio the moment it is resized"
+          "a bare `<img>` with no reserved box, which shifts the layout when the file loads",
+          "a hand-drawn rectangle with a fixed width and height standing in for an image, which breaks its ratio the moment it is resized",
+          "an image that fails to a blank box or a browser broken-image icon"
         ]
       },
       "syncBoundary": [
@@ -7568,12 +7706,28 @@
           "disposition": "LOWERED"
         },
         {
-          "class": "deferred",
+          "class": "static-placeholder",
+          "disposition": "UNSUPPORTED"
+        },
+        {
+          "class": "motion",
           "disposition": "REFUSED"
         },
         {
-          "class": "static-placeholder",
+          "class": "semantics",
+          "disposition": "REFUSED"
+        },
+        {
+          "class": "runtime-behavior",
+          "disposition": "REFUSED"
+        },
+        {
+          "class": "right-to-left",
           "disposition": "UNSUPPORTED"
+        },
+        {
+          "class": "deferred",
+          "disposition": "REFUSED"
         },
         {
           "class": "live-geometry",
@@ -8167,7 +8321,7 @@
       "ai": {
         "primaryPurpose": "Show which person or organization something belongs to, as a photo, initials or a generic glyph.",
         "whenToUse": "A specific person or organization needs a picture: a comment author, a list row, a card owner, the signed-in user in a header, a team or app in a switcher. Add presence when the task depends on whether the person is available.",
-        "avoidWhen": "The picture stands for an action or a concept rather than a specific person, such as a profile link or a settings icon (use Icon), the picture is content media with no identity (use ImagePlaceholder), or the avatar is a control that opens something (put it in a Button or an IconButton).",
+        "avoidWhen": "The picture stands for an action or a concept rather than a specific person, such as a profile link or a settings icon (use Icon), the picture is content media with no identity (use Image), or the avatar is a control that opens something (put it in a Button or an IconButton).",
         "commonPartners": [
           "badge",
           "button",
@@ -8201,14 +8355,13 @@
         ],
         "alternativeTo": [
           "icon",
-          "image-placeholder"
+          "image"
         ],
         "supersedes": [],
         "supersededBy": [],
         "planned": [
           "avatar-group",
-          "card",
-          "image"
+          "card"
         ],
         "replacesPatterns": [
           "a circular image with no fallback, which shows a broken image when the photo fails to load",
@@ -8885,9 +9038,9 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "None. On selection the underline slides from the previous tab to this one, on motion.duration.normal with motion.easing-role.default.",
+        "enter": "None. On selection the underline slides from the previous tab to this one, on motion.preset.move.",
         "exit": "None.",
-        "reduceMotion": "Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast."
+        "reduceMotion": "Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.preset.crossfade.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -9097,9 +9250,12 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.duration.normal with motion.easing-role.default.",
-        "exit": "The outgoing panel fades out under the incoming one. Panels never slide sideways.",
-        "reduceMotion": "Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast."
+        "patterns": [
+          "tabs/select"
+        ],
+        "enter": "None. On a change, the underline travels to its new place on motion.preset.move; the panel cross-fades on motion.preset.crossfade.",
+        "exit": "None. The outgoing panel fades out under the incoming one. Panels never slide sideways.",
+        "reduceMotion": "Under prefers-reduced-motion, the underline takes its new place at once; the panel cross-fades on motion.preset.crossfade.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -9481,8 +9637,8 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "On open, a chevron turns to its open position on motion.duration.normal with motion.easing-role.default; a plus and minus swap glyphs.",
-        "exit": "On close, the chevron turns back on motion.duration.normal with motion.easing-role.default; a plus and minus swap back.",
+        "enter": "On open, a chevron turns to its open position on motion.preset.move; a plus and minus swap glyphs.",
+        "exit": "On close, the chevron turns back on motion.preset.move; a plus and minus swap back.",
         "reduceMotion": "Under prefers-reduced-motion the indicator swaps to its open or closed glyph without turning."
       },
       "composition": {
@@ -9703,9 +9859,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "The panel eases open to its content height (motion.preset.expand), and the indicator turns to its open glyph.",
-        "exit": "The panel eases closed (motion.preset.expand), and the indicator turns back.",
-        "reduceMotion": "Under prefers-reduced-motion the height changes at once, and the panel's fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed."
+        "patterns": [
+          "accordion/expand",
+          "accordion/collapse"
+        ],
+        "enter": "The panel eases open to its content height and fades in on motion.preset.expand; the indicator turns to its open position on motion.preset.move.",
+        "exit": "The panel eases closed and fades out on motion.preset.expand; the indicator turns back on motion.preset.move.",
+        "reduceMotion": "Under prefers-reduced-motion, the panel fades in on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. The panel fades out on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. A fade is not movement, and it keeps the cue that the panel opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -10247,9 +10407,9 @@
         "generationPriority": 9
       },
       "motion": {
-        "enter": "None. On selection the pill travels to this option on motion.duration.normal with motion.easing-role.default, or cross-fades.",
+        "enter": "None. On selection the pill travels to this option on motion.preset.move, or cross-fades.",
         "exit": "None.",
-        "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast."
+        "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.preset.move.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -10465,9 +10625,12 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "None. On selection the pill travels to the new option on motion.duration.normal with motion.easing-role.default, or cross-fades.",
+        "patterns": [
+          "segmented/select"
+        ],
+        "enter": "None. On a change, the pill travels to its new place and the label changes color on motion.preset.move.",
         "exit": "None.",
-        "reduceMotion": "The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast."
+        "reduceMotion": "Under prefers-reduced-motion, the pill takes its new place at once; the label fades to its new color on motion.preset.move.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -11180,9 +11343,17 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "A centered panel fades in and scales up a little; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge (motion.duration.moderate, motion.easing-role.enter). The backdrop fades in.",
-        "exit": "The reverse, on motion.easing-role.exit.",
-        "reduceMotion": "Under prefers-reduced-motion every placement and the backdrop fade only, with no slide and no scale, on motion.duration-reduced.normal to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed."
+        "patterns": [
+          "dialog/enter",
+          "dialog/exit",
+          "dialog/bottom/enter",
+          "dialog/bottom/exit",
+          "dialog/end/enter",
+          "dialog/end/exit"
+        ],
+        "enter": "For a centered dialog, the scrim fades in and the panel fades in and scales up from 96% on motion.preset.surface; the content fades in on motion.preset.fade. For a bottom sheet or a full-screen dialog, the scrim fades in and the panel slides up from the bottom edge on motion.preset.surface; the content fades in on motion.preset.fade. For an end panel, the scrim fades in and the panel slides in from the end edge on motion.preset.surface.",
+        "exit": "For a centered dialog, the scrim fades out and the panel fades out and scales down to 96% on motion.preset.surface.exit; the content fades out on motion.preset.fade.exit. For a bottom sheet or a full-screen dialog, the scrim fades out and the panel slides back down on motion.preset.surface.exit; the content fades out on motion.preset.fade.exit. For an end panel, the scrim fades out and the panel slides back out on motion.preset.surface.exit.",
+        "reduceMotion": "Under prefers-reduced-motion, for a centered dialog opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, with no scale; the content fades in on motion.preset.fade.duration-reduced. For a centered dialog closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, with no scale; the content fades out on motion.preset.fade.exit.duration-reduced. For a bottom sheet or a full-screen dialog opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, instead of sliding; the content fades in on motion.preset.fade.duration-reduced. For a bottom sheet or a full-screen dialog closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, instead of sliding; the content fades out on motion.preset.fade.exit.duration-reduced. For an end panel opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, instead of sliding. For an end panel closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, instead of sliding. A fade is not movement, and it keeps the cue that a layer opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -11731,9 +11902,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "An 8px slide up and a fade (motion.preset.fade: motion.duration.normal, motion.easing-role.enter).",
-        "exit": "A fade (motion.duration.fast with motion.easing-role.exit). A replacement plays the exit, then the enter.",
-        "reduceMotion": "Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal."
+        "patterns": [
+          "toast/enter",
+          "toast/exit"
+        ],
+        "enter": "The toast fades in and slides up by motion.distance.nudge on motion.preset.fade.",
+        "exit": "The toast fades out on motion.preset.fade.exit. A replacement plays the exit, then the enter.",
+        "reduceMotion": "Under prefers-reduced-motion, the toast fades in on motion.preset.fade.duration-reduced, with no slide. The toast fades out on motion.preset.fade.exit.duration-reduced."
       },
       "composition": {
         "composesWith": [
@@ -14368,7 +14543,7 @@
       "motion": {
         "enter": "Fades in. A banner inserted at the top of a page reserves its space, so the content below does not jump.",
         "exit": "Collapses its height and fades on motion.duration.fast with motion.easing-role.exit, so the content below moves up smoothly.",
-        "reduceMotion": "Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal to appear and to go, and its height changes at once when it is dismissed."
+        "reduceMotion": "Under prefers-reduced-motion it fades only, on motion.preset.fade.duration-reduced to appear and motion.preset.fade.exit.duration-reduced to go, and its height changes at once when it is dismissed."
       },
       "composition": {
         "composesWith": [
@@ -15953,7 +16128,7 @@
         "commonPartners": [
           "spinner",
           "progress",
-          "image-placeholder",
+          "image",
           "list-item",
           "avatar"
         ],
@@ -16213,9 +16388,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "Fades in and scales up from a little under full size, from the trigger's side (motion.duration.fast, motion.easing-role.enter). The origin follows the side it opens on.",
-        "exit": "Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.",
-        "reduceMotion": "Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed."
+        "patterns": [
+          "popover/open",
+          "popover/close"
+        ],
+        "enter": "The popover fades in and scales up from 95% on motion.preset.pop. It scales from the trigger's side, and the origin follows the side it opens on.",
+        "exit": "The popover fades out on motion.preset.pop.exit.",
+        "reduceMotion": "Under prefers-reduced-motion, the popover fades in on motion.preset.pop.duration-reduced, with no scale. The popover fades out on motion.preset.pop.exit.duration-reduced. A fade is not movement, and it keeps the cue that a layer opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -17190,9 +17369,13 @@
         "generationPriority": 2
       },
       "motion": {
-        "enter": "Fades in and scales up from a little under full size, from the trigger's side (motion.duration.fast, motion.easing-role.enter). A submenu fades only.",
-        "exit": "Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.",
-        "reduceMotion": "Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that the menu opened or closed."
+        "patterns": [
+          "popover/open",
+          "popover/close"
+        ],
+        "enter": "The popover fades in and scales up from 95% on motion.preset.pop. It scales from the trigger's side. A submenu fades only.",
+        "exit": "The popover fades out on motion.preset.pop.exit.",
+        "reduceMotion": "Under prefers-reduced-motion, the popover fades in on motion.preset.pop.duration-reduced, with no scale. The popover fades out on motion.preset.pop.exit.duration-reduced. A fade is not movement, and it keeps the cue that the menu opened or closed."
       },
       "composition": {
         "composesWith": [
@@ -17318,13 +17501,13 @@
           "name": "delay",
           "type": "number",
           "required": false,
-          "description": "How long the pointer rests on the control before the tooltip shows, in milliseconds. Keyboard focus shows it at once."
+          "description": "How long the pointer rests on the control before the tooltip shows, in milliseconds. Defaults to motion.delay.show. Keyboard focus shows it at once."
         },
         {
           "name": "closeDelay",
           "type": "number",
           "required": false,
-          "description": "How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it."
+          "description": "How long the tooltip stays after the pointer leaves, in milliseconds, so the pointer can move onto it. Defaults to motion.delay.hide."
         },
         {
           "name": "open",
@@ -17426,9 +17609,13 @@
         "generationPriority": 3
       },
       "motion": {
-        "enter": "A fade (motion.duration.fast, motion.easing-role.enter). Moving from one tooltip to the next soon after, it appears with no animation.",
-        "exit": "A fade (motion.duration.instant, motion.easing-role.exit).",
-        "reduceMotion": "Under prefers-reduced-motion, the same fade, at motion.duration-reduced.fast both ways."
+        "patterns": [
+          "tooltip/show",
+          "tooltip/hide"
+        ],
+        "enter": "The tooltip fades in on motion.preset.pop. It shows after motion.delay.show on pointer hover, at once on keyboard focus, and at once with no animation when the pointer moves on from another tooltip within motion.delay.skip.",
+        "exit": "The tooltip fades out on motion.preset.pop.exit. It stays motion.delay.hide after the pointer leaves, so the pointer can move onto it.",
+        "reduceMotion": "Under prefers-reduced-motion, the tooltip fades in on motion.preset.pop.duration-reduced. The tooltip fades out on motion.preset.pop.exit.duration-reduced."
       },
       "composition": {
         "composesWith": [],

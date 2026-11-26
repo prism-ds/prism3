@@ -312,7 +312,7 @@
                 },
                 "contracts": {
                   "type": "object",
-                  "description": "checked / pass / rate / vacuous / failures / unresolved — omitted when no pairs were given. vacuous is true when no pair resolved in any mode, so rate 1 measured nothing."
+                  "description": "checked / pass / rate / vacuous / coverage / failures / unresolved / leaks — omitted when no pairs were given. vacuous is true when no pair resolved in any mode, so rate 1 measured nothing. coverage is the share of pair-and-mode checks that resolved, 0 to 1. leaks lists pairs measured through a raw palette color (core.palette.*) rather than a role."
                 }
               },
               "required": [
@@ -574,6 +574,154 @@
             "text": "the same object as JSON in content[0].text"
           },
           "source": "packages/engine/mcp.ts#name: 'validate_brand'"
+        },
+        {
+          "name": "list_components",
+          "title": "List the components",
+          "description": "List every component the system defines: its id, name, one-line summary and status. About 13,000 characters. Call it before composing UI, then call get_component for each component you place, so you build from the contract rather than from what a component usually looks like elsewhere.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "output": {
+            "structuredContent": {
+              "type": "object",
+              "properties": {
+                "total": {
+                  "type": "number",
+                  "description": "How many components are listed."
+                },
+                "components": {
+                  "type": "array",
+                  "description": "One entry per component, in registry order.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "summary",
+                      "status"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "total",
+                "components"
+              ]
+            },
+            "text": "the same object as JSON in content[0].text"
+          },
+          "source": "packages/engine/mcp.ts#name: 'list_components'"
+        },
+        {
+          "name": "get_component",
+          "title": "Get one component's contract",
+          "description": "One component's contract: its props with their allowed values and defaults, its variants and states, each part with the tokens it may bind (grouped by the property it binds), when to use it and when not (whenToUse, avoidWhen), its partners, and its motion: the motion.* tokens it binds and its motion patterns, each track naming the preset it plays on. Pass `brand`, the same BrandInput theme_brand takes, to resolve it for that brand: the token names the brand's settings bind, and `values`, each named token's value (a color as a hex per mode). Without `brand` the answer is brand-neutral: token names at the default settings. Take the id from list_components; an unknown id is refused, with the nearest ids. At most 25,000 characters.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "A component id from list_components, such as \"button\"."
+              },
+              "brand": {
+                "type": "object",
+                "description": "Optional. The same BrandInput you pass to theme_brand — see that tool for the full input schema."
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "output": {
+            "structuredContent": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "brand": {
+                  "description": "null when brand-neutral; else the brand's id, token root and modes."
+                },
+                "props": {
+                  "type": "array",
+                  "description": "The code API: each prop with its type, allowed values, default and whether it is required."
+                },
+                "variants": {
+                  "type": "object",
+                  "description": "Each variant axis and its values."
+                },
+                "states": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "parts": {
+                  "type": "array",
+                  "description": "Each part: its path, kind, when it is present, and the tokens it may bind, by property."
+                },
+                "values": {
+                  "type": "object",
+                  "description": "With brand: each named token's value for the brand."
+                },
+                "whenToUse": {
+                  "type": "string"
+                },
+                "avoidWhen": {
+                  "type": "string"
+                },
+                "partners": {
+                  "type": "object",
+                  "description": "commonPartners, composesWith and alternativeTo: component ids."
+                },
+                "motion": {
+                  "type": "object",
+                  "description": "The motion prose, the motion.* tokens it binds and, where the component has them, its motion patterns (with brand, the brand's overrides applied)."
+                },
+                "digest": {
+                  "type": "string",
+                  "description": "A change signal for this component's contract."
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "props",
+                "parts",
+                "partners",
+                "motion"
+              ]
+            },
+            "text": "the same object as JSON in content[0].text"
+          },
+          "source": "packages/engine/mcp.ts#name: 'get_component'"
         }
       ]
     },

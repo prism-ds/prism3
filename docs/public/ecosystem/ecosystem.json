@@ -310,7 +310,7 @@
           "switch-row",
           "select",
           "veil",
-          "image-placeholder",
+          "image",
           "spinner",
           "badge",
           "avatar",
@@ -885,7 +885,9 @@
           "theme_brand",
           "theme_from_brief",
           "score_consumption",
-          "export_theme"
+          "export_theme",
+          "list_components",
+          "get_component"
         ]
       }
     },
@@ -1422,6 +1424,28 @@
           "sources": [
             "skills/",
             ".claude/skills/"
+          ]
+        }
+      }
+    },
+    {
+      "id": "read-component-contract",
+      "label": "Read one component's contract",
+      "group": "Generate and check",
+      "lanes": {
+        "agent": {
+          "status": "shipped",
+          "via": "list_components, then get_component: its props, parts and the tokens each may bind, brand-neutral or for a brand",
+          "sources": [
+            "packages/engine/mcp.ts",
+            "packages/engine/mcp-components.ts"
+          ],
+          "mcpTools": [
+            "list_components",
+            "get_component"
+          ],
+          "connections": [
+            "mcp"
           ]
         }
       }

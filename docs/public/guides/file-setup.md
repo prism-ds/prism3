@@ -16,7 +16,7 @@ Setting up again is safe: it adds only what is missing, matched by name. <!-- sr
 
 ## The pages it creates
 
-The file's page list ends up in this order: <!-- src: apps/plugin/src/file-taxonomy.ts@"/**\n * THE FILE TAXONOMY (#1554) — the page-per-component structure as EDITABLE DATA, not hardcoded logic.".."*     leaf on this side"#54450f84 --> <!-- src: apps/plugin/src/file-taxonomy.ts@"cover: 'Cover',".."{ page: 'File Components"#9d31796e -->
+The file's page list ends up in this order: <!-- src: apps/plugin/src/file-taxonomy.ts@"/**\n * THE FILE TAXONOMY (#1554) — the page-per-component structure as EDITABLE DATA, not hardcoded logic.".."*     leaf on this side"#54450f84 --> <!-- src: apps/plugin/src/file-taxonomy.ts@"cover: 'Cover',".."{ page: 'File Components"#99598281 -->
 
 - `Cover`
 - A divider, then `Foundations`, with `↳ Primitive tokens`, `↳ Semantic tokens` and `↳ Grids & layouts`

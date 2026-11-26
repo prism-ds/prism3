@@ -90,6 +90,9 @@ const STRING_CANDIDATES = [
   'duration.normal',
   'easing-role.enter',
   'delay.show',
+  // #2857 phase 2: a pattern track's preset (`preset.<name>[.exit]`) and its distance (`distance.<name>`).
+  'preset.fade.exit',
+  'distance.nudge',
 ];
 /** Keys tried for a map with no `propertyNames` enum: one that needs quoting, with a space at each end, and one plain. */
 const KEY_CANDIDATES = [' A key: "x" #1 ', 'mobile'];

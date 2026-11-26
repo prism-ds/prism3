@@ -20,6 +20,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { isEntry } from '../../packages/engine/entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../..');
@@ -98,7 +99,7 @@ const selftest = async (): Promise<void> => {
   if (results.some(([, ok]) => !ok)) process.exit(1);
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const [cmd, a, ...rest] = process.argv.slice(2);
   if (cmd === 'print' && /^\d+$/.test(a ?? '')) process.stdout.write(`${await scanScript(Number(a))}\n`);
   else if (cmd === 'selftest') await selftest();

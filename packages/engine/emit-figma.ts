@@ -126,6 +126,7 @@ export { buildFigmaShadow, buildFigmaGradient, buildFigmaGridStyles } from './em
 // (#237) so they bundle into the plugin. Imported for the CLI below + re-exported so every
 // `from './emit-figma'` importer (and `test.ts`) stay unchanged.
 import { buildFigmaFont, buildFigmaFontFluid, buildFigmaTextStyles } from './emit-figma-font';
+import { isEntry } from './entry-point';
 export type { FigmaTextStyleProp, FigmaTextStyle, FigmaTextStylesFile } from './emit-figma-font';
 export { buildFigmaFont, buildFigmaFontFluid, buildFigmaTextStyles, fontStyleName, FONT_FLUID_MODES } from './emit-figma-font';
 // ---------------------------------------------------------------------------
@@ -258,7 +259,7 @@ export const figmaArtifacts = (theme: Theme): { artifacts: FigmaArtifact[]; summ
 
 // ---------------------------------------------------------------------- I/O
 const here = dirname(fileURLToPath(import.meta.url));
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 /** Compile an engine-native design.md at `<engine>/./examples/<file>` → Theme. */
 const compileNative = (file: string): Theme =>
   brandTheme(parseDesignMd(readFileSync(resolve(here, `./examples/${file}`), 'utf8')).input);

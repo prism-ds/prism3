@@ -411,11 +411,39 @@
             "properties": {
               "duration": { "type": "string", "pattern": "^(duration|spring-duration)\\.[a-z0-9-]+$", "description": "duration.<step>, or spring-duration.<spring> when the easing is that spring." },
               "easing": { "type": "string", "pattern": "^(easing-role|easing|spring)\\.[a-z0-9-]+$", "description": "easing-role.<role> (the default kind), easing.<curve> (a brand curve included), or spring.<spring>." },
-              "delay": { "type": "string", "pattern": "^delay\\.[a-z0-9-]+$", "description": "delay.<step>. Absent, the preset starts at once." }
+              "delay": { "type": "string", "pattern": "^delay\\.[a-z0-9-]+$", "description": "delay.<step>. Absent, the preset starts at once." },
+              "exit": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "OPTIONAL (#2857 phase 2, Q-PT3 A). The closing half of an arriving preset (fade, reveal, surface, settle, pop), motion.preset.<name>.exit: the same three slots, by default one step shorter on the exit role. Refused on an in-place preset.",
+                "properties": {
+                  "duration": { "type": "string", "pattern": "^(duration|spring-duration)\\.[a-z0-9-]+$", "description": "duration.<step>, or spring-duration.<spring> when the easing is that spring." },
+                  "easing": { "type": "string", "pattern": "^(easing-role|easing|spring)\\.[a-z0-9-]+$", "description": "easing-role.<role> (the default kind), easing.<curve> (a brand curve included), or spring.<spring>." },
+                  "delay": { "type": "string", "pattern": "^delay\\.[a-z0-9-]+$", "description": "delay.<step>. Absent, the exit starts at once." }
+                }
+              }
             }
           },
-          "propertyNames": { "enum": ["state", "fade", "crossfade", "move", "reveal", "draw", "surface", "expand", "step", "settle"] },
+          "propertyNames": { "enum": ["state", "fade", "crossfade", "move", "reveal", "draw", "surface", "expand", "step", "settle", "pop", "press"] },
           "description": "OPTIONAL (#2857, Q-MS1 A, Q-MS3 A). Re-points a preset's slots, brand-wide. Each slot names a motion path, never a number, so the preset snaps to the shared scale. A preset eased by a spring plays for that spring's settle time: its duration is spring-duration.<the same spring>, and is filled in when absent. The reduced duration follows the duration and cannot be set. Absent slots keep the default. An unknown preset, slot or target is refused by name. Deep-validated by brandTheme()."
+        },
+        "patterns": {
+          "type": "object",
+          "description": "OPTIONAL (#2857 phase 2, Q-PT15 A). Changes a track of a motion pattern, keyed by the pattern (dialog/enter) and the track (<element>.<property>, panel.transform). A brand changes a track's preset, distance, start scale or reduced kind, never which tracks exist. Deep-validated by brandTheme(): an unknown pattern, track or preset, a field on the wrong kind of track, and an override that leaves a pattern with every track off under reduced motion are refused by name. The patterns are listed in the agent file's motion_patterns.",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "preset": { "type": "string", "pattern": "^preset\\.[a-z0-9-]+(\\.exit)?$", "description": "preset.<name>, or preset.<name>.exit for an arriving preset's closing half." },
+                "distance": { "oneOf": [{ "type": "string", "pattern": "^(distance\\.[a-z0-9-]+|space\\.[0-9]+)$" }, { "type": "number", "exclusiveMinimum": 0 }], "description": "A slide's distance: distance.<name>, space.<step>, or a number of px above 0." },
+                "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "A scale's start scale, above 0 and at most 1." },
+                "reduced": { "type": "string", "enum": ["fade", "keep", "off"], "description": "What the track does under reduced motion: fade (its movement becomes a fade), keep (it plays on the reduced duration) or off (it jumps to its end)." }
+              }
+            }
+          }
         },
         "brandOnly": {
           "type": "object",

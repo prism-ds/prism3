@@ -48,6 +48,7 @@
  * design with no rules between items (the reference brand's FAQ list) needed a layer override on each instance before.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const accordion: ComponentDef = {
   id: 'accordion',
@@ -301,7 +302,7 @@ export const accordion: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'the height animation — the panel eases open and closed (the motion.preset.expand preset, both ways); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion.',
+          'the height animation — the `accordion/expand` and `accordion/collapse` patterns: the panel eases open and closed on motion.preset.expand, both ways; under prefers-reduced-motion the height changes at once and the panel fades, on motion.preset.expand.duration-reduced to open and to close. Figma variants carry no motion.',
       },
       {
         class: 'right-to-left',
@@ -395,11 +396,8 @@ export const accordion: ComponentDef = {
     planned: ['tree'],
   },
 
-  motion: {
-    enter: 'The panel eases open to its content height (motion.preset.expand), and the indicator turns to its open glyph.',
-    exit: 'The panel eases closed (motion.preset.expand), and the indicator turns back.',
-    reduceMotion: 'Under prefers-reduced-motion the height changes at once, and the panel\'s fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['accordion/expand', 'accordion/collapse'], { reduceMotion: 'A fade is not movement, and it keeps the cue that the panel opened or closed.' }),
 
   notes: {
     contested: [

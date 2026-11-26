@@ -1,10 +1,10 @@
 /**
- * The chrome's eased scroll follows `motion.preset.crossfade.transition` wherever its alias points (#2098 item 4), in Node.
+ * The chrome's eased scroll follows `motion.preset.move.transition` wherever its alias points (#2098 item 4), in Node.
  *
  *   npx tsx apps/studio/test-chrome-motion.ts
  *
  * `--p3-transition-dur` and `--p3-transition-ease` are the edit-reveal's and the jump links' scroll. Since #2041
- * `chrome/spec.mjs` reads both from the one composite the engine emits for them, `motion.preset.crossfade.transition`
+ * `chrome/spec.mjs` reads both from the one composite the engine emits for them, `motion.preset.move.transition`
  * (its `duration` and `timingFunction` members; `motion.transition.default` until #2857 retired it). Over the committed emission that is indistinguishable from
  * reading `motion.duration.normal` and `motion.easing-role.default` directly, because the composite points at
  * exactly those, through the preset's slots, so test-chrome.mjs's QA-B9 arm cannot tell the two reads apart. This arm can: it repoints the
@@ -22,7 +22,7 @@
  * themes, with what it read instead. `resolve` (`chrome/tokens.mjs`) not following a member's alias → both arms,
  * the duration reading the alias string itself and the curve the error it threw.
  */
-import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,9 +58,9 @@ for (const mode of ['light', 'dark'] as const) {
 
   const fixture = structuredClone(modes[mode]);
   const m = fixture.pds3.motion;
-  const def = (m.preset as unknown as Record<string, Record<string, { $value: unknown }>> | undefined)?.crossfade?.transition?.$value as Record<string, unknown> | undefined;
+  const def = (m.preset as unknown as Record<string, Record<string, { $value: unknown }>> | undefined)?.move?.transition?.$value as Record<string, unknown> | undefined;
   ok(!!def && typeof def.duration === 'string' && typeof def.timingFunction === 'string',
-    `${mode}: the emission carries motion.preset.crossfade.transition with aliased duration and timingFunction members (${JSON.stringify(def)})`);
+    `${mode}: the emission carries motion.preset.move.transition with aliased duration and timingFunction members (${JSON.stringify(def)})`);
   if (!def) continue;
   m.duration['p3-fixture-ms'] = { $type: 'duration', $value: DUR };
   m.duration['p3-fixture'] = { $type: 'duration', $value: '{pds3.motion.duration.p3-fixture-ms}' };
@@ -84,7 +84,7 @@ for (const mode of ['light', 'dark'] as const) {
 // not left as a bare JSON error. The fixture copies the real emission, then cuts one file, so the other parses.
 {
   const realOut = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'packages', 'engine', 'out');
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-3914-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-3914-'));
   try {
     const full = readFileSync(join(realOut, 'prism3.tokens.json'), 'utf8');
     copyFileSync(join(realOut, 'prism3.dark.overlay.tokens.json'), join(dir, 'prism3.dark.overlay.tokens.json'));
@@ -107,7 +107,7 @@ for (const mode of ['light', 'dark'] as const) {
 // prints. The fixture copies every top-level JSON in out/, then cuts one file: the default theme's, or another brand's.
 {
   const realOut = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'packages', 'engine', 'out');
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-3914-build-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-3914-build-'));
   try {
     const files = readdirSync(realOut).filter((n) => n.endsWith('.json'));
     for (const n of files) copyFileSync(join(realOut, n), join(dir, n));

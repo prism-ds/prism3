@@ -335,13 +335,29 @@
         "icon"
       ]
     },
-    "image-placeholder": {
+    "image": {
       "glyphs": [
+        {
+          "part": "errorGlyph",
+          "glyph": "image-unavailable",
+          "source": "component-owned",
+          "how": "drawn",
+          "when": {
+            "status": [
+              "error"
+            ]
+          }
+        },
         {
           "part": "markerGlyph",
           "glyph": "image",
           "source": "icon set",
-          "how": "drawn"
+          "how": "drawn",
+          "when": {
+            "status": [
+              "empty"
+            ]
+          }
         }
       ],
       "iconSlots": []
@@ -803,7 +819,10 @@
     "eye-off-filled": [],
     "home": [],
     "image": [
-      "image-placeholder"
+      "image"
+    ],
+    "image-unavailable": [
+      "image"
     ],
     "info-circle": [
       "banner"

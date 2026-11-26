@@ -38,6 +38,7 @@ import { build } from 'esbuild';
 import { componentDefs, figmaAnatomySet, type ComponentDef } from '@prism3/engine/components';
 import { missingDependencies, SWAP_TARGET } from '../../apps/plugin/src/build-deps';
 import { fnv, RESULT_FORMAT, type DefInput, type RunData, type RunResult } from './host-roundtrip';
+import { isEntry } from '../../packages/engine/entry-point';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** One script's ceiling, as `apps/plugin/mcp-paste.ts`'s `SCRIPT_CEILING`: room under a 50,000-character tool limit. */
@@ -136,7 +137,7 @@ export const reportLines = (result: RunResult, expectedHash: string): { lines: s
 };
 
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const args = process.argv.slice(2);
   const opt = (name: string): string | undefined => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };

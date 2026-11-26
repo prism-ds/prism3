@@ -254,7 +254,9 @@ const NO_FIGMA_FORM_YET = new Set<string>([]);
  * or "easing" into one `transition` composite, so each motion preset's four slots (#2857) come back as a composite at
  * `motion.preset.<name>` (with the wrong duration and a linear curve). It is exempted exactly: a preset counts as folded
  * only when the export holds a `transition` at the preset and none of its four slots. The fold count is asserted equal
- * to the presets the engine emits, so this exemption fails by name the day TokenPress stops folding.
+ * to the presets the engine emits, so this exemption fails by name the day TokenPress stops folding. Since #2857 phase 2
+ * an arriving preset nests its exit half, `motion.preset.<name>.exit.*`; the fold drops it with the preset, so a folded
+ * preset also exports none of its exit slots, and those count as folded, not removed.
  */
 const PRESET_SLOTS = ['duration', 'easing', 'delay', 'duration-reduced'];
 const presetFolds: Record<string, { folded: number; presets: number }> = {};
@@ -289,7 +291,10 @@ const motionRoundTrip = (exported: Map<string, Leaf>, dtcg: Map<string, any>): D
     const first = mode === 'shared' || mode === 'Default';
     // #4593: the presets TokenPress folded, each exactly (its composite present, none of its slots).
     const presetGroups = [...new Set([...dtcg.keys()].filter((p) => /\.motion\.preset\.[a-z0-9-]+\.[a-z-]+$/.test(p)).map((p) => p.replace(/\.[a-z-]+$/, '')))];
-    const folded = new Set(presetGroups.filter((g) => exported.get(`${file}#${g}`)?.$type === 'transition' && PRESET_SLOTS.every((sl) => !exported.has(`${file}#${g}.${sl}`))));
+    const folded = new Set(presetGroups.filter((g) => exported.get(`${file}#${g}`)?.$type === 'transition'
+      && PRESET_SLOTS.every((sl) => !exported.has(`${file}#${g}.${sl}`) && !exported.has(`${file}#${g}.exit.${sl}`))));
+    /** The preset a slot belongs to, an exit half's included: `….motion.preset.fade.exit.duration` → `….motion.preset.fade`. */
+    const presetOf = (path: string): string => /^(.*\.motion\.preset\.[a-z0-9-]+)\./.exec(path)?.[1] ?? '';
     const tally = (presetFolds[file + '|' + dtcg.size] ??= { folded: 0, presets: 0 });
     tally.folded = folded.size; tally.presets = presetGroups.length;
     for (const [k, a] of exported) {
@@ -306,16 +311,16 @@ const motionRoundTrip = (exported: Map<string, Leaf>, dtcg: Map<string, any>): D
         : typeof a.$value?.bounce === 'number' && typeof want?.damping === 'number' && Math.abs(a.$value.bounce - (1 - want.damping)) < 1e-4;
       if (!agree) out.push({ kind: 'VALUE', key: k, detail: `export ${J(a.$value)}, engine ${J(want)}` });
     }
-    for (const path of dtcg.keys()) if (!exported.has(`${file}#${path}`) && !folded.has(path.replace(/\.[a-z-]+$/, ''))) out.push({ kind: 'REMOVED', key: `${file}#${path}`, detail: `engine ${J(dtcg.get(path).$value)}, not in the export` });
+    for (const path of dtcg.keys()) if (!exported.has(`${file}#${path}`) && !folded.has(presetOf(path))) out.push({ kind: 'REMOVED', key: `${file}#${path}`, detail: `engine ${J(dtcg.get(path).$value)}, not in the export` });
   }
   return out;
 };
-/** #4593: every preset the engine emits came back folded, and there are ten. Fails by name once TokenPress stops
+/** #4593: every preset the engine emits came back folded, and there are twelve (#2857 phase 2 added pop and press). Fails by name once TokenPress stops
  *  folding, so the exemption above cannot outlive the defect. Reads and clears the tallies `motionRoundTrip` left. */
 const presetFoldHolds = (brand: string): void => {
   const tallies = Object.values(presetFolds);
   for (const k of Object.keys(presetFolds)) delete presetFolds[k];
-  ok(tallies.length > 0 && tallies.every((t) => t.presets === 10 && t.folded === t.presets),
+  ok(tallies.length > 0 && tallies.every((t) => t.presets === 12 && t.folded === t.presets),
     `${brand} motion: #4593 the known TokenPress fold still fires on every preset, so its exemption is still needed (${JSON.stringify(tallies)})`);
 };
 /** The floors, per type: a brand whose DTCG has none of one would make that arm vacuous. */

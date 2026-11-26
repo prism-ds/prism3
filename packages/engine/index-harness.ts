@@ -11,3 +11,4 @@ export { SERVER_INFO } from './mcp';
 export { HANDSHAKE_PROBES } from './mcp-handshake-probes';
 export { validate } from './json-schema-lite';
 export { comparisonBase, integrationBase, mergeGroupBase } from './comparison-base';
+export { isEntry } from './entry-point';

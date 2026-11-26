@@ -1111,6 +1111,15 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/end-of-job note/i, /instances you placed/i, /`GAP \/ ` layers/, /worth suggesting/i],
     resolve: [],
   },
+  // #4467 (owner decision A): with the MCP, an agent lists the components, then gets each one it places, before it
+  // composes. One paragraph names both tools and the order.
+  {
+    id: '#4467 list, then get, before composing',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/list, then get/i, /`list_components`/, /`get_component`/, /before you compose/i],
+    resolve: [],
+  },
 ];
 const blocks = (text: string): string[] => text.split(/\n(?=\s*\n|- |\d+\. )/);
 export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => string | undefined, color: Record<string, { avoid_when?: string }>, paths: Set<string>): Finding[] => {

@@ -956,6 +956,18 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
   },
   {
     axis: 'status',
+    values: ['empty', 'loading', 'loaded', 'error'],
+    defs: ['image'],
+    relation: 'overlapping',
+    reason:
+      'Where an image\'s file stands (#4113, owner decision OD-I2 A): no source, loading, loaded, or failed. OVERLAPPING with '
+      + 'the canonical validation set on `error` only, and the shared value names the same kind of thing: a failure, here a '
+      + 'failed load. It is not validation and draws no danger color: the decorative "image unavailable" mark on the same '
+      + 'fill. `empty` LEADS because it is the code default (no source) and the member an updated Image placeholder lands '
+      + 'on, so a placed instance looks as it did.',
+  },
+  {
+    axis: 'status',
     values: ['upcoming', 'current', 'complete', 'error'],
     defs: ['step-item'],
     relation: 'overlapping',
@@ -1230,10 +1242,10 @@ const AXIS_VALUE_SETS: readonly AxisValueSet[] = [
   {
     axis: 'ratio',
     values: ['4:3', '2:3', '3:4', '4:5', '1:1', '3:2', '16:9'],
-    defs: ['image-placeholder'],
+    defs: ['image'],
     relation: 'sole',
     reason:
-      'The image placeholder\'s aspect PROPORTION (#1316) — a square, the classic photo ratio, and '
+      'Image\'s aspect PROPORTION (#1316, renamed from Image placeholder by #4113) — a square, the classic photo ratio, and '
       + 'widescreen. The values ARE ratios (`parseRatio` reads `16:9` as 16/9 to derive the frame\'s '
       + 'aspect-ratio lock), which is why `anatomyErrors` refuses a `ratio` value that is not a positive '
       + '`W:H`: the lock is derived from the value rather than mapped by a second per-variant table. '

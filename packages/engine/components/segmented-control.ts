@@ -53,6 +53,7 @@
  * control, so the segments share its width equally.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const segmentedControlSegment: ComponentDef = {
   id: 'segmented-control-segment',
@@ -323,9 +324,9 @@ export const segmentedControlSegment: ComponentDef = {
   },
 
   motion: {
-    enter: 'None. On selection the pill travels to this option on motion.duration.normal with motion.easing-role.default, or cross-fades.',
+    enter: 'None. On selection the pill travels to this option on motion.preset.move, or cross-fades.',
     exit: 'None.',
-    reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.',
+    reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.preset.move.duration-reduced.',
   },
 
   notes: {
@@ -483,7 +484,7 @@ export const segmentedControl: ComponentDef = {
         class: 'implementation',
         disposition: 'refused',
         description:
-          'The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option\'s measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.duration.normal with motion.easing-role.default. Under prefers-reduced-motion it moves without animation.',
+          'The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option\'s measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.preset.move. Under prefers-reduced-motion it moves without animation.',
       },
       {
         class: 'responsive-layout',
@@ -571,11 +572,8 @@ export const segmentedControl: ComponentDef = {
     supersededBy: [],
   },
 
-  motion: {
-    enter: 'None. On selection the pill travels to the new option on motion.duration.normal with motion.easing-role.default, or cross-fades.',
-    exit: 'None.',
-    reduceMotion: 'The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['segmented/select']),
 
   notes: {
     contested: [],

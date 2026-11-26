@@ -85,10 +85,12 @@
  *                 file components.
  *
  * INDEPENDENCE (docs/34): every expected number and string is written out here, never read off `canvas-furniture.ts`
- * or `furniture-templates.ts`. The positions on real sets are measured off the shim's nodes by this file.
+ * or `furniture-templates.ts`. The positions on real sets are measured off the shim's nodes by this file. One expected
+ * list is read instead of written: which defs build a set, from the authored surface baseline (`rollout/switch`, #4510).
  *
  * Run: `npx tsx apps/plugin/test-canvas-furniture.ts`
  */
+import { readFileSync } from 'node:fs';
 import { figmaAnatomySet, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, planComponentName, planSetLayout, type AnatomyPlan, componentDefs } from '@prism3/engine/components';
 import { applyComponentPlan, placeNewSet, STAMP_KEY } from './src/write-components';
 import { SWAP_TARGET } from './src/build-deps';
@@ -1019,12 +1021,26 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
   // properties builds a set, except the three that build single components (`emitAsComponents`), which have no grid:
   // Icon, Provider logo (#2343) and Spinner.
   // A SET OF ONE MEMBER HAS NO GRID (#4008): Popover, Menu and Menu.Group each build one member, so there is no row or column to label and each
-  // takes no furniture. Named here, never derived, so a second one-member set fails the count by name.
+  // takes no furniture. Named here, never derived, so a second one-member set fails by name: the baseline records it with one
+  // member, and `rollout/switch` names it as a one-member set missing from this list (#4510).
   const ONE_MEMBER = ['popover', 'menu', 'menu-group'];
+  const SINGLE = ['icon', 'provider-logo', 'spinner'];
   const withSet = componentDefs.filter((d) => d.figmaProperties && !d.figmaProperties.emitAsComponents && !ONE_MEMBER.includes(d.id)).map((d) => d.id);
   const single = componentDefs.filter((d) => d.figmaProperties?.emitAsComponents).map((d) => d.id);
-  ok(withSet.length === 68 && withSet.every(hasFurniture) && JSON.stringify(single) === JSON.stringify(['icon', 'provider-logo', 'spinner']) && !single.some(hasFurniture),
-    `rollout/switch: all 68 defs that build a set of more than one member have furniture; Icon, Provider logo and Spinner, single components, do not (off: ${JSON.stringify(withSet.filter((id) => !hasFurniture(id)))})`);
+  // WHICH SETS, BY NAME, NOT HOW MANY (#4510). This held `withSet.length === <n>`, a count every new set raised by
+  // hand. Two PRs that each added a set each wrote n+1, git merged the identical lines, and the merged tree held n+2:
+  // #4260 went 60 → 61 on both sides when 62 was true, and only the merge queue's full run caught it. The expected
+  // list is now the authored surface baseline's: each default projection (a key with no `@`) of more than one member,
+  // less the three single components. Only `lint-component-surface.ts --accept` writes that file, so it is not derived
+  // from the registry filter above (docs/34), and two PRs that each add a set each add their own key, which merges
+  // to both. A def that leaves `withSet`, or a set the baseline does not hold, fails here by id.
+  const surface = JSON.parse(readFileSync(new URL('../../packages/engine/schema/component-surface.json', import.meta.url), 'utf8')).defs as Record<string, { members: number } | null>;
+  const recorded = Object.entries(surface).filter(([id, s]) => !id.includes('@') && s !== null && s.members > 1 && !SINGLE.includes(id)).map(([id]) => id);
+  const missing = recorded.filter((id) => !withSet.includes(id));
+  const oneMember = withSet.filter((id) => surface[id]?.members === 1);
+  const extra = withSet.filter((id) => !recorded.includes(id) && !oneMember.includes(id));
+  ok(recorded.length > 0 && !missing.length && !extra.length && !oneMember.length && withSet.every(hasFurniture) && JSON.stringify(single) === JSON.stringify(SINGLE) && !single.some(hasFurniture),
+    `rollout/switch: all ${withSet.length} defs that build a set of more than one member have furniture, the ${recorded.length} the surface baseline records; Icon, Provider logo and Spinner, single components, do not (not built: ${JSON.stringify(missing)}; not in the baseline: ${JSON.stringify(extra)}; one member in the baseline, not in ONE_MEMBER: ${JSON.stringify(oneMember)}; off: ${JSON.stringify(withSet.filter((id) => !hasFurniture(id)))})`);
   ok(ONE_MEMBER.every((id) => componentDefs.some((d) => d.id === id) && !hasFurniture(id)),
     `rollout/one member: ${ONE_MEMBER.join(', ')} builds a set of one member and has no furniture (${JSON.stringify(ONE_MEMBER.filter(hasFurniture))})`);
 

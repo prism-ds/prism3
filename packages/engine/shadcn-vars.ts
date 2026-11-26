@@ -50,6 +50,7 @@ import { fileURLToPath } from 'node:url';
 import { comparisonBase, mergeGroupBase } from './comparison-base.ts';
 import { PROJECTION_TARGETS, type ProjectionTarget } from './projections/targets.ts';
 import { satisfiesBump } from './version.ts';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '..', '..');
@@ -281,7 +282,7 @@ const accept = (): void => {
   console.log(`✓ pinned ${pin.light.length} light and ${pin.dark.length} dark names from ${source} at map ${SHADCN_MAP_VERSION}`);
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   if (process.argv.includes('--accept')) accept();
   else check();
 }

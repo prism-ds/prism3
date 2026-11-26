@@ -24,6 +24,7 @@ import { figmaArtifacts } from './emit-figma';
 import { brandTheme } from './theme';
 import { specSupplement, SUPPLEMENT_DEFS, toYaml } from './spec-supplement';
 import type { TokenNames } from './spec-supplement';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const SUPPLEMENT_DIR = resolve(here, 'out', 'specs');
@@ -58,7 +59,7 @@ export const supplementFiles = (): { file: string; text: string }[] => {
   });
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   mkdirSync(SUPPLEMENT_DIR, { recursive: true });
   for (const { file, text } of supplementFiles()) writeFileSync(join(SUPPLEMENT_DIR, file), text);
   console.log(`  ✓ ${SUPPLEMENT_DEFS.length} spec supplement(s) → out/specs/`);

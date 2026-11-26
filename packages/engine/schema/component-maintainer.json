@@ -2672,7 +2672,7 @@
           "THE DECOMPOSITION IS UNVERIFIED ON A REAL HOST, the same way `checkbox-control`'s was: the nested control instance must pin its own HEIGHT (the track height) rather than stretch to the `control-box` line box, and whether the instance's inherited sizing mode cooperates with the row's auto-layout is a real-host question the offline shim cannot answer. The symptom to look for: a control instance stretched to the line-box height instead of centered within it. The control is non-square, so the Row pins HEIGHT only and the width is the control's own 2:1 — a narrower pin than checkbox's square.",
           "THE THUMB GLYPH IS UNVERIFIED ON A REAL HOST for legibility at its smallest size. Since #1425 the thumb is 0.75 × the track (`control.size.*.thumb`), 18px at `small` and 24px at `medium` in every corpus brand, so the glyph is ~12.7px and ~17px after its optical inset; the smallest case is compact density `small`, a 12px thumb and a ~8.5px glyph. The measurement is in `switch-control.ts`.",
           "THE LABEL SIDE HAS ONE EXPRESSION AND `labelPosition` STILL HAS NONE. The anatomy states the DEFAULT (`row.children` is `[label, trackBox]`, label-leading); the flipped order the prop selects is not expressible, because a prop is not a coordinate. RTL is the sharper half and inverts twice over (the row mirrors AND the thumb travel flips).",
-          "THE TRAVEL'S TWO ENDPOINTS ARE EXPRESSED AND THE MOTION BETWEEN THEM IS NOT — on `switch-control` now. The slide on motion.duration.normal with motion.easing-role.default with the synchronized track-color crossfade (at once under prefers-reduced-motion) is the animation the component is most recognized by and has no expression in the schema.",
+          "THE TRAVEL'S TWO ENDPOINTS ARE EXPRESSED AND THE MOTION BETWEEN THEM IS NOT — on `switch-control` now. The slide on motion.preset.move with the synchronized track-color crossfade (at once under prefers-reduced-motion) is the animation the component is most recognized by and has no expression in the schema.",
           "THE role=\"switch\" ANNOUNCEMENT INSIDE A SHADOW ROOT on older Safari with VoiceOver, where no explicit aria-label or aria-labelledby is set (KB switch brief §15, from Material 3's notes). The `aria` block already tells a web-component host to set the name explicitly; whether older Safari announces the role and state correctly across the shadow boundary is not checked by anything here.",
           "THE WHOLE-ROW HIT TARGET HAS A NUMBER SINCE #2894: the row's floor, `size.*.min-height` (the control-height ladder), is bound in Figma as well as code, so a single-line row measures 36/44 at comfortable and 29/36 at compact, and every row clears SC 2.5.8's 24×24 (`test.ts` #2894). Still unverified on a real host, and sharper here than on the siblings because the row is label-leading (the control sits at the trailing edge, furthest from the label). The track spilling past its line-box cell is #1439, which the taller row hides but does not fix."
         ],
@@ -2907,48 +2907,73 @@
         }
       ]
     },
-    "image-placeholder": {
+    "image": {
       "codeOnly": [
         {
           "class": "live-geometry",
           "disposition": "LOWERED",
-          "description": "aspect-lock derive — the frame holds its RATIO while its real size flexes, and Figma expresses that as an aspect-ratio LOCK (`lockAspectRatio()`) that DERIVES the second dimension from the first. The engine binds ONE nominal dimension and locks the ratio; that a variable BINDING on the single axis makes Figma derive the other at PASTE time (as a resize does) is a live-file behavior no offline host can witness, filed for the real-host round-trip arm (`tools/component-roundtrip/`). What the offline gates hold is the lock capturing the right ratio, read back as `targetAspectRatio`."
+          "description": "aspect-lock derive — the frame holds its RATIO while its real size flexes, and Figma expresses that as an aspect-ratio LOCK (`lockAspectRatio()`) that DERIVES the second dimension from the first. The engine binds ONE nominal dimension and locks the ratio; that a variable BINDING on the single axis makes Figma derive the other at PASTE time (as a resize does) is a live-file behavior no offline host can witness, filed for the real-host round-trip arm (`tools/component-roundtrip/`). What the offline gates hold is the lock capturing the right ratio, read back as `targetAspectRatio`. In code the frame is `aspect-ratio: <ratio>` on a box as wide as its container."
         },
         {
           "class": "static-placeholder",
           "disposition": "LOWERED",
-          "description": "raster swap — dropping an actual photograph onto the frame is a NATIVE Figma action (an image fill), not a modeled slot or variant. This def models the frame and its empty state; the image the designer supplies is theirs."
-        },
-        {
-          "class": "deferred",
-          "disposition": "REFUSED",
-          "description": "scrim/veil and play-circle overlays — DEFERRED to a follow-up (#1316 residue, owner-held). A wash for text over the image nests the `veil` component, and a video affordance nests the `play-circle` glyph; both are compositions this core empty-state frame does not carry. Named here so the absence reads as a deferral rather than a gap."
+          "description": "raster swap — dropping an actual photograph onto the frame is a NATIVE Figma action (an image fill on the loaded member), not a modeled slot or variant. Cover is Figma's native fill mode, so `fit` has no axis (OD-I6 A); a designer sets Fit on the image fill for contain."
         },
         {
           "class": "static-placeholder",
           "disposition": "UNSUPPORTED",
-          "description": "marker — in code the \"no image\" marker draws while no image is supplied and goes once one is, so it is derived, not a prop (owner decision Q163.4b A). Figma cannot tell that a fill is a photograph, so the Figma set carries a Figma-only `marker` toggle, on by default, that a designer turns off once an image is in."
+          "description": "the load status — in code the status is derived, never a prop (owner decision Q163.4b A, carried over): no `src` is empty, a `src` not yet loaded is loading, the load event makes it loaded and the error event makes it error. Figma cannot tell that a fill is a photograph or watch a load, so the set carries the four statuses as a variant a designer picks (OD-I2 A); it replaced the Figma-only `marker` boolean."
+        },
+        {
+          "class": "motion",
+          "disposition": "REFUSED",
+          "description": "the reveal — on load the photo fades in over the skeleton on `var(--motion-duration-fast)` with `var(--motion-easing-role-enter)` (`var(--motion-duration-reduced-fast)` under reduced motion: an opacity fade is not vestibular, so it stays). No scale, zoom or parallax on load. Blur-up is the delivery layer's, not Image's. The skeleton's pulse is Skeleton's own, and stops under reduced motion. Figma holds the still frame."
+        },
+        {
+          "class": "semantics",
+          "disposition": "REFUSED",
+          "description": "the alt contract — `alt` is a required string that may be empty (OD-I5 A), stricter than HTML on purpose: an omitted alt can make a screen reader read the file name, and an empty one declares the image decorative. On error an informative image keeps its name on the fallback (`role=\"img\"` with `aria-label` set to the alt); a decorative one stays hidden. Both markers and the skeleton are `aria-hidden`. The alt text is never drawn as visible text in the frame."
+        },
+        {
+          "class": "runtime-behavior",
+          "disposition": "REFUSED",
+          "description": "delivery — Image owns the frame, the fit, the focal point, the radius, the alt contract and the states (OD-I8 A). Responsive sources, art direction with `<picture>`, formats and the CDN are passed through (`srcSet`, `sizes`) or left to the framework's image component, which Image wraps rather than replaces. No lazy default (OD-I7 A): the platform's eager load stands, because a component cannot know which image is the page's largest paint."
+        },
+        {
+          "class": "right-to-left",
+          "disposition": "UNSUPPORTED",
+          "description": "right-to-left — Image does not mirror. A photo mirrored under RTL is wrong (real-world text, faces, products); directional artwork needs its own mirrored file, supplied by the consumer."
+        },
+        {
+          "class": "deferred",
+          "disposition": "REFUSED",
+          "description": "scrim/veil and play-circle overlays — DEFERRED to a follow-up (#1316 residue, owner-held). A wash for text over the image nests the `veil` component, and a video affordance nests the `play-circle` glyph; both are compositions this frame does not carry. Named here so the absence reads as a deferral rather than a gap."
         },
         {
           "class": "live-geometry",
           "disposition": "LOWERED",
-          "description": "the ratio is a magnitude of SHAPE, not a state — 2:3 through 16:9 is a proportion a designer selects, carried by Figma as a variant coordinate, never a runtime state. An image placeholder has no interaction states at all (`states: []`)."
+          "description": "the ratio is a magnitude of SHAPE, not a state — 2:3 through 16:9 is a proportion a designer selects, carried by Figma as a variant coordinate, never a runtime state. Image has no interaction states at all (`states: []`)."
         }
       ],
       "notes": {
         "contested": [
-          "THE FILL SLOT IS `fill`, bound to `color.background.secondary`, and that role is a call rather than the only option. An empty media frame could read as the page (no fill), as a recessed well (`background.tertiary`), or as a distinct filled surface (`background.secondary`). The middle reads as a deliberate placeholder distinct from the page while staying quiet, which is what an empty state wants; a designer who wants a more recessed well rebinds to `background.tertiary`. Named here so the choice is weighable rather than assumed.",
-          "THE SINGLE NOMINAL DIMENSION IS `width`, not `height`, and that is the natural axis for a media frame that is usually as wide as its column and derives its height from the ratio. A portrait-first layout would bind `height` instead; the aspect-lock capability accepts either (the validator refuses only binding BOTH). `width` is the common case, so it is the default here."
+          "THE FILL SLOT IS `fill`, bound to `color.background.secondary`, a call rather than the only option. An empty media frame could read as the page (no fill), as a recessed well (`background.tertiary`), or as a distinct filled surface. The middle reads as a deliberate placeholder while staying quiet. Skeleton binds `background.tertiary` (OD-S4 A), so the loading member shows a recessed rect on the secondary frame: the two are distinct on purpose, so loading reads as different from empty.",
+          "THE SKELETON'S OWN CORNERS. The nested rect keeps Skeleton's `radius.md` inside a frame bound to `radius.none` (OD-I9 A), so the frame's fill shows in the four corners at `loading`. The proposal asked for the rect \"filling the frame\" and said nothing of its corners; matching them is an owner call (flagged in the PR).",
+          "THE SINGLE NOMINAL DIMENSION IS `width`, not `height`, the natural axis for a media frame as wide as its column. A portrait-first layout would bind `height`; the aspect-lock capability accepts either (the validator refuses only binding BOTH)."
         ],
         "unverified": [
-          "THE PASTE-TIME DERIVE IS FIGMA-DOCUMENTED FOR RESIZE, NOT PROVEN FOR A BOUND VARIABLE. `lockAspectRatio()` derives the second dimension when a locked node is resized on one axis, and `targetAspectRatio` is read-only. Binding a variable on the single axis SETS that dimension, which is a resize — so the derive should hold — but that a `setBoundVariable` triggers it at paste time is a live-file behavior no offline host can witness, the same class as accept-and-discard. The offline gates prove the lock is captured with the right ratio (read back as `targetAspectRatio`); the derive-on-paste is filed for the real-host round-trip arm. If a pasted placeholder is ever found NOT deriving its height, the fallback is Option C — a nominal square plus the ratio carried in code/AI metadata only — and this note is the record that A was chosen on Figma's documented lock contract rather than on a live paste.",
-          "THE OVERLAYS ARE DEFERRED (#1316). A legibility scrim/veil over the image and a play-circle video affordance both nest other components and are owner-held for a follow-up. Named here and in `codeOnly` so the absence reads as a deferral rather than a gap.",
-          "THE NOMINAL WIDTH IS A PLACEHOLDER, NOT A MEASUREMENT (the veil/focus-ring idiom). `container.narrow` (720px) makes the standalone build a media-shaped rectangle; the frame has no intrinsic size, so nobody has decided 720px is RIGHT — it is a legible placeholder a designer resizes over their layout, and the ratio, not the width, is the fixed fact.",
-          "THE MARKER SCALES THROUGH A CONSTRAINT, AND THAT A RESIZED INSTANCE HONORS IT IS A LIVE-HOST FACT (#2345). The marker is out of the auto-layout flow, centered, and constrained SCALE/SCALE (`scaleWithParent`), so it should keep its fraction of the frame: 180px at the 720px nominal width, 16px in a 64px thumbnail. Figma documents constraints on an absolutely positioned child of an auto-layout frame, and the offline gates prove the marker is built ABSOLUTE with SCALE/SCALE and centered. That a designer RESIZING AN INSTANCE scales it is a live-file behavior no offline host can witness: check it by placing a 4:3 instance and dragging it to 64px wide. It depends on the aspect lock staying on: a designer who unlocks the frame and resizes it on one axis stretches the marker with it. The 180px nominal size is still #1340's Prism 2 proportion (1/3 of the 4:3 shorter side), held across all seven ratios: 25% of the width at every ratio, so the share of the SHORTER side runs from 25% (portrait and square) to 44% (16:9)."
+          "THE PASTE-TIME DERIVE IS FIGMA-DOCUMENTED FOR RESIZE, NOT PROVEN FOR A BOUND VARIABLE. The offline gates prove the lock is captured with the right ratio (read back as `targetAspectRatio`); the derive-on-paste is filed for the real-host round-trip arm. If a pasted frame is ever found NOT deriving its height, the fallback is Option C — a nominal square plus the ratio carried in code and AI metadata only.",
+          "THE MARKERS SCALE THROUGH A CONSTRAINT, AND THAT A RESIZED INSTANCE HONORS IT IS A LIVE-HOST FACT (#2345). Each marker is out of the auto-layout flow, centered, and constrained SCALE/SCALE, so it keeps its fraction of the frame: 180px at the 720px nominal width, 16px in a 64px thumbnail. Check it by placing a 4:3 instance and dragging it to 64px wide.",
+          "THE LOADING SKELETON FILLS THROUGH GROW AND STRETCH, NOT THE LOCK. At a ratio the frame is fixed in both axes, so the nested rect fills it; that a resized instance keeps the rect filling it is the same live-host class as the markers.",
+          "THE KB BRIEF WAS READ AS THE PROPOSAL (#4113) QUOTES IT. This lane had no checkout of the knowledge base, so a brief point the proposal did not carry is not in this component."
         ],
-        "evolution": [],
+        "evolution": [
+          "Built as `image-placeholder` (#1316): the empty-state frame alone, with a Figma-only `marker` boolean (#2345). Renamed `image` and given the `status` axis, the alt contract and the error glyph by #4113 (owner decisions OD-I1 to OD-I9 all A, 2026-11-19); the boolean retired with the rename.",
+          "THE LOADING LAYER WAS PROPOSED AS AN `absolute` PART. Built as an in-flow `nest` gated on `status`, because the schema gates an absolute on an interaction state and Image has none; at `loading` the nest is the frame's only in-flow child, so it fills the frame as a zero-inset absolute would."
+        ],
         "projection": [
-          "Dropping an image fill onto the frame is a native Figma action, not a modeled slot. (Moved from description and docs.usage, #2411.)"
+          "Dropping an image fill onto the frame is a native Figma action, not a modeled slot. The fill mode is cover by default; contain is the image fill's own Fit setting, so `fit` projects no axis (OD-I6 A).",
+          "The four statuses project as a variant axis because Figma cannot watch a load; in code they are derived (OD-I2 A, Q163.4b A)."
         ]
       },
       "docGaps": [
@@ -2963,31 +2988,6 @@
           "reason": "empty"
         },
         {
-          "section": "accessibility",
-          "field": "motion.enter",
-          "reason": "empty"
-        },
-        {
-          "section": "accessibility",
-          "field": "motion.exit",
-          "reason": "empty"
-        },
-        {
-          "section": "accessibility",
-          "field": "motion.reduceMotion",
-          "reason": "empty"
-        },
-        {
-          "section": "content",
-          "field": "content.errorPattern",
-          "reason": "empty"
-        },
-        {
-          "section": "content",
-          "field": "content.emptyPattern",
-          "reason": "empty"
-        },
-        {
           "section": "content",
           "field": "content.dialogPattern",
           "reason": "empty"
@@ -2999,22 +2999,12 @@
         },
         {
           "section": "related",
-          "field": "composition.composesWith",
-          "reason": "empty"
-        },
-        {
-          "section": "related",
           "field": "composition.supersedes",
           "reason": "empty"
         },
         {
           "section": "related",
           "field": "composition.supersededBy",
-          "reason": "empty"
-        },
-        {
-          "section": "code",
-          "field": "docs.implementation",
           "reason": "empty"
         }
       ]
@@ -3972,7 +3962,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "the turn — a chevron may rotate 180 degrees on open instead of swapping glyphs, on motion.duration.normal with motion.easing-role.default both ways, and swaps without turning under prefers-reduced-motion (the prism3-motion accordion recipe). Figma swaps the down and up glyphs, since a variant holds no motion."
+          "description": "the turn — a chevron may rotate 180 degrees on open instead of swapping glyphs, on motion.preset.move both ways, and swaps without turning under prefers-reduced-motion (the prism3-motion accordion recipe). Figma swaps the down and up glyphs, since a variant holds no motion."
         },
         {
           "class": "right-to-left",
@@ -4082,7 +4072,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "the height animation — the panel eases open and closed (the motion.preset.expand preset, both ways); under prefers-reduced-motion the height changes at once and the panel fades, on motion.duration-reduced.normal to open and to close. Figma variants carry no motion."
+          "description": "the height animation — the `accordion/expand` and `accordion/collapse` patterns: the panel eases open and closed on motion.preset.expand, both ways; under prefers-reduced-motion the height changes at once and the panel fades, on motion.preset.expand.duration-reduced to open and to close. Figma variants carry no motion."
         },
         {
           "class": "right-to-left",
@@ -4489,7 +4479,7 @@
         {
           "class": "implementation",
           "disposition": "REFUSED",
-          "description": "The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option's measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.duration.normal with motion.easing-role.default. Under prefers-reduced-motion it moves without animation."
+          "description": "The sliding indicator (optional) — one aria-hidden node behind the options, moved with transform from the selected option's measured box (a ResizeObserver, re-measured when fonts load or the direction changes), on motion.preset.move. Under prefers-reduced-motion it moves without animation."
         },
         {
           "class": "responsive-layout",
@@ -4837,7 +4827,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — opening: a centered panel fades in and scales up a little; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge; the backdrop fades. On `motion.duration.moderate` with `motion.easing-role.enter`, and `motion.easing-role.exit` to close. Under `prefers-reduced-motion`, every placement and the backdrop fade only, with no slide and no scale, on `motion.duration-reduced.normal` to open and to close. Figma shows the panel at rest."
+          "description": "motion — the `dialog/enter` and `dialog/exit` patterns, and `dialog/bottom/*` and `dialog/end/*` for the other placements: a centered panel fades in and scales up from 96%; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge; the backdrop fades on its panel's preset. On `motion.preset.surface` to open and `motion.preset.surface.exit` to close, the content on `motion.preset.fade` and `motion.preset.fade.exit`. Under `prefers-reduced-motion`, every placement and the backdrop fade only, with no slide and no scale, on each preset's `.duration-reduced`. Figma shows the panel at rest."
         },
         {
           "class": "visual-treatment",
@@ -5098,7 +5088,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — enter: an 8px slide up and a fade on `motion.preset.fade` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.duration.fast` with `motion.easing-role.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest."
+          "description": "motion — the `toast/enter` and `toast/exit` patterns. Enter: a slide up by `motion.distance.nudge` and a fade on `motion.preset.fade`. Exit: a fade on `motion.preset.fade.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.preset.fade.duration-reduced` and `motion.preset.fade.exit.duration-reduced`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest."
         },
         {
           "class": "right-to-left",
@@ -6227,7 +6217,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — appears with an opacity fade; a dismiss collapses the height and fades, on `motion.duration.fast` with `motion.easing-role.exit`, so the content below does not jump. Under `prefers-reduced-motion` both fade only, on `motion.duration-reduced.normal`, and the height changes at once. A banner inserted at the top of a page later reserves its space. Figma shows the banner at rest."
+          "description": "motion — appears with an opacity fade, on `motion.preset.fade`; a dismiss collapses the height and fades, on `motion.preset.fade.exit`, so the content below does not jump. Under `prefers-reduced-motion` both fade only, on `motion.preset.fade.duration-reduced` and `motion.preset.fade.exit.duration-reduced`, and the height changes at once. A banner inserted at the top of a page later reserves its space. Figma shows the banner at rest."
         },
         {
           "class": "right-to-left",
@@ -7160,7 +7150,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — the Popover / open and Popover / close pattern, shared with Menu: opening fades in and scales up from a little under full size, with the transform origin on the trigger's side (following a flip), on `motion.duration.fast` and `motion.easing-role.enter`; closing fades out on `motion.duration.instant` and `motion.easing-role.exit`. Under `prefers-reduced-motion` it fades only, with no scale, on `motion.duration-reduced.fast` to open and to close. Figma shows the panel at rest."
+          "description": "motion — the `popover/open` and `popover/close` patterns, shared with Menu: opening fades in and scales up from 95%, with the transform origin on the trigger's side (following a flip), on `motion.preset.pop`; closing fades out on `motion.preset.pop.exit`. Under `prefers-reduced-motion` it fades only, with no scale, on each preset's `.duration-reduced`. Figma shows the panel at rest."
         },
         {
           "class": "right-to-left",
@@ -7177,7 +7167,7 @@
         "contested": [],
         "unverified": [
           "That the header row collapses when both the title and close toggles are off (no gap left above the body). The plan hides both nodes; no live file has read the header's height back.",
-          "The Popover / open and Popover / close motion preset is described here but not built: the #2857 starter set exists only as a wireframe, so there is no preset to bind yet."
+          "The `popover/open` and `popover/close` motion patterns are built since #2857 phase 2, on `motion.preset.pop` and its exit half; the Figma style per pattern waits on phase 3."
         ],
         "evolution": [
           "Owner decisions (2026-11-19, on #4252), all as recommended: (1) the set is one member on a one-value axis, placement=bottom, the default side, because the engine projects no set without an axis; (2) the member is built 320px wide, between the proposal's 240px floor and 360px cap; (3) the brief's trapFocus and modal are not props, because a trapped or modal popover is a Dialog (OD-P1 A), and restoreFocus is always on; (4) the motion keeps motion.duration.fast, 100ms on the reference brand, which the tempo lever moves per brand; (5) Popover has its own page under Components; (6) the copy is approved.",
@@ -7458,7 +7448,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — the highlight moves with no transition, so a person arrowing through sees it land at once, and a check appears at once. The menu itself opens and closes on the Popover / open and Popover / close pattern."
+          "description": "motion — the highlight moves with no transition, so a person arrowing through sees it land at once, and a check appears at once. The menu itself opens and closes on the `popover/open` and `popover/close` patterns."
         },
         {
           "class": "right-to-left",
@@ -7674,7 +7664,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — the Popover / open and Popover / close pattern: opening fades in and scales up from a little under full size from the trigger's side, on `motion.duration.fast` and `motion.easing-role.enter`; closing fades out on `motion.duration.instant` and `motion.easing-role.exit`. A submenu fades only, on the same timings. Under `prefers-reduced-motion` it fades only, on `motion.duration-reduced.fast` to open and to close."
+          "description": "motion — the `popover/open` and `popover/close` patterns: opening fades in and scales up from 95% from the trigger's side, on `motion.preset.pop`; closing fades out on `motion.preset.pop.exit`. A submenu fades only, on the same presets. Under `prefers-reduced-motion` it fades only, on each preset's `.duration-reduced`."
         },
         {
           "class": "right-to-left",
@@ -7693,7 +7683,7 @@
           "A split button is a Menu variant in the brief; it gets its own issue, #4296 (planned here)."
         ],
         "unverified": [
-          "The Popover / open and Popover / close motion preset is described here but not built: the starter set exists only as a wireframe."
+          "The `popover/open` and `popover/close` motion patterns are built since #2857 phase 2, on `motion.preset.pop` and its exit half; the Figma style per pattern waits on phase 3."
         ],
         "evolution": [
           "Owner decision Q-FL2 (2026-11-19, on #4007): every OD at its recommendation, with K1 B (menubar kept as an alias), K2 measured and so A, K3 B. OD-X1 A: the panel binds Popover's five raised-surface roles, and test.ts holds them equal."
@@ -7758,7 +7748,7 @@
         {
           "class": "runtime-behavior",
           "disposition": "REFUSED",
-          "description": "timing defaults — `delay`, `closeDelay` and the skip window are shared settings of a provider mounted once, so every tooltip on a page keeps the same rhythm. Their default values have no tokens yet; the ranges the field uses for them are with the motion gap batch (#3486)."
+          "description": "timing defaults — `delay`, `closeDelay` and the skip window are shared settings of a provider mounted once, so every tooltip on a page keeps the same rhythm. They default to `motion.delay.show`, `motion.delay.hide` and `motion.delay.skip` (#2857, Q-PT13 A and Q-PT14 A)."
         },
         {
           "class": "responsive-layout",
@@ -7778,7 +7768,7 @@
         {
           "class": "motion",
           "disposition": "REFUSED",
-          "description": "motion — show: opacity 0 to 1, a fade alone with no scale, on `motion.duration.fast` and `motion.easing-role.enter`. Hide: a fade on `motion.duration.instant` and `motion.easing-role.exit`. Inside the skip window it appears with no animation. Under `prefers-reduced-motion` both ways fade on `motion.duration-reduced.fast`."
+          "description": "motion — the `tooltip/show` and `tooltip/hide` patterns. On show: opacity 0 to 1, a fade alone with no scale, on `motion.preset.pop`. On hide: a fade on `motion.preset.pop.exit`. Inside the skip window (`motion.delay.skip`) it appears with no animation. Under `prefers-reduced-motion` it fades on `motion.preset.pop.duration-reduced` to show and `motion.preset.pop.exit.duration-reduced` to hide."
         },
         {
           "class": "right-to-left",

@@ -39,6 +39,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contrast } from '@prism3/engine/color';
 import { readPinned, loadPin, sha256, rootOf, TOKEN_TREE, TOKEN_BASE, TOKEN_OVERLAYS, COMPONENTS } from './oracle';
+import { isEntry } from '../../packages/engine/entry-point';
 
 // ------------------------------------------------------------------------------------------------ the oracle, loaded
 type Leaf = { path: string; $type?: string; $value?: unknown };
@@ -507,7 +508,7 @@ const table = (res: Awaited<ReturnType<typeof scoreDir>>): string => {
   return lines.join('\n') + '\n';
 };
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isEntry(import.meta.url)) {
   const dir = process.argv[2];
   if (!dir || !existsSync(resolve(dir, 'plan.json'))) { console.error('usage: score-code.ts <runs-dir>   (a directory orchestrate.ts plan made)'); process.exit(2); }
   const o = loadOracle();
