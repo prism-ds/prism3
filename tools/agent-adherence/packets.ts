@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readPinned, rootOf, TOKEN_TREE, COMPONENTS, SKILL, sha256 } from './oracle';
+import { isEntry } from '../../packages/engine/entry-point';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PACKET_DIR = resolve(HERE, 'packets');
@@ -97,7 +98,7 @@ export const buildPacket = (arm: Arm): string => {
 
 export const packetPath = (arm: Arm): string => resolve(PACKET_DIR, `${arm}.md`);
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+if (isEntry(import.meta.url)) {
   const check = process.argv.includes('--check');
   let drift = 0;
   for (const arm of ARMS) {

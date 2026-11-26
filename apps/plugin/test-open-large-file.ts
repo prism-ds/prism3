@@ -56,6 +56,9 @@
  * Mutations failing by name: `guarded` no longer dropping the read or moving `presentGen` → `open/write-shared`; the
  * older read's answer cached without the generation check → `open/write-cache`.
  *
+ * #4237, `update/levers-once`: the brand's theme built once per Update check and twice per apply, never once a set.
+ *   Mutation failing by name: `materializerFor(brandInput)(d)` inside `updateTargets`' loop → `update/levers-once`.
+ *
  * #3177, THE UPDATE CHECK AND APPLY over every set, each on the stand-in with its pages unloaded: `update/check-no-walk`,
  * `update/apply-no-walk` (no whole-file search during either), `update/search-yields` (one page searched per turn),
  * `update/one-read` (each page read once per run, and by the apply once more after a write to the set on it) and
@@ -588,8 +591,18 @@ const update = async (label: string, msg: unknown, answer: string): Promise<{ ms
   return out;
 };
 {
+  const { brandLeverBuilds } = await import('./src/brand-def');
+  const b0 = brandLeverBuilds();
   const check = await update('check', { type: 'update-check-request', defs: setIds, input: stored }, 'update-check');
+  const b1 = brandLeverBuilds();
   const apply = check ? await update('apply', { type: 'update-sets', defs: setIds, previewHash: check.msg.previewHash, handEdits: 'keep', input: stored }, 'component-update-result') : null;
+  const b2 = brandLeverBuilds();
+  // #4237 (review of #4261): the brand's theme is built once per run, never once per set, held by a count of the builds
+  // (`brandLeverBuilds`) rather than by how `updateTargets` is spelled. The check builds it once (`updateTargets`); the
+  // apply twice (`updateTargets`, then `ledgerNow` constructing its materializer), over all 50 sets. Literals. The
+  // stand-in apply never calls `ledgerNow`'s per-def closure, so `+2` counts that materializer built, not used: a per-set
+  // rebuild inside that closure is outside this arm's reach (delta review of #4261).
+  ok(b1 - b0 === 1 && b2 - b1 === 2, `update/levers-once: the check builds the brand's theme once and the apply twice, over ${SETS} sets, never once a set (check ${b1 - b0}, apply ${b2 - b1})`);
   ok(!!check && check.searches === 0, `update/check-no-walk: the Update check over ${SETS} sets searches no whole file in one turn (${check ? `${check.searches} whole-file searches` : 'no answer'})`);
   ok(!!apply && apply.searches === 0, `update/apply-no-walk: the apply under the check's hash searches no whole file in one turn (${apply ? `${apply.searches} whole-file searches` : 'no answer'})`);
   ok(!!check && !!apply && check.worst <= 1 && apply.worst <= 1, `update/search-yields: no turn of the check or the apply searches more than one page (worst ${check?.worst ?? '—'} and ${apply?.worst ?? '—'})`);
@@ -938,7 +951,21 @@ console.log('\n  Capture baseline and Adopt (#3189)');
   //   · `check/drops`: a hand edit made after the pass, heard as Figma's `documentchange`, is in the check's answer: the
   //     edited set is read again. Mutation: the listener's drop removed → `check/drops`.
   // Measured, not asserted: the check's host calls on a fresh read of every set.
-  const CHECK_CAP = 900_000;
+  // #3055: 900,000 → 950,000. Steps and StepItem, landing with Popover, took the template to 66 sets, and the check grew
+  // with them to 905,404 calls (882,494 at 64 sets), linear in the members it reads. With Skeleton (#4109) the template
+  // holds 67 sets and the check 913,510 calls, so 900,000 fails on the merged tree and 950,000 holds. The regressions
+  // this cap exists for stay far above it: the fresh read of every set measures 2.10M, and `main` before #3313 made 2.6M.
+  // #4007: 950,000 since Menu, Menu.Item and Menu.Group took the template to 66 sets (904,870 measured; 900,000 held 63). The
+  // mutations above still land at 2.1M and more, so the cap keeps its margin over them.
+  // Steps merged onto Menu: 70 sets, 946,063 calls (fresh read 2,144,328). 950,000 still holds, with about 4,000 to spare,
+  // so the next set added will likely need to raise it.
+  // Steps merged onto Tooltip (#4009): 950,000 → 1,000,000. 71 sets, 956,255 calls (fresh read 2,155,572), so 950,000
+  // fails on the merged tree. 1,000,000 leaves about 44,000, some five sets at about 8,000 calls a set, and the
+  // regressions this cap exists for still land at 2.1M and more.
+  // ToggleButton and ToggleIconButton merged onto Avatar, Menu, Steps and Tooltip (#4112, #4353): 1,000,000 → 1,100,000.
+  // 74 sets and 180 more members, 1,026,617 calls (fresh read 2,265,152), so 1,000,000 fails on the merged tree.
+  // 1,100,000 leaves about 73,000, and the regressions this cap exists for still land at 2.2M and more.
+  const CHECK_CAP = 1_100_000;
   const checkOf = async (): Promise<{ msg: any; calls: number; progress: { msg: any; turn: number; i: number }[]; answerAt: number }> => {
     const at = posted.length;
     calls = 0; callsIn.clear();

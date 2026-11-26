@@ -1,10 +1,10 @@
-# @prism3/studio — the web dashboard
+# @prism3/studio — the web Studio
 
 The first **rendering host** over the Prism3 engine core (see `../../docs/09-architecture-and-repos.md`
-and `08-theming-interfaces.md`). It imports the same pure engine modules the Figma
-plugin will, and renders from the shared contracts:
+and `08-theming-interfaces.md`). It imports the same pure engine modules as the Figma
+plugin, which runs this UI whole in its panel, and renders from the shared contracts:
 
-- **Knobs** from the lever manifest (`packages/engine/levers.ts`).
+- **Settings** from the lever manifest (`packages/engine/levers.ts`).
 - **Live component preview + per-mode contrast overlay** from `previewSpec`
   (`preview.ts`) resolved through `resolvePreview(theme)` (`resolve-preview.ts`).
 - **Generated palette ramps** straight off `brandTheme(input).palettes`.
@@ -75,7 +75,7 @@ makes obvious, and that a third probe will hit on its first run.
   - **Brand and Palettes don't:** nothing they set varies by mode, so they show no line and stay editable
     in every mode.
 - **Symptom.** A probe that loops pages on the outside and modes on the inside reads each page in
-  whichever mode the *previous* page happened to leave behind, so its results are ordering artefacts.
+  whichever mode the *previous* page happened to leave behind, so its results are ordering artifacts.
   Worse, it does not look like an ordering bug. Arrive at one of the seven pages from a derived mode
   and every field is read-only, so the probe reports controls that will not take an edit. That is the
   app being correct. The first draft of `test-smoke.mjs` looped this way and reported two false
@@ -172,6 +172,47 @@ What can change the site is measured, not assumed: Vercel runs `build:site`, who
 `packages/engine/**`, `packages/engine/schema/**` and one plugin file, `apps/plugin/src/causes.ts` (#3326), from
 outside `apps/studio/`, and copies `docs/public/` to `/docs` (#2637). The rest of the Figma plugin is **not** part of
 this build, so the rest of `apps/plugin/**` deliberately does not trigger a deploy.
+
+The build also copies each hosted brand's shadcn registry item, `packages/engine/out/shadcn/<brand>.registry-item.json`, to
+`/r/<brand>.json` unchanged (#2997, Q2997.19 A). `test-shadcn-registry.ts` checks the built copies against `out/`, byte for byte.
+The hosted brands are the house brand and the engine's example brands, and no others (#4373):
+
+- `/r/prism3.json`
+- `/r/aurora.json`
+- `/r/harbor.json`
+
+### The shadcn/ui theme
+
+Install a brand's theme into a shadcn/ui project:
+
+```bash
+npx shadcn add https://prism3-ds.vercel.app/r/<brand>.json
+```
+
+That URL serves the hosted brands. For a brand of your own, choose Export, then Design tokens, and set **Format** to
+**shadcn/ui theme**: it downloads the same two files the registry and `out/shadcn/` hold, `<brand>.shadcn.css` and
+`<brand>.shadcn.registry-item.json`. **Tailwind theme** downloads `<brand>.tailwind.theme.css`. Install the registry item with `npx shadcn add ./<brand>.shadcn.registry-item.json`.
+The command line writes them with `cli.ts <brief> --out <dir> --shadcn --tailwind`, and the MCP's `export_theme` with
+`include: ["shadcn", "tailwind"]`. All of them run the projector regen does, so a brand gets the same bytes on every
+surface.
+
+The registry item carries two rules beyond the theme variables, both for focus. Stock shadcn/ui draws the focus outline
+(`outline-ring/50`) and every component's focus ring (`ring-ring/50`) at 50%, which is 2.0–2.8:1 against the page. The
+ring takes several forms: `focus-visible:` (Button, Input, Select, Checkbox, Switch, Badge, Tabs, Textarea and others),
+the Slider thumb, the Calendar and its focused day, the Input OTP slot, `focus-within:` (Combobox, Attachment), Input
+Group and Bubble. The rules draw all of them at the full `--ring`, 3.7:1 or more on the three hosted brands. A ring on an
+invalid field keeps its stock `destructive` color. In dark mode the destructive Button and Badge focus in the brand's
+`--ring`, about 5:1, not their stock red at 40%, about 1.6:1. The plain `out/shadcn/<brand>.css` carries neither rule. The item's `docs` field points here.
+
+Three stock classes still draw text under 4.5:1. The theme leaves them as shadcn ships them, and `lint-shadcn-contrast`
+measures each one on every run (#4387, #4388, #4411). One class edit in the component raises each. The ratios are the
+three hosted brands' floors in that gate's `KNOWN`:
+
+| Component | Stock class | Measured | Edit | After the edit |
+|---|---|---|---|---|
+| Alert, `destructive` description | `text-destructive/90` | 3.91–3.97:1 light, 3.62–3.63:1 dark | `text-destructive` | 4.56:1 or more in light. Dark stays at 4.25:1: `--destructive` is a fill under white text, and no one value clears both. |
+| Input and Select, placeholder in dark | `dark:bg-input/30` | 3.78–3.83:1 | remove it | 4.99:1 or more: the placeholder sits on the page color. |
+| Button, `link` variant in dark | `text-primary` | 4.23–4.25:1 | add `dark:text-foreground` | 18:1. The link loses the brand hue in dark; a project that wants a hue sets its own `text-*` class. |
 
 Only some of the engine's `.ts` files are actually imported by that bundle, so the script names the
 others as exclusions rather than naming the imported ones as inclusions. That direction is the point: a new

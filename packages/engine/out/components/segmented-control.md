@@ -44,7 +44,6 @@ Use a segmented control for a choice between two to five short options that chan
 - Name what is being chosen, with a visible label or an accessible name
 - Use two to five options with short, one-line labels
 - Select a sensible option from the start
-- Use the form behavior when the value is submitted with a form
 
 ### Don't
 
@@ -75,9 +74,10 @@ Use a segmented control for a choice between two to five short options that chan
 
 ### Motion
 
-- **Enter:** None. On selection the pill travels to the new option on motion.transition.default, or cross-fades.
+- **Patterns:** `segmented/select`
+- **Enter:** None. On a change, the pill travels to its new place and the label changes color on motion.preset.move.
 - **Exit:** None.
-- **Reduced motion:** The indicator moves at once; only the color change remains, fading on motion.duration-reduced.fast.
+- **Reduced motion:** Under prefers-reduced-motion, the pill takes its new place at once; the label fades to its new color on motion.preset.move.duration-reduced.
 
 ## Content guidelines
 
@@ -88,13 +88,15 @@ One or two words per option, nouns, sentence case: "List", not "Show list".
 ## Related components
 
 - **Built from:** `field-label`, `segmented-control-segment`
-- **Instead, consider:** `tabs`, `radio-group`, `select`, `switch-row`, `radio-row`, `button-group`, `counter`, `slider`
+- **Instead, consider:** `tabs`, `radio-group`, `select`, `switch-row`, `radio-row`, `button-group`, `counter`, `slider`, `toggle-button`
 - **Often used with:** `icon`
 - **Replaces:**
   - a radio group restyled as a compact switcher for a view that changes at once
   - a row of buttons with a hand-rolled active state and no group semantics
 
 ## Building it in code
+
+- Use the form behavior when the value is submitted with a form
 
 ### Props
 

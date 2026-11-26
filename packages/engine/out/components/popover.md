@@ -77,9 +77,10 @@ Use a Popover for content the user asks for that belongs next to the control tha
 
 ### Motion
 
-- **Enter:** Fades in and scales up from a little under full size, from the trigger's side (motion.duration.fast, motion.easing-role.enter). The origin follows the side it opens on.
-- **Exit:** Fades out (motion.duration.instant, motion.easing-role.exit), quicker than it opened.
-- **Reduced motion:** Under prefers-reduced-motion it fades only, with no scale, on motion.duration-reduced.fast to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed.
+- **Patterns:** `popover/open`, `popover/close`
+- **Enter:** The popover fades in and scales up from 95% on motion.preset.pop. It scales from the trigger's side, and the origin follows the side it opens on.
+- **Exit:** The popover fades out on motion.preset.pop.exit.
+- **Reduced motion:** Under prefers-reduced-motion, the popover fades in on motion.preset.pop.duration-reduced, with no scale. The popover fades out on motion.preset.pop.exit.duration-reduced. A fade is not movement, and it keeps the cue that a layer opened or closed.
 
 ## Content guidelines
 
@@ -90,7 +91,7 @@ Titles are short and in sentence case. Body text says what the user needs and no
 ## Related components
 
 - **Built from:** `flush-icon-button-neutral`, `button-group`
-- **Instead, consider:** `dialog`
+- **Instead, consider:** `dialog`, `tooltip`, `menu`
 - **Often used with:** `button`, `button-neutral`, `icon-button`, `icon-button-neutral`, `link`, `text-field`, `select`, `checkbox-group`
 - **Replaces:**
   - an absolutely positioned div with a hand-written click-outside handler

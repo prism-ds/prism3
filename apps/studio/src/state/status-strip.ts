@@ -34,6 +34,8 @@ export type RunReading = {
   readonly item: string | null;
   readonly done: number;
   readonly total: number;
+  /** #4476: the host read its hand-backs as throttled by a hidden Figma window. */
+  readonly throttled?: boolean;
 };
 
 /** The run as the strip follows it: when it started, when the panel last heard from it, the step's last reading, the
@@ -44,18 +46,25 @@ export type StripRun = {
   readonly reading: RunReading | null;
   readonly seen: readonly string[];
   readonly updated: { readonly done: number; readonly total: number; readonly finished: boolean } | null;
+  /** #4476: some reading of this run said the host is throttling it. Kept to the run's end, so the note explains a slow
+   *  run to a designer who comes back to the window. */
+  readonly throttled?: boolean;
 };
 
 export const startStripRun = (now: number): StripRun => ({ startedAt: now, heardAt: now, reading: null, seen: [], updated: null });
 
 /** The run after a reading from it. An update's `work` reading names the set it starts, so the set before it is done. */
 export const withReading = (r: StripRun, m: RunReading, now: number): StripRun => ({
-  ...r, heardAt: now, reading: m,
+  ...r, heardAt: now, reading: m, throttled: !!r.throttled || !!m.throttled,
   seen: m.run === 'update' && m.phase === 'work' && m.item && !r.seen.includes(m.item) ? [...r.seen, m.item] : r.seen,
 });
 
+/** #4476: the Build set and Style guides progress line, with the throttling note after it once the host reads the run as
+ *  throttled (`STRIP_COPY.throttled`, the one copy of the words). */
+export const withThrottleNote = (line: string, throttled: boolean | undefined): string => (throttled ? `${line} · ${STRIP_COPY.throttled}` : line);
+
 /** The run after it was heard from without a reading of its own (a build's or a style guide's progress, a step's start). */
-export const heard = (r: StripRun, now: number): StripRun => ({ ...r, heardAt: now });
+export const heard = (r: StripRun, now: number, throttled = false): StripRun => ({ ...r, heardAt: now, throttled: !!r.throttled || throttled });
 
 /** The run as a step ends and the next starts: the update's count is kept for the verdict, the step's reading goes. */
 export const stepEnded = (r: StripRun, now: number): StripRun => ({
@@ -137,6 +146,9 @@ export const STRIP_COPY = {
   theCheck: 'the check',
   of: (n: number, of: number): string => `${n} of ${of}`,
   still: (what: string): string => `Still working on ${what}`,
+  /** #4476 DRAFT (OWNER DECISION pending): a run's progress line once the host throttles its hand-backs, because Figma's
+   *  window is hidden. The Build set and Style guides lines carry it too (`withThrottleNote`). */
+  throttled: 'Figma slows plugins while its window is hidden — keep it visible to finish sooner.',
   stopAfter: (what: string): string => `Stop after ${what}`,
   stopping: (what: string): string => `Stopping after ${what}…`,
   /** Each step's words once it is done, for the verdict line. */
@@ -150,7 +162,7 @@ export const STRIP_COPY = {
   details: 'Details in Activity.',
   /** #3189: an agent's Capture baseline and Adopt, in the words Activity already gives them (Q114 A). These two and
    *  `agentSub` are the owner's, approved as worded (Q3210.2 A), not DRAFT. */
-  agentRun: { capture: 'Recording the sets as built…', adopt: 'Adopting members…' } as Record<'capture' | 'adopt', string>,
+  agentRun: { capture: 'Saving what was built…', adopt: 'Updating variants…' } as Record<'capture' | 'adopt', string>,
   /** #3189: the line under an agent's run. */
   agentSub: 'An agent runs this. Details in Activity.',
   /** The writing controls' reason while a run is out (Q3170.3 A), on hover. */
@@ -220,7 +232,8 @@ export const stripView = (x: {
       count = STRIP_COPY.of(step.queue.at, step.queue.of);
       fill = step.queue.of ? (step.queue.at - 1) / step.queue.of : null;
     }
-    const still = x.now - run.heardAt >= SILENCE_MS ? STRIP_COPY.still(on) : null;
+    // #4476: a throttled run says why it is slow, in place of "Still working on…", which it explains.
+    const still = run.throttled ? STRIP_COPY.throttled : x.now - run.heardAt >= SILENCE_MS ? STRIP_COPY.still(on) : null;
     return { kind: 'running', what, n: count ? `${count} · ${clock}` : clock, fill, still,
       stop: { label: step.stopping ? STRIP_COPY.stopping(stopOn) : STRIP_COPY.stopAfter(stopOn), disabled: step.stopping } };
   }
@@ -239,7 +252,7 @@ export const stripView = (x: {
 };
 
 /** One step's result, as Update file's run records it (`StepResult`). */
-type Result = { readonly step: StepKey; readonly ok: boolean; readonly headline: string; readonly warn?: true };
+type Result = { readonly step: StepKey; readonly ok: boolean; readonly headline: string; readonly warn?: true; readonly sets?: number };
 
 /** The verdict line once Update file's run has ended (Q3170.6 A). `stopped`: the person asked it to stop. The update's
  *  count is the run's (`StripRun.updated`): a reading of `finish` with fewer sets done than ticked is the host's stop at a
@@ -274,7 +287,9 @@ export const stripVerdict = (x: {
     return { tone: 'bad', what: STRIP_COPY.stoppedAt(at), n: u ? STRIP_COPY.updatedOf(u.done, u.total) : clock,
       sub: `${failed.headline.replace(/^[✓✗⚠]\s*/, '')}. ${u ? kept(u.done, u.total) : ''}${STRIP_COPY.details}` };
   }
-  const words = x.results.map((r) => (r.step === 'update' ? STRIP_COPY.updated(u?.done ?? 0) : STRIP_COPY.done[r.step]));
+  // #4067: the update's count is its own verdict's sets written to (`wroteTo`), the number its headline gives, never
+  // the in-place pass's progress, which counts only the sets whose members it writes (a run of 6 sets so counted wrote to 37).
+  const words = x.results.map((r) => (r.step === 'update' ? STRIP_COPY.updated(r.sets ?? u?.done ?? 0) : STRIP_COPY.done[r.step]));
   // #3308: each step that had problems says so in its own headline, after the steps; the line is then a warning.
   const warned = x.results.filter((r) => r.warn).map((r) => `${r.headline.replace(/^[✓✗⚠]\s*/, '')}. `).join('');
   return { tone: warned ? 'warn' : 'ok', what: words.length === 1 ? words[0] : STRIP_COPY.fileUpdated, n: clock, sub: `${words.length > 1 ? `${words.join(', ')}. ` : ''}${warned}${STRIP_COPY.details}` };

@@ -43,7 +43,8 @@ import { applyWritePlan, applyFloatPlan, applyVarCollectionPlan, beginMigration 
 import { applyStylesPlan } from './src/write-styles';
 import { applyGridStylePlan, gridSkippedNote } from './src/write-grid-styles';
 import { applyTextStylePlan } from './src/write-text-styles';
-import { guardApply, preflightPlanOf, conflictSummary, type PreflightPlan } from './src/preflight';
+import { guardApply, preflightPlanOf, conflictSummary, modesNeeded, modeLimitOf, type PreflightPlan } from './src/preflight';
+import { preflightApiOf } from './src/theme-ports';
 import { runApplyTheme } from './src/apply-theme';
 import { conflictKey, choiceNote, renamedOf, type CollisionChoices } from './src/collision-choice';
 import { computePrunePlan, type PruneInput } from './src/prune-figma';
@@ -338,7 +339,7 @@ for (const [id, theme] of themes) {
 // literals for the `prism3` example brand — names, counts and the verdict text are written out here, not
 // read off the plan, so a plan or summary that moves fails by name instead of agreeing with itself.
 const PRISM3 = (exampleBrands as Record<string, BrandInput>).prism3;
-const STYLE_COUNT = 102;         // prism3: 15 effect (14 shadow + glass, #2869) + 2 paint + 5 grid + 80 text (63 + body/xs's 8, #2266, + the 3 underlined labels, #2324, + the 6 default-weight labels and their underlined twins, Q226 A)
+const STYLE_COUNT = 109;         // prism3: 22 effect (21 shadow: light, dark and hc-dark's 7 each, #4131, + glass, #2869) + 2 paint + 5 grid + 80 text (63 + body/xs's 8, #2266, + the 3 underlined labels, #2324, + the 6 default-weight labels and their underlined twins, Q226 A)
 const COLLECTION_COUNT = 15;     // core, color, space, radius, size, icon, control, border-width, focus, opacity, blur (#2869), text-spacing (#2423), layout, motion (#2394), type-sets
 const apply = async (f: FileShim) => {
   try { return (await runApplyTheme(PRISM3, f as any)).guarded; }
@@ -530,8 +531,9 @@ const foreignSnap = (x: ReturnType<typeof foreignFile>): string => JSON.stringif
   ok(g.ok, `Q112 rename: applies${g.ok ? '' : ` — ${'threw' in g ? `threw: ${g.threw}` : conflictSummary(g.conflicts, 3)}`}`);
   ok(foreignSnap(x) === before, 'Q112 rename: the hand-made collection, both its variables and the designer\'s style are untouched');
   const col2 = x.f.collections.find((c) => c.name === 'color (Prism3)');
-  ok(!!col2 && (col2.data.get('prism3/modes:owned') ?? '') !== '' && col2.modes.length === 4,
-    'Q112 rename: `color (Prism3)` is made, stamped, with the four appearance modes');
+  // Five: the four appearance modes and the default theme's Brand B (#1729).
+  ok(!!col2 && (col2.data.get('prism3/modes:owned') ?? '') !== '' && col2.modes.length === 5,
+    'Q112 rename: `color (Prism3)` is made, stamped, with the four appearance modes and Brand B');
   const v2 = x.f.vars.find((v) => v.name === `${VAR} (Prism3)`);
   const white = x.f.vars.find((v) => v.name === 'pds3/core/palette/white');
   ok(!!v2 && v2.variableCollectionId === col2?.id && v2.resolvedType === 'COLOR' && (Object.values(v2.valuesByMode)[0] as any)?.id === white?.id,
@@ -816,6 +818,65 @@ for (const c of ['skip', 'rename'] as const) {
   ok(stopIds.length > 0 && into(stopIds) === 0, `#1904 gradient stops: ${into(stopIds)} of ${stopIds.length} stop bindings landed in the stranded collection`);
   ok(blurIds.length > 0 && into(blurIds) === 0, `#1904 glass blur: ${into(blurIds)} of ${blurIds.length} radius bindings landed in the stranded collection`);
   ok(washIds.length > 0 && into(washIds) === 0, `#1904 wash opacity: ${into(washIds)} of ${washIds.length} opacity aliases landed in the stranded collection`);
+}
+
+// ── THE MODE CAPACITY (#4157) ──
+// `modesNeeded` is what the file's collections will hold once the apply has run, for each collection it adds a mode to;
+// `modeLimitOf` asks the host's probe only when there is one. Expected values are literals typed here: a fresh file's
+// `color` collection gets the five color modes (Brand B is the fifth, #1729), and a Prism3 file the apply already wrote needs no mode added at all.
+{
+  const plan = (): PreflightPlan => {
+    const t = brandTheme(structuredClone(PRISM3));
+    const fc = buildFigmaColor(t);
+    return preflightPlanOf({ color: buildWritePlan(fc), float: buildFloatWritePlan(t), font: buildFontVarPlan(t), motion: buildMotionVarPlan(t),
+      styles: buildStylesPlan(t), grid: buildGridStylePlan(t), text: buildTextStylePlan(t) });
+  };
+  const p = plan();
+  const colorModes = p.modes?.find((m) => m.collection === 'color')?.names ?? [];
+  ok(JSON.stringify(colorModes) === JSON.stringify(['light', 'dark', 'hc-light', 'hc-dark', 'brand-b']), `#4157 premise: the plan reconciles the five color modes into color (${JSON.stringify(colorModes)})`);
+  const fresh = modesNeeded(p, []);
+  ok(fresh.length > 0 && fresh.includes(5) && fresh.every((n) => n > 1), `#4157 fresh file: every collection of more than one mode needs its count, color 5 (${JSON.stringify(fresh)})`);
+  const f = new FileShim();
+  const first = await apply(f);
+  const asked: number[] = [];
+  const api = { ...preflightApiOf(f as any), modeCap: async (n: number) => { asked.push(n); return 1; } };
+  const again = modesNeeded(p, await f.getLocalVariableCollectionsAsync());
+  ok(first.ok && again.length === 0 && (await modeLimitOf(p, api)) === null && asked.length === 0,
+    `#4157 a Prism3 file the apply already wrote adds no mode, so the probe is never asked (needs ${JSON.stringify(again)}, asked ${JSON.stringify(asked)})`);
+  const color = f.collections.find((c) => c.name === 'color');
+  color.modes = color.modes.slice(0, 2);
+  const short = modesNeeded(p, await f.getLocalVariableCollectionsAsync());
+  ok(JSON.stringify(short) === '[5]', `#4157 a color collection holding 2 of its 5 modes needs 5 (${JSON.stringify(short)})`);
+  const lim = await modeLimitOf(p, api);
+  ok(JSON.stringify(lim) === '{"allowed":1,"needed":5}' && JSON.stringify(asked) === '[5]', `#4157 a cap of 1 against that need is a limit, asked once for 5 (${JSON.stringify(lim)}, asked ${JSON.stringify(asked)})`);
+  // reconcileModes' step 2: a lone mode under a name the plan doesn't use is renamed, not added beside, so a color
+  // collection holding one mode called "Foo" grows to 5, not 6 (#4157 review). Off by one here, a file that fits is refused.
+  color.modes = [{ ...color.modes[0], name: 'Foo' }];
+  const lone = modesNeeded(p, await f.getLocalVariableCollectionsAsync());
+  ok(JSON.stringify(lone) === '[5]', `#4157 a color collection holding one mode under a name the plan doesn't use is renamed, so it needs 5 (${JSON.stringify(lone)})`);
+}
+
+// ── #1908 A GRADIENT AT A NEGATIVE OR EXPONENT ANGLE, BEFORE THE MARK: still Prism3's ────────────────────
+// A file applied before #1906's ownership mark carries only the description to say a gradient style is Prism3's, and
+// the engine writes the angle as JavaScript prints the number (`figmaGradientDescription`): `-45°`, `1e-7°`. The brand
+// schema does not bound the angle. aurora's linear gradient at -45°, and a second at 1e-7, both applied, the marks
+// stripped, applied again: 0 conflicts. The angles and the expected description are typed here. Mutation: the sign
+// dropped from `STYLE_SIGNATURES.paint` → `#1908 pre-mark gradient`.
+{
+  const AURORA = (exampleBrands as Record<string, BrandInput>).aurora;
+  const grads = (AURORA as { gradients: { kind: string; angle?: number }[] }).gradients;
+  const lin = grads.find((g) => g.kind === 'linear')!;
+  const brand = { ...AURORA, gradients: [{ ...lin, angle: -45 }, { ...lin, name: 'tiny', angle: 1e-7 }, ...grads.filter((g) => g !== lin)] } as unknown as BrandInput;
+  const run = async (f: FileShim) => { try { return (await runApplyTheme(brand, f as any)).guarded; } catch (e) { return { ok: false as const, conflicts: [], threw: (e as Error).message }; } };
+  const f = new FileShim();
+  await run(f);
+  const desc = f.styles.paint.map((x) => String(x.description ?? ''));
+  ok(desc.some((d) => d.startsWith('gradient brand — linear -45°, ')) && desc.some((d) => d.startsWith('gradient tiny — linear 1e-7°, ')),
+    `#1908 premise: the engine describes the two gradients with a signed and an exponent angle (${JSON.stringify(desc.map((d) => d.split(',')[0]))})`);
+  stripMarks(f);
+  const g = await run(f);
+  ok(g.ok && createdOf(g) === 0,
+    `#1908 pre-mark gradient: a file applied before the mark, with a -45° and a 1e-7° gradient, re-applies with 0 conflicts${g.ok ? '' : ` — ${'threw' in g ? `threw: ${g.threw}` : conflictSummary(g.conflicts, 3)}`}`);
 }
 
 console.log(`${failed ? `\n✗ ${failed} check(s) failed` : '\n✓ apply pre-flight: all checks passed'} — ${executed} assertions executed`);

@@ -740,7 +740,7 @@ export const textField: ComponentDef = makeTextField({
     { name: 'onChange', type: 'function', required: false, description: 'Change handler (also onBlur / onFocus).' },
     { name: 'type', type: "enum: 'text' | 'email' | 'url' | 'tel' | 'search' | 'password'", values: ['text', 'email', 'url', 'tel', 'search', 'password'], default: 'text', required: false, description: 'Attribute-only variants (mobile keyboard + autofill). Not number: numeric input needs a number field (not built yet). search / password are better served by their thin specializations.' },
     { name: 'placeholder', type: 'string', required: false, description: 'An example only ("name@example.com"); vanishes on input; nothing load-bearing lives here.' },
-    { name: 'helpText', type: 'string | node', required: false, description: 'Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format before failure.' },
+    { name: 'helpText', type: 'string | node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format before failure.' },
     // #1623 sign-off (C1/TF-5) — validation is the `validation` + `validationMessage` pair, select's exact
     // prop names and value set, so one concept has one name across the field family. The Figma `status`
     // variant axis maps to `validation` value-for-value (the axis keeps field-message's name so the nested
@@ -871,8 +871,10 @@ export const textField: ComponentDef = makeTextField({
     do: [
       'Always render a visible, associated label (FieldLabel) — visually-hidden only for search',
       'Distinguish `readOnly` (copyable, submitted, full-contrast) from disabled (silent, exempt)',
-      'Emit a real `<input name>` so it works uncontrolled, in a native form, with Server Actions',
       'Separate a decorative glyph (`aria-hidden`) from an interactive trailing action (a labeled button)',
+    ],
+    implementation: [
+      'Emit a real `<input name>` so it works uncontrolled, in a native form, with Server Actions',
       'Follow the error-timing contract: validate on blur, re-validate on input after the first error, move focus to the first invalid field on submit, and show an error summary on a long form (the form library runs it; the field renders it)',
     ],
     dont: [
@@ -888,7 +890,7 @@ export const textField: ComponentDef = makeTextField({
     primaryPurpose: 'Capture a single line of free-form, non-enumerable text with an associated label and helper/validation message.',
     whenToUse: 'Names, emails, titles, SKUs, identifiers, short queries — any single-line text the system cannot offer as a fixed set.',
     avoidWhen: 'The value comes from a known set (Select, Radio.Group, or a combobox), spans multiple lines (Textarea), is numeric-formatted (a number field), is boolean (Checkbox.Row or Switch.Row), is a date (a date picker), or needs suggestions (a combobox — the moment a suggestion list attaches you are in combobox territory with a different ARIA contract).',
-    commonPartners: ['field-label', 'field-message', 'icon', 'button', 'spinner'],
+    commonPartners: ['field-label', 'field-message', 'icon', 'button', 'spinner', 'tooltip'],
     triggerKeywords: ['text field', 'text input', 'input', 'form field', 'textbox', 'email field', 'search field'],
     generationPriority: 2,
   },
@@ -899,7 +901,7 @@ export const textField: ComponentDef = makeTextField({
     composesWith: ['field-label', 'field-message'],
     alternativeTo: ['textarea', 'select', 'checkbox-row', 'switch-row', 'password-field', 'search-field', 'counter', 'card-number-field', 'slider', 'code-input'],
     replacesPatterns: ['bare input without label wiring', 'placeholder-as-label', '`type=number` for formatted numeric'],
-    planned: ['form', 'tooltip', 'combobox', 'number-field', 'date-picker'],
+    planned: ['form', 'combobox', 'number-field', 'date-picker'],
   },
 
   // KB text-field brief §8.
@@ -917,12 +919,10 @@ export const textField: ComponentDef = makeTextField({
     contested: [
       FOCUS_EDGE_STATUS_NOTE,
       FOCUS_EDGE_DEFAULT_NOTE,
-      'Bundled props vs composed slots — ship both: props for the 90% vertical-form case, composed FieldLabel/FieldMessage slots for the 10% custom layout (brief §3).',
       'How far to split the typed family — NumberField separate; SearchField/PasswordField thin specializations; email/url/tel stay as type+attributes (brief §3).',
       'Validation ownership/timing — presentational default; the form library owns timing (brief §3, §6).',
       'pressed — the brief lists it as a runtime state (§4, touch-down feedback before the virtual keyboard rises), largely a mobile concern. Not declared: `pressed` is not a field state here (see `tokens`), so a touch-down carries no skin of its own. The alternative is a `pressed` state with its own skin, which no field role emits today (`color.field.border.pressed` does not exist).',
       'density [comfortable, compact, fluid] — the brief\'s second variant axis (§4, §15). Not declared: the engine\'s density is a brand lever that moves every control\'s rungs, and `size` covers per-field scale. Carbon\'s borderless `fluid` field is a separate treatment, not built.',
-      'prefix / suffix as TEXT affixes vs merged away (#1699 decision 3, owner-delegated: one prop per slot). They were glyph-or-action slots duplicating `leadingIcon` / `trailingIcon`. Chosen: keep the names for the text affixes (a currency symbol, a unit — brief §9\'s locale placement). In the brief, `prefix` / `suffix` name the adornment slots (§2, §15) and §10 maps `leadingVisual` / `trailingVisual` onto them; here the glyph adornments are the two icon slots, so the names are reused for the text affixes, with the glyphs on the two icon slots and the clear action on `clearable`. The alternative, dropping `prefix` / `suffix` entirely, loses the text affix a currency or unit field needs.',
     ],
     unverified: [
       'Polaris migration to framework-agnostic Web Components (<s-text-field>, Shadow DOM) — needs _source-text backing, shared with the Button brief (brief §11, §14).',
@@ -932,6 +932,9 @@ export const textField: ComponentDef = makeTextField({
     ],
     // KB text-field brief §13.
     evolution: [
+      // Moved from `contested` (#1716): each describes a decision already taken, so it is evolution.
+      'Bundled props vs composed slots — ship both: props for the 90% vertical-form case, composed FieldLabel/FieldMessage slots for the 10% custom layout (brief §3).',
+      'prefix / suffix as TEXT affixes vs merged away (#1699 decision 3, owner-delegated: one prop per slot). They were glyph-or-action slots duplicating `leadingIcon` / `trailingIcon`. Chosen: keep the names for the text affixes (a currency symbol, a unit — brief §9\'s locale placement). In the brief, `prefix` / `suffix` name the adornment slots (§2, §15) and §10 maps `leadingVisual` / `trailingVisual` onto them; here the glyph adornments are the two icon slots, so the names are reused for the text affixes, with the glyphs on the two icon slots and the clear action on `clearable`. The alternative, dropping `prefix` / `suffix` entirely, loses the text affix a currency or unit field needs.',
       'READ-ONLY KEEPS THE EDITABLE FIELD\'S BOUNDARY (owner decision, 2026-09-29, #1710). The read-only member binds `field.border.rest`, the same border as the rest and filled members, in every mode. The earlier `border.secondary` binding measured 2.69–2.81:1 on `background.secondary` in light, below the 1.4.11 floor, and `field.border.rest` is already the quietest neutral step that clears 3:1 there, so no fainter read-only edge can pass. Read-only is carried by its semantics (aria-readonly; still focusable and submitted) and by the affordances its member does not draw (no caret), not by a fainter edge.',
       // Moved from `contested` (#1700): decided here (a status, not a state), so it is evolution.
       'warning as a distinct state (brief §4 calls it optional; many systems fold it into helper/error). Settled here as a STATUS, not a state: `warning` is a value of the `status` axis with its own border (`color.border.warning`, #1517) and its own message status, so the field signals it on both.',

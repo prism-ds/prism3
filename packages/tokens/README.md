@@ -31,7 +31,7 @@ npm install ./prism3-tokens-<version>.tgz       # in the client project
 ```
 
 ```css
-@import "@prism3/tokens";                       /* every block: :root and light, dark, hc-dark, hc-light */
+@import "@prism3/tokens";                       /* every block: :root and light, brand-b, dark, hc-dark, hc-light */
 
 .card { color: var(--pds3-color-text-primary); }
 ```
@@ -47,7 +47,7 @@ npm install ./prism3-tokens-<version>.tgz       # in the client project
 |---|---|
 | `@prism3/tokens` (also `@prism3/tokens/prism3.css`) | every block, `:root` first |
 | `@prism3/tokens/prism3/base.css` | the light defaults, on `:root` and `[data-theme="light"]` |
-| `@prism3/tokens/prism3/<mode>.css` | one `[data-theme="<mode>"]` block: `dark`, `hc-dark`, `hc-light`. `dark.css` also holds the system-preference block below |
+| `@prism3/tokens/prism3/<mode>.css` | one `[data-theme="<mode>"]` block: `brand-b`, `dark`, `hc-dark`, `hc-light`. `dark.css` also holds the system-preference block below |
 
 **Following the OS (#4140).** A page that sets no `data-theme` follows the system setting: the dark values also apply
 under `@media (prefers-color-scheme: dark)` on `:root:not([data-theme])`, with no script and no flash of light. A page
@@ -73,8 +73,49 @@ guaranteed name, in every mode block. It also checks each name's value against t
 that mode, read from `packages/engine/out/prism3.tokens.json`, which the build never reads (#3563).
 That check ignores spelling (`#0000001a` or `rgba(0, 0, 0, 0.1)`, quoted or not), but not order: a
 reversed `cubic-bezier( )` or reordered shadow layers fail it. Each per-mode file
-(`prism3/<mode>.css`) gets the same checks on its own, not only the joined file (#3877). A non-DTCG type (today the three `spring` tokens) isn't in the
-projection, so it isn't in the CSS (#642).
+(`prism3/<mode>.css`) gets the same checks on its own, not only the joined file (#3877). A non-DTCG type isn't in the projection (#642).
+
+### Springs (#3510)
+
+Plain CSS can't run spring physics, so the CSS carries each spring as an easing curve and a duration to play
+it over (owner decision Q-SP1 E):
+
+```css
+.sheet {
+  transition: transform var(--pds3-motion-spring-duration-snappy) var(--pds3-motion-spring-easing-snappy);
+}
+```
+
+- `--pds3-motion-spring-easing-<name>` is the spring sampled into a `linear()` curve.
+- `--pds3-motion-spring-duration-<name>` is how long the spring takes to settle. Use the same `<name>` for both.
+
+The springs' damping and stiffness (`motion.spring.*`) aren't in the CSS. They stay in the DTCG tree
+(`<brand>.tokens.json`) and in Figma, where a JavaScript animation library or Figma can run the spring itself.
+`packages/engine/spring.ts` derives the curve and the duration and states the numbers behind them: the settle
+threshold, the sampling density and the error bound `test.ts` holds the curve to.
+
+DTCG has no type for a `linear()` function, so the curves have the custom type `linearEasing` and aren't in the
+conforming projection. The engine writes them to a third source, `<brand>.css-only.json`, which only
+`sd.ship.mjs` reads. Stock Style Dictionary has no transform for that type and writes the string as it stands,
+so the build still runs no custom code. The durations are DTCG `duration` tokens and travel in the projection
+like any other. `check-package.mjs` expects both, from its own list of the types the package carries.
+
+Each typeface ships with its fallback stack, ending in a generic family:
+`--pds3-core-font-typeface-inter: Inter, system-ui, …, sans-serif` (#4155). If a face doesn't load, text
+falls back to the same kind of face rather than the browser default. The build reads the web base,
+`prism3.web.base.tokens.json`, which is the conforming base with each stack as its DTCG array value. The
+platform-neutral `prism3.base.tokens.json` keeps one family per typeface, because a comma list isn't a font
+name on Android. `check-package.mjs`'s [FALLBACK] arm checks the generic family in every block.
+
+### Two names that read differently elsewhere (#4161, #4175)
+
+- **`foreground` is a surface, not ink.** `--pds3-color-foreground-*` are the cards, panels and fills placed on the
+  page. Ink is `--pds3-color-text-*` and `--pds3-color-icon-*`. In Primer and in many CSS kits `foreground` means
+  text, so check which one you bind (`docs/06` §2).
+- **Padded steps sort last in JavaScript.** Steps such as `025`, `050` and `075` keep their leading zero, so they
+  sort in order as text, the way Figma's panel shows them. A JavaScript object puts integer-like keys (`100`, `950`)
+  before string keys, so in this CSS and in any key walk `025` comes after `950`, and `space-025` after `space-1200`.
+  Sort by `Number(step)` when the order matters.
 
 ### What a typography style's `font` shorthand leaves out (#3507)
 
@@ -101,6 +142,31 @@ authored, so it names the underline but not the tracking, and the role is only i
 This package stays stock Style Dictionary with no custom transform (owner decision on #3507), so it
 writes no per-style `-letter-spacing` or `-text-decoration` property. A component package reads both fields from the DTCG tree and writes the
 two declarations itself.
+
+### Three sub-properties DTCG §9.8 doesn't define (#4128)
+
+DTCG 2025.10 Format §9.8 defines five typography sub-properties: `fontFamily`, `fontSize`, `fontWeight`,
+`letterSpacing` and `lineHeight`. A `type.*` style's `$value` can carry three more. They are Prism3
+extensions to §9.8, and they stay in `$value` (owner decision A on #4128) — the conforming projection
+strips `$extensions` (#2552), so a key moved there would not reach a consumer.
+
+| Sub-property | What it carries | Which styles carry it | In the stock `font` shorthand |
+|---|---|---|---|
+| `fontStyle` | `"italic"` | the italic styles: a `*-italic` modifier, and the bare styles of a category that is italic by default | yes — the shorthand starts with `italic` |
+| `textDecoration` | `"underline"` | the `*-link` styles | no — set `text-decoration-line: underline` beside it |
+| `textCase` | `"uppercase"` (the engine also accepts `"lowercase"`; no brand emits it) | the eyebrow styles | no — set `text-transform: uppercase` beside it |
+
+Each key is a literal string, never an alias, and is absent when the style is upright, undecorated or
+in its authored case. **A strict §9.8 reader may drop all three.** Where it does, an italic style reads
+upright, a link style loses its underline and an eyebrow loses its uppercase, with no warning. The stock
+CSS output keeps `fontStyle`, because the `font` shorthand has a font-style field:
+
+```css
+--pds3-type-display-sm-emphasis: italic var(--pds3-core-font-weight-role-emphasis) var(--pds3-core-font-size-48)/var(--pds3-core-font-line-height-role-snug) var(--pds3-core-font-family-display);
+```
+
+The shorthand has no field for `textDecoration` or `textCase`, so neither is in the CSS value; a
+component package reads them from the DTCG tree, the same way as `letterSpacing` above.
 
 ## The rule
 
@@ -372,9 +438,35 @@ where the text's size is set:
 | Android (views) | `android:letterSpacing` takes em already: set the number as it is. |
 | Compose | `letterSpacing = (-0.04).em`. |
 
-The typography composites (`type.*`) alias a letter-spacing role, so they carry the same multiplier.
-The CSS `font` shorthand the stock `css` group writes for a composite has no letter-spacing field, so
-on web, set `letter-spacing` from the role beside it. Composites on native are #2432's gap.
+In the canonical tree the typography composites (`type.*`) alias a letter-spacing role. In the
+conforming projection a composite's `letterSpacing` is resolved to px instead (#4128): the role's
+multiplier times that style's own font size, as a DTCG `dimension` (`{ "value": -0.96, "unit": "px" }`
+for -0.02 at 48px), because DTCG §9.8 types it as a dimension. It is exact at the style's size, and
+the em multiplier stays on the role for anything that scales the size. The CSS `font` shorthand the
+stock `css` group writes for a composite has no letter-spacing field, so on web, set `letter-spacing`
+from the role beside it. Composites on native are #2432's gap.
+
+### Value forms: DTCG 2025.10 objects, durations aside (#4123)
+
+The conforming projection writes literal colors and dimensions in DTCG 2025.10's object forms, and
+stock Style Dictionary 5.5 reads them with no custom code:
+
+| Type | Form in the projection | Spec |
+|---|---|---|
+| `color` | `{ "colorSpace": "srgb", "components": [r, g, b], "alpha": a, "hex": "#rrggbb" }`, components 0–1, `alpha` only below 1 | Color module §4.1 |
+| `dimension` | `{ "value": 16, "unit": "px" }`, `px` or `rem` | Format §8.2 |
+| `duration` | `"200ms"`, a string | departs from Format §8.5 |
+
+A shadow layer's color and lengths follow the same forms. The CSS is unchanged, except that a color
+inside a shadow layer prints as `rgb(3.92% 7.06% 15.69% / 0.102)` where it printed `#0a12281a`: the
+same color in CSS Color 4 syntax.
+
+**Why durations stay strings.** Stock Style Dictionary 5.5 can't read a duration object: alone or as
+a transition's `delay`, `{ "value": 200, "unit": "ms" }` comes out as `[object Object]` in CSS, Swift,
+Kotlin and Android, where `"200ms"` comes out as `200ms`. Owner decision A on #4123 kept the string
+form wherever stock Style Dictionary can't read the object, so durations change when it can. The
+canonical `<brand>.tokens.json` keeps the string forms for every type; it is the engine's own tree,
+not the handoff.
 
 The no-custom-code rule stands. The gate runs built-in transform groups and formats only, so no
 reference production config with custom transforms ships for now, and the `[GAP]` pins stay as the

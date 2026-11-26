@@ -281,8 +281,9 @@
  *
  * Run: `npx tsx apps/plugin/test-update-apply.ts`
  */
-import { figmaAnatomySet, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, planComponentName, type AnatomyPlan, componentDefs, type ComponentDef } from '@prism3/engine/components';
-import { ENGINE_VERSION, parseDesignMd, type BrandInput } from '@prism3/engine';
+import { applyIconMap, figmaAnatomySet, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, planComponentName, planStamp, type AnatomyPlan, componentDefs, type ComponentDef } from '@prism3/engine/components';
+import { ENGINE_VERSION, coordKey, parseDesignMd, type BrandInput } from '@prism3/engine';
+import { createHash } from 'node:crypto';
 import { adoptions, applyComponentPlan, memberStamp, respaceSets, snugSets, STAMP_KEY } from './src/write-components';
 import { SWAP_TARGET } from './src/build-deps';
 import { NS } from './src/persist-figma';
@@ -292,10 +293,10 @@ import { EXECUTOR_REVISION } from './src/executor-revision';
 import { materializeForBrand } from './src/brand-def';
 import { BASELINE_KEY, UPDATING_KEY } from './src/member-baseline';
 import { figmaInstances, fixHostMethods, makeShim, STYLE_FONT, type Node, type Page } from './component-shim';
-import { adoptMembers, breakingClause, breakingLine, breakingOf, consumerLines, breakingSection, breakingSummary, captureBaselines, checkedSetOf, dryRunSet, hostPorts, previewLine, previewUpdate, previewVerdict, readSetView, readSingleView, type Breaking, type UpdateHost, type UpdateTarget } from './src/update-plan';
+import { adoptMembers, breakingClause, breakingLine, breakingOf, breaksConsumers, consumerLines, breakingSection, breakingSummary, captureBaselines, checkedSetOf, dryRunSet, hostPorts, previewLine, previewUpdate, previewVerdict, readSetView, readSingleView, type Breaking, type UpdateHost, type UpdateTarget } from './src/update-plan';
 import { drawnFaults, faultLine, varsById } from './src/drawn';
 import { BASELINE_V, baselineOf, resetStyleNames, snapshotMember, writeBaseline } from './src/member-baseline';
-import { applyUpdate, applyVerdict as applyVerdictOf, ledgerAfter, previewHashOf, namesMember, DEPRECATED_PREFIX, RETAINED_KEY, nestedFirst, type ApplyHost } from './src/update-apply';
+import { applyUpdate, applyVerdict as applyVerdictOf, fallbackLine, fontMissHead, ledgerAfter, previewHashOf, namesMember, DEPRECATED_PREFIX, RETAINED_KEY, nestedFirst, changedSets, type ApplyHost } from './src/update-apply';
 import { headerFor } from './src/page-header';
 import { readFileSync } from 'node:fs';
 
@@ -905,8 +906,53 @@ for (const [tag, change] of [
     `#4070 nested/kept still reported: kept by an update that rewrote the member, the edit is still reported (${JSON.stringify(post.handEdits)})`);
 }
 
+/* ── #4470: a theme's type family is not a hand edit on the members ─────────────────────────────────────────────── */
+// The owner's Update file run (2026-11-22) followed a theme change to the title and display family, and flagged
+// CardNumberField (control/cardMark, 84 members) and List (items/item1-3, 12 members) beside about 35 usage panels. Each
+// set is built here with the sets it nests, on the host's instance model (`figmaInstances`); then THE THEME: every text
+// style's family moves, and every text in a style, nested ones included, re-resolves to it, as the host re-resolves a
+// style whose family variable changed. Nobody touches a member, so each set must read every member current with no
+// hand edit. The counts are typed here. Mutation: `signatureOf` reads a styled text's resolved font beside its style
+// (`member-baseline.ts`) → `#4470 members/card-number-field`. The List arm is a pin that mutation cannot reach, and that
+// is the finding: a List member holds no text of its own (each is inside a List.Item instance, whose layers the record
+// does not walk), so no type family reaches List's record. Its 12 flags fit `#4070 nested/written before` instead.
+section('#4470 members — a theme that changes the type families is not a hand edit on CardNumberField or List');
+for (const [subject, nested, count] of [['list', ['list-item'], 12], ['card-number-field', ['field-label', 'field-message'], 84]] as const) {
+  const all = [...nested, subject].map(plansOf), flat = all.flat();
+  const page: Page = { children: [] };
+  const api = makeShim({
+    vars: [...new Set(flat.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]))],
+    styles: [...new Set(flat.flatMap((p) => planTextStyles(p.root)))],
+    effects: [...new Set(flat.flatMap((p) => planEffectStyles(p.root)))],
+    comps: [...new Set([SWAP_TARGET, 'focus-ring', ...flat.flatMap((p) => planComps(p.root))])].filter((c) => !(nested as readonly string[]).includes(c)),
+    page, liveRoot: true, identities: true, scaleConstrained: true, wrapNode: figmaInstances(page),
+  }) as any;
+  const misses: string[] = [];
+  for (const pl of all) misses.push(...(await applyComponentPlan(pl, api)).misses);
+  // CardNumberField's card mark is a swap to a provider logo, a catalog name here with no main to read a proportion off.
+  const real = misses.filter((m) => !/^cardMark\.aspectLock -> no main component/.test(m));
+  const file = { ...api, root: { ...api.root, findAllWithCriteria: (c: { types: string[] }) => (c.types.length === 1 && c.types[0] === 'COMPONENT_SET' ? page.children.filter((n) => n.type === 'COMPONENT_SET') : api.root.findAllWithCriteria(c)) } } as unknown as ApplyHost;
+  const targets = [{ def: subject, plans: all[all.length - 1] }];
+  const before = (await previewUpdate(file, targets)).sets[0];
+  // THE THEME: each style's family moves, and every text in a style follows it.
+  const styles = (await api.getLocalTextStylesAsync()) as { id: string; fontName: { family: string; style: string } }[];
+  for (const s of styles) s.fontName = { ...s.fontName, family: 'Display Serif' };
+  let moved = 0;
+  const walkAll = (n: Node): void => {
+    const style = styles.find((s) => s.id === n.textStyleId);
+    if (n.type === 'TEXT' && style) { n.fontName = { ...style.fontName }; moved++; }
+    for (const c of (n.children as Node[] | undefined) ?? []) walkAll(c);
+  };
+  for (const n of page.children) walkAll(n as Node);
+  ok(real.length === 0 && before.counts.current === count && before.handEdits.length === 0 && moved > count,
+    `#4470 members premise (${subject}): built clean with ${nested.join(', ')}, ${count} current before the theme, and the theme moved ${moved} styled texts (${real[0] ?? ''})`);
+  const after = (await previewUpdate(file, targets)).sets[0];
+  ok(after.handEdits.length === 0 && after.counts.handEdited === 0 && after.counts.current === count,
+    `#4470 members/${subject}: after the theme moved every type family, all ${count} members read current, no hand edit (${JSON.stringify(after.counts)}; ${JSON.stringify([...new Set(after.handEdits.map((h) => h.path))])})`);
+}
+
 /* ── choices ─────────────────────────────────────────────────────────────────────────────────────────── */
-section('choices — a hand edit overwritten, or accepted as built, when the confirm says so (design note §5)');
+section('choices — a hand edit overwritten, or accepted as baseline, when the confirm says so (design note §5)');
 for (const choice of ['overwrite', 'accept'] as const) {
   const w = await world(TAG, plansOf(TAG), { extraVars: ['space/999'] });
   const m = membersOf(w.set())[3];
@@ -921,7 +967,7 @@ for (const choice of ['overwrite', 'accept'] as const) {
     ok(held === await varIdOf(w, 'space/999') && post.handEdits.length === 0 && post.counts.current === 45 && applyVerdict(res).ok,
       `hand/overwrite: the plan's value is written over the edit, and the next dry run reads all 45 current (${held}; ${JSON.stringify(post.counts)})`);
   else
-    ok(held === zero && post.handEdits.length === 0 && post.counts.current === 45 && applyVerdict(res).lines[0].includes('1 hand edit accepted as built'),
+    ok(held === zero && post.handEdits.length === 0 && post.counts.current === 45 && applyVerdict(res).lines[0].includes('1 hand edit accepted as baseline'),
       `hand/accept: the edit stays and is no longer listed (${held}; ${post.handEdits.length} listed; ${applyVerdict(res).lines[0]})`);
 }
 
@@ -1062,6 +1108,10 @@ section('structure — an update that changes a hand-edited member\'s structure 
       ok(o.updated.includes(NAME) && !o.skipped.length && content === k.content && (JSON.stringify(member().fills) === JSON.stringify(RED)) === (k.choice === 'keep'),
         `structure/${k.kind} written: under ${k.choice} the member is updated, its layers ${k.content}, its edited fill ${k.choice === 'keep' ? 'kept' : 'overwritten'} (${o.updated.length} updated; ${content}; ${JSON.stringify(o.skipped)})`);
     }
+    // #4116 (owner A): the guide says a recolor keeps the set updating unless an update changes that variant's layers. A
+    // structural skip around the recolor turns the WHOLE set's updates off (#3948); a written member leaves them on.
+    // Mutation: `restructured` skips left out of `around` in `plan()` → `#4116 structure/<kind>: … updates off`.
+    ok((o.turnedOff === true) === k.skips, `#4116 structure/${k.kind}: under ${k.choice} the set's updates are ${k.skips ? '' : 'not '}turned off (turnedOff ${String(o.turnedOff)})`);
   }
 }
 
@@ -1086,7 +1136,7 @@ section('calm — a miss on a member with kept hand edits is its own line, never
   ok(o.misses.length === 0 && (o.editedMisses ?? []).length > 0 && (o.editedMisses ?? []).every((x) => x.startsWith('footprint -> ') && x.includes(NAME)),
     `calm/split: the footprint misses the kept padding causes are listed apart, none left a miss (${JSON.stringify(o.misses).slice(0, 160)}; ${(o.editedMisses ?? []).length} apart)`);
   ok(v.ok && v.headline.startsWith('✓ updated 45 in place'), `calm/verdict: the run reads ✓ (${v.headline})`);
-  const line = v.lines.find((l) => l.startsWith('tag: not written because the member is hand-edited — footprint -> '));
+  const line = v.lines.find((l) => l.startsWith('tag: not written because the variant is hand-edited — footprint -> '));
   ok(!!line && !v.lines.some((l) => /not written as planned/.test(l)), `calm/line: the line names what was not written, and no part reads "not written as planned" (${(line ?? v.lines.join(' | ')).slice(0, 200)})`);
   ok(String(content.paddingLeft) === '3' && !((content.boundVariables as Record<string, unknown> | undefined)?.paddingLeft), `calm/kept: the padding is as the designer left it (${String(content.paddingLeft)})`);
 }
@@ -1128,7 +1178,7 @@ section('calm — a miss on a member with kept hand edits is its own line, never
   const res = await applyUpdate(w.host, w.api as any, [{ def: TAG, plans: next }], previewHashOf(pre), { choices: { handEdits: 'accept' } });
   const o = res.outcomes[0];
   const v = applyVerdict(res);
-  const line = v.lines.find((l) => l.startsWith('tag: not written because the member is hand-edited — footprint -> '));
+  const line = v.lines.find((l) => l.startsWith('tag: not written because the variant is hand-edited — footprint -> '));
   ok(o.misses.length === 0 && (o.editedMisses ?? []).length > 0 && (o.editedMisses ?? []).every((x) => x.startsWith('footprint -> ') && x.includes(NAME))
     && v.ok && v.headline.startsWith('✓ ') && !!line && !v.lines.some((l) => /not written as planned/.test(l)),
     `calm/accept: under Accept the kept padding's misses are listed apart too, and the run reads ✓ (${v.headline}; ${JSON.stringify(o.misses).slice(0, 120)}; ${(o.editedMisses ?? []).length} apart)`);
@@ -1168,7 +1218,7 @@ section('keep, reported — a kept hand edit on a bound size is a hand edit kept
   // #3421 (Q39 A): the kept dot holds back the plan's size and corner bindings on it, so the verdict names them and the
   // headline says a set kept edits over changes. Typed here.
   ok(v.lines[0] === 'radio-control: 60 updated in place, 1 hand edit kept (dot size).' && v.ok && v.headline === '✓ updated 60 in place · 1 set kept edits over changes'
-    && v.lines[1] === 'radio-control: hand edits kept on 1 member keep out 2 of the plan\'s values (dot: size → control/size/md/dot, dot: corner radius → radius/round). Listed under Kept edits until Overwrite or Accept as baseline is chosen for it.',
+    && v.lines[1] === 'radio-control: hand edits kept on 1 variant keep out 2 of Prism3\'s values (dot: size → control/size/md/dot, dot: corner radius → radius/round). Listed under Kept edits until Overwrite or Accept as baseline is chosen for it.',
     `kept report/named: the hand edit kept names the property it kept (${JSON.stringify(v)})`);
 
   // #3326 PR 1 (Q3326.1 A): CAUSES, from the facts `ok` reads, never from the lines' words. A clean run has none; a set
@@ -1178,7 +1228,7 @@ section('keep, reported — a kept hand edit on a bound size is a hand edit kept
   ok(Array.isArray(v.causes) && v.causes.length === 0, `causes/clean: an ok run names no cause (${JSON.stringify(v.causes)})`);
   const unverified = applyVerdict({ ...res, outcomes: [{ ...o, content: ['dot.width 14 → 16'] }] });
   ok(!unverified.ok && JSON.stringify(unverified.causes) === JSON.stringify([{ kind: 'warn', subject: 'radio-control', what: 'not verified',
-    reasons: ['1 field still differs from the plan — dot.width 14 → 16.'] }]),
+    reasons: ['1 field still differs from what Prism3 expects — dot.width 14 → 16.'] }]),
     `causes/not verified: one cause for the set, its line's clause as the reason (${JSON.stringify(unverified.causes)})`);
   const refusedSet = applyVerdict({ ...res, outcomes: [{ ...o, refused: 'the set moved since the check' }] });
   ok(JSON.stringify(refusedSet.causes) === JSON.stringify([{ kind: 'bad', subject: 'radio-control', what: 'not updated', reasons: ['the set moved since the check.'] }]),
@@ -1318,11 +1368,12 @@ section('add, order — members an update adds take their plan place, so the set
 {
   // #2386's own case: the image placeholder as built before #2345 (three ratios), updated to today's seven. The oracle is
   // a fresh build of the same plan, read off the shim's set (`variantOptions` follows member order, as #2386 measured).
-  const IP = 'image-placeholder';
-  const full = plansOf(IP);
+  // #4113: Image carries a status axis now; the scenario reads its empty members, the old placeholder's.
+  const IP = 'image';
+  const full = plansOf(IP).filter((p) => p.coord.status === 'empty');
   const ratios = (set: Node): string => JSON.stringify((set.componentPropertyDefinitions as Record<string, { variantOptions?: string[] }>).ratio?.variantOptions);
   const fresh = ratios((await world(IP, full)).set());
-  const three = new Set(['ratio=1:1', 'ratio=4:3', 'ratio=16:9']);
+  const three = new Set(['ratio=1:1, status=empty', 'ratio=4:3, status=empty', 'ratio=16:9, status=empty']);
   {
     const w = await world(IP, full.filter((p) => three.has(planComponentName(p))));
     const before = identityOf(w.set());
@@ -1338,11 +1389,11 @@ section('add, order — members an update adds take their plan place, so the set
     // 1:1 leaves the plan as the others join: kept and marked deprecated (Q2), it holds the slot it had, and the planned
     // members fill the rest in plan order.
     const w = await world(IP, full.filter((p) => three.has(planComponentName(p))));
-    const next = full.filter((p) => planComponentName(p) !== 'ratio=1:1');
+    const next = full.filter((p) => planComponentName(p) !== 'ratio=1:1, status=empty');
     const { res } = await confirm(w, [{ def: IP, plans: next }]);
     const names = membersOf(w.set()).map((m) => String(m.name));
-    const want = ['ratio=4:3', 'ratio=1:1', ...next.map(planComponentName).filter((n) => n !== 'ratio=4:3')];
-    ok(res.outcomes[0]?.deprecated.includes('ratio=1:1') && JSON.stringify(names) === JSON.stringify(want),
+    const want = ['ratio=4:3, status=empty', 'ratio=1:1, status=empty', ...next.map(planComponentName).filter((n) => n !== 'ratio=4:3, status=empty')];
+    ok(res.outcomes[0]?.deprecated.includes('ratio=1:1, status=empty') && JSON.stringify(names) === JSON.stringify(want),
       `add, order/kept member: the deprecated 1:1 keeps its slot and the planned members fill the rest in plan order (${names.join(', ')})`);
   }
 }
@@ -1455,7 +1506,7 @@ section('stop — a run that stops part-way finishes when the update runs again'
     `causes/stopped: the set the run stopped at is its cause, the host's words its reason (${JSON.stringify(applyVerdict(res).causes)})`);
   // #3449: stopped inside the members' writes, before any stamp, the pass finished none, and the line says 0.
   const zeroLine = applyVerdict(res).lines.find((l) => l.startsWith(`${TAG}: stopped (`)) ?? '';
-  ok(zeroLine.includes('). 0 members updated; '), `stop/count none: stopped before any member's stamp, the line counts 0 finished (${zeroLine.slice(0, 160)})`);
+  ok(zeroLine.includes('). 0 variants updated; '), `stop/count none: stopped before any member's stamp, the line counts 0 finished (${zeroLine.slice(0, 160)})`);
   const mid = (await previewUpdate(w.host, [{ def: TAG, plans: next }])).sets[0];
   ok(mid.counts.current === 0 && mid.counts.update === 45 && mid.handEdits.length === 0,
     `stop/out of date: every member still reads out of date, and none as a hand edit (${JSON.stringify(mid.counts)}, ${mid.handEdits.length} edits)`);
@@ -1489,7 +1540,7 @@ section('stop/count — a set stopped after some members finished counts them');
   const mid = (await previewUpdate(w.host, [{ def: TAG, plans: next }])).sets[0];
   ok(mid.counts.current === 9 && mid.counts.update === 36, `stop/count premise: the dry run reads 9 members current and 36 out of date (${JSON.stringify(mid.counts)})`);
   const line = applyVerdict(res).lines.find((l) => l.startsWith(`${TAG}: stopped (`)) ?? '';
-  ok(line.includes('). 9 members updated; '), `stop/count finished: the stopped set's line counts the 9 members it finished (${line.slice(0, 160)})`);
+  ok(line.includes('). 9 variants updated; '), `stop/count finished: the stopped set's line counts the 9 members it finished (${line.slice(0, 160)})`);
 }
 {
   // The host throws on the 10th member's MARKER clear, the write after its stamp (`finishUpdated`): that member carries
@@ -1519,7 +1570,7 @@ section('stop/count — a set stopped after some members finished counts them');
   ok(restamped.length === 10 && marked === 1,
     `stop/count marker premise: 10 members carry the new stamp and ${marked} of them is still marked in progress (${restamped.length} restamped)`);
   const line = applyVerdict(res).lines.find((l) => l.startsWith(`${TAG}: stopped (`)) ?? '';
-  ok(line.includes('). 9 members updated; '), `stop/count marker: a member stamped but still marked in progress is not counted finished (${line.slice(0, 160)})`);
+  ok(line.includes('). 9 variants updated; '), `stop/count marker: a member stamped but still marked in progress is not counted finished (${line.slice(0, 160)})`);
   const markedName = String(restamped.find((m: any) => pd(m, UPDATING_KEY))?.name ?? '');
   ok(mid.counts.current === 9 && mid.counts.update === 36 && mid.states.some((s) => s.member === markedName && s.state === 'update'),
     `stop/count marker dry run: the dry run reads the member still marked in progress as to update, not current, and agrees with the line's 9 (${JSON.stringify(mid.counts)}; ${markedName})`);
@@ -1556,7 +1607,7 @@ section('stop/count — a set stopped after some members finished counts them');
   ok(!!res.outcomes[0]?.stopped && stamps === 36 && !pd(marked, UPDATING_KEY) && post.counts.current === 44 && post.counts.update === 1,
     `stop/count after marker premise: run 2 stops at the 36th stamp write, the marked member is finished, and the dry run reads 44 current and 1 to update (${stamps} stamps; ${JSON.stringify(post.counts)})`);
   const line = applyVerdict(res).lines.find((l) => l.startsWith(`${TAG}: stopped (`)) ?? '';
-  ok(line.includes('). 35 members updated; ') && (res.outcomes[0]?.updated ?? []).includes(String(marked?.name)),
+  ok(line.includes('). 35 variants updated; ') && (res.outcomes[0]?.updated ?? []).includes(String(marked?.name)),
     `stop/count after marker: run 2's line counts the 35 members it finished, the one a marker stop left among them (${line.slice(0, 160)})`);
 }
 {
@@ -1592,7 +1643,7 @@ section('stop/count — a set stopped after some members finished counts them');
   ok(!!res.outcomes[0]?.stopped && /the host stopped/.test(res.outcomes[0].stopped!) && throws === 1 && pd(hit, STAMP_KEY) === stampBefore && !pd(hit, UPDATING_KEY),
     `stop/count damage only premise: the run stopped as it marked the member, which keeps its stamp and carries no marker (${res.outcomes[0]?.stopped}; ${throws} throws)`);
   const line = applyVerdict(res).lines.find((l) => l.startsWith(`${TAG}: stopped (`)) ?? '';
-  ok(line.includes('). 0 members updated; ') && (res.outcomes[0]?.updated ?? []).length === 0,
+  ok(line.includes('). 0 variants updated; ') && (res.outcomes[0]?.updated ?? []).length === 0,
     `stop/count damage only: a member to update for damage alone, which the stopped pass never reached, is not counted (${line.slice(0, 160)}; updated ${JSON.stringify(res.outcomes[0]?.updated ?? [])})`);
 }
 
@@ -1637,7 +1688,7 @@ section('stop/count — a set stopped after some members finished counts them');
   ok(!!res.outcomes[0]?.stopped && clears === 2 && done.length === 1 && hits.every((h) => pd(h, STAMP_KEY) === stampBefore.get(h)),
     `stop/count damage finished premise: the run stopped on the second member's marker clear, one member finished, both stamps unchanged (${res.outcomes[0]?.stopped}; ${done.length} finished)`);
   const line = applyVerdict(res).lines.find((l) => l.startsWith(`${TAG}: stopped (`)) ?? '';
-  ok(line.includes('). 1 member updated; ') && JSON.stringify(res.outcomes[0]?.updated ?? []) === JSON.stringify(done.map((h) => String(h.name))),
+  ok(line.includes('). 1 variant updated; ') && JSON.stringify(res.outcomes[0]?.updated ?? []) === JSON.stringify(done.map((h) => String(h.name))),
     `stop/count damage finished: a member updated for damage alone, which the stopped pass finished, is counted (${line.slice(0, 160)}; updated ${JSON.stringify(res.outcomes[0]?.updated ?? [])})`);
 }
 
@@ -1751,9 +1802,9 @@ const agrees = async (w: World, targets: UpdateTarget[], ledger?: Parameters<typ
   });
   const restyle = (plans: AnatomyPlan[], to: string): AnatomyPlan[] => plans.map((p) => JSON.parse(JSON.stringify(p).replaceAll(`"${planTextStyles(p.root)[0]}"`, `"${to}"`)) as AnatomyPlan);
   const cases: { name: string; def: string; mk: (w: World) => AnatomyPlan[]; says: RegExp }[] = [
-    { name: 'variable', def: TAG, mk: (w) => moveGap(w.plans), says: /variable the plan binds is not in this file \(space\/999\)/ },
+    { name: 'variable', def: TAG, mk: (w) => moveGap(w.plans), says: /variable Prism3 binds is not in this file \(space\/999\)/ },
     { name: 'text style', def: TAG, mk: (w) => restyle(w.plans, 'label/absent'), says: /text style not in this file: label\/absent/ },
-    { name: 'swap target', def: 'button', mk: (w) => swapTo(w.plans, 'icon/absent'), says: /component the plan swaps to is not in this file: icon\/absent/ },
+    { name: 'swap target', def: 'button', mk: (w) => swapTo(w.plans, 'icon/absent'), says: /component Prism3 swaps to is not in this file: icon\/absent/ },
     { name: 'font', def: TAG, mk: (w) => {
       const real = w.api.loadFontAsync as (f: { family: string; style: string }) => Promise<void>;
       w.api.loadFontAsync = (w.host as { loadFontAsync?: unknown }).loadFontAsync = async (f: { family: string; style: string }) => { if (f.family === STYLE_FONT.family && f.style === STYLE_FONT.style) throw new Error('not installed'); return real(f); };
@@ -1769,7 +1820,7 @@ const agrees = async (w: World, targets: UpdateTarget[], ledger?: Parameters<typ
     const plans = w.plans.map((p, i) => swapTo([p], five[i % five.length]!)[0]!);
     const r = await agrees(w, [{ def: 'button', plans }]);
     const line = r.pre.sets[0]?.blockers.find((b) => b.startsWith('component')) ?? '';
-    ok(plans.length >= five.length && line === 'components the plan swaps to are not in this file: zz-a/2, zz-a/1, zz-b/1, zz-c/1, and 1 more',
+    ok(plans.length >= five.length && line === 'components Prism3 swaps to are not in this file: zz-a/2, zz-a/1, zz-b/1, zz-c/1, and 1 more',
       `agree/file swap targets over four sets: the list keeps the first three sets' targets and counts one more set (${plans.length} plans; ${line || r.pre.sets[0]?.blockers.join('; ') || 'none'})`);
   }
   for (const c of cases) {
@@ -2404,25 +2455,25 @@ const singleWorld = async (plans: AnatomyPlan[], extraVars: string[] = [], o: { 
   const next = plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; (q.root as unknown as Record<string, unknown>).descendantFills = 'color/icon/secondary'; return q; });
   const t = { def: 'icon', plans: next, single: true };
   const pre = await previewUpdate(w.host, [t]);
-  ok(pre.sets[0]?.counts.update === 46, `premise: the dry run reads all 46 icons out of date (${JSON.stringify(pre.sets[0]?.counts)})`);
+  ok(pre.sets[0]?.counts.update === 48, `premise: the dry run reads all 48 icons out of date (${JSON.stringify(pre.sets[0]?.counts)})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const v = applyVerdict(res);
-  ok(v.ok && v.headline === '✓ updated 46 in place', `single/update: ${v.headline} (${v.lines.slice(0, 2).join(' | ').slice(0, 220)})`);
+  ok(v.ok && v.headline === '✓ updated 48 in place', `single/update: ${v.headline} (${v.lines.slice(0, 2).join(' | ').slice(0, 220)})`);
   const after = new Map(w.comps().map((c) => [String(c.name), { key: String(c.key), id: String(c.id) }] as const));
-  ok(after.size === 46 && [...before].every(([n, b]) => after.get(n)?.key === b.key && after.get(n)?.id === b.id), 'single/keys: every icon keeps its key and id');
+  ok(after.size === 48 && [...before].every(([n, b]) => after.get(n)?.key === b.key && after.get(n)?.id === b.id), 'single/keys: every icon keeps its key and id');
   const sec = (await w.api.variables.getLocalVariablesAsync()).find((x: { name: string }) => x.name.endsWith('/color/icon/secondary')).id;
   const inked = w.comps().filter((c) => ((c.children as Node[]) ?? []).filter((k) => k.type === 'VECTOR').every((k) => (k.fills as { boundVariables?: { color?: { id: string } } }[])[0]?.boundVariables?.color?.id === sec)).length;
-  ok(inked === 46, `single/written: every icon's ink is the plan's new color (${inked})`);
+  ok(inked === 48, `single/written: every icon's ink is the plan's new color (${inked})`);
   const post = (await previewUpdate(w.host, [t])).sets[0];
   const markers = w.comps().filter((c) => (c.getSharedPluginData as (a: string, b: string) => string)(NS, 'memberUpdating') !== '').length;
-  ok(post.counts.current === 46 && markers === 0, `single/finished: each icon is finished as a set member is, current with its marker off (${JSON.stringify(post.counts)}, ${markers} markers left)`);
+  ok(post.counts.current === 48 && markers === 0, `single/finished: each icon is finished as a set member is, current with its marker off (${JSON.stringify(post.counts)}, ${markers} markers left)`);
 }
 {
   const plans = plansOf('icon');
   const w = await singleWorld(plans.filter((_, i) => i !== 5));
   const res = await applyUpdate(w.host, w.api as any, [{ def: 'icon', plans, single: true }], previewHashOf(await previewUpdate(w.host, [{ def: 'icon', plans, single: true }])));
   const at = w.comps().map((c) => `${c.x},${c.y}`);
-  ok(res.outcomes[0]?.added === 1 && w.comps().length === 46 && new Set(at).size === at.length,
+  ok(res.outcomes[0]?.added === 1 && w.comps().length === 48 && new Set(at).size === at.length,
     `single/add: the glyph the plan gained is built, in a slot no other icon holds (${res.outcomes[0]?.added}, ${w.comps().length} icons, ${new Set(at).size} distinct places)`);
 }
 {
@@ -2439,6 +2490,34 @@ const singleWorld = async (plans: AnatomyPlan[], extraVars: string[] = [], o: { 
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(await previewUpdate(w.host, [t])));
   ok(applyVerdict(res).ok && dump() === before && res.outcomes[0]?.skipped.some((x) => x.member === 'name=my-logo' && x.reason === 'not built by Prism3'),
     `single/owner: the owner's hand-made icon is left exactly as it is, and named (${JSON.stringify(res.outcomes[0]?.skipped)})`);
+}
+// #3076, owner decision 2026-11-20 A: BRAND ART THAT DUPLICATES AN ICON IS REPORTED, NEVER BLOCKED. The brand's set is
+// built, then updated to a new ink. Its `dash` is core `minus` (and so `minus-filled`) drawn the other way round, its
+// `oblique` is core `slash` from another start vertex; its `checkmark` is core `check`'s art, and `check` is mapped away,
+// so no duplicate. Absolute `L` only: the shim reads a path's numbers as x,y pairs (see the provider logos below), and
+// `test.ts` holds the relative spellings.
+// EXPECTED is typed here, never read from `icon-map.ts`. The dry run names the two groups, refuses nothing, and the apply
+// it hashes goes through.
+{
+  const DUP = { map: { plus: 'add', check: 'checkmark' }, glyphs: { add: { path: 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z' }, checkmark: { path: 'M10.0007 15.1709L19.1931 5.97852L20.6073 7.39273L10.0007 17.9993L3.63672 11.6354L5.05093 10.2212L10.0007 15.1709Z' }, dash: { path: 'M19 13L5 13L5 11L19 11Z' }, oblique: { path: 'M16.17 4L9.97 20L7.83 20L14.03 4Z' } } };
+  const plans = figmaAnatomySet(applyIconMap(componentDefs.find((d) => d.id === 'icon')!, DUP), { swapTarget: SWAP_TARGET });
+  const w = await singleWorld(plans, ['color/icon/secondary']);
+  const next = plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; (q.root as unknown as Record<string, unknown>).descendantFills = 'color/icon/secondary'; return q; });
+  const t = { def: 'icon', plans: next, single: true };
+  const pre = await previewUpdate(w.host, [t]);
+  ok(JSON.stringify(pre.iconDuplicates) === JSON.stringify([['dash', 'minus', 'minus-filled'], ['oblique', 'slash']]),
+    `#3076 duplicate art/reported: the dry run names each brand glyph that draws an icon's shape, with it (got ${JSON.stringify(pre.iconDuplicates)})`);
+  const v = previewVerdict(pre);
+  ok(v.lines.includes('Icons: 2 groups draw the same shape (dash, minus and minus-filled; oblique and slash). Each is built as its own icon.'),
+    `#3076 duplicate art/summary: the dry run summary carries the line (${JSON.stringify(v.lines.filter((l) => l.startsWith('Icons')))})`);
+  ok(v.ok && !pre.refused.length && !pre.missing.length && pre.sets.length === 1 && !pre.sets[0].blockers.length && pre.sets[0].counts.update === 50,
+    `#3076 duplicate art/not blocked: the set is checked with no blocker and all 50 icons to update (${v.headline}; ${JSON.stringify(pre.sets[0]?.blockers)}; ${JSON.stringify(pre.sets[0]?.counts)})`);
+  const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
+  const av = applyVerdictOf(res);
+  ok(av.ok && av.headline === '✓ updated 50 in place', `#3076 duplicate art/applied: the apply the dry run hashed goes through (${av.headline}; ${av.lines.slice(0, 2).join(" | ")})`);
+  const plain = await previewUpdate((await singleWorld(plansOf('icon'))).host, [{ def: 'icon', plans: plansOf('icon'), single: true }]);
+  ok(plain.iconDuplicates === undefined && !previewVerdict(plain).lines.some((l) => l.startsWith('Icons:')),
+    `#3076 duplicate art/none: Prism3's own set reports no duplicate art (got ${JSON.stringify(plain.iconDuplicates)})`);
 }
 // THE PROVIDER LOGOS (#2343): single components too, and each value carries its kind, `provider-logo/payment/visa`, so a
 // value with a `/` is still a member when it is one of the def's own coordinates. The icon set cannot catch a reader
@@ -2541,8 +2620,8 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   ok(JSON.stringify(nowVec?.vectorPaths) === JSON.stringify(REDRAWN) && applyVerdict(res).ok,
     `redraw/kept: the update keeps the designer's drawing rather than laying a fresh import over it (${JSON.stringify(nowVec?.vectorPaths)?.slice(0, 80)}; ${applyVerdict(res).headline})`);
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(post.handEdits.some((h) => h.member === member && h.path === '.') && post.counts.current === 45,
-    `redraw/still listed: the next dry run still reports the redraw, and the other 45 read current (${JSON.stringify(post.handEdits.filter((h) => h.member === member))}; ${JSON.stringify(post.counts)})`);
+  ok(post.handEdits.some((h) => h.member === member && h.path === '.') && post.counts.current === 47,
+    `redraw/still listed: the next dry run still reports the redraw, and the other 47 read current (${JSON.stringify(post.handEdits.filter((h) => h.member === member))}; ${JSON.stringify(post.counts)})`);
   // CONTROL: an untouched glyph's artwork reads the same across a rebuild, so the arm cannot fire on every glyph.
   ok(!pre.sets[0].handEdits.some((h) => h.member !== member), `redraw/control: no other glyph reads as redrawn (${pre.sets[0].handEdits.filter((h) => h.member !== member).length})`);
 }
@@ -2574,12 +2653,12 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   const named = res.outcomes[0]?.misses.filter((x) => x.startsWith(`name=${String(hit.name).split('/').pop()}.asBuilt -> NOT RECORDED`)) ?? [];
   ok(named.length === 1, `recordfail/named: the outcome names the icon as not recorded (${JSON.stringify(named)}; ${v.headline})`);
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(post.counts.current === 45 && post.counts.current + (post.counts.update ?? 0) + (post.counts.noBaseline ?? 0) === 46 && !post.handEdits.some((h) => h.member.endsWith(String(hit.name).split('/').pop()!)),
-    `recordfail/out of date: the next dry run reads it out of date, never current, the other 45 current (${JSON.stringify(post.counts)})`);
+  ok(post.counts.current === 47 && post.counts.current + (post.counts.update ?? 0) + (post.counts.noBaseline ?? 0) === 48 && !post.handEdits.some((h) => h.member.endsWith(String(hit.name).split('/').pop()!)),
+    `recordfail/out of date: the next dry run reads it out of date, never current, the other 47 current (${JSON.stringify(post.counts)})`);
   const glyph = String(hit.name).split('/').pop();
-  ok(!v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 45 updated in place.'
-    && v.lines.includes(`icon: 1 member not finished — name=${glyph} (its as-built record could not be written). It still reads as out of date; run the update again to finish it.`),
-    `recordfail/verdict: the verdict is not a ✓, counts 45 updated and names the icon not finished (${JSON.stringify(v)})`);
+  ok(!v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 47 updated in place.'
+    && v.lines.includes(`icon: 1 variant not finished — name=${glyph} (its as-built record could not be written). It still reads as out of date; run Update file again to finish it.`),
+    `recordfail/verdict: the verdict is not a ✓, counts 47 updated and names the icon not finished (${JSON.stringify(v)})`);
 }
 {
   // THE SAME FAILURE ON A SET MEMBER: `finishUpdated` is the set path's finish too, called from its own loop.
@@ -2601,7 +2680,7 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
     `recordfail/set member: a set member whose record could not be written keeps its stamp, reads out of date and is named (stamp ${pdOf(hit, STAMP_KEY) === stampWas ? 'kept' : 'moved'}; ${JSON.stringify(post.counts)}; ${JSON.stringify(named)})`);
   const v = applyVerdict(res);
   ok(!v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === `${TAG}: 44 updated in place.`
-    && v.lines.includes(`${TAG}: 1 member not finished — ${String(hit.name)} (its as-built record could not be written). It still reads as out of date; run the update again to finish it.`),
+    && v.lines.includes(`${TAG}: 1 variant not finished — ${String(hit.name)} (its as-built record could not be written). It still reads as out of date; run Update file again to finish it.`),
     `recordfail/set verdict: the set member's verdict is not a ✓, counts 44 updated and names it not finished (${JSON.stringify(v)})`);
 }
 {
@@ -2629,8 +2708,8 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   const o = res.outcomes[0];
   const v = applyVerdict(res);
   ok(o?.skipped.some((x) => x.member === 'name=check') && o.misses.some((x) => x.startsWith('name=check-circle.asBuilt -> NOT RECORDED'))
-    && !v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 44 updated in place, 1 left as it is.'
-    && v.lines.includes('icon: 1 member not finished — name=check-circle (its as-built record could not be written). It still reads as out of date; run the update again to finish it.'),
+    && !v.ok && v.headline === '⚠ Updated 1 set · 1 to check' && v.lines[0] === 'icon: 46 updated in place, 1 left as it is.'
+    && v.lines.includes('icon: 1 variant not finished — name=check-circle (its as-built record could not be written). It still reads as out of date; run Update file again to finish it.'),
     `recordfail/prefix: a skip on name=check leaves the refused record on name=check-circle in the misses and the verdict (skipped ${JSON.stringify(o?.skipped)}; misses ${JSON.stringify(o?.misses)}; ${JSON.stringify(v)})`);
 }
 {
@@ -2671,10 +2750,10 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   // precedence over a refused set → `uf3/refused stops`.
   const base = { updated: ['a=1'], added: 0, renamed: 0, deprecated: [], skipped: [], kept: [], unrecorded: [], handEdits: 'keep' as const, identity: [], content: [], misses: [] };
   const clean = (k: number) => Array.from({ length: k }, (_, i) => ({ ...base, def: `s${i}`, set: `s${i}` }));
-  const toCheck = [{ ...base, def: 'p', set: 'p', content: ['a=1.fills: 2 paint(s) (the plan says none)'] }, { ...base, def: 'q', set: 'q', misses: ['label.characters -> DISCARDED (set "Go", reads "")'] }];
+  const toCheck = [{ ...base, def: 'p', set: 'p', content: ['a=1.fills: 2 paint(s) (Prism3 expects none)'] }, { ...base, def: 'q', set: 'q', misses: ['label.characters -> DISCARDED (set "Go", reads "")'] }];
   const warn = applyVerdict({ outcomes: [...clean(45), ...toCheck], refused: [], missing: [] } as any);
   ok(!warn.ok && warn.completed === true && warn.headline === '⚠ Updated 47 sets · 2 to check'
-    && warn.lines.includes('p: 1 field still differs from the plan — a=1.fills: 2 paint(s) (the plan says none).')
+    && warn.lines.includes('p: 1 field still differs from what Prism3 expects — a=1.fills: 2 paint(s) (Prism3 expects none).')
     && warn.lines.includes('q: 1 part not written as planned — label.characters -> DISCARDED (set "Go", reads "").'),
     `uf3/warn: every set written, 2 to check, is completed, not ok, and says so (${warn.headline}; completed ${warn.completed})`);
   const one = applyVerdict({ outcomes: [toCheck[0]], refused: [], missing: [] } as any);
@@ -2695,10 +2774,10 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   // left plural → `verb/differs 1`; left singular → `verb/differ 2`; the pronoun left plural → `verb/left 1`.
   const base = { def: 'x', set: 'x', updated: ['a=1', 'a=2'], added: 0, renamed: 0, deprecated: [], skipped: [] as { member: string; reason: string }[], kept: [], unrecorded: [], handEdits: 'keep' as const, identity: [], content: [] as string[], misses: [] };
   const lineOf = (o: typeof base, re: RegExp): string => applyVerdict({ outcomes: [o], refused: [], missing: [] } as any).lines.find((l) => re.test(l)) ?? '(none)';
-  const one = lineOf({ ...base, content: ['a=1/label.nestVariant: f/emphasis=secondary (the plan says f/emphasis=primary)'] }, /from the plan/);
-  ok(one === 'x: 1 field still differs from the plan — a=1/label.nestVariant: f/emphasis=secondary (the plan says f/emphasis=primary).', `verb/differs 1: one field reads "still differs" (${one})`);
-  const two = lineOf({ ...base, content: ['a=1/.opacity: 0.5 (the plan says 1)', 'a=2/.opacity: 0.5 (the plan says 1)'] }, /from the plan/);
-  ok(two === 'x: 2 fields still differ from the plan — a=1/.opacity: 0.5 (the plan says 1); a=2/.opacity: 0.5 (the plan says 1).', `verb/differ 2: two fields read "still differ" (${two})`);
+  const one = lineOf({ ...base, content: ['a=1/label.nestVariant: f/emphasis=secondary (Prism3 expects f/emphasis=primary)'] }, /from what Prism3 expects/);
+  ok(one === 'x: 1 field still differs from what Prism3 expects — a=1/label.nestVariant: f/emphasis=secondary (Prism3 expects f/emphasis=primary).', `verb/differs 1: one field reads "still differs" (${one})`);
+  const two = lineOf({ ...base, content: ['a=1/.opacity: 0.5 (Prism3 expects 1)', 'a=2/.opacity: 0.5 (Prism3 expects 1)'] }, /from what Prism3 expects/);
+  ok(two === 'x: 2 fields still differ from what Prism3 expects — a=1/.opacity: 0.5 (Prism3 expects 1); a=2/.opacity: 0.5 (Prism3 expects 1).', `verb/differ 2: two fields read "still differ" (${two})`);
   const left1 = lineOf({ ...base, skipped: [{ member: 'a=3', reason: 'not built by Prism3' }] }, /left as/);
   ok(left1 === 'x: 2 updated in place, 1 left as it is.', `verb/left 1: one member left reads "left as it is" (${left1})`);
   const left2 = lineOf({ ...base, skipped: [{ member: 'a=3', reason: 'not built by Prism3' }, { member: 'a=4', reason: 'not built by Prism3' }] }, /left as/);
@@ -2728,16 +2807,16 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   for (const c of w.comps()) putPd(c, BASELINE_KEY, '');
   const t = { def: 'icon', plans: reinked(plans), single: true };
   const pre = await previewUpdate(w.host, [t]);
-  ok(pre.sets[0]?.counts.noBaseline === 46, `premise: the dry run reads all 46 icons with no record (${JSON.stringify(pre.sets[0]?.counts)})`);
+  ok(pre.sets[0]?.counts.noBaseline === 48, `premise: the dry run reads all 48 icons with no record (${JSON.stringify(pre.sets[0]?.counts)})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const o = res.outcomes[0];
   const v = applyVerdict(res);
-  ok(v.ok && o?.updated.length === 46 && o.unrecorded.length === 46,
+  ok(v.ok && o?.updated.length === 48 && o.unrecorded.length === 48,
     `unrecorded single/updated: by default every record-less icon is updated and named as updated without a record (${v.headline}; ${o?.updated.length} updated, ${o?.unrecorded.length} unrecorded)`);
   const sec = await varIdOf(w as unknown as World, 'color/icon/secondary');
   const inked = w.comps().filter((c) => ((c.children as Node[]) ?? []).filter((k) => k.type === 'VECTOR').every((k) => (k.fills as { boundVariables?: { color?: { id: string } } }[])[0]?.boundVariables?.color?.id === sec)).length;
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(inked === 46 && post.counts.current === 46 && w.comps().every((c) => !!pdOf(c, BASELINE_KEY)),
+  ok(inked === 48 && post.counts.current === 48 && w.comps().every((c) => !!pdOf(c, BASELINE_KEY)),
     `unrecorded single/recorded: each takes the plan's ink and a record, and reads current after (${inked} inked; ${JSON.stringify(post.counts)})`);
 }
 {
@@ -2752,8 +2831,8 @@ const reinked = (plans: AnatomyPlan[]): AnatomyPlan[] => plans.map((p) => { cons
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre), { choices: { noBaseline: 'skip' } });
   const o = res.outcomes[0];
   const post = (await previewUpdate(w.host, [t])).sets[0];
-  ok(o?.updated.length === 45 && dump() === before && JSON.stringify(o.skipped.map((x) => x.reason)) === JSON.stringify(['no as-built record']) && post.counts.noBaseline === 1,
-    `unrecorded single/skip: under noBaseline 'skip' the record-less icon is left exactly as it is and named, the other 45 updated (${o?.updated.length}, ${JSON.stringify(o?.skipped)}, ${dump() === before ? 'untouched' : 'written'}; ${JSON.stringify(post.counts)})`);
+  ok(o?.updated.length === 47 && dump() === before && JSON.stringify(o.skipped.map((x) => x.reason)) === JSON.stringify(['no as-built record']) && post.counts.noBaseline === 1,
+    `unrecorded single/skip: under noBaseline 'skip' the record-less icon is left exactly as it is and named, the other 47 updated (${o?.updated.length}, ${JSON.stringify(o?.skipped)}, ${dump() === before ? 'untouched' : 'written'}; ${JSON.stringify(post.counts)})`);
 }
 {
   // A DUPLICATE OF THE FILE, FOR THE SINGLE COMPONENTS (#2436): `format/duplicate` for the icons and the spinner. The
@@ -3156,7 +3235,7 @@ section('order — a component this run adds counts as present for the set that 
   const w2 = await runAdds();
   const short: UpdateTarget[] = [{ def: 'wallet-button', plans: walletNow }, { def: 'provider-logo', plans: providerAll.filter((p) => p.coord.name !== 'button/paypal-gold'), single: true }];
   const pre2 = await previewUpdate(w2.host, short);
-  ok(JSON.stringify(pre2.sets.find((p) => p.set === 'wallet-button')?.blockers) === '["Not in this file: provider-logo/button/paypal-gold. Build provider-logo first, then run the update again"]',
+  ok(JSON.stringify(pre2.sets.find((p) => p.set === 'wallet-button')?.blockers) === '["Not in this file: provider-logo/button/paypal-gold. Build provider-logo first, then run Update file again"]',
     `run adds/unsupplied: a mark the run does not add still blocks wallet-button, named alone (${JSON.stringify(pre2.sets.find((p) => p.set === 'wallet-button')?.blockers)})`);
   // A BLOCKED PROVIDER CREDITS NOTHING (review should-fix 1): this run's provider-logo is itself blocked — one of its
   // marks nests a component the file does not have — so the apply refuses it and adds none of its 11 marks. Its marks
@@ -3190,7 +3269,7 @@ section('order — a component this run adds counts as present for the set that 
   const pre4 = await previewUpdate(w4.host, afterTheme);
   const pl4 = pre4.sets.find((p) => p.set === 'provider-logo');
   const wb4 = pre4.sets.find((p) => p.set === 'wallet-button');
-  ok(JSON.stringify(pl4?.blockers) === `["1 variable the plan binds is not in this file (${THEME_VAR})"]` && pl4?.themeBlocked === true,
+  ok(JSON.stringify(pl4?.blockers) === `["1 variable Prism3 binds is not in this file (${THEME_VAR})"]` && pl4?.themeBlocked === true,
     `premise: provider-logo is blocked only by a variable Theme writes (${JSON.stringify([pl4?.blockers, pl4?.themeBlocked])})`);
   ok(wb4?.themeBlocked === true && wb4.blockers.length === 1 && wb4.blockers[0].startsWith('Not in this file: ') && buttons.every((b) => wb4.blockers[0].includes(b)),
     `run adds/after theme: wallet-button reads blocked only until Theme, as its provider does, its blockers still naming the 11 marks (${JSON.stringify([wb4?.blockers, wb4?.themeBlocked])})`);
@@ -3281,12 +3360,12 @@ section('property — a default the plan changed is edited in place, keeping the
 
 /* ── property rename (#2759) ─────────────────────────────────────────────────────────────────────────── */
 section('property rename — each of the ledger\'s property renames renames the set\'s property in place, and an instance keeps its value (#2759)');
-// The four renames owner decision Q345 A made, typed here rather than read off COMPONENT_RENAMES: the ledger is
-// the subject, so deleting any shipped entry fails this section by its def's name (`docs/34` shape 1).
+// The renames owner decision Q345 A made, typed here rather than read off COMPONENT_RENAMES: the ledger is
+// the subject, so deleting any shipped entry fails this section by its def's name (`docs/34` shape 1). Image
+// placeholder's `Marker` → `marker` left with the boolean itself (#4113, OD-I2 A); the image section holds its drop.
 const PROPERTY_RENAMES_Q345: readonly (readonly [def: string, from: string, to: string])[] = [
   ['tag', 'Check icon', 'check icon'],
   ['switch-control', 'State icon', 'state icon'],
-  ['image-placeholder', 'Marker', 'marker'],
   ['segmented-control', 'Label', 'label'],
 ];
 for (const [def, from, to] of PROPERTY_RENAMES_Q345) {
@@ -3751,7 +3830,7 @@ section('grid — a set laid out in another axis order reads its members as move
     const pre = await previewUpdate(w.host, [{ def: id, plans }]);
     const c = pre.sets[0].counts;
     // `positions` is capped at LIST_CAP like every list a dry run carries (`truncated` says by how many); the count is whole.
-    ok(c.move === n && (pre.sets[0].positions?.length ?? 0) + (pre.sets[0].truncated?.positions ?? 0) === n && c.update + c.add + c.drop + c.rename + c.handEdited + c.noBaseline === 0 && previewLine(pre.sets[0]) === `${name}: ${total} members. ${n} to move.`,
+    ok(c.move === n && (pre.sets[0].positions?.length ?? 0) + (pre.sets[0].truncated?.positions ?? 0) === n && c.update + c.add + c.drop + c.rename + c.handEdited + c.noBaseline === 0 && previewLine(pre.sets[0]) === `${name}: ${total} variants. ${n} to move.`,
       `grid/${id} moves: laid out in another order, ${n} members at another ${axis} read as moves, and nothing else (${previewLine(pre.sets[0])}; ${JSON.stringify(c)})`);
     const before = identityOf(w.set());
     const res = await applyUpdate(w.host, w.api as any, [{ def: id, plans }], previewHashOf(pre));
@@ -3759,7 +3838,7 @@ section('grid — a set laid out in another axis order reads its members as move
     const after = identityOf(w.set());
     const keptIds = [...before.members].every(([k, b]) => after.members.get(k)?.id === b.id && after.members.get(k)?.key === b.key) && after.members.size === total;
     const next = (await previewUpdate(w.host, [{ def: id, plans }])).sets[0];
-    ok(v.headline === `✓ moved ${n}` && v.lines[0] === `${name}: ${n} moved.` && keptIds && previewLine(next) === `${name}: up to date (${total} members).`,
+    ok(v.headline === `✓ moved ${n}` && v.lines[0] === `${name}: ${n} moved.` && keptIds && previewLine(next) === `${name}: up to date (${total} variants).`,
       `grid/${id} converges: the apply moves the ${n}, keeps every id, and the next dry run reads up to date (${v.headline} | ${v.lines[0]} | ids ${keptIds ? 'kept' : 'changed'} | ${previewLine(next)})`);
     // AN UNRELATED UPDATE over the same old layout (every member's root gap moves): its moves are reported, never an
     // x or y changed silently. Every member whose place changed is one the dry run listed, and the apply counts them.
@@ -3804,7 +3883,7 @@ section('default member — Q347\'s three reorders reach an existing set in plac
   const OLD: [string, string, string[], string][] = [
     ['icon-button', 'appearance', ['filled', 'outline', 'ghost'], 'appearance=ghost'],
     ['veil', 'intensity', ['subtle', 'medium', 'strong'], 'intensity=medium'],
-    ['image-placeholder', 'ratio', ['2:3', '3:4', '4:5', '1:1', '4:3', '3:2', '16:9'], 'ratio=4:3'],
+    ['image', 'ratio', ['2:3', '3:4', '4:5', '1:1', '4:3', '3:2', '16:9'], 'ratio=4:3'],
   ];
   /** Figma's default variant: the top-left-most member, spatially. Topmost row first, then leftmost in it. */
   const insertedOf = (set: Node): string => String([...membersOf(set)].sort((a, b) => Number(a.y) - Number(b.y) || Number(a.x) - Number(b.x))[0]?.name);
@@ -3843,7 +3922,7 @@ section('default member — Q347\'s three reorders reach an existing set in plac
       && membersOf(now).includes(main) && String(main.id) === mainId && inst.x === -500);
     ok(live, `default member/${id} instances: both placed instances stay on the page, unmoved, each on a member still in the set with its id`);
     const next = (await previewUpdate(w.host, [{ def: id, plans }])).sets[0];
-    ok(previewLine(next) === `${String(now.name)}: up to date (${after.members.size} members).`, `default member/${id} current: the next dry run reads up to date (${previewLine(next)})`);
+    ok(previewLine(next) === `${String(now.name)}: up to date (${after.members.size} variants).`, `default member/${id} current: the next dry run reads up to date (${previewLine(next)})`);
   }
 }
 
@@ -3906,7 +3985,7 @@ section('default member — #2752\'s Q1 B and Q2 A reorders reach an existing se
       && membersOf(now).includes(main) && String(main.id) === mainId && inst.x === -500);
     ok(live, `default member/${id} instances (Q1/Q2): both placed instances stay on the page, unmoved, each on a member still in the set with its id`);
     const next = (await previewUpdate(w.host, [{ def: id, plans }])).sets[0];
-    ok(previewLine(next) === `${String(now.name)}: up to date (${after.members.size} members).`, `default member/${id} current (Q1/Q2): the next dry run reads up to date (${previewLine(next)})`);
+    ok(previewLine(next) === `${String(now.name)}: up to date (${after.members.size} variants).`, `default member/${id} current (Q1/Q2): the next dry run reads up to date (${previewLine(next)})`);
   }
 }
 
@@ -4031,7 +4110,7 @@ section('page — an update re-spaces the sets Prism3 built on a page as a new b
   const v = previewVerdict(pre);
   ok(JSON.stringify(moving) === JSON.stringify(['button-destructive', 'button-neutral']) && pre.sets.every((p) => !p.blockers.length)
     && v.headline === 'Would change 2 of 3' && v.lines.includes('2 sets to move, so the sets on each page sit as a new build spaces them.')
-    && previewLine(pre.sets[1]) === 'button-destructive: 576 members. The set moves to its place on the page.',
+    && previewLine(pre.sets[1]) === 'button-destructive: 576 variants. The set moves to its place on the page.',
     `page/set moves: on a page laid out under the old 400 rule, the dry run moves the 2 later sets and nothing else (${JSON.stringify(moving)}; ${v.headline}; ${previewLine(pre.sets[1])})`);
   // THE APPLY: each set lands where a fresh build put it, every id kept, the note untouched, and the next dry run up to date.
   const res = await applyUpdate(host, api, targets, previewHashOf(pre));
@@ -4187,7 +4266,7 @@ section('header row — sets an earlier build put beside a wide page header move
   const idsWas = ids();
   const pre = await previewUpdate(host, targets);
   const to = pre.sets.map((p) => (p.setMove ? [p.setMove.to.x - Number(header.x), p.setMove.to.y - Number(header.y)] : null));
-  ok(JSON.stringify(to) === JSON.stringify(freshRel) && previewLine(pre.sets[0]) === `checkbox-control: ${membersOf(sets[0]).length} members. The set moves to its place on the page.`,
+  ok(JSON.stringify(to) === JSON.stringify(freshRel) && previewLine(pre.sets[0]) === `checkbox-control: ${membersOf(sets[0]).length} variants. The set moves to its place on the page.`,
     `header row/dry run: all three sets, the first included, move to where a fresh build puts them under the header (${JSON.stringify(to)}; fresh ${JSON.stringify(freshRel)}; ${previewLine(pre.sets[0])})`);
   const res = await applyUpdate(host, api, targets, previewHashOf(pre));
   const next = await previewUpdate(host, targets);
@@ -4505,7 +4584,7 @@ section('format — a record reads the same in a copy of the file, and a record 
   const dry = previewVerdict(pre).lines[0];
   const res = await applyUpdate(w.host, w.api as any, [{ def: TAG, plans: w.plans }], previewHashOf(pre));
   const done = applyVerdict(res).lines[0];
-  ok(dry === 'tag: 45 members. 45 recorded by an earlier plugin version, read as having no as-built record.' && done === 'tag: 45 updated in place, 45 of them recorded by an earlier plugin version.',
+  ok(dry === 'tag: 45 variants. 45 recorded by an earlier plugin version, read as having no as-built record.' && done === 'tag: 45 updated in place, 45 of them recorded by an earlier plugin version.',
     `format/earlier words: the dry run and the apply say the record is an earlier version's (${dry} | ${done})`);
   const again = (await previewUpdate(w.host, [{ def: TAG, plans: w.plans }])).sets[0];
   ok(again.counts.current === 45, `format/earlier recorded: after the update each member has a record of this format, and reads current (${JSON.stringify(again.counts)})`);
@@ -4615,7 +4694,7 @@ section('damage under a record — a member drawn wrong reads "to update" whatev
   const p = pre.sets[0];
   const st = p.states.find((x) => x.member === String(m.name))?.state;
   const black = p.changes.find((c) => c.field === hit && /stored #000000/.test(c.from) && c.sample.includes(String(m.name)));
-  ok(st === 'handEdited' && p.counts.update === 0 && p.counts.handEdited === 1 && !!black && previewLine(p) === `${TAG}: 45 members. 1 member edited by hand.`,
+  ok(st === 'handEdited' && p.counts.update === 0 && p.counts.handEdited === 1 && !!black && previewLine(p) === `${TAG}: 45 variants. 1 variant edited by hand.`,
     `damage/under a layer dry run: the member counts as edited by hand, not to update, and its paint is still listed (${st}; ${JSON.stringify(p.counts)}; ${black ? `${black.part}.${black.field}: ${black.from}` : 'no paint line'}; ${previewLine(p)})`);
   for (const choice of ['keep', 'overwrite', 'accept'] as const) {
     // #2956: each choice meets the set with its updates on. The skip turns them off by itself (`updates off/…` and the
@@ -4623,7 +4702,7 @@ section('damage under a record — a member drawn wrong reads "to update" whatev
     (w.set().setSharedPluginData as (a: string, b: string, c: string) => void)('prism3', 'updatesOff', '');
     const res = await applyUpdate(w.host, w.api as any, [{ def: TAG, plans: w.plans }], previewHashOf(await previewUpdate(w.host, [{ def: TAG, plans: w.plans }])), { choices: { handEdits: choice } });
     const why = res.outcomes[0]?.skipped.find((x) => x.member === String(m.name))?.reason ?? '';
-    ok(why.startsWith('a layer was added or removed by hand, and it draws other than its plan (') && why.includes(String(m.name)) && why.includes(`${hit}: stored #000000`) && dumpOf(m) === before,
+    ok(why.startsWith('a layer was added or removed by hand, and it draws other than Prism3 expects (') && why.includes(String(m.name)) && why.includes(`${hit}: stored #000000`) && dumpOf(m) === before,
       `damage/under a layer skip (${choice}): the skip names the layer and the damage, and the member is left exactly (${why || 'not skipped'}; ${dumpOf(m) === before ? 'untouched' : 'written'})`);
   }
 }
@@ -4686,7 +4765,7 @@ section('verify reads what the host draws — damage the HOST makes behind the e
   const pre = await previewUpdate(w.host, [{ def: TAG, plans: w.plans }]);
   const res = await applyUpdate(w.host, w.api as any, [{ def: TAG, plans: w.plans }], previewHashOf(pre));
   const content = res.outcomes[0]?.content ?? [];
-  ok(!applyVerdict(res).ok && content.some((l) => /\.fills: stored #000000 at 100% \(the plan says .*, which resolves to #[0-9a-f]{6} at \d+%\)$/.test(l)),
+  ok(!applyVerdict(res).ok && content.some((l) => /\.fills: stored #000000 at 100% \(Prism3 expects .*, which resolves to #[0-9a-f]{6} at \d+%\)$/.test(l)),
     `verify/drawn paints: a paint the host left black under its binding fails verify, named (${applyVerdict(res).headline}; ${content.find((l) => /stored #000000/.test(l)) ?? content[0]})`);
 }
 
@@ -4716,7 +4795,7 @@ section('verify reads what the host draws — damage the HOST makes behind the e
   const pre = await previewUpdate(w.host, [t]);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const content = res.outcomes[0]?.content ?? [];
-  ok(!applyVerdict(res).ok && content.some((l) => /\.glyph: a vector [\d.]+×[\d.]+ at [\d.]+,[\d.]+ \(the plan says inside its [\d.]+×[\d.]+ frame\)$/.test(l)),
+  ok(!applyVerdict(res).ok && content.some((l) => /\.glyph: a vector [\d.]+×[\d.]+ at [\d.]+,[\d.]+ \(Prism3 expects inside its [\d.]+×[\d.]+ frame\)$/.test(l)),
     `verify/drawn glyphs: a spinner glyph the host did not scale to its frame fails verify, named (${applyVerdict(res).headline}; ${content.find((l) => /\.glyph:/.test(l)) ?? 'no glyph line'})`);
 }
 {
@@ -4786,14 +4865,14 @@ section('mixed — in a set the build updates, a member from an earlier plugin s
   }
   const t = { def: 'icon', plans, single: true };
   const pre = await previewUpdate(w.host, [t]);
-  ok(pre.sets[0]?.counts.revisionUnknown === 46 && previewVerdict(pre).headline === '✓ No changes found',
-    `premise: all 46 icons read "built by an earlier plugin", and nothing changes (${JSON.stringify(pre.sets[0]?.counts)}; ${previewVerdict(pre).headline})`);
+  ok(pre.sets[0]?.counts.revisionUnknown === 48 && previewVerdict(pre).headline === '✓ No changes found',
+    `premise: all 48 icons read "built by an earlier plugin", and nothing changes (${JSON.stringify(pre.sets[0]?.counts)}; ${previewVerdict(pre).headline})`);
   const logs = w.comps().map((c) => watchWrites(c));
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const other = logs.flat().filter((x) => !new RegExp(`setSharedPluginData\\(${NS}, (${STAMP_KEY}|${BASELINE_KEY})\\)$`).test(x));
   const again = (await previewUpdate(w.host, [t])).sets[0];
-  ok(res.outcomes[0]?.restamped?.length === 46 && other.length === 0 && again.counts.current === 46,
-    `single/stamped: each icon takes its stamp and nothing else, and all 46 read current (${res.outcomes[0]?.restamped?.length} stamped; ${other.length} other writes; ${JSON.stringify(again.counts)}; ${applyVerdict(res).headline})`);
+  ok(res.outcomes[0]?.restamped?.length === 48 && other.length === 0 && again.counts.current === 48,
+    `single/stamped: each icon takes its stamp and nothing else, and all 48 read current (${res.outcomes[0]?.restamped?.length} stamped; ${other.length} other writes; ${JSON.stringify(again.counts)}; ${applyVerdict(res).headline})`);
 }
 
 {
@@ -4814,14 +4893,14 @@ section('mixed — in a set the build updates, a member from an earlier plugin s
   const pre = await previewUpdate(w.host, [t]);
   const st = pre.sets[0];
   const stateOf = st?.states.find((x) => x.member === `name=${String(hit.name).replace(/^icon\//, '')}`)?.state;
-  ok(stateOf === 'update' && st?.counts.revisionUnknown === 45 && st.changes.some((c) => c.field === 'fills' && /stored #000000/.test(c.from)),
+  ok(stateOf === 'update' && st?.counts.revisionUnknown === 47 && st.changes.some((c) => c.field === 'fills' && /stored #000000/.test(c.from)),
     `single/damage: the icon drawn black under its binding reads "to update", named, though its record matches and its stamp is an earlier plugin's (${stateOf}; ${st?.counts.revisionUnknown} from an earlier plugin; ${st?.changes.map((c) => `${c.field}: ${c.from}`).join(' | ')})`);
   const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
   const vars = await varsById(w.api as any);
   const left = w.comps().flatMap((c) => drawnFaults(c, vars));
   const again = (await previewUpdate(w.host, [t])).sets[0];
-  ok(applyVerdict(res).ok && res.outcomes[0]?.updated.length === 1 && res.outcomes[0]?.restamped?.length === 45 && left.length === 0 && again.counts.current === 46,
-    `single/damage repaired: the update re-applies that icon, which then draws its variable's color; the other 45 take their stamps; all 46 read current (${applyVerdict(res).headline}; ${res.outcomes[0]?.updated.length} updated, ${res.outcomes[0]?.restamped?.length} stamped; ${left.length} faults; ${again.counts.current} current)`);
+  ok(applyVerdict(res).ok && res.outcomes[0]?.updated.length === 1 && res.outcomes[0]?.restamped?.length === 47 && left.length === 0 && again.counts.current === 48,
+    `single/damage repaired: the update re-applies that icon, which then draws its variable's color; the other 47 take their stamps; all 48 read current (${applyVerdict(res).headline}; ${res.outcomes[0]?.updated.length} updated, ${res.outcomes[0]?.restamped?.length} stamped; ${left.length} faults; ${again.counts.current} current)`);
 }
 
 {
@@ -5087,8 +5166,8 @@ section('what the host draws — after an update in place, every bound paint sho
   const res = await applyUpdate(w.host, w.api as any, [{ def: 'button', plans: next }], previewHashOf(pre));
   const content = res.outcomes[0]?.content ?? [];
   const member = [...bare].find((n) => content.some((c) => c.startsWith(`${n}.fills: `))) ?? '';
-  const want = `${member}.fills: 1 paint(s) (the plan says none)`;
-  const wantField = `${String(held.name)}.primaryAxisAlignItems: MIN (the plan says CENTER)`;
+  const want = `${member}.fills: 1 paint(s) (Prism3 expects none)`;
+  const wantField = `${String(held.name)}.primaryAxisAlignItems: MIN (Prism3 expects CENTER)`;
   ok(!!member && content.includes(want) && content.includes(wantField) && !content.some((c) => c.includes('/..')),
     `root/named: a root's verify lines name the member alone (${want}; ${wantField}; ${content.find((c) => c.includes('/..')) ?? `${content.length} content lines`})`);
 }
@@ -5158,7 +5237,7 @@ section("veil — every directional member's gradient stops store the colors the
     const toUpdate = st.states.filter((x) => x.state === 'update').length;
     const black = st.changes.filter((c) => c.field === 'fills' && c.from === 'stored #000000 at 100%');
     ok(toUpdate === 24 && black.reduce((n, c) => n + c.members, 0) === 48 && st.counts.revisionUnknown === 6 && previewVerdict(pre).headline === 'Would change 1 of 1',
-      `veil/dry run: the 24 members whose stops store black read "to update", each stop named "stored #000000 at 100%" (${toUpdate} to update; ${black.reduce((n, c) => n + c.members, 0)} stops named, e.g. ${black[0] ? `${black[0].from} (the plan says ${black[0].to})` : 'none'}; ${st.counts.revisionUnknown} from an earlier plugin; ${previewVerdict(pre).headline})`);
+      `veil/dry run: the 24 members whose stops store black read "to update", each stop named "stored #000000 at 100%" (${toUpdate} to update; ${black.reduce((n, c) => n + c.members, 0)} stops named, e.g. ${black[0] ? `${black[0].from} (Prism3 expects ${black[0].to})` : 'none'}; ${st.counts.revisionUnknown} from an earlier plugin; ${previewVerdict(pre).headline})`);
     const res = await applyUpdate(w.host, w.api as any, [{ def: 'veil', plans: w.plans }], previewHashOf(pre));
     const r = await read(w);
     ok(applyVerdict(res).ok && res.outcomes[0]?.updated.length === 24 && r.wrong.length === 0 && r.shown.get(MEMBER) === MEMBER_STOPS,
@@ -5188,7 +5267,7 @@ section("veil — every directional member's gradient stops store the colors the
     const pre = await previewUpdate(w.host, [{ def: 'veil', plans: w.plans }]);
     const res = await applyUpdate(w.host, w.api as any, [{ def: 'veil', plans: w.plans }], previewHashOf(pre));
     const content = res.outcomes[0]?.content ?? [];
-    const line = `${MEMBER}.fills: stored #000000 at 100% (the plan says color/veil/dark/strong, which resolves to #b64d3c at 70%)`;
+    const line = `${MEMBER}.fills: stored #000000 at 100% (Prism3 expects color/veil/dark/strong, which resolves to #b64d3c at 70%)`;
     ok(!applyVerdict(res).ok && content.includes(line),
       `veil/verify: a stop the host left black under its binding fails verify, named (${applyVerdict(res).headline}; ${content.find((l) => l.startsWith(MEMBER)) ?? content[0] ?? 'no content line'})`);
   }
@@ -5213,10 +5292,10 @@ section("veil — every directional member's gradient stops store the colors the
     const first = `stored #b64d3c at 100%`;
     const firstTo = solid.find((c) => c.from === first)?.to;
     ok(toUpdate === 24 && solid.reduce((n, c) => n + c.members, 0) === 48 && /color\/veil\/dark\/strong, which resolves to #b64d3c at 70%/.test(String(firstTo)) && previewVerdict(pre).headline === 'Would change 1 of 1',
-      `veil/alpha dry run: the 24 members whose stops keep their color at 100% read "to update", each stop named (${toUpdate} to update; ${solid.reduce((n, c) => n + c.members, 0)} stops named, e.g. ${firstTo ? `${first} (the plan says ${firstTo})` : solid[0] ? `${solid[0].from} (the plan says ${solid[0].to})` : 'none'}; ${previewVerdict(pre).headline})`);
+      `veil/alpha dry run: the 24 members whose stops keep their color at 100% read "to update", each stop named (${toUpdate} to update; ${solid.reduce((n, c) => n + c.members, 0)} stops named, e.g. ${firstTo ? `${first} (Prism3 expects ${firstTo})` : solid[0] ? `${solid[0].from} (Prism3 expects ${solid[0].to})` : 'none'}; ${previewVerdict(pre).headline})`);
     const res = await applyUpdate(w.host, w.api as any, [{ def: 'veil', plans: w.plans }], previewHashOf(pre));
     const content = res.outcomes[0]?.content ?? [];
-    const line = `${MEMBER}.fills: stored #b64d3c at 100% (the plan says color/veil/dark/strong, which resolves to #b64d3c at 70%)`;
+    const line = `${MEMBER}.fills: stored #b64d3c at 100% (Prism3 expects color/veil/dark/strong, which resolves to #b64d3c at 70%)`;
     ok(!applyVerdict(res).ok && content.includes(line),
       `veil/alpha verify: a stop the host left at 100% under its binding fails verify, named (${applyVerdict(res).headline}; ${content.find((l) => l.startsWith(MEMBER)) ?? content[0] ?? 'no content line'})`);
   }
@@ -5444,6 +5523,12 @@ section('reach — a member stamped under an older revision is to update only wh
   // record's floor is to update, as every member was before #3101. Read off the dry run of the host's own members; the
   // stamps are rewritten on the host, as an older plugin left them.
   const QUIET = '_accordion-indicator';
+  // Revision 74 (#2865, the description record) redraws every set (`"all"`), so the record is read here with QUIET left
+  // out of every entry since 42, an "all" entry as every other projected set, and put back after.
+  const committedReach = EXECUTOR_REACH.reach;
+  const everySet = componentDefs.filter((d) => d.figmaProperties).map((d) => d.id);
+  (EXECUTOR_REACH as { reach: typeof committedReach }).reach = Object.fromEntries(Object.entries(committedReach).map(([k, v]) => [k, Number(k) > 42 ? (v === 'all' ? everySet : v).filter((id) => id !== QUIET) : v]));
+  try {
   ok(!reaches(QUIET, 42, EXECUTOR_REVISION), `reach premise: no revision since 42 names ${QUIET}`);
   for (const [rev, want] of [[42, 'current'], [EXECUTOR_REACH.floor - 1, 'update']] as const) {
     const w = await world(QUIET);
@@ -5455,6 +5540,7 @@ section('reach — a member stamped under an older revision is to update only wh
     const c = (await previewUpdate(w.host, [{ def: QUIET, plans: w.plans }])).sets[0].counts;
     ok(c[want] === n, `reach/dry run ${rev}: a ${QUIET} set stamped under revision ${rev} reads all ${n} members ${want === 'current' ? 'current' : 'to update'} (${JSON.stringify(c)})`);
   }
+  } finally { (EXECUTOR_REACH as { reach: typeof committedReach }).reach = committedReach; }
 }
 
 section('glyph layer — a glyph\'s layer named like a sibling part is never taken for that part (#2795)');
@@ -5540,68 +5626,64 @@ section('corpus — every def, re-applied in place by an executor revision bump,
   ok(bad.length === 0 && ran === defs.length, `corpus/in place: all ${defs.length} defs re-applied with every key and id kept, read back clean, and current after (${ran} clean; ${bad.slice(0, 4).join(' || ')})`);
 }
 
-/* ── image-placeholder (#2345) ───────────────────────────────────────────────────────────────────────── */
-section('image-placeholder — the NB master\'s 3-member set reaches 7 ratios, a scaling marker and the Marker boolean in place (#2345)');
+/* ── image-placeholder → image (#4113) ─────────────────────────────────────────────────────────────── */
+section('image — a file\'s 7-member Image placeholder set is renamed Image in place, each member on status=empty, 21 added, the marker boolean gone (#4113)');
 {
-  // THE FILE AS THE NB MASTER HOLDS IT: built from the def as it was before #2345 — three ratios, the marker in
-  // the flow, no boolean. Reconstructed from today's def by putting those three facts back, so the subject is the
-  // real def's projection on both sides.
-  const IMG = 'image-placeholder';
-  const now = componentDefs.find((x) => x.id === IMG)!;
-  const { optional: _o, scaleWithParent: _s, ...oldMarker } = now.anatomy.parts.markerGlyph;
-  void _o; void _s;
-  const before2345 = {
+  // THE FILE AS #2345 LEFT IT: the set named `image-placeholder`, seven ratio members, the marker in every member behind
+  // the Figma-only `marker` boolean, and square corners with no radius binding. Reconstructed from today's def by putting
+  // those facts back, so the subject is the real def's projection on both sides. Every expectation is typed here from
+  // the owner decisions (OD-I1 A: renamed in place; OD-I2 A: `empty` leads, the boolean retires), never read from the def.
+  const OLD = 'image-placeholder', NEW = 'image';
+  const now = componentDefs.find((x) => x.id === NEW)!;
+  const { presentWhen: _w, ...oldMarker } = now.anatomy.parts.markerGlyph;
+  void _w;
+  const { radius: _r, ...oldFrame } = now.anatomy.parts.frame as typeof now.anatomy.parts.frame & { radius?: string };
+  void _r;
+  const before4113 = {
     ...now,
-    variants: { ratio: ['1:1', '4:3', '16:9'] },
-    anatomy: { ...now.anatomy, parts: { ...now.anatomy.parts, markerGlyph: oldMarker } },
-    figmaProperties: { ...now.figmaProperties, booleans: {} },
+    id: OLD,
+    variants: { ratio: now.variants.ratio },
+    axisKinds: { ratio: 'authoring' },
+    anatomy: { ...now.anatomy, parts: { frame: { ...oldFrame, children: ['markerGlyph'] }, markerGlyph: { ...oldMarker, optional: true } } },
+    figmaProperties: { ...now.figmaProperties, variantAxes: ['ratio'], booleans: { marker: { part: 'markerGlyph', default: true, figmaName: 'marker', figmaOnly: true } } },
   } as typeof now;
-  const oldPlans = figmaAnatomySet(before2345, { swapTarget: SWAP_TARGET });
-  const newPlans = plansOf(IMG);
-  const w = await world(IMG, oldPlans);
-  const NAMES_BEFORE = ['ratio=1:1', 'ratio=4:3', 'ratio=16:9'];
-  ok(JSON.stringify(membersOf(w.set()).map((m) => String(m.name)).sort()) === JSON.stringify([...NAMES_BEFORE].sort()),
-    `premise: the file holds the three pre-#2345 members (${membersOf(w.set()).map((m) => m.name).join(', ')})`);
+  const oldPlans = figmaAnatomySet(before4113, { swapTarget: SWAP_TARGET });
+  const newPlans = plansOf(NEW);
+  // The file holds what today's plans bind and nest that the old set did not: the corner variable and Skeleton.
+  const w = await world(NEW, oldPlans, { extraComps: ['skeleton'], extraVars: ['radius/none'] });
+  const RATIOS = ['4:3', '2:3', '3:4', '4:5', '1:1', '3:2', '16:9'];
+  ok(String(w.set().name) === OLD && JSON.stringify(membersOf(w.set()).map((m) => String(m.name))) === JSON.stringify(RATIOS.map((r) => `ratio=${r}`)),
+    `premise: the file holds the set as '${OLD}', its seven ratio members (${String(w.set().name)}: ${membersOf(w.set()).map((m) => m.name).join(', ')})`);
+  const oldProps = Object.keys((w.set().componentPropertyDefinitions ?? {}) as object).map((k) => k.split('#')[0]);
+  ok(oldProps.includes('marker'), `premise: the file's set declares the marker boolean (${oldProps.join(', ')})`);
   const before = identityOf(w.set());
-  const { pre, res } = await confirm(w, [{ def: IMG, plans: newPlans }]);
+  const { pre, res } = await confirm(w, [{ def: NEW, plans: newPlans }]);
   const p = pre.sets[0];
-  ok(p.counts.update === 3 && p.counts.add === 4 && p.counts.drop === 0 && p.renames.length === 0 && !p.blockers.length,
-    `img/dry run: the three existing members read update, four are added, none dropped or renamed (${JSON.stringify(p.counts)}, ${p.renames.length} renames, ${p.blockers.length} blockers)`);
-  // `absoluteScale` by name: the read-back has to see that the file's marker is not SCALE-constrained, or a marker
-  // the update failed to constrain would read current.
-  ok(p.changes.some((c) => c.part === 'markerGlyph' && c.field === 'absoluteScale' && c.members === 3),
-    `img/dry run: the marker's SCALE placement is a named difference on all three (${JSON.stringify(p.changes.map((c) => [c.part, c.field, c.members])).slice(0, 200)})`);
+  ok(!!p && p.setRename?.from === OLD && p.setRename.to === NEW && p.counts.rename === 7 && p.counts.add === 21 && p.counts.drop === 0 && !p.blockers.length,
+    `img/dry run: read under '${OLD}', to be renamed '${NEW}'; the seven members renamed onto status=empty, 21 added, none dropped (${JSON.stringify(p ? { setRename: p.setRename, counts: p.counts, blockers: p.blockers } : null)})`);
   const v = applyVerdict(res);
   ok(v.ok, `img/verdict: ${v.headline} (${v.lines.slice(0, 2).join(' | ').slice(0, 240)})`);
+  ok(String(w.set().name) === NEW && w.page.children.filter((n) => n.type === 'COMPONENT_SET').length === 1, `img/in place: one set, now named '${NEW}' (${w.page.children.filter((n) => n.type === 'COMPONENT_SET').map((n) => String(n.name)).join(', ')})`);
   const after = identityOf(w.set());
-  // Typed here: the seven names the issue asks for.
-  const NAMES_AFTER = ['ratio=2:3', 'ratio=3:4', 'ratio=4:5', 'ratio=1:1', 'ratio=4:3', 'ratio=3:2', 'ratio=16:9'];
-  ok(JSON.stringify([...after.members.keys()].sort()) === JSON.stringify([...NAMES_AFTER].sort()) && res.outcomes[0].added === 4,
-    `img/added: the set holds the seven ratios, four of them added (${[...after.members.keys()].join(', ')}; added ${res.outcomes[0].added})`);
   ok(JSON.stringify(after.set) === JSON.stringify(before.set), 'img/set kept: the set keeps its key and id');
-  const moved = [...before.members].filter(([name, b]) => after.members.get(name)?.key !== b.key || after.members.get(name)?.id !== b.id).map(([n]) => n);
-  ok(moved.length === 0, `img/members kept: the three existing members keep their keys and ids (${moved.join(', ') || 'none moved'})`);
+  // Each old member is now its ratio's empty member, keeping its key and id, so a placed instance looks as it did.
+  const moved = [...before.members].filter(([name, b]) => {
+    const to = `${name}, status=empty`;
+    return after.members.get(to)?.key !== b.key || after.members.get(to)?.id !== b.id;
+  }).map(([n]) => n);
+  ok(moved.length === 0, `img/members kept: each ratio member is now its status=empty member, key and id kept (${moved.join(', ') || 'none moved'})`);
   const markerMoved = [...before.members].filter(([name, b]) => {
     const was = [...b.kids].find(([path]) => path.startsWith('markerGlyph#'))?.[1];
-    return !was || ![...(after.members.get(name)?.kids.values() ?? [])].includes(was);
+    return !was || ![...(after.members.get(`${name}, status=empty`)?.kids.values() ?? [])].includes(was);
   }).map(([n]) => n);
-  ok(markerMoved.length === 0, `img/marker kept: each existing member's marker keeps its node id (${markerMoved.join(', ') || 'none replaced'})`);
-  // Read off the shim's nodes: every member's marker lifted out of the flow and constrained SCALE/SCALE.
-  const placement = membersOf(w.set()).map((m) => {
-    const k = childNamed(m, 'markerGlyph');
-    const c = k?.constraints as { horizontal?: string; vertical?: string } | null;
-    return `${String(m.name)}:${String(k?.layoutPositioning)} ${c?.horizontal}/${c?.vertical}`;
-  });
-  ok(placement.every((s) => s.endsWith(':ABSOLUTE SCALE/SCALE')), `img/marker scales: every member's marker is ABSOLUTE, SCALE/SCALE (${placement.filter((s) => !s.endsWith(':ABSOLUTE SCALE/SCALE')).join('; ') || 'all seven'})`);
-  // The Marker boolean: declared on the set, default on, and every member's marker wired to it.
-  const defs = (w.set().componentPropertyDefinitions ?? {}) as Record<string, { type: string; defaultValue: unknown }>;
-  const markerProp = Object.entries(defs).find(([k]) => k.split('#')[0] === 'marker');
-  ok(!!markerProp && markerProp[1].type === 'BOOLEAN' && markerProp[1].defaultValue === true,
-    `img/property: the set declares the BOOLEAN 'marker', default on (${JSON.stringify(defs)})`);
-  const unwired = membersOf(w.set()).filter((m) => String(((childNamed(m, 'markerGlyph')?.componentPropertyReferences ?? {}) as Record<string, string>).visible ?? '').split('#')[0] !== 'marker').map((m) => String(m.name));
-  ok(unwired.length === 0, `img/property wired: every member's marker visibility follows 'marker' (${unwired.join(', ') || 'all seven'})`);
-  const post = (await previewUpdate(w.host, [{ def: IMG, plans: newPlans }])).sets[0];
-  ok(post.counts.current === 7 && post.handEdits.length === 0, `img/current: the next dry run reads all seven current (${JSON.stringify(post.counts)})`);
+  ok(markerMoved.length === 0, `img/marker kept: each empty member's marker keeps its node id (${markerMoved.join(', ') || 'none replaced'})`);
+  const WANT = RATIOS.flatMap((r) => ['empty', 'loading', 'loaded', 'error'].map((st) => `ratio=${r}, status=${st}`));
+  ok(JSON.stringify([...after.members.keys()].sort()) === JSON.stringify([...WANT].sort()) && res.outcomes[0].added === 21,
+    `img/added: the set holds the 28 ratio × status members, 21 of them added (${after.members.size}; added ${res.outcomes[0].added})`);
+  const props = Object.keys((w.set().componentPropertyDefinitions ?? {}) as object).map((k) => k.split('#')[0]);
+  ok(!props.includes('marker'), `img/property: the marker boolean is gone from the set (${props.join(', ')})`);
+  const post = (await previewUpdate(w.host, [{ def: NEW, plans: newPlans }])).sets[0];
+  ok(!!post && !post.setRename && post.counts.current === 28 && post.handEdits.length === 0, `img/current: the next dry run finds the set under '${NEW}' and reads all 28 current (${JSON.stringify(post?.counts)})`);
 }
 
 /* ── inline glyph → icon instance (#2380) ────────────────────────────────────────────────────────────── */
@@ -5757,7 +5839,7 @@ for (const [ROW, MEMBERS, FLOW] of [['radio-row', 6, ['controlCell', 'label']], 
   const lines = previewVerdict(pre).lines;
   const moves = FLOW.map((part) => p.changes.find((c) => c.part === part && c.field === 'moves into'));
   ok(moves.every((c) => c?.to === 'content' && c.members === MEMBERS)
-    && FLOW.every((part) => lines.includes(`${ROW} · ${part} · moves into content, kept (${MEMBERS} members).`))
+    && FLOW.every((part) => lines.includes(`${ROW} · ${part} · moves into content, kept (${MEMBERS} variants).`))
     && !p.changes.some((c) => /removed/.test(c.to)),
     `${ROW} rows/dry run moves: [${FLOW.join(', ')}] are listed as moving into content, kept, and nothing as removed (${JSON.stringify(p.changes.map((c) => [c.part, c.field, c.to, c.members])).slice(0, 300)})`);
   ok(applyVerdict(res).ok, `${ROW} rows/verdict: ${applyVerdict(res).headline} (${applyVerdict(res).lines.slice(0, 2).join(' | ').slice(0, 240)})`);
@@ -5910,7 +5992,7 @@ section('accordion — a set built before the header row (#2594, owner Q276 A) t
 {
   // THE FILE AS A BUILD AT MAIN BEFORE #2594 LEFT IT: the header top-aligned, holding the indicators and the title
   // directly with the gap on itself, and no `titleRow`. Reconstructed from today's def by putting those facts back,
-  // so the subject is the real def's projection on both sides (as `image-placeholder` above does).
+  // so the subject is the real def's projection on both sides (as `image` above does).
   const ACC = 'accordion';
   const now = componentDefs.find((x) => x.id === ACC)!;
   const { titleRow, ...restParts } = now.anatomy.parts;
@@ -5940,8 +6022,8 @@ section('accordion — a set built before the header row (#2594, owner Q276 A) t
   const lines = previewVerdict(pre).lines;
   const moveLines = ['header/leadingIndicator', 'header/titleBox', 'header/trailingIndicator'].map((part) => p.changes.find((c) => c.part === part));
   ok(JSON.stringify(moveLines.map((c) => [c?.field, c?.to, c?.members])) === JSON.stringify([['moves into', 'header/titleRow', 24], ['moves into', 'header/titleRow', 48], ['moves into', 'header/titleRow', 24]])
-    && lines.includes('accordion · header/titleBox · moves into header/titleRow, kept (48 members).')
-    && lines.includes('accordion · header/leadingIndicator · moves into header/titleRow, kept (24 members).')
+    && lines.includes('accordion · header/titleBox · moves into header/titleRow, kept (48 variants).')
+    && lines.includes('accordion · header/leadingIndicator · moves into header/titleRow, kept (24 variants).')
     && !p.changes.some((c) => /removed/.test(c.to)),
     `acc/dry run moves: the indicators and the title are listed as moving into the row, kept, and nothing as removed (${JSON.stringify(p.changes.map((c) => [c.part, c.field, c.to, c.members]))})`);
   const v = applyVerdict(res);
@@ -6191,8 +6273,8 @@ section('stretched mode — an axis the parent stretches: the verify and the dry
       (m.setSharedPluginData as (a: string, b: string, c: string) => void)(NS, STAMP_KEY, st.replace(/\|[^|]*$/, '|0'));
     }
   };
-  const want = [`${control.name}/header.counterAxisSizingMode: FIXED (the plan says AUTO)`, `${control.name}/header/titleRow.counterAxisSizingMode: FIXED (the plan says AUTO)`,
-    `${open.name}/content.counterAxisSizingMode: AUTO (the plan says FIXED)`].sort();
+  const want = [`${control.name}/header.counterAxisSizingMode: FIXED (Prism3 expects AUTO)`, `${control.name}/header/titleRow.counterAxisSizingMode: FIXED (Prism3 expects AUTO)`,
+    `${open.name}/content.counterAxisSizingMode: AUTO (Prism3 expects FIXED)`].sort();
   outOfDate();
   const first = await confirm(w, [{ def: ACC, plans: w.plans }]);
   const modes = members.map((m) => `${sizeOf(m)}:${String(indicator(m).counterAxisSizingMode)}:${String(indicator(m).layoutAlign)}`);
@@ -6221,7 +6303,7 @@ section('stretched mode — an axis the parent stretches: the verify and the dry
   const third = await confirm(w, [{ def: ACC, plans: w.plans }]);
   const thirdModes = third.pre.sets[0].changes.filter((c) => /SizingMode$/.test(c.field)).map((c) => `${c.part}.${c.field}: ${c.from} → ${c.to} × ${c.members}`).sort();
   ok(JSON.stringify(thirdModes) === JSON.stringify(['content.counterAxisSizingMode: AUTO → FIXED × 1', 'header.counterAxisSizingMode: FIXED → AUTO × 1', 'header/titleRow.counterAxisSizingMode: FIXED → AUTO × 1', `header/titleRow/${lostAt}.counterAxisSizingMode: FIXED → AUTO × 1`].sort())
-    && third.res.outcomes[0].content.includes(`${lost.name}/header/titleRow/${lostAt}.counterAxisSizingMode: FIXED (the plan says AUTO)`),
+    && third.res.outcomes[0].content.includes(`${lost.name}/header/titleRow/${lostAt}.counterAxisSizingMode: FIXED (Prism3 expects AUTO)`),
     `stretch/lost: an indicator the host no longer stretches is listed by the dry run and named by the verify (${JSON.stringify(thirdModes)}; ${JSON.stringify(third.res.outcomes[0].content.slice(0, 4))})`);
 }
 
@@ -6273,7 +6355,7 @@ section('segmented control — sets built with the tinted, outlined look (#2418)
   // THE FILE AS A BUILD AT MAIN BEFORE #2724 LEFT IT: the selected indicator tinted in the overlay slot with a 2px
   // primary outline stepping per state, a disabled outline, and the control's track a 1px neutral outline with no
   // fill. Reconstructed from today's defs by putting those facts back, so the subject is the real defs' projection on
-  // both sides (as `image-placeholder` and `accordion` above do). Every expectation below is read off the shim's
+  // both sides (as `image` and `accordion` above do). Every expectation below is read off the shim's
   // nodes by the test. Mutations: the executor's in-place stroke clear skipped → `seg/border removed`,
   // `seg/track outline removed`.
   const SEG = 'segmented-control-segment', CTL = 'segmented-control';
@@ -6690,8 +6772,21 @@ section('published — on a set in a team library, what breaks consumer files is
     // (11), the callout's lines the capped 8 plus the count of the rest. Literal. Mutations: `count` read off the capped
     // lines (9), or the lines left uncapped (11) → `uf2/checked set past the cap`.
     const past = checkedSetOf({ ...p, breaking: many }, TAG).changes;
-    ok(JSON.stringify(past) === JSON.stringify({ count: 11, lines: wantCap.slice(1, 10) }),
+    ok(JSON.stringify(past) === JSON.stringify({ count: 11, lines: wantCap.slice(1, 10), kinds: { breaks: 0, retired: 11, leaves: 0 } }),
       `uf2/checked set past the cap: the button counts all 11 changes, the callout lists 8 and counts the other 3 (${JSON.stringify(past && { count: past.count, lines: past.lines.length })})`);
+    // #4481 (owner decision A): THE SPLIT BY KIND, for Update file's one-line summary, counted over every change, never
+    // the capped lines. A literal mix typed here: 8 members merged and removed, 1 property removed, 1 layer replaced and
+    // 1 layer removed break consumers (11); 2 members retired; 1 rename out of the library. 14 in all, 9 of them past the
+    // cap of 8 lines. MUTATIONS: `changeKinds` counting `merge` as retired, or reading the capped lines → `#4481 split`.
+    const mix: Breaking[] = [
+      ...Array.from({ length: 8 }, (_, i) => ({ kind: 'merge' as const, member: `size=m${i}`, into: 'size=medium' })),
+      { kind: 'property', name: 'label', change: 'removed' }, { kind: 'replace', member: 'size=small', path: 'content/label', reason: 'a layer' },
+      { kind: 'layer', path: 'content/check', members: 3 }, { kind: 'drop', member: 'size=a' }, { kind: 'drop', member: 'size=b' },
+      { kind: 'private', from: TAG, to: `_${TAG}` },
+    ];
+    const split = checkedSetOf({ ...p, breaking: mix }, TAG).changes;
+    ok(split?.count === 14 && split.lines.length === 9 && JSON.stringify(split.kinds) === JSON.stringify({ breaks: 11, retired: 2, leaves: 1 }),
+      `#4481 split: a set's changes cross counted by kind, 11 that break, 2 retired, 1 leaving the library, adding up to all 14 past the cap (${JSON.stringify(split && { count: split.count, lines: split.lines.length, kinds: split.kinds })})`);
   }
 
   // A LAYER REMOVED AND RE-ADDED (#2864): Tag built while its check layer was `check`, updated to plans naming it
@@ -6715,7 +6810,7 @@ section('published — on a set in a team library, what breaks consumer files is
     const one: Extract<Breaking, { kind: 'layer' }> = lay[0] ?? { kind: 'layer', path: '(none listed)', members: 0 };
     ok(lay.length === 1 && lay[0].path === CHECK && lay[0].members === 15 && JSON.stringify(lay[0].added) === JSON.stringify(['checkGlyph']),
       `published/layer removed: the removed layer is listed once, on its 15 members, beside the layer added in its place (${JSON.stringify(lay)})`);
-    ok(breakingLine(TAG, one) === `${TAG} · ${CHECK} · removed from 15 members — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`,
+    ok(breakingLine(TAG, one) === `${TAG} · ${CHECK} · removed from 15 variants — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`,
       `published/layer line: the line names the layer, what is lost and the in-place fix (${breakingLine(TAG, one)})`);
     ok(previewVerdict({ sets: [p], missing: [], refused: [] }).lines.includes(breakingLine(TAG, one)), 'published/layer section: the check\'s section carries the line');
     // The checklist's set (`checkedSetOf`, what `main.ts` posts): the published set carries its line, the unpublished none.
@@ -6724,7 +6819,7 @@ section('published — on a set in a team library, what breaks consumer files is
       `published/checklist set: the checked set posted for the checklist carries the published set's line, and the unpublished set's none (${checkedSetOf(p, TAG).breaks} | ${checkedSetOf(qp, TAG).breaks})`);
     // #3711 (Q-UF2 A): the checked set also carries each change named and the count, for the callout before the run; the
     // unpublished set carries none. Literal. Mutation: `changes` dropped from `checkedSetOf` → `uf2/checked set`.
-    ok(JSON.stringify(checkedSetOf(p, TAG).changes) === JSON.stringify({ count: 1, lines: [`${TAG} · ${CHECK} · removed from 15 members — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`] })
+    ok(JSON.stringify(checkedSetOf(p, TAG).changes) === JSON.stringify({ count: 1, lines: [`${TAG} · ${CHECK} · removed from 15 variants — breaks files that use this library: overrides on it are lost. If checkGlyph is this layer renamed, declare the rename and the update renames it in place.`], kinds: { breaks: 1, retired: 0, leaves: 0 } })
       && !('changes' in checkedSetOf(qp, TAG)),
       `uf2/checked set: the published set's changes are named and counted for the callout, the unpublished set's absent (${JSON.stringify(checkedSetOf(p, TAG).changes)})`);
     const shipped = (await previewUpdate(w.host, [{ def: TAG, plans: planned }])).sets[0];
@@ -6874,7 +6969,7 @@ section('published — on a set in a team library, what breaks consumer files is
     ok(breakingClause([{ breaking: layerGone }]) === ' · 1 change affects files that use this library and breaks them'
       && JSON.stringify(breakingSection([{ set: 'Tag', breaking: layerGone }], false)) === JSON.stringify([
         'Files that use this library: 1 change in 1 published set, 1 of them breaking, passed on at the next library publish.',
-        'Tag · content/check · removed from 15 members — breaks files that use this library: overrides on it are lost.'])
+        'Tag · content/check · removed from 15 variants — breaks files that use this library: overrides on it are lost.'])
       && breakingSection([{ set: 'Tag', breaking: layerGone }], true)[0] === 'Files that use this library: 1 change made in 1 published set, 1 of them breaking, passed on at the next library publish.',
       `uf1/layer counted: a removed layer is counted as breaking in the clause and the section head (${breakingClause([{ breaking: layerGone }])} | ${breakingSection([{ set: 'Tag', breaking: layerGone }], false)[0]})`);
     const privRename: Breaking[] = [{ kind: 'private', from: 'Tag', to: '_Tag' }];
@@ -6915,7 +7010,7 @@ section('published — on a set in a team library, what breaks consumer files is
     ok(!!res.refusedAll && res.outcomes.length === 0, `published/hash: a set published after the check refuses the confirm (${res.refusedAll ?? 'applied'})`);
   }
 
-  // DIALOG GAINS ITS END PLACEMENT (#2877): a published Dialog built before the side sheet, its 20 members (with the fill
+  // DIALOG GAINS ITS END PLACEMENT (#2877): a published Dialog built before the side sheet, its 12 members (20 before #3392 A) (with the fill
   // footer, #2880), updated to the plan with the four `placement=end` members. Adding a variant value is additive, so the
   // check adds exactly those four and lists NOTHING as breaking: no member dropped, renamed or replaced, no property
   // removed or retyped. The member names are literals typed here, never read off the def.
@@ -6929,14 +7024,15 @@ section('published — on a set in a team library, what breaks consumer files is
     const w = await world('dialog', before, { extraVars: [...new Set(next.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]))], componentProps: { 'flush-icon-button-neutral': { 'swap icon#9:1': { type: 'INSTANCE_SWAP', defaultValue: 'icon/close' } } } });
     (w.api.publish as (n: Node, s: string) => void)(w.set(), 'CURRENT');
     const p = (await previewUpdate(w.host, [{ def: 'dialog', plans: next }])).sets[0];
-    const END = ['placement=end, footer=inline, size=medium', 'placement=end, footer=stacked, size=medium', 'placement=end, footer=fill, size=medium', 'placement=end, footer=none, size=medium'];
-    ok(before.length === 20 && next.length === 24, `premise: Dialog was 20 members and is 24 with the end placement (${before.length} → ${next.length})`);
+    // #3392 A: no size axis, so 12 members before the end placement and 16 with it.
+    const END = ['placement=end, footer=inline', 'placement=end, footer=stacked', 'placement=end, footer=fill', 'placement=end, footer=none'];
+    ok(before.length === 12 && next.length === 16, `premise: Dialog was 12 members and is 16 with the end placement (${before.length} → ${next.length})`);
     ok(p?.publish === 'CURRENT' && JSON.stringify([...p.adds].sort()) === JSON.stringify([...END].sort()) && p.drops.length === 0 && (p.breaking ?? []).length === 0,
       `published/dialog end additive: the four end members are added and nothing breaks library consumers (adds ${JSON.stringify(p?.adds)}, drops ${p?.drops.length}, breaking ${JSON.stringify((p?.breaking ?? []).slice(0, 3))})`);
   }
 
-  // DIALOG GAINS ITS FILL FOOTER (#2880, Q492 B): a published Dialog built before the fill footer, its 18 members (with
-  // the end placement, #2877), updated to the plan with the six `footer=fill` members. Adding a variant value is additive,
+  // DIALOG GAINS ITS FILL FOOTER (#2880, Q492 B): a published Dialog built before the fill footer, its 12 members (18 before #3392 A) (with
+  // the end placement, #2877), updated to the plan with the four `footer=fill` members (six before #3392 A). Adding a variant value is additive,
   // so the check adds exactly those six and lists NOTHING as breaking: no member dropped, renamed or replaced, no property
   // removed or retyped. The member names are literals typed here, never read off the def.
   {
@@ -6949,13 +7045,11 @@ section('published — on a set in a team library, what breaks consumer files is
     const w = await world('dialog', before, { extraVars: [...new Set(next.flatMap((p) => [...planBoundVars(p.root), ...planPaintVars(p.root)]))], componentProps: { 'flush-icon-button-neutral': { 'swap icon#9:1': { type: 'INSTANCE_SWAP', defaultValue: 'icon/close' } } } });
     (w.api.publish as (n: Node, s: string) => void)(w.set(), 'CURRENT');
     const p = (await previewUpdate(w.host, [{ def: 'dialog', plans: next }])).sets[0];
-    const FILL = [
-      'placement=center, footer=fill, size=medium', 'placement=center, footer=fill, size=small', 'placement=center, footer=fill, size=large',
-      'placement=bottom, footer=fill, size=medium', 'placement=full, footer=fill, size=medium', 'placement=end, footer=fill, size=medium',
-    ];
-    ok(before.length === 18 && next.length === 24, `premise: Dialog was 18 members and is 24 with the fill footer (${before.length} → ${next.length})`);
+    // #3392 A: no size axis, so 12 members before the fill footer and 16 with it, one fill member per placement.
+    const FILL = ['placement=center, footer=fill', 'placement=bottom, footer=fill', 'placement=full, footer=fill', 'placement=end, footer=fill'];
+    ok(before.length === 12 && next.length === 16, `premise: Dialog was 12 members and is 16 with the fill footer (${before.length} → ${next.length})`);
     ok(p?.publish === 'CURRENT' && JSON.stringify([...p.adds].sort()) === JSON.stringify([...FILL].sort()) && p.drops.length === 0 && (p.breaking ?? []).length === 0,
-      `published/dialog fill additive: the six fill members are added and nothing breaks library consumers (adds ${JSON.stringify(p?.adds)}, drops ${p?.drops.length}, breaking ${JSON.stringify((p?.breaking ?? []).slice(0, 3))})`);
+      `published/dialog fill additive: the four fill members are added and nothing breaks library consumers (adds ${JSON.stringify(p?.adds)}, drops ${p?.drops.length}, breaking ${JSON.stringify((p?.breaking ?? []).slice(0, 3))})`);
   }
 
   // LINK GAINS ITS CURRENT PAGE (#2872, owner decisions Q507): a published Link built before the axis existed, its 96
@@ -7413,6 +7507,136 @@ section('tint — SignInButton\'s white glyph on a dark fill reads current, and 
     `glyph tint/verify: all 96 updated, and no tinted glyph reads as differing from the plan (${o.updated.length} updated; ${tint.length} tint lines${tint.length ? `: ${tint[0]}` : ''})`);
 }
 
+// #4068, THE OWNER'S UPDATE FILE RUN, 2026-11-18: Sign-in button's Google labels declare Google Sans Medium with a
+// fallback, Roboto Medium (the def's `font.fallback`). Google Sans was not installed, the executor wrote Roboto Medium,
+// and the summary read "36 parts not written as planned". A declared fallback that landed is the designed outcome: it is
+// reported as a fallback, one line per part and face, and is not a part to check. A face whose fallback did not land either
+// stays a miss. Expected counts are literals typed here: 96 members, 36 of them on Google Sans. The font refusal is the
+// host's (`loadFontAsync` throwing), set after the build so the update meets it. Mutations: `splitFontFallbacks` not
+// called → `fallback/reported`, `fallback/not a miss`, `fallback/line`; its `notLanded` read dropped → `fallback/miss kept`,
+// `fallback/miss line`.
+section("fallback — a declared font fallback that landed is reported as a fallback, not as parts not written (#4068)");
+{
+  const id = 'sign-in-button';
+  const plans = plansOf(id);
+  const google = plans.filter((p) => JSON.stringify(p.root).includes('"family":"Google Sans"')).map(planComponentName);
+  ok(plans.length === 96 && google.length === 36, `fallback/premise: 96 members, 36 of them on Google Sans (${plans.length}, ${google.length})`);
+  const deep = (n: Node, name: string): Node | undefined => (n.children as Node[] | undefined)?.reduce<Node | undefined>((f, c) => f ?? (c.name === name ? c : deep(c, name)), undefined);
+  const labelsOf = (set: Node): Node[] => membersOf(set).filter((m) => google.includes(String(m.name))).map((m) => deep(m, 'label')).filter((l): l is Node => !!l);
+  // `hold` runs on the host's own built label nodes before the update, for a host that does not keep a font write.
+  const run = async (refused: readonly string[], hold?: (label: Node) => void) => {
+    const allowMisses: string[] = [];
+    const w = await world(id, plans, { extraVars: ['space/999'], allowMisses });
+    if (hold) for (const l of labelsOf(w.set())) hold(l);
+    // The host's own refusal, in Figma's words, for each face the test names; the shim's methods are fixed, so a copy.
+    const api = { ...w.api, loadFontAsync: async (fn: { family: string; style: string }) => {
+      if (refused.includes(`${fn.family} ${fn.style}`)) throw new Error(`The font "${fn.family} ${fn.style}" could not be loaded`);
+      return w.api.loadFontAsync(fn);
+    } };
+    const moved = plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; (q.root.bound as Record<string, string>).itemSpacing = 'space/999'; return q; });
+    const targets = [{ def: id, plans: moved }];
+    const pre = await previewUpdate(w.host, targets);
+    const res = await applyUpdate(w.host, api as any, targets, previewHashOf(pre));
+    return { w, res, o: res.outcomes[0], v: applyVerdict(res) };
+  };
+  // THE FALLBACK LANDED: Google Sans refused, Roboto Medium written.
+  {
+    const { w, o, v } = await run(['Google Sans Medium']);
+    // The witness is the host's own label nodes, never the update's report.
+    const labels = labelsOf(w.set()).map((l) => l.fontName as { family: string; style: string } | undefined);
+    ok(labels.length === 36 && labels.every((f) => f?.family === 'Roboto' && f.style === 'Medium'),
+      `fallback/premise written: the host's 36 Google labels hold Roboto Medium (${labels.length}; ${JSON.stringify(labels[0])})`);
+    ok(o.updated.length === 96 && JSON.stringify(o.fallbacks) === JSON.stringify([{ part: 'label', face: 'Google Sans Medium', used: 'Roboto Medium', count: 36 }]),
+      `fallback/reported: one fallback, 36 labels (${JSON.stringify(o.fallbacks)})`);
+    ok(!o.misses.some((x) => x.startsWith('label.font -> ')), `fallback/not a miss: no label font miss is left (${o.misses.filter((x) => x.startsWith('label.font')).length})`);
+    ok(v.lines.includes("sign-in-button: Google Sans Medium isn't installed, so 36 labels use Roboto Medium, as the component allows.")
+      && !v.lines.some((l) => l.includes('not written as planned') && l.includes('.font ->')),
+      `fallback/line: one line for the font, none "not written as planned" (${JSON.stringify(v.lines.filter((l) => l.includes('font') || l.includes('Google')))})`);
+    // The harness's provider logo is a stand-in with no size, so the mark's aspect lock is the set's one other finding
+    // (as in `tint` above): the set is still to check for that, and for nothing about its font.
+    ok(!v.causes.some((c) => c.reasons.some((r) => r.includes('Google Sans') || r.includes('label.font'))),
+      `fallback/not to check: no cause names the font (${JSON.stringify(v.causes.flatMap((c) => c.reasons.filter((r) => r.includes('font')))).slice(0, 300)})`);
+  }
+  // THE FALLBACK DID NOT LAND EITHER: both faces refused. Each label is a real miss, and none reads as a fallback.
+  {
+    const { o, v } = await run(['Google Sans Medium', 'Roboto Medium']);
+    // THE FORM IS THE EXECUTOR'S (#4358): every label face miss the real executor reported, matched on the part and the
+    // face alone, starts with `fontMissHead`, so the head `splitFontFallbacks` keys on is the one the executor writes.
+    // Mutation: `fontMissHead` worded without `REFUSED` (the form before #4358) → `fallback/miss form`.
+    const named = o.misses.filter((x) => x.startsWith('label.font -> Google Sans Medium ') || x.startsWith('label.font -> Roboto Medium '));
+    ok(named.length === 108 && named.every((x) => x.startsWith(fontMissHead('label', 'Google Sans Medium')) || x.startsWith(fontMissHead('label', 'Roboto Medium'))),
+      `fallback/miss form: the executor's 108 label font misses each start with fontMissHead (${named.length}; ${named[0]})`);
+    const face = o.misses.filter((x) => x.startsWith(fontMissHead('label', 'Google Sans Medium'))).length;
+    const back = o.misses.filter((x) => x.startsWith(fontMissHead('label', 'Roboto Medium'))).length;
+    // Each label reports its face twice (the literal's load, then the text write's load of the face it still holds).
+    ok(face === 72 && back === 36 && !o.fallbacks,
+      `fallback/miss kept: 72 face misses and 36 fallback misses stay misses, no fallback reported (${face}, ${back}, ${JSON.stringify(o.fallbacks)})`);
+    const line = v.lines.find((l) => l.startsWith('sign-in-button: ') && l.includes('not written as planned')) ?? '';
+    ok(Number(line.match(/^sign-in-button: (\d+) parts not written as planned/)?.[1] ?? 0) >= 108
+      && !v.lines.some((l) => l.includes("isn't installed")) && v.headline.startsWith('⚠') && v.lines.includes('To check: sign-in-button. The lines above say what differs on each.'),
+      `fallback/miss line: the 108 font misses read as parts not written, the set to check, no fallback line (${v.headline}; ${line.slice(0, 200)})`);
+  }
+  // THE FALLBACK LOADED BUT WAS NOT KEPT: Google Sans refused, Roboto Medium loads, and the host keeps the face the label
+  // already holds when the executor writes Roboto (no throw). The face misses must stay misses: "uses Roboto Medium"
+  // would be false. Mutation: the `DISCARDED` clause of `notLanded` dropped → `fallback/discarded kept`.
+  {
+    const { o, v } = await run(['Google Sans Medium'], (l) => {
+      let held = l.fontName;
+      Object.defineProperty(l, 'fontName', { configurable: true, enumerable: true, get: () => held, set: (f: { family: string }) => { if (f.family !== 'Roboto') held = f; } });
+    });
+    const gone = o.misses.filter((x) => x.startsWith('label.literalFont -> DISCARDED (set Roboto Medium ')).length;
+    const face = o.misses.filter((x) => x.startsWith(fontMissHead('label', 'Google Sans Medium'))).length;
+    ok(gone === 36 && face >= 36 && !o.fallbacks && !v.lines.some((l) => l.includes("isn't installed")),
+      `fallback/discarded kept: 36 discarded Roboto writes keep every face miss a miss, no fallback line (${gone}, ${face}, ${JSON.stringify(o.fallbacks)})`);
+  }
+  // THE FALLBACK'S WRITE THREW: Google Sans refused, Roboto Medium loads, the font lands but the size write throws. The
+  // miss names the fallback through `literalFont ->` alone (the size already read as planned, so no DISCARDED), and the
+  // face misses stay misses. Mutation: the `literalFont -> <fallback>` clause of `notLanded` dropped → `fallback/thrown kept`.
+  {
+    const { o, v } = await run(['Google Sans Medium'], (l) => {
+      const size = l.fontSize;
+      Object.defineProperty(l, 'fontSize', { configurable: true, enumerable: true, get: () => size, set: () => { throw new Error('fontSize is read-only here'); } });
+    });
+    const thrown = o.misses.filter((x) => x.startsWith('label.literalFont -> Roboto Medium ')).length;
+    const gone = o.misses.filter((x) => x.startsWith('label.literalFont -> DISCARDED')).length;
+    ok(thrown === 36 && gone === 0 && !o.fallbacks && !v.lines.some((l) => l.includes("isn't installed")),
+      `fallback/thrown kept: 36 thrown Roboto writes, none read as discarded, keep every face miss a miss, no fallback line (${thrown}, ${gone}, ${JSON.stringify(o.fallbacks)})`);
+  }
+  // ONE PART: the singular form of the line. Mutation: the verb swapped → `fallback/line one`.
+  ok(fallbackLine('sign-in-button', { part: 'label', face: 'Google Sans Medium', used: 'Roboto Medium', count: 1 })
+    === "sign-in-button: Google Sans Medium isn't installed, so 1 label uses Roboto Medium, as the component allows.",
+    `fallback/line one: one label reads in the singular (${fallbackLine('sign-in-button', { part: 'label', face: 'Google Sans Medium', used: 'Roboto Medium', count: 1 })})`);
+}
+
+// #4067, THE SAME RUN: ONE SUMMARY GAVE THREE SET COUNTS, "6 sets updated" (Update file's run line, from the in-place
+// pass's progress: the sets whose members it writes), "Updated 44 sets · 1 to check" (the verdict, which counted every set
+// given that was not refused, stopped, off or idle, so also those with nothing to write) and "Saved before Prism3 updated
+// 37 sets" (the version, the sets the check planned to write). A set updated is now one thing, a set the run wrote to, and
+// the verdict carries its count (`sets`) for the run line. One plan, typed here: a set whose members are written, one whose
+// only work is its usage panel, one with nothing to write, and one with nothing to write that still differs from the plan,
+// which is the set to check. Mutations: `wroteTo` counting `asPreviewed` again → `counts/headline`, `counts/sets`; the To
+// check line dropped → `counts/to check named`, `fallback/miss line`.
+section('counts — one run gives one count of sets updated, and names the set to check (#4067)');
+{
+  const base = { updated: [] as string[], added: 0, renamed: 0, deprecated: [] as string[], skipped: [], kept: [], unrecorded: [], handEdits: 'keep' as const, identity: [] as string[], content: [] as string[], misses: [] as string[] };
+  const planned = [{ set: 'tag' }, { set: 'badge' }];
+  const version = `Saved before Prism3 updated ${planned.length} sets`;
+  const res = {
+    outcomes: [
+      { ...base, def: 'tag', set: 'tag', updated: ['a', 'b'] },
+      { ...base, def: 'badge', set: 'badge', furniture: { labels: 0, backdrops: 0, clear: 0, panels: 1 } as never },
+      { ...base, def: 'divider', set: 'divider', asPreviewed: { line: 'divider: up to date.', upToDate: true } },
+      { ...base, def: 'link', set: 'link', content: ['link/label.fills: a (the plan says b)'], asPreviewed: { line: 'link: 1 to update.', upToDate: false } },
+    ],
+    refused: [], missing: [], version,
+  } as never;
+  const v = applyVerdict(res);
+  ok(v.headline.startsWith(`⚠ Updated ${planned.length} sets · 1 to check`), `counts/headline: the sets written to, the planned 2 (${v.headline})`);
+  ok(v.sets === planned.length, `counts/sets: the verdict carries the same count for the run line (${v.sets})`);
+  ok(v.lines.includes(`Saved a version first: "${version}".`), `counts/version: the version names the same 2 (${JSON.stringify(v.lines.slice(-2))})`);
+  ok(v.lines.includes('To check: link. The lines above say what differs on each.'), `counts/to check named: the set to check, by name (${JSON.stringify(v.lines)})`);
+}
+
 /* ── updates off (#2956) ──────────────────────────────────────────────────────────────────────────────── */
 section('updates off — a set whose updates are off is left as it is, reported calmly; the mark is in the check\'s hash and the due read');
 {
@@ -7456,6 +7680,144 @@ section('updates off — a set whose updates are off is left as it is, reported 
     `updates off/due: the mark reads over current, due and kept edits, and nothing else moves (${JSON.stringify(due)})`);
 }
 
+section('description — a def summary that moved reaches a set whose members are current (#2865, owner decision A)');
+{
+  // Every member of the Tag is current; only its description differs from the def's summary. Owner decision A: the
+  // description is Prism3's while it equals its record (shared plugin data `prism3`/`description`, typed here), and
+  // while it has no record at all; one a designer changed after the record is kept. Expected values typed here, the
+  // summary read off the def. Mutations: the check's row dropped → `description/planned`, `description/unrecorded`;
+  // the apply's write dropped → `description/applied`, `description/unrecorded`; `descriptionIsOurs` taking every
+  // description → `description/designer-kept`; `describe`'s `descriptionIsOurs` guard dropped → `description/single`.
+  const summary = componentDefs.find((d) => d.id === TAG)!.summary!;
+  const OLD = 'An old line about tags.';
+  const rec = (n: Node): string => (n.getSharedPluginData as (a: string, b: string) => string)('prism3', 'description');
+  const mark = (n: Node, v: string): void => (n.setSharedPluginData as (a: string, b: string, c: string) => void)('prism3', 'description', v);
+  {
+    const w = await world(TAG);
+    w.set().description = OLD;
+    mark(w.set(), OLD);
+    const targets: UpdateTarget[] = [{ def: TAG, plans: w.plans }];
+    const pre = await previewUpdate(w.host, targets);
+    const p = pre.sets[0];
+    const v = previewVerdict(pre);
+    ok(p.counts.update === 0 && JSON.stringify(p.description) === JSON.stringify({ to: summary, from: [OLD], nodes: 1 })
+      && v.lines.includes(`tag: 45 variants. description to update.`) && v.lines.includes(`tag · description: the summary says "${summary}", the file has "${OLD}".`),
+      `description/planned: with every member current, the check lists the description as the set's one change (${JSON.stringify(p.description)}; ${JSON.stringify(v.lines.slice(0, 2))})`);
+    const res = await applyUpdate(w.host, w.api as any, targets, previewHashOf(pre));
+    const a = applyVerdict(res);
+    ok(w.set().description === summary && rec(w.set()) === summary && res.outcomes[0]?.described === 1 && !res.outcomes[0]?.updated.length
+      && a.lines.includes('tag: description updated.') && w.api._versions.length === 1,
+      `description/applied: the confirm writes the summary and its record, no member, one version saved (${JSON.stringify(w.set().description)}; record ${JSON.stringify(rec(w.set()))}; ${JSON.stringify(a.lines)})`);
+    const again = await previewUpdate(w.host, targets);
+    ok(!again.sets[0].description && previewVerdict(again).headline === '✓ All sets up to date', `description/converges: the next check reads the set up to date (${previewVerdict(again).headline})`);
+  }
+  {
+    // A description with NO record (a file built before #2865, image-placeholder's case) is Prism3's.
+    const w = await world(TAG);
+    w.set().description = OLD;
+    const targets: UpdateTarget[] = [{ def: TAG, plans: w.plans }];
+    const pre = await previewUpdate(w.host, targets);
+    await applyUpdate(w.host, w.api as any, targets, previewHashOf(pre));
+    ok(pre.sets[0].description?.from[0] === OLD && w.set().description === summary && rec(w.set()) === summary,
+      `description/unrecorded: a stale description with no record is replaced, and recorded (${JSON.stringify(pre.sets[0].description)}; ${JSON.stringify(w.set().description)})`);
+  }
+  {
+    // A DESIGNER'S LINE, written after Prism3's record: kept, and the check says so. #1623's guarantee.
+    const w = await world(TAG);
+    w.set().description = 'Our team calls these chips.';
+    mark(w.set(), OLD);
+    const targets: UpdateTarget[] = [{ def: TAG, plans: w.plans }];
+    const pre = await previewUpdate(w.host, targets);
+    const v = previewVerdict(pre);
+    const moved = moveGap(w.plans);
+    const w2 = { def: TAG, plans: moved };
+    const pre2 = await previewUpdate(w.host, [w2]);
+    await applyUpdate(w.host, w.api as any, [w2], previewHashOf(pre2), { descriptionOf: () => summary });
+    ok(!pre.sets[0].description && pre.sets[0].descriptionKept === 1 && v.headline === '✓ All sets up to date' && v.lines.includes("tag · description: edited by hand, so it's kept.")
+      && w.set().description === 'Our team calls these chips.' && rec(w.set()) === OLD,
+      `description/designer-kept: a description changed after the record is kept through a check and an update that rewrites every member (${JSON.stringify(v.lines.slice(0, 2))}; ${JSON.stringify(w.set().description)})`);
+  }
+  {
+    // A SINGLE-COMPONENT DEF (#2865 review should-fix 2): each stamped component is its own description. Of two icons, one
+    // still carries Prism3's old line and its record; on the other a designer changed it after the record. The check
+    // plans the one and keeps the other, and the confirm writes the one only. Mutation: `describe`'s
+    // `descriptionIsOurs` guard dropped → `description/single`.
+    const icSummary = componentDefs.find((d) => d.id === 'icon')!.summary!;
+    const plans = plansOf('icon');
+    const w = await singleWorld(plans);
+    const [ours, theirs] = w.comps();
+    ours.description = OLD; mark(ours, OLD);
+    theirs.description = 'Our team draws these by hand.'; mark(theirs, OLD);
+    const t: UpdateTarget = { def: 'icon', plans, single: true };
+    const pre = await previewUpdate(w.host, [t]);
+    const p = pre.sets[0];
+    const v = previewVerdict(pre);
+    const res = await applyUpdate(w.host, w.api as any, [t], previewHashOf(pre));
+    ok(JSON.stringify(p.description) === JSON.stringify({ to: icSummary, from: [OLD], nodes: 1 }) && p.descriptionKept === 1
+      && v.lines.some((l) => l.endsWith(' description to update.')) && v.lines.includes(`${p.set} · description: edited by hand, so it's kept.`)
+      && ours.description === icSummary && rec(ours) === icSummary && theirs.description === 'Our team draws these by hand.' && rec(theirs) === OLD && res.outcomes[0]?.described === 1,
+      `description/single: of two icons, the one still Prism3's takes the summary and the one a designer changed is kept (${JSON.stringify(p.description)}, kept ${p.descriptionKept}; ${JSON.stringify(ours.description)} / ${JSON.stringify(theirs.description)})`);
+    // #2865 delta review should-fix 3: a set whose only write was its description is named in the publish description's
+    // set list, beside #4091's merge-only arm. Mutation: `|| o.described` dropped from `changedSets` → `description/publish`.
+    const descOnly = { ...res.outcomes[0]!, updated: [], added: 0, renamed: 0, deprecated: [], merged: [], described: 1 };
+    const listed = changedSets([descOnly]);
+    ok(listed.length === 1 && listed[0] === descOnly.set, `description/publish: a set whose only write was its description is listed as changed in the publish description (${JSON.stringify(listed)})`);
+  }
+}
+
+section('behind — a set whose run skipped a member still behind its plan is not recorded as current (#3907)');
+{
+  // A member edited by hand, then an update that changes its structure: under Keep the member is skipped whole and the
+  // run turns the set's updates off by itself (#2956). The skipped member is still behind its plan, so the as-built
+  // ledger must not record the set as built from today's def: once the designer turns updates back on, the due read
+  // has to offer it again. Expected values typed here. Mutations: `ledgerAfter`'s `behind` filter dropped →
+  // `behind/ledger`, `behind/back on`; the dry run's `behind` flag dropped → the same two and `behind/flag`; the flag set
+  // on every state → `behind/control`.
+  const NAME = 'type=select, selection=unselected, size=medium, state=rest';
+  const RED = [{ type: 'SOLID', visible: true, opacity: 1, blendMode: 'NORMAL', color: { r: 1, g: 0, b: 0 } }];
+  const e = { engine: 'e1', def: 'today', rev: 1 } as never;
+  const old = { engine: 'e1', def: 'earlier', rev: 1 } as never;
+  {
+    const w = await world(TAG, plansOf(TAG), { extraVars: ['color/keep/changed'] });
+    membersOf(w.set()).find((m) => m.name === NAME)!.fills = JSON.parse(JSON.stringify(RED));
+    const next = w.plans.map((p) => { const q = JSON.parse(JSON.stringify(p)) as AnatomyPlan; planChild(q.root, 'content').children!.push({ name: 'extra', type: 'FRAME', bound: {}, children: [] } as unknown as PlanNode); return q; });
+    const targets = [{ def: TAG, plans: next }];
+    const pre = await previewUpdate(w.host, targets);
+    const st = pre.sets[0].states.find((x) => x.member === NAME);
+    ok(st?.behind === true, `behind/flag: the dry run reads the restructured, hand-edited member as behind its plan (${JSON.stringify(st)})`);
+    const res = await applyUpdate(w.host, w.api as any, targets, previewHashOf(pre), { choices: { handEdits: 'keep' } });
+    const o = res.outcomes[0];
+    const ledger = ledgerAfter(res.outcomes, () => e, { [TAG]: old } as never);
+    ok(o.turnedOff === true && o.updated.length === 44 && JSON.stringify(o.behind) === JSON.stringify([NAME]) && !(TAG in ledger),
+      `behind/ledger: the run skips the member, turns updates off, and records no entry for the set (${o.turnedOff}; ${o.updated.length} updated; ${JSON.stringify(o.behind)}; ${JSON.stringify(Object.keys(ledger))})`);
+    // The old entry stands. Turned back on (no off mark), the due read offers the set again; off, it reads `off`.
+    const merged = { [TAG]: old, ...ledger } as never;
+    const offRead = dueOf(merged, [TAG], () => e, undefined, { [TAG]: 'auto' });
+    const backOn = dueOf(merged, [TAG], () => e);
+    ok(offRead[TAG].state === 'off' && backOn[TAG].state === 'due',
+      `behind/back on: with updates off it reads off, and turned back on it reads due, never current (${JSON.stringify(offRead[TAG])}; ${JSON.stringify(backOn[TAG])})`);
+  }
+  {
+    // CONTROL: a member Prism3 built, with a layer added by hand, whose own plan this update leaves alone. It is skipped
+    // (its paths can't be trusted) but not behind anything, so the set is recorded as usual. A member Prism3 did not
+    // build is skipped too, and is never behind.
+    const w = await world(TAG, plansOf(TAG), { extraVars: ['space/999'] });
+    const [unstamped, structural] = [membersOf(w.set())[5], membersOf(w.set())[7]];
+    (unstamped.setSharedPluginData as (a: string, b: string, c: string) => void)(NS, STAMP_KEY, '');
+    const extra = (w.api.createFrame as () => Node)();
+    extra.name = 'designer note';
+    (structural.appendChild as (c: Node) => void)(extra);
+    const targets: UpdateTarget[] = [{ def: TAG, plans: w.plans.map((p) => planComponentName(p) === structural.name ? p : moveGap([p])[0]) }];
+    const { pre, res } = await confirm(w, targets);
+    const o = res.outcomes[0];
+    const st = pre.sets[0].states.find((x) => x.member === structural.name);
+    const ledger = ledgerAfter(res.outcomes, () => e, { [TAG]: old } as never);
+    ok(st?.state === 'handEdited' && !st.behind && JSON.stringify(o.skipped.map((x) => x.reason).sort()) === JSON.stringify(['a layer was added or removed by hand', 'not built by Prism3'])
+      && !o.behind && JSON.stringify(ledger[TAG]) === JSON.stringify(e),
+      `behind/control: a member skipped for a layer added by hand, its plan unchanged, and one not built by Prism3 leave the set recorded as built from today's def (${JSON.stringify(st)}; ${JSON.stringify(o.skipped)}; ${JSON.stringify(ledger[TAG])})`);
+  }
+}
+
 // #3326 PR 1 review S2: THE INVARIANT, over every verdict this suite read. A verdict that is not ok says why: at least one
 // cause, and each subject is a def id (one of the engine's, or one a hand-written outcome names), or null for the run's
 // own cause. Never a set's name in the file. Mutations: any writer path's cause dropped, or a subject taken from a set's
@@ -7469,6 +7831,102 @@ section('updates off — a set whose updates are off is left as it is, reported 
   });
   ok(verdictsSeen.some(({ v }) => !v.ok) && !bad.length,
     `causes/every verdict: each of the ${verdictsSeen.filter(({ v }) => !v.ok).length} verdicts not ok names a cause, each subject a def id (${JSON.stringify(bad.slice(0, 3).map(({ v }) => ({ headline: v.headline, causes: v.causes })))})`);
+}
+
+/* ── dialog size merged (#3392) ─────────────────────────────────────────────────────────────────────────── */
+// #3392 A (owner, 2026-11-18): Dialog's width-only `size` axis is no variant. A file built before holds 24 members: 12
+// centered ones on `size=small | medium | large` and 12 bottom, full and end ones at `size=medium`. The update must
+// leave 16, one per coordinate, none on the old axis and none kept deprecated: each `size=medium` member leaves the axis
+// IN PLACE (its id, key and every placed instance kept), and each small or large member MERGES into it: its placed
+// instances are swapped onto the medium member at the width they had (400 or 720), and it is removed. The old def is
+// rebuilt here from today's by putting the axis back, as the def held it; the names, counts and widths are literals.
+// Mutation: the `merge` entry dropped from `COMPONENT_RENAMES` → `dialog size/dry run` (the set is refused: the
+// small and large members collapse). The apply's resize dropped → `dialog size/placed small`, `/placed large`.
+section('dialog size — a set built with the width-only size axis leaves 16 members, the small and large ones merged into medium with their placed instances (#3392)');
+{
+  const now = componentDefs.find((d) => d.id === 'dialog')!;
+  const panel = now.anatomy!.parts.panel as { builtSize: { widths: Record<string, unknown> } };
+  const oldDef = {
+    ...now,
+    variants: { placement: now.variants.placement, size: ['medium', 'small', 'large'], footer: now.variants.footer },
+    axisKinds: { ...now.axisKinds, size: 'authoring' },
+    anatomy: { ...now.anatomy!, parts: { ...now.anatomy!.parts, panel: { ...panel, builtSize: { ...panel.builtSize, widths: { ...panel.builtSize.widths, center: { medium: 560, small: 400, large: 720 } } } } } },
+    figmaProperties: { ...now.figmaProperties!, variantAxes: ['placement', 'size', 'footer'], excludeCoordinates: [{ placement: ['bottom', 'full', 'end'], size: ['small', 'large'] }] },
+  } as ComponentDef;
+  const w = await world('dialog', figmaAnatomySet(oldDef, { swapTarget: SWAP_TARGET }), { componentProps: { 'flush-icon-button-neutral': { 'swap icon#9:1': { type: 'INSTANCE_SWAP', defaultValue: 'icon/close' } } } });
+  const set = w.set();
+  const names = membersOf(set).map((m) => String(m.name));
+  const SMALL = 'placement=center, footer=inline, size=small', LARGE = 'placement=center, footer=stacked, size=large';
+  const MED = 'placement=center, footer=inline, size=medium', MED2 = 'placement=center, footer=stacked, size=medium';
+  // The rebuilt def projects exactly the set main shipped: origin/main's `component-surface.json` records dialog at
+  // 24 members, sha256 529ad20a… over its sorted `name|stamp` rows (typed here, from that baseline; it was 5a835955… until #4057 moved main's Dialog projection, 17ff3a9b… until #4084, and 529ad20a… until #2857 phase 2 rewrote its motion notes).
+  const oldPlans = figmaAnatomySet(oldDef, { swapTarget: SWAP_TARGET });
+  const oldSha = createHash('sha256').update(figmaAnatomySet(oldDef).map((x) => `${planComponentName(x)}|${planStamp(x)}`).sort().join('\n')).digest('hex');
+  ok(oldPlans.length === 24 && oldSha === '4891dd310957be2d327c63206d8c85eb29a794a90bc6a4f0c9efedfd2d00e1a0',
+    `premise: the old def rebuilt here projects main's 24-member Dialog set exactly (${oldPlans.length}, ${oldSha.slice(0, 12)}…)`);
+  ok(names.length === 24 && names.includes(SMALL) && names.includes(LARGE) && names.filter((n) => n.includes('size=')).length === 24,
+    `premise: dialog holds the 24 members of the old set, ${SMALL} among them (${names.length})`);
+  // THE PLACED INSTANCES, on the page beside the set: two of the small member, one of the large, one of medium. The
+  // shim's members build no instances, so each is modelled as the host holds one: a node pointing at its main, whose
+  // `swapComponent` re-points it and takes the new main's size (the worst case: the apply must restore the width), and
+  // which Figma reaches from its main through `getInstancesAsync`, modelled per member from these.
+  const member = (n: string) => membersOf(set).find((m) => m.name === n)!;
+  const placedOf = new Map<Node, Node[]>();
+  const place = (n: string): Node => {
+    const m = member(n);
+    const i = { type: 'INSTANCE', name: 'Dialog', mainComponent: m, width: Number(m.width), height: Number(m.height), _swaps: 0,
+      resize(x: number, y: number) { this.width = x; this.height = y; },
+      swapComponent(c: Node) { this.mainComponent = c; this.width = Number(c.width); this.height = Number(c.height); this._swaps++; } } as unknown as Node;
+    placedOf.set(m, [...(placedOf.get(m) ?? []), i]);
+    (m as { getInstancesAsync?: () => Promise<Node[]> }).getInstancesAsync = async () => placedOf.get(m) ?? [];
+    return i;
+  };
+  const s1 = place(SMALL), s2 = place(SMALL), l1 = place(LARGE), m1 = place(MED);
+  ok(Number(s1.width) === 400 && Number(l1.width) === 720 && Number(m1.width) === 560, `premise: the placed instances are 400, 720 and 560 wide (${s1.width}, ${l1.width}, ${m1.width})`);
+  const medNode = member(MED), medId = String(medNode.id), medKey = String(medNode.key);
+  const med2Node = member(MED2);
+  const { pre, res } = await confirm(w, [{ def: 'dialog', plans: plansOf('dialog') }]);
+  const p = pre.sets[0];
+  ok(!!p && !p.blockers.length && p.counts.drop === 0 && p.counts.add === 0 && p.counts.rename === 16 && (p.merges?.length ?? 0) === 8
+    && p.merges!.some((x) => x.member === SMALL && x.into === MED) && p.merges!.some((x) => x.member === LARGE && x.into === MED2),
+    `dialog size/dry run: 16 renamed off the axis, 8 merged (${SMALL} into ${MED}), none dropped, added or blocked (${p ? `${p.counts.rename} renamed, ${p.merges?.length ?? 0} merged, ${p.counts.drop} dropped, ${p.counts.add} added; ${p.blockers.join('; ') || 'no blockers'}` : 'no set'})`);
+  ok(previewLine(p!).includes('8 to merge into another member, its instances moved'), `dialog size/line: the confirm line says what the merge removes (${previewLine(p!)})`);
+  // Published, the merge is named as a change that breaks files using the library: their instances of a removed member
+  // stop updating (the wording is a DRAFT; the kind and the count are what this holds).
+  const br = breakingOf({ ...p!, publish: 'CURRENT' });
+  ok(br.filter((b) => b.kind === 'merge').length === 8 && br.filter((b) => b.kind === 'merge').every(breaksConsumers) && /8 members merged into another and removed/.test(breakingSummary(br, 'dialog')),
+    `dialog size/breaking: published, the 8 merges are listed as breaking files that use the library (${br.filter((b) => b.kind === 'merge').length}; ${breakingSummary(br, 'dialog').slice(0, 140)})`);
+  const o = res.outcomes[0];
+  ok(applyVerdict(res).ok && o?.renamed === 16 && o?.merged?.length === 8 && o.deprecated.length === 0,
+    `dialog size/apply: ${applyVerdict(res).headline} (${o?.renamed} renamed, ${o?.merged?.length ?? 0} merged, ${o?.deprecated.length} deprecated${o?.refused ? `; ${o.refused}` : ''})`);
+  // #4091 review S1: the done line confirms the merge, as `marked deprecated` confirms a drop (DRAFT wording).
+  const doneLine = applyVerdict(res).lines.find((l) => l.startsWith(`${o?.set}: `)) ?? '';
+  ok(doneLine.includes('8 merged into another member'), `dialog size/verdict: the set's done line names the 8 merges (${doneLine})`);
+  // A set whose only write was a merge is not idle ("not updated"): its members were removed and its instances moved.
+  const mergeOnly = { ...o!, updated: [], added: 0, renamed: 0, deprecated: [], moved: 0, setMoved: false, skipped: [{ member: 'x', reason: 'y' }] } as typeof o;
+  const mv = applyVerdict({ ...res, outcomes: [mergeOnly] });
+  ok(mv.headline === '✓ 8 merged into another member' && mv.lines.some((l) => l.includes('8 merged into another member')),
+    `dialog size/merge only: a set whose only write was the merge reads as written, never idle (${mv.headline}; ${mv.lines[0]})`);
+  // #4091 review nit: a set whose only write was a merge is named in the publish description's set list.
+  const listed = changedSets([mergeOnly!]);
+  ok(listed.length === 1 && listed[0] === o?.set, `dialog size/publish: a merge-only set is listed as changed in the publish description (${JSON.stringify(listed)})`);
+  const after = membersOf(w.set()).map((m) => String(m.name));
+  const keys = after.map((n) => coordKey(n));
+  ok(after.length === 16 && !after.some((n) => n.includes('size=')) && new Set(keys).size === 16 && !membersOf(w.set()).some((m) => String(m.description ?? '').startsWith(DEPRECATED_PREFIX)),
+    `dialog size/members: the set holds 16, none on size, no two on one coordinate, none deprecated (${after.length}; ${after.filter((n) => n.includes('size=')).join(', ') || 'none on size'})`);
+  const medNow = membersOf(w.set()).find((m) => String(m.id) === medId);
+  ok(!!medNow && medNow === medNode && String(medNow.name) === 'placement=center, footer=inline' && String(medNow.key) === medKey,
+    `dialog size/medium kept: the medium member is the same node, id and key kept, now ${medNow ? String(medNow.name) : 'gone'}`);
+  const mainId = (i: Node): string => String(((i as { mainComponent?: { id?: unknown } }).mainComponent ?? (i as { _main?: { id?: unknown } })._main)?.id ?? '');
+  ok(mainId(s1) === medId && mainId(s2) === medId && Number(s1.width) === 400 && Number(s2.width) === 400,
+    `dialog size/placed small: both small instances now point at the medium member and keep their 400 width (${mainId(s1) === medId}, ${mainId(s2) === medId}; ${s1.width}, ${s2.width})`);
+  ok(mainId(l1) === String(med2Node.id) && Number(l1.width) === 720,
+    `dialog size/placed large: the large instance points at the stacked medium member and keeps its 720 width (${mainId(l1) === String(med2Node.id)}; ${l1.width})`);
+  ok(mainId(m1) === medId && Number(m1.width) === 560 && !(m1 as { _swaps?: number })._swaps, `dialog size/placed medium: the medium instance was not swapped and is 560 wide (${m1.width})`);
+  const props = w.set().componentPropertyDefinitions as Record<string, { type: string }>;
+  ok(!props.size && !!props.placement && !!props.footer, `dialog size/properties: the set offers placement and footer and no size (${Object.keys(props).filter((k) => props[k].type === 'VARIANT').join(', ')})`);
+  const post = (await previewUpdate(w.host, [{ def: 'dialog', plans: plansOf('dialog') }])).sets[0];
+  ok(post?.counts.current === 16 && !post.merges, `dialog size/current: every member reads current after, nothing left to merge (${JSON.stringify(post?.counts)})`);
 }
 
 void STYLE_FONT; void BASELINE_KEY;

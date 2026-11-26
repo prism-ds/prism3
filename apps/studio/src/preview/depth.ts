@@ -29,10 +29,11 @@ import { h, hook } from '../shell/dom';
 import { DOMAINS, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import {
-  curveOfRole, durationRampSection, motionCurvesSection, motionTransitionsSection, shadowRampSection, shadowTintSection, springsSection,
+  durationRampSection, motionCurvesSection, motionTransitionsSection, presetCurveOf, shadowRampSection, shadowTintSection, springsSection,
   type DurationsCopy, type TransitionsCopy,
 } from './sections/index';
 import { SG_SURFACES, ground, oppositeOf, palSection, sgContext, type SgRole } from './sections/kit';
+import { must } from '../must';
 
 const PAGE = DOMAINS.find((d) => d.id === 'depth') as PageData;
 /** A lever section's heading and description, from the page data the levers draw them from (Q23). */
@@ -64,8 +65,8 @@ export const DEPTH_PREVIEW_COPY = {
   } satisfies DurationsCopy,
   springs: { title: 'Springs', desc: 'Physics presets for platforms that animate with springs. Read-only.' },
   transitions: {
-    title: 'Transitions',                                             // DRAFT
-    desc: 'Each transition traced at this tempo, along the curve its role uses.',   // DRAFT
+    title: 'Presets',                                                 // DRAFT (#2857, for the owner)
+    desc: 'Each motion preset traced at this tempo, along the curve its easing uses.',   // DRAFT (#2857, for the owner)
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
   } satisfies TransitionsCopy,
@@ -94,7 +95,7 @@ export const mountDepthPreview = (host: HTMLElement, cleanups: (() => void)[]): 
   const paint = (why: 'mount' | 'brand' | 'mode'): void => {
     const all = resolvedModes(theme);
     const rolesByMode = new Map<string, Record<string, SgRole | undefined>>(all.map((x) => [x.mode as string, x.roles as Record<string, SgRole | undefined>]));
-    const cur: string = rolesByMode.has(currentMode) ? currentMode : rp.modes[0];
+    const cur: string = rolesByMode.has(currentMode) ? currentMode : must(rp.modes[0], 'the first mode');
     const c = sgContext({
       rolesByMode, cur, opp: oppositeOf(cur, rp.modes, (m) => rolesByMode.has(m)), namespace: theme.namespace, modeLabel, badges: false,
       paletteHex: (p, s) => theme.palettes.find((x) => x.palette === p)?.steps.find((x) => x.key === s)?.hex ?? null,
@@ -124,7 +125,7 @@ export const mountDepthPreview = (host: HTMLElement, cleanups: (() => void)[]): 
     card.replaceChildren(...secs.map((s) => ground(c, s, page)));
 
     // D9: a Motion edit plays the traces once, at the chosen speed, unless reduced motion is on.
-    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.transitions.map((t) => curveOfRole(mo, cur, t.name))]);
+    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.presets.map((p) => presetCurveOf(mo, cur, p))]);
     if (why === 'brand' && lastDrawn !== null && lastMode === cur && drawn !== lastDrawn && !reduced) {
       played = true;
       play();

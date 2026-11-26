@@ -1099,6 +1099,14 @@ export type PartFields = {
    *  reads `rest`: unlike a variant axis a state has a resting value, and the paint grammar already treats
    *  an unsupplied state as rest. */
   presentWhen?: Record<string, readonly string[]>;
+  /** #3058 (owner decision 2026-11-18 A): where `presentWhen`'s VARIANT gate leaves a member out, the part is BUILT
+   *  HIDDEN there (`visible: false`) instead of left out of the tree. Figma carries an instance's override on a node
+   *  across a variant switch by the node's name, so a node that is absent from one member drops whatever a designer put
+   *  in it on the way through: Accordion's panel slot came back as its placeholder after collapsed and expanded again.
+   *  Hidden, it lays out as absent (auto layout skips it, so the member's footprint is unchanged) and keeps its content.
+   *  A box's only: the case is a slot's content, and a box is what becomes a slot. Needs a `presentWhen` to soften; a
+   *  STATE gate stays a presence gate, since a state is never an instance's authored content. */
+  hiddenWhenAbsent?: true;
   /** VARIANT-GATED POSITION (#990): axis → value → where along its PARENT's main axis this part sits.
    *  A switch's thumb says `{ selection: { off: 'start', on: 'end' } }` — ONE part, in two places.
    *
@@ -1372,6 +1380,12 @@ export type PartFields = {
    *  (`layoutPositioning: 'ABSOLUTE'`), place it at `parent − artboard − inset` on both axes, and constrain
    *  it `MAX`/`MAX`, so it stays in the corner when a designer resizes the instance. `lint-absolute-inset.ts`
    *  holds the inset to the parent's stroke weight in every brand, so the artboard never overlaps the edge. */
+  /*
+   *  A `box` takes the same pin (#4110, Avatar's presence ring): the box keeps its own size, hugging what it holds,
+   *  and both executors place it exactly as they place the grip, since their corner pass reads any node by name. The
+   *  ring is the def's own frame (a page-colored disc around a nested Badge dot), so it is a box, not an `absolute`
+   *  instance sized by its parent. A pinned box takes no `grow` or `crossAxisFill`: out of the flow there is no
+   *  cell for it to fill. */
   corner?: 'bottom-right';
   /** For a `box`: PIN it across its parent's BOTTOM EDGE, out of the auto-layout flow (#2872, Link's current-page bar,
    *  owner decisions Q507). The box keeps its own bound `height` and spans the parent's full width, flush with its
@@ -1495,7 +1509,7 @@ export type BoxKey =
   | 'contentSlot' | 'slotSettings' | 'preferred' | 'preferredWhenBuilt' | 'paintSlots' | 'paintGroup' | 'gradient'
   | 'clipsContent' | 'scroll' | 'minWidth' | 'placementWidth' | 'placementHeight' | 'directionWhen' | 'sizingWhen'
   | 'builtSize' | 'elevation' | 'radiusEdges' | 'minHeight' | 'minWidthKey' | 'minWidthRatio' | 'flush' | 'center'
-  | 'aspectRatio' | 'foot' | 'footShare';
+  | 'aspectRatio' | 'foot' | 'footShare' | 'hiddenWhenAbsent' | 'corner' | 'inset';
 export type TextKey =
   | 'innerTarget' | 'size' | 'presentWhen' | 'positionWhen' | 'literal' | 'paintSlot' | 'type'
   | 'verticalAlign' | 'wrap' | 'lines' | 'characters';
@@ -2154,6 +2168,12 @@ export type ComponentDef = {
    *  Maintainer data: no emitted shape carries it (`project-def.ts` projects named fields). Validated (`leverErrors`). */
   levers?: ComponentLevers;
 
+  /** THE BRAND'S OWN ICON ART (#3076), written ONLY by `applyIconMap` (`icon-map.ts`) from the brand input's
+   *  `icons.glyphs`, never authored on a def. The projector looks a glyph up here before the core set
+   *  (`ICON_PATHS`), so the `icon` def draws the brand's icons and every other def may name one. Absent on every
+   *  authored def and for every brand without glyphs. Maintainer data: no emitted shape carries it. */
+  brandGlyphs?: Record<string, { path: string; fillRule?: 'evenodd' }>;
+
   /** A LAYER GAP DERIVED FROM THE GAP THE EYE SEES (owner, 2026-09-29, the dismissible Tag). Each entry names
    *  three `tokens` keys (`{size}` expands as in `densitySpacing`): `visible`, the distance the eye reads, a
    *  density-following gap (in `densitySpacing`, so it is stepped and floored at 4px); `inset`, a fixed inset
@@ -2213,6 +2233,12 @@ export type ComponentDef = {
     usage: string;
     do?: string[];
     dont?: string[];
+    /** How to build it in code (#2778, owner decision A on Q362): the rules a developer, or an agent writing the
+     *  component's code, acts on and a designer placing it does not (DOM and ARIA wiring, state ownership, events,
+     *  CSS technique, what each brand setting builds). Ships in `components.ai.json` and on the docs page's
+     *  "Building it in code" section. `do` / `dont` keep the usage rules and the ones both readers act on; ARIA's
+     *  contract stays in `accessibility.aria`; what Figma cannot carry and its history stay in `codeOnly` / `notes`. */
+    implementation?: string[];
     contentGuidelines?: string;
   };
 
@@ -2264,7 +2290,13 @@ export type ComponentDef = {
   };
 
   // ---- motion / notes (§15, SCALES) ----
-  motion?: { enter?: string; exit?: string; reduceMotion?: string };
+  /** The component's motion (#2857 phase 2, Q-PT2 A). A def that names its `patterns` (`motion-patterns.ts`) writes
+   *  `motion: motionOf([...])`, and its prose is generated from them; `notes` holds its own sentences after the
+   *  generated ones. A def with no pattern yet writes its prose by hand. */
+  /** `patterns` (#2857 phase 2): the motion patterns it plays, by name (`dialog/enter`), each in `MOTION_PATTERNS`
+   *  (`motion-patterns.ts`). A def that names patterns writes this field with `motionOf`, so its prose is generated from
+   *  them and cannot disagree. */
+  motion?: { patterns?: string[]; enter?: string; exit?: string; reduceMotion?: string };
   /** Field-research residue, kept beside the def rather than in a doc so it travels with the thing it
    *  is about: `contested` (the practice disagrees), `unverified` (asserted here, not yet gated),
    *  `evolution` (a finding a later revision RESOLVED — kept because "why is it like this now" is the
@@ -2272,8 +2304,8 @@ export type ComponentDef = {
    *
    *  `contested` HOLDS ONLY OPEN OR ARGUED ITEMS (#1700). A decision this def has settled moves to
    *  `evolution`, which is where "why is it like this now" is answered. `validateComponentDef` refuses a
-   *  `contested` entry with a sentence that opens `Settled` / `Resolved` / `RESOLVED` / `CLOSED`, and an
-   *  `unverified` entry with one that opens `Resolved` / `RESOLVED`. It reads every sentence, not only the entry's
+   *  `contested` entry with a sentence that opens with a verdict (`DECIDED_VERBS`: settled, resolved, closed,
+   *  decided, chosen, in any case; #1716), and an `unverified` entry with one that opens `resolved`. It reads every sentence, not only the entry's
    *  first word: the entries this rule was written for lead with the question and settle it in the
    *  second sentence ("Where the ring is drawn — … Settled here as the offset sibling"), so a first-word
    *  check passes the very case it exists for (`docs/34` shape 14).
@@ -2322,6 +2354,28 @@ export const SUMMARY_MAX = 100;
  *  host's size reaches its items. The cap grows by that sentence, so the host's own line keeps the room every
  *  other summary has. `lint-component-docs.ts` holds the sentence itself, as its own literal. */
 export const ITEMS_SIZE_NOTE_LENGTH = " Size applies to the items you haven't edited. After editing an item, select the items and set their size.".length;
+/** #1716 — the verbs a decided `notes` entry opens a sentence with, matched in any case. `contested` refuses
+ *  all of them; `unverified` refuses `resolved` alone (#1700). */
+export const DECIDED_VERBS = ['settled', 'resolved', 'closed', 'decided', 'chosen'] as const;
+export const RESOLVED_VERBS = ['resolved'] as const;
+/** A period that ends one of these is not a sentence break ("e.g. Resolved later?" is one sentence). */
+const ABBREVIATION_END = /\b(?:e\.g|i\.e|vs|cf|etc|approx|incl|viz)\.$/i;
+/** #1716 — the first verb of `verbs` that OPENS a clause of `entry`, as written, or null. A clause opens at the
+ *  entry's start, after `.` `!` `?` or `;` and a space (not after an abbreviation's period), or after an em dash
+ *  and a space. A colon is not a break: "Brief §4: Settled in the brief, argued here" is one argued sentence. A
+ *  verb inside a clause is prose, not a verdict ("fonts are settled as dead; the font model is not"). */
+export const verdictOpening = (entry: string, verbs: readonly string[]): string | null => {
+  const opener = new RegExp(`^(${verbs.join('|')})\\b`, 'i');
+  const starts = [0];
+  const breaks = /([.!?;])\s+|—\s+/g;
+  for (let m = breaks.exec(entry); m; m = breaks.exec(entry)) {
+    if (m[1] === '.' && ABBREVIATION_END.test(entry.slice(0, m.index + 1))) continue;
+    starts.push(m.index + m[0].length);
+  }
+  for (const at of starts) { const w = entry.slice(at).match(opener); if (w) return w[1]!; }
+  return null;
+};
+
 export const summaryMaxOf = (def: Pick<ComponentDef, 'props'>): number =>
   def.props?.some((p) => p.name === 'items' && p.type === 'slot') && def.props.some((p) => p.name === 'size') ? SUMMARY_MAX + ITEMS_SIZE_NOTE_LENGTH : SUMMARY_MAX;
 
@@ -2366,16 +2420,16 @@ export const validateComponentDef = (
     if (!/^[a-z][a-z0-9-]*$/.test(a)) errors.push(`alias '${a}' is not kebab-case — an alias is a name (\`loading-indicator\`); a phrase belongs in ai.triggerKeywords (#1700)`);
   // #1700 — `contested` holds only open or argued items; a settled one belongs in `evolution`. Every
   // sentence is read, not only the first word: the entries this was written for put the question first
-  // and "Settled here as …" second (see `notes` on `ComponentDef`).
-  const SETTLED_OPENING = /(?:^|[.;:!?]\s+|—\s+)(Settled|Resolved|RESOLVED|CLOSED)\b/;
-  const RESOLVED_OPENING = /(?:^|[.;:!?]\s+|—\s+)(Resolved|RESOLVED)\b/;
+  // and "Settled here as …" second (see `notes` on `ComponentDef`). #1716 widened the verbs to the ones
+  // decided entries actually used ("Decided:", "Chosen:", "— settled as …"), and made the split respect
+  // abbreviations and colons ("e.g. Resolved later?", "Brief §4: Settled in the brief, argued here").
   (def.notes?.contested ?? []).forEach((e, i) => {
-    const m = e.match(SETTLED_OPENING);
-    if (m) errors.push(`notes.contested[${i}] has a sentence opening '${m[1]}' — contested holds only open or argued items; a settled decision moves to notes.evolution (#1700)`);
+    const w = verdictOpening(e, DECIDED_VERBS);
+    if (w) errors.push(`notes.contested[${i}] has a sentence opening '${w}' — contested holds only open or argued items; a settled decision moves to notes.evolution (#1700, #1716)`);
   });
   (def.notes?.unverified ?? []).forEach((e, i) => {
-    const m = e.match(RESOLVED_OPENING);
-    if (m) errors.push(`notes.unverified[${i}] has a sentence opening '${m[1]}' — a resolved item is no longer unverified; it moves to notes.evolution (#1700)`);
+    const w = verdictOpening(e, RESOLVED_VERBS);
+    if (w) errors.push(`notes.unverified[${i}] has a sentence opening '${w}' — a resolved item is no longer unverified; it moves to notes.evolution (#1700)`);
   });
   req(!!def.description, 'description is required');
   req(typeof def.summary === 'string' && def.summary.length > 0, 'summary is required — the one-line Figma description');
@@ -4569,7 +4623,7 @@ const leverErrors = (def: ComponentDef): string[] => {
     // The key is restated from `BORDER_WEIGHT_KEY` (anatomy-figma.ts): the schema cannot import the materializer.
     if (setting === 'buttonBorderWeight') {
       if (entry.edge !== true) errors.push(`levers.buttonBorderWeight.edge must be true when set (got ${JSON.stringify(entry.edge)})`);
-      else if (def.tokens['border-width'] === undefined) errors.push('levers.buttonBorderWeight needs a border-width key: the setting rebinds the edge it binds');
+      else if (!['', ...(def.variants?.selection ?? []).map((s) => `${s}.`)].some((p) => def.tokens[`${p}border-width`] !== undefined)) errors.push('levers.buttonBorderWeight needs a border-width key (or one per selection value): the setting rebinds the edge it binds');
     }
     if (setting === 'outlineInteraction' && entry.opaqueFill !== true) errors.push(`levers.outlineInteraction.opaqueFill must be true when set (got ${JSON.stringify(entry.opaqueFill)})`);
   }
@@ -4935,13 +4989,14 @@ const anatomyErrors = (def: ComponentDef): string[] => {
   // which only a TEXT node takes, so only a `text` part carries one (Q-PU2 A; since #3783 `figmaAnatomyPlan` reads it on
   // no other kind either). The union under `PartFields` says the same at the type layer, and `lint-part-union` proves
   // it does.
-  const KIND_ONLY: readonly { field: 'radius' | 'replaces' | 'overlaysWhenAbsent' | 'when' | 'children' | 'type'; kinds: readonly PartKind[]; asked?: readonly PartKind[]; why: string }[] = [
+  const KIND_ONLY: readonly { field: 'radius' | 'replaces' | 'overlaysWhenAbsent' | 'when' | 'children' | 'type' | 'hiddenWhenAbsent'; kinds: readonly PartKind[]; asked?: readonly PartKind[]; why: string }[] = [
     { field: 'radius', kinds: ['box'], why: "the corners are bound only on a box's frame" },
     { field: 'replaces', kinds: ['overlay'], why: 'only an overlay takes another part\'s cell' },
     { field: 'overlaysWhenAbsent', kinds: ['overlay'], why: "it is an overlay's fallback when none of its 'replaces' is present" },
     { field: 'when', kinds: ['overlay', 'absolute'], why: "only those two kinds are gated by state; an in-flow part gates on it through 'presentWhen'" },
     { field: 'children', kinds: ['box'], asked: ['text', 'slot', 'overlay'], why: 'only a box builds a frame that holds children — a text node holds none, and a slot or overlay is an instance, which takes no appends' },
     { field: 'type', kinds: ['text'], why: 'it names a text style, and only a text node takes one — a frame or an instance has no text style to set' },
+    { field: 'hiddenWhenAbsent', kinds: ['box'], why: "it keeps a slot's content across a variant switch, and only a box becomes a slot (#3058)" },
   ];
   for (const [n, p] of Object.entries(parts)) {
     for (const k of KIND_ONLY)
@@ -4951,6 +5006,11 @@ const anatomyErrors = (def: ComponentDef): string[] => {
 
   // Only a box lays out children; a text/slot/overlay/absolute carrying layout means the tree is
   // mis-shaped and the materializer would emit an auto-layout frame where a leaf belongs.
+  // #3058: `hiddenWhenAbsent` softens a VARIANT gate, so a part without one has nothing to soften, and a gate on the
+  // state alone is a presence rule it does not reach.
+  for (const [n, p] of Object.entries(parts))
+    if (p.hiddenWhenAbsent !== undefined && (p.hiddenWhenAbsent !== true || !Object.keys(p.presentWhen ?? {}).some((a) => a !== STATE_GATE)))
+      e.push(`anatomy part '${n}' declares 'hiddenWhenAbsent' without a variant gate in 'presentWhen' to soften — it takes \`true\` alone, on a part that a variant axis gates`);
   for (const [n, p] of Object.entries(parts)) {
     // ---- VARIANT-GATED PRESENCE (#910) ----
     // Six rules, and each one is a way the field can be authored so that it validates and then makes the
@@ -5396,16 +5456,18 @@ const anatomyErrors = (def: ComponentDef): string[] => {
     // ONE EXCEPTION, and it is the other out-of-flow placement: a `vector` pinned into a `corner` is also
     // outside the flow, and its `inset` is the distance in from that corner's two edges. Refused on a
     // vector with no `corner`, where it would again read as an offset from a cell.
-    if (p.kind !== 'absolute' && p.inset !== undefined && !(p.kind === 'vector' && p.corner))
-      e.push(`anatomy part '${n}' is kind '${p.kind}' but binds 'inset' — only an 'absolute' part, or a 'vector' pinned into a 'corner', sits outside the flow to be inset from it`);
+    if (p.kind !== 'absolute' && p.inset !== undefined && !((p.kind === 'vector' || p.kind === 'box') && p.corner))
+      e.push(`anatomy part '${n}' is kind '${p.kind}' but binds 'inset' — only an 'absolute' part, or a 'vector' or 'box' pinned into a 'corner', sits outside the flow to be inset from it`);
     // ---- THE CORNER PIN (textarea's resize grip) ----
     // Four ways to author it so it validates and then projects nothing, or projects into the flow: on a kind
     // whose branch never reads it; with no `inset`, so the executor has no distance to place it at; on the
     // ROOT, which has no parent corner; and under a parent that is not an auto-layout box, where Figma
     // ignores `layoutPositioning` silently and the glyph takes a cell after all.
     if (p.corner !== undefined) {
-      if (p.kind !== 'vector')
-        e.push(`anatomy part '${n}' is kind '${p.kind}' but declares 'corner' — only a 'vector' draws its own glyph at its own artboard size and can be pinned into a corner (an 'absolute' part is sized by its parent instead)`);
+      if (p.kind !== 'vector' && p.kind !== 'box')
+        e.push(`anatomy part '${n}' is kind '${p.kind}' but declares 'corner' — only a 'vector' (its own artboard) or a 'box' (its own frame) keeps its own size and can be pinned into a corner (an 'absolute' part is sized by its parent instead)`);
+      if (p.kind === 'box' && (p.grow !== undefined || p.crossAxisFill !== undefined || p.foot !== undefined))
+        e.push(`anatomy part '${n}' is a 'box' pinned into corner '${p.corner}' and also declares 'grow', 'crossAxisFill' or 'foot' — a pinned box is out of the flow, so it has no cell to fill and no second placement`);
       if (!p.inset)
         e.push(`anatomy part '${n}' declares corner '${p.corner}' but binds no 'inset' — the executor places the glyph 'inset' in from the corner's two edges, so without one it has no distance to write and the part lands on the parent's own border`);
       if (n === a.root)

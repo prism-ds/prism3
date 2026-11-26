@@ -48,6 +48,7 @@ import { brandTheme, type BrandInput, GROUND_INPUT, resolveAllModes, toDesignMd 
 import { EXAMPLE_BRANDS_JSON as exampleBrands } from '@prism3/engine';
 import * as store from './src/state/store';
 import * as F from './src/state/fills-input';
+import * as BI from './src/state/brand-input';
 import { validateDesignMd, importErrorText } from './src/state/start-input';
 
 let executed = 0, failed = 0;
@@ -60,7 +61,15 @@ const ok = (cond: boolean, label: string): void => {
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const tokens = JSON.parse(readFileSync(join(REPO, 'packages/engine/out/prism3.tokens.json'), 'utf8'));
 const ROOT = Object.keys(tokens).find((k) => !k.startsWith('$'))!;
-const prism3 = (exampleBrands as Record<string, BrandInput>).prism3;
+/** The default theme without Brand B (#1729), its custom mode: these fixtures write per-mode levers and compare the
+ *  whole per-mode map, and they build every mode they use themselves. Brand B's own cascade is test-brand-input's. */
+const withoutBrandB = (b: BrandInput): BrandInput => {
+  const { customModes: _c, modePalettes: _p, modeLevers: _l, ...rest } = structuredClone(b);
+  // Brand B's own surfaces (its snapshot of light's, #1946) go with it: no mode reads them once it is gone.
+  const { 'brand-b': _s, ...surfaces } = (rest.surfaces ?? {}) as Record<string, unknown>;
+  return { ...rest, ...(rest.surfaces ? { surfaces: surfaces as BrandInput['surfaces'] } : {}), brandColors: (rest.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
+};
+const prism3 = withoutBrandB((exampleBrands as Record<string, BrandInput>).prism3);
 const PRISTINE = JSON.stringify(prism3);
 const reset = (input: BrandInput = prism3): void => store.initSession(structuredClone(input), { kind: 'example', id: 'prism3' });
 const pristine = (): boolean => JSON.stringify(store.brandState) === PRISTINE;
@@ -152,15 +161,43 @@ ok(linkRows.length === 0, `no Surfaces & fills row edits a link role${linkRows.l
 // ── 2. which surfaces the previewed mode shows (Q22) ─────────────────────────────────────────────────
 console.log('\n2. Surfaces: the previewed mode\'s key, editable only in Light and Dark (owner decision Q22)');
 reset({ ...structuredClone(prism3), customModes: [{ name: 'night', base: 'dark' }, { name: 'paper', base: 'light' }] } as BrandInput);
-const MODE_RULE: Array<[string, { source: string; editable: boolean }]> = [
-  ['light', { source: 'light', editable: true }], ['dark', { source: 'dark', editable: true }],
-  ['hc-light', { source: 'light', editable: false }], ['hc-dark', { source: 'dark', editable: false }],
-  ['wireframe', { source: 'light', editable: false }],
-  ['night', { source: 'dark', editable: false }], ['paper', { source: 'light', editable: false }],
+// `source` is the `surfaces.<key>` the controls read and the mode whose roles they show; `family` the unset page's
+// fallback. A custom mode reads its own key (#1946: it is a snapshot, rendered from `surfaces.<name>`, never its base's).
+const MODE_RULE: Array<[string, { source: string; family: string; editable: boolean }]> = [
+  ['light', { source: 'light', family: 'light', editable: true }], ['dark', { source: 'dark', family: 'dark', editable: true }],
+  ['hc-light', { source: 'light', family: 'light', editable: false }], ['hc-dark', { source: 'dark', family: 'dark', editable: false }],
+  ['wireframe', { source: 'light', family: 'light', editable: false }],
+  ['night', { source: 'night', family: 'dark', editable: false }], ['paper', { source: 'paper', family: 'light', editable: false }],
 ];
 for (const [mode, want] of MODE_RULE) {
   const got = F.surfaceSourceOf(mode);
   ok(JSON.stringify(got) === JSON.stringify(want), `previewing ${mode}, the surface controls show ${want.source}'s surfaces, ${want.editable ? 'editable' : 'read-only'} (got ${JSON.stringify(got)})`);
+}
+// #1946: a custom mode's controls show what the engine renders for it, its own copied surfaces, not its source's live
+// ones. Oracle: the engine's resolution of the custom mode, and the copied input, both read before light moves.
+{
+  reset({ ...structuredClone(prism3), surfaces: { light: { base: 50 } } } as BrandInput);
+  const name = BI.addCustomMode();
+  store.rebuild();
+  const copied = JSON.stringify(store.brandState.surfaces?.[name]);
+  const engineBg = resolved('background.primary', name)?.hex;
+  F.setSurfaceBase('light', '200');
+  store.rebuild();
+  const lightBg = resolved('background.primary', 'light')?.hex;
+  const { source } = F.surfaceSourceOf(name);
+  const shownInput = JSON.stringify(store.brandState.surfaces?.[source]);
+  const shownBg = F.rolesIn(source)['background.primary']?.hex;
+  ok(lightBg !== engineBg && resolved('background.primary', name)?.hex === engineBg, `#1946: light's new page (${lightBg}) is not the custom mode's (${engineBg}) after the edit (the edit is real)`);
+  ok(shownInput === copied && shownBg === engineBg,
+    `#1946: after light's page moves, the fills panel for ${name} shows ${name}'s copied page, not light's new one (input ${shownInput}, want ${copied}; swatch ${shownBg}, want ${engineBg})`);
+}
+// #1946: a refused floor on a custom mode's own surfaces reads in the studio's words, naming the mode.
+{
+  reset();
+  Object.assign(store.brandState, { customModes: [{ name: 'paper', base: 'light' }], surfaces: { light: { base: 'white' }, paper: { floorStep: 400 } } });
+  store.rebuild();
+  ok(store.lastError === 'The contrast floor has to match a page background in paper. Choose 050 or 100, or return to Auto.',
+    `#1946: a floor refusal on surfaces.<custom>.floorStep reads in the studio's words (read ${JSON.stringify(store.lastError)})`);
 }
 // The writes the controls make for the mode they are handed: that mode's key, nothing else.
 reset();
@@ -224,6 +261,25 @@ ok(store.brandState.scrimStrength === 'standard' && scrimReads() === 'black-alph
   `#3050: Standard writes "standard" and the row reads out black-alpha 40 / 60 / 60 / 70 (read ${scrimReads()})`);
 reset();
 ok(F.brandScrimStrength() === 'standard', `#3050: a brand without the lever reads as Standard (${F.brandScrimStrength()})`);
+
+// #3339 (owner C): Controls sit on. "The page only" writes `interactiveGround: 'page'` and nothing else, and the light
+// field border reads one step lighter, measured on the page (neutral.450 → neutral.400 for this brand, the step the
+// build PR measured, typed here); "Every surface" writes 'floor' and reads today's step; an unset brand reads as floor.
+const fieldStep = (m: string): string => String(F.rolesIn(m)['field.border.rest']?.path ?? 'none').split('.').slice(-2).join('.');
+reset();
+F.setInteractiveGround('page');
+store.rebuild();
+ok(JSON.stringify(store.brandState) === JSON.stringify({ ...prism3, interactiveGround: 'page' }) && F.brandInteractiveGround() === 'page',
+  `#3339: The page only writes interactiveGround "page" and nothing else (${JSON.stringify(store.brandState.interactiveGround)})`);
+const hcPage = `${fieldStep('hc-light')} ${fieldStep('hc-dark')}`;
+ok(fieldStep('light') === 'neutral.400', `#3339: under The page only the light field border reads neutral.400 (read ${fieldStep('light')})`);
+F.setInteractiveGround('floor');
+store.rebuild();
+ok(store.brandState.interactiveGround === 'floor' && fieldStep('light') === 'neutral.450',
+  `#3339: Every surface writes "floor" and the light field border reads neutral.450 (read ${fieldStep('light')})`);
+ok(`${fieldStep('hc-light')} ${fieldStep('hc-dark')}` === hcPage, `#3339: high contrast reads the same field border under either setting (page ${hcPage}, floor ${fieldStep('hc-light')} ${fieldStep('hc-dark')})`);
+reset();
+ok(F.brandInteractiveGround() === 'floor', `#3339: a brand without the setting reads as Every surface (${F.brandInteractiveGround()})`);
 
 
 // ── 4. S4d: every Surfaces & fills role has a home (owner decisions Q20, Q49, Q50) ─────────────────────
@@ -450,7 +506,7 @@ F.pairIcons();
 ok(JSON.stringify(store.brandState) === JSON.stringify(prism3), `re-pair clearing the only overrides leaves the brand byte-identical to the one loaded (overrides ${JSON.stringify(store.brandState.overrides)})`);
 // The confirm's words, APPROVED verbatim (owner decision Q52, 2026-10-02). Literal.
 ok(F.PAIR_ICONS_CONFIRM.title === 'Pair icons with text?' && F.PAIR_ICONS_CONFIRM.body(3) === 'This removes 3 custom icon colors. Icons will follow their text color again.'
-  && F.PAIR_ICONS_CONFIRM.action === 'Pair icons', `the re-pair confirm's title, body and action are the approved copy (${JSON.stringify([F.PAIR_ICONS_CONFIRM.title, F.PAIR_ICONS_CONFIRM.body(3), F.PAIR_ICONS_CONFIRM.action])})`);
+  && F.PAIR_ICONS_CONFIRM.action(3) === 'Remove 3 icon colors', `the re-pair confirm's title, body and action are the approved copy (${JSON.stringify([F.PAIR_ICONS_CONFIRM.title, F.PAIR_ICONS_CONFIRM.body(3), F.PAIR_ICONS_CONFIRM.action])})`);
 // The singular for one override (owner decision Q60, APPROVED 2026-10-02), the plural for two. Literal.
 ok(F.PAIR_ICONS_CONFIRM.body(1) === 'This removes 1 custom icon color. Icons will follow their text color again.',
   `the re-pair confirm's body for 1 override is the approved singular (Q60) — read ${JSON.stringify(F.PAIR_ICONS_CONFIRM.body(1))}`);
@@ -757,7 +813,7 @@ for (const c of REFUSAL_CASES) {
   ok(!ENGINE_WORDS.test(store.lastError ?? '') && !/floorStep/.test(store.lastError ?? ''), `#2250 ${c.what}: the error bar's message carries none of the engine's sentence, nor its key`);
   const imp = validateDesignMd(toDesignMd(c.input));
   const text = 'error' in imp ? importErrorText(imp.error) : null;
-  ok(!!text && text.includes(`Parsed, but the engine rejected it: ${c.wantImport}`) && 'error' in imp && imp.error.line != null,
+  ok(!!text && text.includes(`This design.md loaded, but the engine refused it: ${c.wantImport}`) && 'error' in imp && imp.error.line != null,
     `#2250 ${c.what}: a design.md import is refused with the studio sentence, on its line (read ${JSON.stringify(text)})`);
   ok(!ENGINE_WORDS.test(text ?? ''), `#2250 ${c.what}: the import's message carries none of the engine's sentence`);
 }
@@ -845,8 +901,9 @@ for (const brand of ['prism3', 'aurora', 'harbor']) {
       `${at}: the "not checked" line holds: no field border, button border or focus ring is measured on the floor (${floor}) — on it: ${JSON.stringify(onFloor)}; seen ${notChecked.length}`);
   }
 }
-// Floor (docs/34 shape 9): the sweep ran over every mode it claims to, three brands with four modes each.
-ok(floorModes === 12, `the floor's groups were checked in 12 brand modes — checked ${floorModes}`);
+// Floor (docs/34 shape 9): the sweep ran over every mode it claims to, three brands with four modes each, plus prism3's
+// Brand B (#1729).
+ok(floorModes === 13, `the floor's groups were checked in 13 brand modes — checked ${floorModes}`);
 
 console.log(`\n${executed - failed}/${executed} Surfaces & fills write assertions passed.`);
 if (failed) process.exit(1);

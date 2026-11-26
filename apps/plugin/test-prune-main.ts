@@ -26,6 +26,9 @@
  *   · `...exec.text` dropped from Apply Theme's planned style names (a Rename reads as an orphan) → `main/apply renamed style, no orphan` (#1737).
  *   · prune's furniture rule back to "set alive" only (the parent not compared) → `main/moved set's furniture` (#2485).
  *   · the `core/other` entry dropped from Apply Theme's `allOrphans` → `main/apply reports core/other` (#1109).
+ *   · `unlessRenamedPlanned` dropped from `orphanStyles` → `main/prune spares renamed style` (#3860).
+ *   · `unlessRenamedPlanned` dropped from `computePrunePlan`'s variables arm → `main/prune spares renamed variable` (#3869).
+ *   · `unlessRenamedPlanned` dropped from Apply Theme's `allOrphans` → `main/apply note spares renamed variable` (#3869).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,7 +52,7 @@ const input: BrandInput = brandFromDesignMd(readFileSync(join(REPO, 'packages/en
 const other: BrandInput = { ...input, controlShape: input.controlShape === 'pill' ? 'rounded' : 'pill' };
 
 // The owner's copy, typed here (`prune-figma.ts`'s `PRUNE_COPY`, approved as D3709.1).
-const NOT_APPLIED = "Nothing removed — the file doesn't hold this brand yet. Apply the theme first, then check again.";
+const NOT_APPLIED = "Nothing removed — the file doesn't hold this brand yet. Run Update file with Theme ticked, then check again.";
 const MOVED = 'Nothing removed — the file changed after the check. Check again.';
 
 const file = new FileShim();
@@ -109,6 +112,16 @@ const send = async (msg: unknown, kinds: readonly string[], ms = 120_000): Promi
 const applied = await send({ type: 'apply-theme', input }, ['apply-result']);
 if (applied?.type !== 'apply-result' || !applied.ok) throw new Error(`premise: Apply Theme did not run clean (${JSON.stringify(applied)?.slice(0, 400)})`);
 
+// #4185 B row 3 (owner decision 2026-11-20 on #4364): every axis line of Apply's summary is a capitalized label, "Word:"
+// and a space, as "Layout:", "Type:" and "Motion:" are. The labels and their order are typed here, not read from main.ts.
+// Mutation: `Palette:` back to `palette` (or any one label) in main.ts → `#4185 main/apply labels`.
+{
+  const LABELS = ['Palette', 'Color', 'Layout', 'Styles', 'Type', 'Motion'];
+  const heads = ((applied.lines ?? []) as string[]).slice(0, LABELS.length).map((l) => /^([^:]*): \d/.exec(l)?.[1] ?? l);
+  ok(JSON.stringify(heads) === JSON.stringify(LABELS),
+    `#4185 main/apply labels: Apply's axis lines read "Palette: …", "Color: …", "Layout: …", "Styles: …", "Type: …", "Motion: …" (${JSON.stringify(((applied.lines ?? []) as string[]).slice(0, LABELS.length))})`);
+}
+
 // #1109 — APPLY REPORTS THE CORE VARIABLES NO SLICE OWNS, ON ITS SUMMARY. `test-write.ts` holds `uc` on
 // `runApplyTheme`'s result; this holds the line a designer reads, through main.ts. Planted in `core`: a hand-made
 // `<root>/core/zzlegacy/1` and an un-rooted `zzmisc/1`, neither in any slice. Removed after, so the arms below start
@@ -120,13 +133,13 @@ if (applied?.type !== 'apply-result' || !applied.ok) throw new Error(`premise: A
   if (!coreCol) throw new Error('premise: Apply Theme wrote no `core` collection');
   const ghosts = [`${croot}/core/zzlegacy/1`, 'zzmisc/1'].map((n) => file.createVariable(n, coreCol, 'FLOAT'));
   const again = await send({ type: 'apply-theme', input }, ['apply-result']);
-  const NOTE = '⚠ 2 orphaned variables not in the plan (core/other: 2) — likely renames; nothing was deleted';
+  const NOTE = '⚠ 2 variables the brand no longer writes (core/other: 2). Nothing was deleted — Update file › Clean up lists them';
   const lines: string[] = again?.lines ?? [];
-  ok(!(applied.lines as string[]).some((l) => l.includes('orphaned variables')),
-    `main/apply clean file, no core/other: the first apply names no orphaned variable (${JSON.stringify((applied.lines as string[]).filter((l) => l.includes('orphaned')))})`);
+  ok(!(applied.lines as string[]).some((l) => l.includes('variables the brand no longer writes')),
+    `main/apply clean file, no core/other: the first apply names no orphaned variable (${JSON.stringify((applied.lines as string[]).filter((l) => l.includes('no longer writes')))})`);
   ok(again?.type === 'apply-result' && again.ok === true && lines.includes(NOTE) && String(again.summary).includes(NOTE)
     && ghosts.every((v: any) => !v.removed),
-    `main/apply reports core/other: a re-apply's summary counts the two core variables no slice owns, and removes neither (${JSON.stringify(lines.filter((l) => l.includes('orphaned')))})`);
+    `main/apply reports core/other: a re-apply's summary counts the two core variables no slice owns, and removes neither (${JSON.stringify(lines.filter((l) => l.includes('no longer writes')))})`);
   for (const v of ghosts) v.remove();
 }
 
@@ -197,7 +210,7 @@ events.length = 0;
 readThrows = true;
 const r5 = await send({ type: 'prune', input, confirm: true, previewHash: String(preview2?.previewHash ?? '') }, ['prune-result']);
 ok(r5?.applied === true && r5.ok === false && r5.count === 3 && liveAll().length === 0
-  && /^Prune stopped — .*node read failed.*\. Removed 3 stale items before it stopped: 3 variables\.$/.test(String(r5.summary)),
+  && /^Clean up stopped — .*node read failed.*\. Removed 3 stale items before it stopped: 3 variables\.$/.test(String(r5.summary)),
   `main/throw after removals: a throw after three removals reports the three, not 0 (count ${r5?.count}, left ${JSON.stringify(liveAll())}, ${JSON.stringify(r5?.summary)})`);
 
 // #3709 S2 — the third guard's other half: a version save that FAILS removes nothing. Two fresh stale variables, the
@@ -316,9 +329,9 @@ ok(ended >= 0 && after.some((m) => m.done === true),
     plant(() => fs.createTextStyle(), 'Marketing/Hero'),
   ];
   const again = await send({ type: 'apply-theme', input }, ['apply-result']);
-  const NOTE = '⚠ 3 orphaned styles not in the plan (text: 2, effect: 1) — likely from an earlier brand; nothing was deleted';
+  const NOTE = '⚠ 3 styles the brand no longer writes (text: 2, effect: 1). Nothing was deleted — Update file › Clean up lists them';
   const lines: string[] = again?.lines ?? [];
-  ok(applied?.lines?.length > 0 && !(applied.lines as string[]).some((l) => l.includes('orphaned style')),
+  ok(applied?.lines?.length > 0 && !(applied.lines as string[]).some((l) => l.includes('the brand no longer writes')),
     `main/apply clean file, no orphan styles: the first apply, into a file holding only what it wrote, names no style (${JSON.stringify((applied?.lines ?? []).filter((l: string) => l.includes('style')))})`);
   ok(again?.type === 'apply-result' && again.ok === true && String(again.summary).includes(NOTE) && lines.includes(NOTE)
     && planted.every((st) => !st.removed),
@@ -346,6 +359,54 @@ ok(ended >= 0 && after.some((m) => m.done === true),
   const renamed = file.styles.text.find((st: any) => st.name === `${name} (Prism3)`);
   ok(again?.ok === true && !!renamed && !theirs.removed && !lines.some((l) => l.includes('orphaned style')) && !String(again.summary).includes('orphaned style'),
     `main/apply renamed style, no orphan: Rename writes "${name} (Prism3)" beside the designer's, and the verdict names no orphan style (${JSON.stringify(lines.filter((l) => /style/.test(l) && l.startsWith('⚠')))}; renamed ${!!renamed})`);
+}
+
+// #3860 — PRUNE SPARES THE STYLE A RENAME WROTE. The file above now holds the designer's style and `<name> (Prism3)`
+// beside it. Prune's planned names are the plans alone, so before #3860 its preview offered the renamed style, which
+// Apply's note (above) does not count. Owner decision A: a name that is planned once every ` (Prism3)` is stripped is
+// the plan's own.
+// Mutation: `unlessRenamedPlanned` dropped from `orphanStyles` → `main/prune spares renamed style`.
+{
+  const name = themePlans(input).textPlan.map((r) => r.name).find((n) => n.includes('/')) ?? '';
+  const renamed = file.styles.text.find((st: any) => st.name === `${name} (Prism3)`);
+  if (!renamed) throw new Error(`premise: the renamed style "${name} (Prism3)" is not in the file`);
+  const pv = await send({ type: 'prune', input, confirm: false }, ['prune-result']);
+  ok(pv?.type === 'prune-result' && pv.count === 0 && !String(pv.summary).includes('(Prism3)'),
+    `main/prune spares renamed style: #3860, Prune's preview does not offer "${name} (Prism3)" (count ${pv?.count}, ${JSON.stringify(String(pv?.summary ?? '').slice(0, 200))})`);
+  renamed.remove();
+  file.styles.text.find((st: any) => st.name === name)?.remove();
+  await send({ type: 'apply-theme', input }, ['apply-result']);
+}
+
+// #3869 — PRUNE SPARES THE VARIABLE A RENAME WROTE, the issue's reproduction committed. A palette variable in Prism3's
+// own `core` is retyped by hand, so Apply refuses with one collision; Rename writes `<name> (Prism3)` and repoints every
+// alias at it. Before #3869, Prune offered that variable and a confirm deleted it, leaving the aliases dangling. Then
+// the hand-made variable is removed and the brand re-applied: the renamed one is now what Apply's orphan note would
+// count, and Apply's note reads Prune's rule, so it names no orphan either.
+// Mutation: `unlessRenamedPlanned` dropped from `computePrunePlan`'s variables arm → `main/prune spares renamed variable`.
+// Mutation: `unlessRenamedPlanned` dropped from main.ts's `allOrphans` → `main/apply note spares renamed variable`.
+{
+  const white = file.vars.find((v: any) => String(v.name).endsWith('/core/palette/white'));
+  if (!white) throw new Error('premise: the applied file holds no `…/core/palette/white`');
+  const wname = String(white.name);
+  white.resolvedType = 'STRING'; white.valuesByMode = { m: 'hand-typed' };
+  const refused = await send({ type: 'apply-theme', input }, ['apply-result']);
+  if (refused?.ok !== false) throw new Error(`premise: a retyped palette variable is not a collision (${refused?.headline})`);
+  const key = `variable:core:${wname}`;
+  const again = await send({ type: 'apply-theme', input, collisions: { [key]: 'rename' } }, ['apply-result']);
+  const renamed = file.vars.find((v: any) => v.name === `${wname} (Prism3)`);
+  const aliasers = (): number => file.vars.filter((v: any) => Object.values(v.valuesByMode ?? {}).some((x: any) => x?.type === 'VARIABLE_ALIAS' && x.id === renamed?.id)).length;
+  if (again?.ok !== true || !renamed || aliasers() === 0) throw new Error(`premise: Rename did not write an aliased "${wname} (Prism3)" (ok ${again?.ok}, renamed ${!!renamed}, aliased by ${aliasers()})`);
+  const n = aliasers();
+  const pv = await send({ type: 'prune', input, confirm: false }, ['prune-result']);
+  const pc = await send({ type: 'prune', input, confirm: true, previewHash: String(pv?.previewHash ?? '') }, ['prune-result']);
+  ok(pv?.count === 0 && !String(pv?.summary).includes('(Prism3)') && !renamed.removed && file.vars.includes(renamed) && aliasers() === n,
+    `main/prune spares renamed variable: #3869, Prune neither offers nor removes "${wname} (Prism3)", and its ${n} aliases still resolve (preview ${JSON.stringify(String(pv?.summary ?? '').slice(0, 200))}; confirm ${JSON.stringify(String(pc?.summary ?? '').slice(0, 120))}; removed ${!!renamed.removed})`);
+  white.remove();
+  const after = await send({ type: 'apply-theme', input }, ['apply-result']);
+  const lines: string[] = after?.lines ?? [];
+  ok(after?.ok === true && file.vars.includes(renamed) && !lines.some((l) => l.includes('orphaned variables')) && !String(after.summary).includes('orphaned variables'),
+    `main/apply note spares renamed variable: #3869, with the hand-made one gone, a re-apply's orphan note does not count "${wname} (Prism3)" (${JSON.stringify(lines.filter((l) => l.includes('orphaned')))})`);
 }
 
 console.log = log;

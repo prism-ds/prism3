@@ -115,7 +115,7 @@ export const switchRow: ComponentDef = {
   props: [
     { name: 'checked', type: 'boolean', required: false, description: 'The binary, with defaultChecked for the uncontrolled form — native naming. onChange is expected to apply the effect immediately: that expectation is the component\'s contract, and a switch whose change is committed by a later Save button is a Checkbox.Row. For an async effect the controlled value is the server-confirmed source of truth with optimistic local state layered over it.' },
     { name: 'label', type: 'node', required: false, description: 'Rich content, and part of the hit target — the Checkbox.Row label model, inherited. Names the setting as a stable noun or adjective phrase in sentence case ("Airplane mode"), never the state ("Airplane mode is on") and never an action ("Turn on airplane mode"). It does not change on toggle: a label that flips Enable/Disable is disorienting and is a common bug.' },
-    { name: 'description', type: 'node', required: false, description: 'Helper beneath the label, describedby-wired. Where the consequence of the setting goes — what turning it on will actually do.' },
+    { name: 'description', type: 'node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the label: the consequence of the setting, what turning it on does.' },
     { name: 'labelPosition', type: "enum: 'leading' | 'trailing'", values: ['leading', 'trailing'], default: 'leading', required: false, description: 'Where Switch.Row differs structurally from Checkbox.Row and Radio.Row, whose control always leads. Defaults to label-leading because a switch\'s habitat is the settings row, with the toggle at the row\'s trailing edge where the eye expects it; flip to control-leading when a switch sits inline among other form controls. A prop and not a variants axis: it changes a row\'s direction and no ink at any coordinate, so it is an anatomy concern (see the header).' },
     { name: 'disabled', type: 'boolean', default: false, required: false, description: 'Native disabled: removed from the tab order, not submitted, contrast-exempt. Disables the whole row: the nested switch takes its disabled skin and the label dims. Reserve for a setting that does not apply in the current state.' },
     { name: 'isPending', type: 'boolean', required: false, default: false, description: 'A first-class state here, because an immediate change can still wait on the network. Locks input, swaps the thumb for a spinner and announces aria-busy. The practice ships optimistic-by-default — flip instantly, revert and message on failure — with this as the alternative for high-latency or critical toggles where an inconsistent intermediate is genuinely harmful.' },
@@ -408,10 +408,12 @@ export const switchRow: ComponentDef = {
       'Apply the change the instant it is toggled — the immediacy is the contract',
       'Put the label first and the switch at the row\'s trailing edge; flip to control-leading only when a switch sits inline among other form controls',
       'Name the setting, not the state, and keep the label the same on and off',
-      'Default to optimistic: flip immediately, then revert and say what failed if the effect did not take',
-      'Guard the re-toggle race — lock input on the first interaction until the effect resolves',
       'Support read-only for settings a user may review but not change: focusable, in the tab order, at full contrast',
       'Let thumb position carry the state, and add the thumb glyph (showStateLabel) where legibility demands a cue beyond color',
+    ],
+    implementation: [
+      'Default to optimistic: flip immediately, then revert and say what failed if the effect did not take',
+      'Guard the re-toggle race — lock input on the first interaction until the effect resolves',
     ],
     dont: [
       'Use a switch for a binary that is submitted with a form — if a Save button sits anywhere in the flow it is a Checkbox.Row',
@@ -441,21 +443,21 @@ export const switchRow: ComponentDef = {
     // level down. The label is the Row's own text part, not a `field-label`, and an outcome error is a status
     // message, not a `field-message` (#1699).
     composesWith: ['switch-control'],
-    alternativeTo: ['checkbox-row', 'radio-row', 'segmented-control', 'button', 'button-destructive', 'button-neutral', 'text-field', 'checkbox-group', 'radio-group', 'slider'],
+    alternativeTo: ['checkbox-row', 'radio-row', 'segmented-control', 'button', 'button-destructive', 'button-neutral', 'text-field', 'checkbox-group', 'radio-group', 'slider', 'toggle-button'],
     replacesPatterns: [
       'a checkbox misused for an immediate-effect setting',
       'two radios standing in for an obvious binary on/off',
       'an `aria-pressed` toggle button misused to hold a state setting',
     ],
     supersededBy: [],
-    planned: ['card', 'toggle-button'],
+    planned: ['card'],
   },
 
   // KB switch brief §8. The thumb slide itself is `switch-control`'s motion; the Row's is the async outcome.
   motion: {
     enter: 'none (present on mount)',
     exit: 'none',
-    reduceMotion: 'The nested control carries the thumb travel (motion.transition.default; at once under prefers-reduced-motion, with the track color fading). The Row\'s motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears.',
+    reduceMotion: 'The nested control carries the thumb travel (motion.preset.move; at once under prefers-reduced-motion, with the track color fading). The Row\'s motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears.',
   },
 
   notes: {
@@ -475,7 +477,7 @@ export const switchRow: ComponentDef = {
       'THE DECOMPOSITION IS UNVERIFIED ON A REAL HOST, the same way `checkbox-control`\'s was: the nested control instance must pin its own HEIGHT (the track height) rather than stretch to the `control-box` line box, and whether the instance\'s inherited sizing mode cooperates with the row\'s auto-layout is a real-host question the offline shim cannot answer. The symptom to look for: a control instance stretched to the line-box height instead of centered within it. The control is non-square, so the Row pins HEIGHT only and the width is the control\'s own 2:1 — a narrower pin than checkbox\'s square.',
       'THE THUMB GLYPH IS UNVERIFIED ON A REAL HOST for legibility at its smallest size. Since #1425 the thumb is 0.75 × the track (`control.size.*.thumb`), 18px at `small` and 24px at `medium` in every corpus brand, so the glyph is ~12.7px and ~17px after its optical inset; the smallest case is compact density `small`, a 12px thumb and a ~8.5px glyph. The measurement is in `switch-control.ts`.',
       'THE LABEL SIDE HAS ONE EXPRESSION AND `labelPosition` STILL HAS NONE. The anatomy states the DEFAULT (`row.children` is `[label, trackBox]`, label-leading); the flipped order the prop selects is not expressible, because a prop is not a coordinate. RTL is the sharper half and inverts twice over (the row mirrors AND the thumb travel flips).',
-      'THE TRAVEL\'S TWO ENDPOINTS ARE EXPRESSED AND THE MOTION BETWEEN THEM IS NOT — on `switch-control` now. The slide on motion.transition.default with the synchronized track-color crossfade (at once under prefers-reduced-motion) is the animation the component is most recognized by and has no expression in the schema.',
+      'THE TRAVEL\'S TWO ENDPOINTS ARE EXPRESSED AND THE MOTION BETWEEN THEM IS NOT — on `switch-control` now. The slide on motion.preset.move with the synchronized track-color crossfade (at once under prefers-reduced-motion) is the animation the component is most recognized by and has no expression in the schema.',
       'THE role="switch" ANNOUNCEMENT INSIDE A SHADOW ROOT on older Safari with VoiceOver, where no explicit aria-label or aria-labelledby is set (KB switch brief §15, from Material 3\'s notes). The `aria` block already tells a web-component host to set the name explicitly; whether older Safari announces the role and state correctly across the shadow boundary is not checked by anything here.',
       'THE WHOLE-ROW HIT TARGET HAS A NUMBER SINCE #2894: the row\'s floor, `size.*.min-height` (the control-height ladder), is bound in Figma as well as code, so a single-line row measures 36/44 at comfortable and 29/36 at compact, and every row clears SC 2.5.8\'s 24×24 (`test.ts` #2894). Still unverified on a real host, and sharper here than on the siblings because the row is label-leading (the control sits at the trailing edge, furthest from the label). The track spilling past its line-box cell is #1439, which the taller row hides but does not fix.',
     ],

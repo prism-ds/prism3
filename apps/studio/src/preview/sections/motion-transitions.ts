@@ -1,9 +1,10 @@
-/** The four transitions, traced (#114, redesigned #292 "trace the curve"; UI redesign S9.1 lifted the legacy
+/** The motion presets, traced (#114, redesigned #292 "trace the curve"; UI redesign S9.1 lifted the legacy
  *  `renderMotionSpecimen` here, and S9.2 drew it in the Depth & motion preview's Motion section, owner decisions D7 A
- *  and D9 A): one stage per semantic transition (default, enter, exit, emphasized). The ghost line is the curve the
- *  transition's role uses IN THE MODE IN VIEW (`curveOfRole`: the mode's re-point, else the brand's; #2046, which the
- *  legacy specimen and concept v6 both missed by reading the transition's fixed default curve), and the dot traces it
- *  over the mode's duration.
+ *  and D9 A). One stage per preset (#2857, Q-MS1 A: the presets replaced the four `motion.transition.*`
+ *  composites). The ghost line is the curve the preset's easing resolves to IN THE MODE IN VIEW (a role's curve through
+ *  `curveOfRole`: the mode's re-point, else the brand's, #2046; or the curve the preset names), and the dot traces it
+ *  over the preset's duration in that mode. A preset eased by a spring traces a straight line over the spring's settle
+ *  time, since a spring has no Bézier to draw; its label names the spring.
  *
  *  WHEN IT PLAYS is the caller's (`preview/depth.ts`): once after a Motion edit and on Play or Replay, at real speed, and
  *  never by itself under reduced motion. This module draws the dots at rest and hands back `play`. The Slow motion
@@ -17,6 +18,12 @@
 import type { Theme } from '@prism3/engine';
 import { el, hook, subHead, tokenPillBadged, tokenPillWrapping, viewOnly } from './kit';
 import { curveOfRole, motionStageSvg } from './motion-curves';
+import { must } from '../../must';
+
+const LINEAR = [0, 0, 1, 1];
+/** The curve a preset's easing resolves to in `mode`: its role's curve there, or the curve it names; null for a spring. */
+export const presetCurveOf = (mo: Theme['motion'], mode: string, p: Theme['motion']['presets'][number]): string | null =>
+  'role' in p.easing ? curveOfRole(mo, mode, p.easing.role) : 'curve' in p.easing ? p.easing.curve : null;
 
 /** The playback divisors the Slow motion select offers, real speed first (D9: Off, 1/2, 1/4, 1/8). */
 export const MOTION_SLOWMO_OPTIONS = [1, 2, 4, 8];
@@ -37,11 +44,13 @@ export const motionTransitionsSection = (
   wrap.append(subHead(copy.title), el('p', 'dm-desc', copy.desc));
 
   const bar = el('div', 'mo-toolbar');
-  const btn = hook(el('button', 'mo-replay', playback.played ? copy.replay : copy.play), 'motion-play') as HTMLButtonElement;
+  // #4188: the chrome's own page button and select, as every control beside the preview is (they steer the preview;
+  // they are not specimens).
+  const btn = hook(el('button', 'p3-btn p3-btn-page p3-mo-play', playback.played ? copy.replay : copy.play), 'motion-play') as HTMLButtonElement;
   btn.type = 'button';
   const slowLabel = el('label', 'mo-slowmo');
   slowLabel.append(document.createTextNode(`${copy.slow} `));
-  const select = hook(viewOnly(el('select', 'mo-slowmo-sel')), 'motion-slowmo') as HTMLSelectElement;
+  const select = hook(viewOnly(el('select', 'p3-select p3-mo-slowmo')), 'motion-slowmo') as HTMLSelectElement;
   for (const v of MOTION_SLOWMO_OPTIONS) {
     const opt = el('option', undefined, v === 1 ? copy.off : `1/${v}`) as HTMLOptionElement;
     opt.value = String(v);
@@ -56,15 +65,15 @@ export const motionTransitionsSection = (
 
   const grid = el('div', 'mo-grid');
   const dots: { el: HTMLElement; anim: string }[] = [];
-  for (const t of mo.transitions) {
-    const ms = durOf(t.duration);
+  for (const p of mo.presets) {
+    const ms = 'step' in p.duration ? durOf(p.duration.step) : must(mo.springSettle[p.duration.spring], `the ${p.duration.spring} spring's settle time`);
     const playMs = ms * playback.slowmo;
-    const curve = curveOfRole(mo, mode, t.name);
-    const curveBez = mo.easing[curve] ?? mo.easing.standard;
+    const curve = presetCurveOf(mo, mode, p);
+    const curveBez = curve === null ? LINEAR : must(mo.easing[curve] ?? mo.easing.standard, `the ${curve} curve`);
     const anim = `mo-trace-x ${playMs}ms linear both, mo-trace-y ${playMs}ms cubic-bezier(${curveBez.join(', ')}) both`;
     const col = hook(el('div', 'mo-col'), 'transition');
-    col.dataset.transition = t.name;
-    col.dataset.curve = curve;
+    col.dataset.transition = p.preset;
+    col.dataset.curve = curve ?? `spring:${'spring' in p.easing ? p.easing.spring : ''}`;
     const stage = el('div', 'mo-stage');
     stage.append(motionStageSvg(curveBez));
     const dot = hook(el('div', 'mo-dot'), 'transition-dot');
@@ -72,12 +81,14 @@ export const motionTransitionsSection = (
     dots.push({ el: dot, anim });
     col.append(stage);
     const meta = el('div', 'mo-colmeta');
-    meta.append(el('div', 'mo-colname', t.name));
+    meta.append(el('div', 'mo-colname', p.preset));
     const row = el('div', 'spec-metarow');
-    // The card IS `motion.transition.<name>`: the composite first, then the two parts it binds, the duration and the role.
-    row.append(tokenPillWrapping(`motion.transition.${t.name}`), el('span', 'mo-meta mono', `${ms}ms · ${curve}`),
-      tokenPillBadged(`motion.duration.${t.duration}`), tokenPillBadged(`motion.easing-role.${t.name}`));
-    meta.append(row, el('div', 'mo-coldesc', t.desc));
+    // The card IS `motion.preset.<name>`: its composite first, then what its duration and easing slots point at.
+    const durPill = 'step' in p.duration ? `motion.duration.${p.duration.step}` : `motion.spring-duration.${p.duration.spring}`;
+    const easePill = 'role' in p.easing ? `motion.easing-role.${p.easing.role}` : 'curve' in p.easing ? `motion.easing.${p.easing.curve}` : `motion.spring.${p.easing.spring}`;
+    row.append(tokenPillWrapping(`motion.preset.${p.preset}.transition`), el('span', 'mo-meta mono', `${ms}ms · ${curve ?? ('spring' in p.easing ? p.easing.spring : '')}`),
+      tokenPillBadged(durPill), tokenPillBadged(easePill));
+    meta.append(row);
     col.append(meta);
     grid.append(col);
   }

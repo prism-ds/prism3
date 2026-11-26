@@ -39,7 +39,7 @@ Shown on the default member: appearance `ghost`, size `medium`, shape `square`, 
 
 ## Usage guidelines
 
-Use for a self-evident action where space is tight and a text label would be redundant or not fit — toolbar actions, a close affordance, row-level edit/delete. Color is the component (IconButton / IconButton.Destructive / IconButton.Neutral — pick by semantics); rank actions within a view by appearance (filled > outline > ghost). Always provide the accessible name; pair with a tooltip (not built yet) for the visible name on hover/focus.
+Use for a self-evident action where space is tight and a text label would be redundant or not fit — toolbar actions, a close affordance, row-level edit/delete. Color is the component (IconButton / IconButton.Destructive / IconButton.Neutral — pick by semantics); rank actions within a view by appearance (filled > outline > ghost). Always provide the accessible name; pair with a Tooltip for the visible name on hover/focus.
 
 **In RTL.** The icon flips only if it points a direction, such as an arrow.
 
@@ -47,7 +47,6 @@ Use for a self-evident action where space is tight and a text label would be red
 
 - Always give it an accessible name (a verb)
 - Use recognizable, conventional icons (close = ×, more = ⋯); pair novel icons with a visible label instead
-- Expand the hit area to meet target-size minimums even when the icon is visually small
 - Confirm a destructive icon action that cannot be undone — the confirmation carries a neutral escape ("Cancel" / "Keep"), since a lone trash glyph offers none
 
 ### Don't
@@ -91,12 +90,14 @@ The accessible name is a verb naming the action ("Close", "More actions"), never
 
 - **Built from:** `focus-ring`, `spinner`
 - **Instead, consider:** `button-destructive`, `flush-icon-button-destructive`
-- **Often used with:** `icon`, `popover`
+- **Often used with:** `icon`, `popover`, `menu`, `tooltip`
 - **Replaces:**
   - `div[role=button]` wrapping an icon
   - a `<button>` holding only an `<svg>` and no accessible name
 
 ## Building it in code
+
+- Expand the hit area to meet target-size minimums even when the icon is visually small
 
 ### Props
 

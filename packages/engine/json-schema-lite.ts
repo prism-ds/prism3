@@ -9,7 +9,7 @@
  *
  * Supported: `$ref` (local `#/$defs/...` only), `type` (one or a list), `const`, `enum`, `properties`,
  * `required`, `additionalProperties` (boolean or schema), `patternProperties`, `items`, `minItems`,
- * `uniqueItems`, `minLength`, `pattern`, `minimum`, `anyOf`. Annotations (`$schema`, `$id`, `title`,
+ * `uniqueItems`, `minLength`, `pattern`, `minimum`, `exclusiveMinimum`, `maximum` (#2857 phase 2), `anyOf`. Annotations (`$schema`, `$id`, `title`,
  * `description`, `$comment`, `$defs`) are read or skipped as annotations.
  *
  *   validate(schema, document) → string[]   // one message per violation, JSON-pointer located; [] = valid
@@ -18,7 +18,7 @@
 type Schema = Record<string, any> | boolean;
 
 const ANNOTATIONS = new Set(['$schema', '$id', 'title', 'description', '$comment', '$defs']);
-const KEYWORDS = new Set(['$ref', 'type', 'const', 'enum', 'properties', 'required', 'additionalProperties', 'patternProperties', 'items', 'minItems', 'uniqueItems', 'minLength', 'pattern', 'minimum', 'anyOf']);
+const KEYWORDS = new Set(['$ref', 'type', 'const', 'enum', 'properties', 'required', 'additionalProperties', 'patternProperties', 'items', 'minItems', 'uniqueItems', 'minLength', 'pattern', 'minimum', 'exclusiveMinimum', 'maximum', 'anyOf']);
 
 const typeOf = (v: unknown): string =>
   v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v === 'number' ? (Number.isInteger(v) ? 'integer' : 'number') : typeof v;
@@ -53,6 +53,8 @@ export const validate = (root: Record<string, any>, doc: unknown): string[] => {
       if (schema.pattern !== undefined && !new RegExp(schema.pattern, 'u').test(v)) fail(`${JSON.stringify(v)} does not match ${schema.pattern}`);
     }
     if (typeof v === 'number' && schema.minimum !== undefined && v < schema.minimum) fail(`${v} is below ${schema.minimum}`);
+    if (typeof v === 'number' && schema.exclusiveMinimum !== undefined && v <= schema.exclusiveMinimum) fail(`${v} is not above ${schema.exclusiveMinimum}`);
+    if (typeof v === 'number' && schema.maximum !== undefined && v > schema.maximum) fail(`${v} is above ${schema.maximum}`);
     if (Array.isArray(v)) {
       if (schema.minItems !== undefined && v.length < schema.minItems) fail(`fewer than ${schema.minItems} items`);
       if (schema.uniqueItems && new Set(v.map((x) => JSON.stringify(x))).size !== v.length) fail('items are not unique');

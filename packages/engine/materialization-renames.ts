@@ -199,7 +199,7 @@ export const MATERIALIZATION_RENAMES: MaterializationRule[] = [
       + 'than colliding with whatever else a shared file holds, and the point of the tier is that after it '
       + 'a variable\'s name IS its DTCG path — `prism.core.palette.red.550` (#1102) with slashes for dots. '
       + 'Figma STYLES keep the transform they already had and drop both segments; that exception is stated '
-      + 'in `docs/10` because "names track their DTCG path" is now true-with-one-exception rather than just true.',
+      + 'in `docs/10` because "names track their DTCG path" is now true with one exception, where it was true without one.',
     // POSITIONAL, and the two halves read in opposite directions on purpose.
     //
     // The domain asks whether the name is ALREADY rooted, which is the idempotence question and the only
@@ -327,6 +327,17 @@ export const MATERIALIZATION_DELETIONS: MaterializationDeletion[] = [
       + 'step its own spec states. CONTRACT 14.0.0 records the same removal on the token-name side.',
     domain: (collection, name, root) =>
       collection === 'size' && new RegExp(`^${root}/size/(xs|sm|md|lg|xl)/(padding-x|padding-x-visual|padding-y|gap)$`).test(name),
+  },
+  {
+    id: 'motion-50ms-reduced-floor-2857',
+    since: '{{ENGINE_VERSION}}',
+    why:
+      'Reduced motion is min(full, 100ms) on every step (owner decision Q-MP17 A, #2857, closing #3484 and #3493). '
+      + 'The old rule floored every brand\'s reduced `normal` to 50ms, so the 50ms duration primitive was reached '
+      + 'by every brand; a snappy brand reaches no other 50ms value, so its `motion/duration-ms/50` primitive has '
+      + 'nothing left to alias it. Nothing replaces it. CONTRACT 16.0.0 records the same change on the token side, '
+      + 'as a demotion to brand-dependent.',
+    domain: (collection, name) => collection === 'motion' && name === 'ads/motion/duration-ms/50',
   },
 ];
 

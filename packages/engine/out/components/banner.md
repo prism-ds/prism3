@@ -55,7 +55,6 @@ Use a Banner for an important message the user should see and may need to act on
 - Give the action a verb that says what it does
 - Use the neutral tone for an announcement or an offer, which carries no status
 - End a one-line message with an inline link when its action goes somewhere
-- Move focus to a sensible place after a dismiss
 
 ### Don't
 
@@ -90,8 +89,8 @@ Use a Banner for an important message the user should see and may need to act on
 ### Motion
 
 - **Enter:** Fades in. A banner inserted at the top of a page reserves its space, so the content below does not jump.
-- **Exit:** Collapses its height and fades on motion.transition.exit, so the content below moves up smoothly.
-- **Reduced motion:** Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal to appear and to go, and its height changes at once when it is dismissed.
+- **Exit:** Collapses its height and fades on motion.duration.fast with motion.easing-role.exit, so the content below moves up smoothly.
+- **Reduced motion:** Under prefers-reduced-motion it fades only, on motion.preset.fade.duration-reduced to appear and motion.preset.fade.exit.duration-reduced to go, and its height changes at once when it is dismissed.
 
 ## Content guidelines
 
@@ -110,6 +109,8 @@ Titles are short, specific and in sentence case, with no period. The body states
   - an error shown as a toast that disappears
 
 ## Building it in code
+
+- Move focus to a sensible place after a dismiss
 
 ### Props
 

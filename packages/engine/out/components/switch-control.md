@@ -43,10 +43,8 @@ Do not place this on its own. It is the track-and-thumb Switch.Row nests, so a f
 
 ### Do
 
-- Nest this from Switch.Row rather than redrawing the track per host
-- Let the host row pass selection, state and showStateLabel through, and follow its size, so the nested control tracks the row
 - Let thumb position carry the state; treat the glyph as a legibility aid, not the color-independence answer
-- Supply an external aria-label only when using the control genuinely alone
+- Supply an external `aria-label` only when using the control genuinely alone
 
 ### Don't
 
@@ -71,9 +69,10 @@ Do not place this on its own. It is the track-and-thumb Switch.Row nests, so a f
 
 ### Motion
 
-- **Enter:** none (present on mount)
-- **Exit:** none
-- **Reduced motion:** The thumb travels across the track on motion.transition.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back.
+- **Patterns:** `switch/toggle`
+- **Enter:** None. On a change, the thumb travels to its new place and the track changes color on motion.preset.move. The thumb travel is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it.
+- **Exit:** None.
+- **Reduced motion:** Under prefers-reduced-motion, the thumb takes its new place at once; the track fades to its new color on motion.preset.move.duration-reduced. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back.
 
 ## Content guidelines
 
@@ -91,6 +90,9 @@ The atom has no copy of its own; all label, description and error text belongs t
   - the painted track and thumb inlined in a switch row
 
 ## Building it in code
+
+- Nest this from Switch.Row rather than redrawing the track per host
+- Let the host row pass selection, state and showStateLabel through, and follow its size, so the nested control tracks the row
 
 ### Props
 

@@ -225,10 +225,11 @@ const ZERO_OK: Record<string, string> = {
 const MUST_COVER = [
   'button.focusRing', 'button-destructive.focusRing', 'button-neutral.focusRing', 'wallet-button.focusRing', 'sign-in-button.focusRing',
   'icon-button.focusRing', 'icon-button-destructive.focusRing', 'icon-button-neutral.focusRing',
+  'toggle-button.focusRing', 'toggle-icon-button.focusRing',
   'flush-icon-button.focusRing', 'flush-icon-button-destructive.focusRing', 'flush-icon-button-neutral.focusRing',
   'checkbox-control.focusRing', 'radio-control.focusRing', 'switch-control.focusRing',
   'tag.focusRing', 'tab-item.focusRing', 'accordion.focusRing', 'segmented-control-segment.focusRing', 'link.focusRing',
-  'counter.focusRing', '_slider-thumb.focusRing',
+  'counter.focusRing', '_slider-thumb.focusRing', 'menu-item.focusRing',
   'counter.focusRing',
   'pagination-item.focusRing',
 ];
@@ -244,10 +245,11 @@ const MUST_COVER = [
 const MUST_CLEAR_STROKE = [
   'button.focusRing', 'button-destructive.focusRing', 'button-neutral.focusRing', 'wallet-button.focusRing', 'sign-in-button.focusRing',
   'icon-button.focusRing', 'icon-button-destructive.focusRing', 'icon-button-neutral.focusRing',
+  'toggle-button.focusRing', 'toggle-icon-button.focusRing',
   'flush-icon-button.focusRing', 'flush-icon-button-destructive.focusRing', 'flush-icon-button-neutral.focusRing',
   'checkbox-control.focusRing', 'radio-control.focusRing', 'switch-control.focusRing',
   'tag.focusRing', 'tab-item.focusRing', 'segmented-control-segment.focusRing', 'link.focusRing',
-  'counter.focusRing', '_slider-thumb.focusRing',
+  'counter.focusRing', '_slider-thumb.focusRing', 'menu-item.focusRing',
   'counter.focusRing',
   'pagination-item.focusRing',
 ];
@@ -589,7 +591,8 @@ for (const def of componentDefs) {
 // neither walk reads the other. Every member plan is walked (`figmaAnatomySet`), since a corner-pinned def
 // need not carry a size axis, and both directions of D apply: every declared pin is represented, and no plan
 // node carries a pin its def does not declare.
-const MUST_COVER_CORNER = ['textarea.gripGlyph'];
+// Avatar's presence ring (#4110): a box pinned into the container's corner, the dot outside the clipping mask.
+const MUST_COVER_CORNER = ['textarea.gripGlyph', 'avatar.presenceRing'];
 const cornerCovered = new Set<string>();
 let cornerChecks = 0;
 for (const def of componentDefs) {

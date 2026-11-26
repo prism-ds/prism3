@@ -1,3 +1,16 @@
+import { aliasTargetIds } from '../types/figma-guards';
+
+/** Alias targets that are not local variables, resolved through the Plugin API (prism3 #4166). */
+export interface ExternalAliasTargets {
+  /** Each resolved target variable, once. */
+  variables: Variable[];
+  /** Collection id → name, for each target's collection the API could read. */
+  collectionNames: Record<string, string>;
+  /** Collection id → default mode id, for the same collections (prism3 #2365): a tinted wash over a library variable
+   *  resolves through that collection's default mode, as an alias into any other collection does. */
+  collectionDefaultModes: Record<string, string>;
+}
+
 /**
  * Scans and retrieves design tokens from the Figma document.
  * Provides methods to enumerate variables, text styles, effect styles and
@@ -48,6 +61,66 @@ export class TokenScanner {
       effectStyles,
       paintStyles,
     };
+  }
+
+  /**
+   * The alias targets that are not in `variables` (prism3 #4166). A local variable can alias a
+   * variable from an enabled team library, which `getLocalVariablesAsync` does not list, so the
+   * export had no record of it and wrote the raw `{VariableID:…}`. `getVariableByIdAsync` resolves
+   * such an id for any variable the file has imported. Each id is looked up once; a target that is
+   * itself an alias is followed, up to `MAX_HOPS`. An id the API cannot resolve is left out, so it
+   * stays a broken alias, as before.
+   *
+   * `boundIds` are the variables styles bind directly (a text style's font weight, a gradient stop, a
+   * shadow's color; prism3 #4366): a binding to a library variable is looked up the same way, in the
+   * first hop, so a composite can name the library it came from.
+   */
+  async resolveExternalAliasTargets(variables: Variable[], boundIds: string[] = []): Promise<ExternalAliasTargets> {
+    const MAX_HOPS = 10;
+    const known = new Set(variables.map(v => v.id));
+    const found: Variable[] = [];
+    let frontier = variables;
+    const seed: string[] = [];
+    boundIds.forEach(id => {
+      if (!known.has(id)) {
+        known.add(id);
+        seed.push(id);
+      }
+    });
+    for (let hop = 0; hop < MAX_HOPS && (frontier.length > 0 || (hop === 0 && seed.length > 0)); hop++) {
+      const missing: string[] = hop === 0 ? seed.slice() : [];
+      frontier.forEach(v => {
+        Object.values(v.valuesByMode).forEach(value => {
+          aliasTargetIds(value).forEach(id => {
+            if (!known.has(id)) {
+              known.add(id);
+              missing.push(id);
+            }
+          });
+        });
+      });
+      const resolved = await Promise.all(
+        missing.map(id => figma.variables.getVariableByIdAsync(id).catch(() => null))
+      );
+      frontier = resolved.filter((v): v is Variable => v !== null && v !== undefined);
+      frontier.forEach(v => found.push(v));
+    }
+
+    const collectionNames: Record<string, string> = {};
+    const collectionDefaultModes: Record<string, string> = {};
+    const collectionIds = Array.from(new Set(found.map(v => v.variableCollectionId)));
+    const collections = await Promise.all(
+      collectionIds.map(id => figma.variables.getVariableCollectionByIdAsync(id).catch(() => null))
+    );
+    collections.forEach(c => {
+      if (c) {
+        collectionNames[c.id] = c.name;
+        if (c.defaultModeId) {
+          collectionDefaultModes[c.id] = c.defaultModeId;
+        }
+      }
+    });
+    return { variables: found, collectionNames, collectionDefaultModes };
   }
 
   /**

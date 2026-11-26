@@ -8,7 +8,7 @@
 ## Headline
 
 - **Anchor reproduction** — provided `primary` `#C8102E` vs generated `primary.500` `#c8102e`: **ΔE00 0.00** (≈0 confirms exact-anchor preservation).
-- **Aliases**: 1565/1565 resolve · **mode contrast contracts**: 980/980 hold.
+- **Aliases**: 1688/1688 resolve · **mode contrast contracts**: 980/980 hold.
 - **`primary` on white**: the engine measures **5.88:1** (clears small-text AA). The engine measures every contract, so if the brief's prose states a different figure, the *measured* value governs — a stale contrast claim in the source can't propagate.
 - Palettes generated: primary, neutral, secondary, tertiary, success, warning, info, danger · danger draws from `danger`.
 - x-prism3 levers: root=wds.
@@ -196,7 +196,7 @@ Observed elevation is single-layer CSS `box-shadow` strings; the engine generate
 - action: the primary palette, by default — actionPalette is not set.
 - danger: the brand's hue 21.95.
 - dimensions: 4px grid, 8px spacing rhythm, 'comfortable' density (sets component sizes), radius scale 1 (base radius 4px).
-- motion: 'standard' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.
+- motion: 'standard' tempo sets the durations; each reduced-motion twin is a short fade of at most 100ms.
 - shadow: 6 steps (xs–2xl) of two layers each, plus a one-layer inset, softness 1; tinted to hue 249 at 0.15. Full shadows in light, reduced in dark, where surface lightness carries elevation.
 - gradient: none — the brand declares no gradients, and none are added by default.
 - layout: 5 breakpoints (sm 0, md 768, lg 1024, xl 1440, 2xl 1920); 12-column grid (4/8/12/12/12 by breakpoint); gutters 16/16/24/24/32px and margins 16/24/24/32/48px, from the spacing scale; containers max 1440px, narrow 720px.

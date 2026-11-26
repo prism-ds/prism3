@@ -96,6 +96,8 @@ const FIELDS: Record<string, Seed | Seed[] | string> = {
   ],
   modeAnchors: { seed: (b) => { b.modeAnchors = { dark: { acc: 400 }, promo: { acc: 500 } } as BrandInput['modeAnchors']; } },
   modeLevers: { seed: (b) => { b.modeLevers = { dark: { tempo: 'relaxed' }, promo: { tempo: 'snappy' } } as BrandInput['modeLevers']; } },
+  // #1729: keyed by the modes, valued by the color it swaps in; a removal drops the swap, so that mode stops swapping.
+  modePalettes: { confirms: 1, seed: (b) => { b.modePalettes = { promo: { primary: 'acc' } }; } },
   disabledStrategy: 'an enum', disabledMin: 'a number', iconContrast: 'an enum', outlineInteraction: 'an enum',
   outlineHoverFill: { confirms: 3, seed: (b) => {   // light's mode-wide pick, light's and dark's primary set; the acc sets are the column's
     b.outlineInteraction = 'opaque-fill';
@@ -105,7 +107,7 @@ const FIELDS: Record<string, Seed | Seed[] | string> = {
       promo: { sets: { acc: { hover: 'neutral.100' } } },
     } as BrandInput['outlineHoverFill'];
   } },
-  outlineWash: 'numbers', neutralEmphasis: 'an enum', raisedSurface: 'an enum', scrimStrength: 'an enum', secondaryTextGround: 'an enum',
+  outlineWash: 'numbers', neutralEmphasis: 'an enum', raisedSurface: 'an enum', scrimStrength: 'an enum', secondaryTextGround: 'an enum', interactiveGround: 'an enum',
   glassRoles: [
     { heldOnRemove: true, seed: (b) => { b.glassRoles = { card: { palette: 'acc.100', alpha: 60 } }; } },
     // A semantic role path under the color's column (#3710 review): it names the column, so it follows a rename and
@@ -132,6 +134,7 @@ const FIELDS: Record<string, Seed | Seed[] | string> = {
   density: 'an enum', radiusScale: 'a number', baseMd: 'a number', controlShape: 'an enum', fieldStyle: 'an enum', searchFieldStyle: 'an enum',
   tagStyle: 'an enum', dialogTitleSize: 'an enum', bannerStyle: 'an enum', currentIndicator: 'an enum', radiusHairline: 'a flag',
   buttonIcons: 'an enum', buttonContentSize: 'an enum', buttonMinWidthMultiplier: 'a number', buttonLabelWeight: 'an enum', buttonTextHover: 'an enum',
+  icons: 'icon names and their art (#3076), never a palette or a mode',
   buttonBorderWeight: 'an enum',
 };
 /** `surfaces.<mode>`'s keys, by hand: the inverse band and tiers may be `{ palette, step }`; the page tiers are neutral steps. */

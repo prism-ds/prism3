@@ -130,6 +130,7 @@
  * carries the state.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const switchControl: ComponentDef = {
   id: 'switch-control',
@@ -451,10 +452,12 @@ export const switchControl: ComponentDef = {
   docs: {
     usage: 'Do not place this on its own. It is the track-and-thumb Switch.Row nests, so a fix to its border weight or its fill grammar reaches the row without being copied. Build it before the row that nests it (the nest resolves by name against the live file). A standalone use is only for a control with an external label and its own aria wiring.',
     do: [
+      'Let thumb position carry the state; treat the glyph as a legibility aid, not the color-independence answer',
+      'Supply an external `aria-label` only when using the control genuinely alone',
+    ],
+    implementation: [
       'Nest this from Switch.Row rather than redrawing the track per host',
       'Let the host row pass selection, state and showStateLabel through, and follow its size, so the nested control tracks the row',
-      'Let thumb position carry the state; treat the glyph as a legibility aid, not the color-independence answer',
-      'Supply an external aria-label only when using the control genuinely alone',
     ],
     dont: [
       'Place a bare track as the clickable element — the labeled row is the hit target, and a compact small track (16px) is under the SC 2.5.8 minimum on its own',
@@ -485,11 +488,8 @@ export const switchControl: ComponentDef = {
 
   // KB switch brief §8. The keys are the schema's (`enter` / `exit` / `reduceMotion`); the thumb slide is a
   // state transition, so it is carried in `reduceMotion` beside its reduced form, button's precedent.
-  motion: {
-    enter: 'none (present on mount)',
-    exit: 'none',
-    reduceMotion: 'The thumb travels across the track on motion.transition.default, with a synchronized track-color crossfade; it is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it. Under prefers-reduced-motion the travel drops and the thumb takes its new place at once; the track-color change fades on motion.duration-reduced.fast. On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['switch/toggle'], { enter: 'The thumb travel is the receipt that the immediate change registered. Translate the thumb (`transform`), never animate width or layout, and do not spring it.', reduceMotion: 'On an async toggle the thumb snaps to the new position and a spinner cross-fades onto it; if the change fails, the thumb slides back.' }),
 
   notes: {
     // #2411 (owner Q167 call 3): how a consumer-facing fact is projected into the design file — maintainer-only.

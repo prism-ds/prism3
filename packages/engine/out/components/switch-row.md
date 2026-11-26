@@ -46,8 +46,6 @@ Use for a binary on/off setting that applies immediately — notifications, dark
 - Apply the change the instant it is toggled — the immediacy is the contract
 - Put the label first and the switch at the row's trailing edge; flip to control-leading only when a switch sits inline among other form controls
 - Name the setting, not the state, and keep the label the same on and off
-- Default to optimistic: flip immediately, then revert and say what failed if the effect did not take
-- Guard the re-toggle race — lock input on the first interaction until the effect resolves
 - Support read-only for settings a user may review but not change: focusable, in the tab order, at full contrast
 - Let thumb position carry the state, and add the thumb glyph (showStateLabel) where legibility demands a cue beyond color
 
@@ -83,7 +81,7 @@ Use for a binary on/off setting that applies immediately — notifications, dark
 
 - **Enter:** none (present on mount)
 - **Exit:** none
-- **Reduced motion:** The nested control carries the thumb travel (motion.transition.default; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears.
+- **Reduced motion:** The nested control carries the thumb travel (motion.preset.move; at once under prefers-reduced-motion, with the track color fading). The Row's motion is the async outcome: on an optimistic toggle the thumb snaps to the new state and a spinner cross-fades onto it while pending; on failure the thumb slides back, the track flashes the error color, and a message says what did not happen, so the reversal is explained. Under prefers-reduced-motion the slide back snaps too; the message still appears.
 
 ## Content guidelines
 
@@ -95,7 +93,7 @@ The label names the setting and never changes. The description says what turning
 ## Related components
 
 - **Built from:** `switch-control`
-- **Instead, consider:** `checkbox-row`, `radio-row`, `segmented-control`, `button`, `button-destructive`, `button-neutral`, `text-field`, `checkbox-group`, `radio-group`, `slider`
+- **Instead, consider:** `checkbox-row`, `radio-row`, `segmented-control`, `button`, `button-destructive`, `button-neutral`, `text-field`, `checkbox-group`, `radio-group`, `slider`, `toggle-button`
 - **Often used with:** `focus-ring`
 - **Replaces:**
   - a checkbox misused for an immediate-effect setting
@@ -104,13 +102,16 @@ The label names the setting and never changes. The description says what turning
 
 ## Building it in code
 
+- Default to optimistic: flip immediately, then revert and say what failed if the effect did not take
+- Guard the re-toggle race — lock input on the first interaction until the effect resolves
+
 ### Props
 
 | Name | Type | Default | Required | Description |
 | --- | --- | --- | --- | --- |
 | `checked` | boolean | — | no | The binary, with defaultChecked for the uncontrolled form — native naming. onChange is expected to apply the effect immediately: that expectation is the component's contract, and a switch whose change is committed by a later Save button is a Checkbox.Row. For an async effect the controlled value is the server-confirmed source of truth with optimistic local state layered over it. |
 | `label` | node | — | no | Rich content, and part of the hit target — the Checkbox.Row label model, inherited. Names the setting as a stable noun or adjective phrase in sentence case ("Airplane mode"), never the state ("Airplane mode is on") and never an action ("Turn on airplane mode"). It does not change on toggle: a label that flips Enable/Disable is disorienting and is a common bug. |
-| `description` | node | — | no | Helper beneath the label, describedby-wired. Where the consequence of the setting goes — what turning it on will actually do. |
+| `description` | node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the label: the consequence of the setting, what turning it on does. |
 | `labelPosition` | enum: 'leading' \| 'trailing' | `leading` | no | Where Switch.Row differs structurally from Checkbox.Row and Radio.Row, whose control always leads. Defaults to label-leading because a switch's habitat is the settings row, with the toggle at the row's trailing edge where the eye expects it; flip to control-leading when a switch sits inline among other form controls. A prop and not a variants axis: it changes a row's direction and no ink at any coordinate, so it is an anatomy concern (see the header). |
 | `disabled` | boolean | `false` | no | Native disabled: removed from the tab order, not submitted, contrast-exempt. Disables the whole row: the nested switch takes its disabled skin and the label dims. Reserve for a setting that does not apply in the current state. |
 | `isPending` | boolean | `false` | no | A first-class state here, because an immediate change can still wait on the network. Locks input, swaps the thumb for a spinner and announces aria-busy. The practice ships optimistic-by-default — flip instantly, revert and message on failure — with this as the alternative for high-latency or critical toggles where an inconsistent intermediate is genuinely harmful. |

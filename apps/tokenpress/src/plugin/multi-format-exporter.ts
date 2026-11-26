@@ -72,6 +72,8 @@ export class MultiFormatTokenExporter extends TokenExporter {
   private rawFigmaExporter: RawFigmaExporter;
   private dotNotationExporter: DotNotationExporter;
   private scanner: TokenScanner;
+  /** Token paths a DTCG-based format left out of its file (prism3 #3886), once each across modes, for the footer. */
+  private skippedCssValues: string[] = [];
 
   constructor(options: MultiFormatExportOptions) {
     super(options);
@@ -84,6 +86,11 @@ export class MultiFormatTokenExporter extends TokenExporter {
   /**
    * Initialize and register format exporters
    */
+  /** Token paths the CSS format left out, having no CSS form for them (prism3 #3886). */
+  getSkippedCssValues(): string[] {
+    return this.skippedCssValues.slice();
+  }
+
   private initializeFormatExporters(): void {
     // Register CSS exporter
     if (!exporterRegistry.isSupported('css')) {
@@ -109,6 +116,7 @@ export class MultiFormatTokenExporter extends TokenExporter {
     const startTime = Date.now();
     const zip = new JSZip();
     this.fileCount = 0;
+    this.skippedCssValues = [];
 
     const reportProgress = (progress: number, message: string) => {
       if (progressCallback) {
@@ -223,6 +231,11 @@ export class MultiFormatTokenExporter extends TokenExporter {
         const platformExports = await exporter.export(mergedDTCG, formatOptions);
 
         for (const platformExport of platformExports) {
+          (platformExport.omitted || []).forEach(name => {
+            if (this.skippedCssValues.indexOf(name) === -1) {
+              this.skippedCssValues.push(name);
+            }
+          });
           // For multi-mode exports, add mode name to the filename
           const fileName = isMultiMode
             ? this.addModeToFilename(platformExport.fileName, modeName)
@@ -394,7 +407,9 @@ export class MultiFormatTokenExporter extends TokenExporter {
     const { collections, variables } = await this.scanner.scanAll({
       excludedCollectionNames: (this.options as MultiFormatExportOptions).excludedCollections,
     });
-    const variableMap = new Map(variables.map(v => [v.id, v]));
+    // A team-library alias target names itself rather than 'Unknown' (prism3 #4166).
+    this.setExternalAliasTargets(await this.scanner.resolveExternalAliasTargets(variables));
+    const variableMap = this.variableMapOf(variables);
 
     return {
       variables,

@@ -52,6 +52,9 @@ decision for the owner (section 6), and most become component work.
   missing: the set grows, and tabs, accordions, lists, dividers and segmented controls now ship. The rule doesn't apply to pieces Prism3 doesn't have. Log the
   missing component, and use Prism3 atoms inside it (`icon-button`, `flush-icon-button`, `button`,
   `link`, text styles) wherever they fit.
+- **Name each layer you build by hand because no component fits with the prefix `GAP / `**, then what it
+  stands for: "GAP / Promo tile", "GAP / Site footer". The name travels with the layer, so a hand-built
+  stand-in is never later read as a Prism3 component, and the audit counts it by name (section 7).
 
 ## 2. Before the first write
 
@@ -337,6 +340,12 @@ gradient styles first), hidden leftovers the owner deferred. Finish by recheckin
   listed too (section 8, step 5).
 - **Exempt the placeholder (FPO) fill and deliberate component states** from consistency checks.
 - **An instance's own padding isn't a raw value.** Leave instance nodes out of the unbound-spacing scan.
+- **Count the `GAP / ` layers by name:** every layer whose name starts with the prefix (section 1). They are
+  built by hand on purpose, so they are not rogue; report the count, and each one's name and screen, beside
+  "left on purpose".
+- **A quick check by eye, for the owner:** Figma's Outline view (View › Outline, Cmd/Ctrl+Y, also called
+  wireframe view) draws library instances in purple and hand-built layers without it. A screen that reads
+  mostly purple is mostly Prism3; a layer that isn't purple and isn't a `GAP / ` layer is worth a second look.
 
 Once a set of rebuilt pages is done, run the consistency audit too (section 10). Every node can be
 bound to Prism3 while the pages still disagree with each other.
@@ -409,6 +418,9 @@ Log the library's name, every key imported, every import that failed and its rea
 ## 9. What to hand back
 
 - Per screen: placed components, overrides, snaps, grays for review, and what was left on purpose.
+- **The end-of-job note:** the Prism3 instances you placed, by component and count; the `GAP / ` layers you
+  built by hand, each with what it stands for; and the components worth suggesting, starting with the gaps
+  that more than one screen needed.
 - **The differences, in the file.** Pin a native Figma annotation on each layer that differs from the design, in categories the owner can filter: improvement, gap, brand-only, decided, question (prefix them with the brand so they don't mix with the file's own), each with its mapping-row ID, and the owner question's number when it has one. Put a contrast failure the owner keeps in the file's accessibility category too. When you re-run, replace only your own categories' notes.
 - **The rebuilt page laid out like the source page:** one section per flow, the screens in the source's order and breakpoint order, with the file's own heading components above each section where it has them.
 - On the library path: the library, the key table, imports that failed, and the publish status of

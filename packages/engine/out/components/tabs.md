@@ -13,7 +13,7 @@ A row of tabs above a baseline. Each tab names one panel of related content; sel
 
 - **Purpose:** Switch between peer panels of related content in place, one at a time.
 - **Use when:** Two to about six peer sections of one subject, viewed one at a time, where switching is quick and the address need not change.
-- **Avoid when:** The selection changes the page or the address (PageNav, a navigation of links), filters or re-sorts the current view (SegmentedControl, or Select), is a required sequence (a stepper, not built yet), or has many independent sections (Accordion).
+- **Avoid when:** The selection changes the page or the address (PageNav, a navigation of links), filters or re-sorts the current view (SegmentedControl, or Select), is a required sequence (Steps), or has many independent sections (Accordion).
 
 ## Anatomy
 
@@ -72,9 +72,10 @@ Use tabs to switch between peer sections of related content in one place, one at
 
 ### Motion
 
-- **Enter:** None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.transition.default.
-- **Exit:** The outgoing panel fades out under the incoming one. Panels never slide sideways.
-- **Reduced motion:** Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast.
+- **Patterns:** `tabs/select`
+- **Enter:** None. On a change, the underline travels to its new place on motion.preset.move; the panel cross-fades on motion.preset.crossfade.
+- **Exit:** None. The outgoing panel fades out under the incoming one. Panels never slide sideways.
+- **Reduced motion:** Under prefers-reduced-motion, the underline takes its new place at once; the panel cross-fades on motion.preset.crossfade.duration-reduced.
 
 ## Content guidelines
 

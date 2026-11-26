@@ -20,7 +20,9 @@
  * is the only reason the coverage check below exists at all. So there are two different scans:
  *
  *   1-3. REFERENCE checks — a name the skill quotes must still exist (dead references).
- *   4.   COVERAGE check   — a surface the engine grew must appear in the skill that documents it.
+ *   4.   COVERAGE check   — a surface the engine grew must appear in the skill that documents it, NAMED as a
+ *        property (a code span or a fenced example's top-level key, never an English word), and one level down
+ *        for `NESTED_COVERAGE`'s parents (#4173).
  *   5.   IDENTIFIER check — an all-caps name a skill quotes (`MUST_COVER`, `ENGINE_VERSION`) is declared
  *        in the source file the skill places it in, or in some source file when it names none (#1725).
  *   6.   DISCOVERY check  — every skill under `skills/` has a `.claude/skills/<name>` symlink to it, so a
@@ -48,6 +50,7 @@ import { buildTree } from './tree';
 import { buildAiMetadata } from './ai-metadata';
 import { toolDefs } from './mcp';
 import { leverManifest } from './levers';
+import { componentDefs } from './components/index';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../..');
@@ -144,6 +147,10 @@ const AI_FIELDS = (() => {
     const t = ai[tier];
     if (t && typeof t === 'object') for (const e of Object.values(t)) if (e && typeof e === 'object') for (const [k, x] of Object.entries(e)) if (k !== 'mode_overrides' && k !== 'resolves_to') sub(x);
   }
+  // A motion preset's fields (#2857): `motion_presets` is keyed by preset name, which is data, so its entries' own keys
+  // (`duration`, `easing`, `reduced_duration`) are the vocabulary, as a tier's entries' keys are above.
+  const presets = ai.motion_presets;
+  if (presets && typeof presets === 'object') for (const e of Object.values(presets)) if (e && typeof e === 'object') Object.keys(e).forEach((n) => out.add(n));
   // Frontmatter keys a skill file declares about itself.
   ['when_to_use', 'disable_model_invocation'].forEach((n) => out.add(n));
   return out;
@@ -221,9 +228,7 @@ const DECLARED = indexOf(SOURCES.map((f) => [f, readFileSync(join(repo, f), 'utf
  * stale (drop the admission and let its location be checked), and so does one no skill quotes any more.
  */
 const UPPER = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/;
-const NOT_DECLARED: Record<string, string> = {
-  COMPONENT_CONTRACT_VERSION: 'a decided direction with no code yet (#1325 Option 3, #1326 decision 3); `prism3-build-component` §8 names it and says in the next sentence that it does not exist in code today',
-};
+const NOT_DECLARED: Record<string, string> = {};
 /** Admitted words a real skill quoted this run, for the stale-admission check. Cleared after the self-check. */
 const admittedSeen = new Set<string>();
 
@@ -386,6 +391,8 @@ export const scanText = (text: string, rel: string, findings: Finding[], ctx: Id
  * surface — and the untested scan is disproportionately likely to be the interesting one, because the
  * interesting one is usually the one shaped differently enough to sit outside the common path.
  */
+/** The BrandInput properties whose OWN keys the coverage scan asks for, one level down (#4173). */
+export const NESTED_COVERAGE = ['typography', 'layout', 'motionPersonality'] as const;
 /** Enum rows the coverage scan read from REAL skills (the self-check's samples are not counted). */
 let enumRowsRead = 0;
 export const scanCoverage = (text: string, rel: string, findings: Finding[]): void => {
@@ -416,7 +423,17 @@ export const scanCoverage = (text: string, rel: string, findings: Finding[]): vo
     const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
     // An `omits:` entry must be a property (#2677). An entry naming nothing exempts nothing, and reads as a
     // decision about a surface that does not exist: `prism3-theme` carried `inverse` for months.
-    for (const o of declaredOmit) if (!(o in schema.properties)) findings.push({ file: rel, kind: 'dead omission', detail: `\`omits:\` names \`${o}\`, which is not a BrandInput property. Remove it` });
+    // A dotted entry (`typography.faces`) omits one nested input of a NESTED_COVERAGE parent (#4173), resolved one
+    // `properties` level per segment, like the enum rows below.
+    const schemaAt = (path: string): unknown => path.split('.').reduce<{ properties?: Record<string, unknown> } | undefined>(
+      (node, key) => node?.properties?.[key] as { properties?: Record<string, unknown> } | undefined, schema);
+    for (const o of declaredOmit) {
+      if (!schemaAt(o)) findings.push({ file: rel, kind: 'dead omission', detail: `\`omits:\` names \`${o}\`, which is not a BrandInput property. Remove it` });
+      // A dotted entry outside NESTED_COVERAGE's parents (or deeper than one level) resolves, but the scan never reads
+      // that input, so it exempts nothing (#4273 review: `omits: surfaces.light` went unflagged).
+      else if (o.includes('.') && (o.split('.').length !== 2 || !(NESTED_COVERAGE as readonly string[]).includes(o.split('.')[0])))
+        findings.push({ file: rel, kind: 'dead omission', detail: `\`omits:\` names \`${o}\`, a nested input the coverage scan never reads (only one level under ${NESTED_COVERAGE.join(', ')}), so it exempts nothing. Remove it` });
+    }
     // A table row documenting an ENUM property lists every value (#2677). A row whose first cell is the
     // backticked property is the skill's statement of what the property takes; a value the schema gained
     // later and the row never learned is a choice the skill hides. `controlShape` gained `boxed` and
@@ -433,11 +450,46 @@ export const scanCoverage = (text: string, rel: string, findings: Finding[]): vo
       if (rel !== 'self-check') enumRowsRead++;
       for (const v of def?.enum ?? []) if (!row[2].includes(`\`${String(v)}\``)) findings.push({ file: rel, kind: 'incomplete enum', detail: `the \`${row[1]}\` row does not list \`${String(v)}\`, one of the values the schema accepts (${(def!.enum ?? []).join(', ')})` });
     }
+    // WHAT COUNTS AS DOCUMENTING A PROPERTY (#4173). A word in prose did, and an English word is not a lever:
+    // "four modes" covered `modes` and "`[{ name, oklch … }]`" covered `name`, while the skill never documented
+    // either, so the scan could not fire on short, common property names (`docs/34`: the oracle was shared with
+    // unrelated text). A property is documented only where the skill NAMES it as one:
+    //   - an inline code span that IS its path, or its path then a dotted child (`modes`, `typography.lineHeights`;
+    //     `typography.captionFloor` names `typography` too). A span with the name inside it (`[{ name, … }]`) or
+    //     a value after it (`name: accent`, a brand color's name) does not count;
+    //   - a key line of a fenced example at the block's own base indentation (`id: <brand-slug>`), never a key
+    //     nested deeper in it (a gradient's `name:` is not the brand's `name`);
+    //   - for a NESTED key, also a code span on a table row whose first cell is its parent: that row's shape
+    //     cell is the skill's statement of the parent's keys (`{ families, weightRoles, … }`).
+    // Fenced blocks are cut out before code spans are read, so a fence's backticks cannot pair with prose.
+    const fences = [...body.matchAll(/^([ \t]*)```[^\n]*\n([\s\S]*?)^[ \t]*```/gm)];
+    const prose = body.replace(/^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```.*$/gm, '');
+    const spans = [...prose.matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim());
+    const fenceKeys = new Set(fences.flatMap((f) => {
+      const lines = f[2].split('\n').filter((l) => l.trim() && !l.trim().startsWith('#'));
+      const base = Math.min(...lines.map((l) => l.match(/^[ \t]*/)![0].length));
+      return lines.filter((l) => l.match(/^[ \t]*/)![0].length === base).map((l) => l.trim().match(/^([A-Za-z]+):/)?.[1]).filter(Boolean) as string[];
+    }));
+    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const named = (path: string): boolean => spans.some((c) => c === path || c.startsWith(`${path}.`));
+    const rowSpans = (parent: string): string[] =>
+      [...prose.matchAll(/^\|\s*`([A-Za-z.]+)`\s*\|(.*)$/gm)].filter((r) => r[1] === parent).flatMap((r) => [...r[2].matchAll(/`([^`\n]+)`/g)].map((m) => m[1]));
+    const uncovered = (path: string) => findings.push({ file: rel, kind: 'uncovered input surface', detail: `\`${path}\` is a BrandInput property this skill never names (in a code span, a table row's first cell or a fenced example's top-level key) — document it, or add it to the frontmatter \`omits:\` list` });
     for (const prop of Object.keys(schema.properties)) {
       if (declaredOmit.has(prop)) continue;
-      // Word-boundary match so `surfaces` does not satisfy `surface`.
-      if (!new RegExp(`\\b${prop.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(body)) {
-        findings.push({ file: rel, kind: 'uncovered input surface', detail: `\`${prop}\` is a BrandInput property this skill never mentions — document it, or add it to the frontmatter \`omits:\` list` });
+      if (!named(prop) && !fenceKeys.has(prop)) uncovered(prop);
+    }
+    // ONE LEVEL DOWN (#4173), for the parents whose keys are separate authoring choices. Before this only
+    // `schema.properties` was read, so twelve nested inputs (`typography.lineHeights`, `layout.columns`,
+    // `motionPersonality.easingRoles`, …) were never asked for. The parents are listed, not inferred: a nested
+    // object like `primary: {l,c,h}` is one value, not three levers.
+    for (const parent of NESTED_COVERAGE) {
+      if (declaredOmit.has(parent)) continue;
+      const row = rowSpans(parent);
+      for (const key of Object.keys((schema.properties[parent] as { properties?: object })?.properties ?? {})) {
+        const path = `${parent}.${key}`;
+        if (declaredOmit.has(path)) continue;
+        if (!named(path) && !row.some((c) => new RegExp(`(?<![A-Za-z0-9_.-])${esc(key)}(?![A-Za-z0-9_-])`).test(c))) uncovered(path);
       }
     }
   }
@@ -695,6 +747,21 @@ const selfCheck = (): string[] => {
     if (!cov('---\n| `typography.captionFloor` | `11` | x |\n').includes('incomplete enum')) bad.push('a nested enum row missing a value (`typography.captionFloor` without `10`) passes');
     if (cov('---\n| `typography.captionFloor` | `11` \\| `10` | x |\n').includes('incomplete enum')) bad.push('a complete nested enum row is flagged');
     if (!cov('---\n| `density` | `comfortable` \\| `compact` | `spacious` is for reading |\n').includes('incomplete enum')) bad.push('a value quoted only in the description cell (`spacious`) counts as listed');
+    // #4173: an English word, a name inside a span, or a nested key in an example is not documenting a property.
+    const flagged = (b: string, path: string) => sampleCoverage(`---\ndocuments: brandInput\n${b}`).some((f) => f.kind === 'uncovered input surface' && f.detail.startsWith(`\`${path}\` `));
+    if (!flagged('---\nfour modes in plain prose\n', 'modes')) bad.push('#4173: "four modes" in plain prose counts as documenting `modes`');
+    if (flagged('---\n| `modes` | `light` | which modes ship |\n', 'modes')) bad.push('#4173: a table row whose first cell is `modes` does not count as documenting it');
+    if (!flagged('---\n| `brandColors` | `[{ name, oklch: {l,c,h} }]` | accents |\nas `name: accent`\n', 'name')) bad.push('#4173: a span with `name` inside it, or `name: accent`, counts as documenting the brand\'s `name`');
+    if (!flagged('---\n```yaml\ngradients:\n  - name: x\n```\n', 'name')) bad.push('#4173: a key nested in a fenced example (`  - name:`) counts as documenting `name`');
+    if (flagged('---\n```yaml\nid: x\nname: X\n```\n', 'name')) bad.push('#4173: a fenced example\'s top-level key (`name: X`) does not count as documenting `name`');
+    if (!flagged('---\n| `typography` | `{ families }` | x |\n', 'typography.lineHeights')) bad.push('#4173: a nested input (`typography.lineHeights`) the skill never names passes — the scan stopped at the top level');
+    if (flagged('---\n| `typography` | `{ families, lineHeights }` | x |\n', 'typography.lineHeights')) bad.push('#4173: a nested key on its parent\'s table row does not count');
+    if (flagged('---\nset `typography.lineHeights` here\n', 'typography.lineHeights')) bad.push('#4173: a dotted code span (`typography.lineHeights`) does not count');
+    if (!flagged('---\n| `layout` | `{ lineHeights }` | x |\n', 'typography.lineHeights')) bad.push('#4173: a nested key on ANOTHER parent\'s row counts for this one');
+    if (flagged('omits: typography.lineHeights\n---\n', 'typography.lineHeights')) bad.push('#4173: a dotted `omits:` entry does not exempt its nested input');
+    if (!cov('omits: typography.notAKey\n---\n').includes('dead omission')) bad.push('#4173: a dotted `omits:` entry naming no nested input passes');
+    if (!cov('omits: surfaces.light\n---\n').includes('dead omission')) bad.push('#4173: a dotted `omits:` entry under a parent the scan never reads (`surfaces.light`) passes, though it exempts nothing');
+    if (cov('omits: typography.faces\n---\n').includes('dead omission')) bad.push('#4173: a dotted `omits:` entry under a NESTED_COVERAGE parent is flagged as dead');
   }
   const everyProp = Object.keys(
     JSON.parse(readFileSync(resolve(repo, 'packages/engine/schema/theme-schema.json'), 'utf8')).properties,
@@ -737,7 +804,7 @@ const selfCheck = (): string[] => {
   // prop reads as documented. Cheap, and the failure it prevents is the quiet kind — a prop counted
   // as covered because some unrelated longer word happens to contain it.
   if (
-    !sampleCoverage(`---\ndocuments: brandInput\n---\n\nzzz${someProp} and ${someProp}zzz\n`)
+    !sampleCoverage(`---\ndocuments: brandInput\n---\n\n\`zzz${someProp}\` and \`${someProp}zzz\`\n`)
       .some((f) => f.detail.includes(`\`${someProp}\``))
   ) {
     bad.push(`\`${someProp}\` glued inside a longer word now counts as documenting it — the coverage match lost a word boundary`);
@@ -752,7 +819,7 @@ const selfCheck = (): string[] => {
     JSON.parse(readFileSync(resolve(repo, 'packages/engine/schema/theme-schema.json'), 'utf8')).properties,
   ).filter((p) => p !== someProp).join(', ');
   if (
-    sampleCoverage(`---\ndocuments: brandInput\nomits: ${allButSome}\n---\n\ncovers ${someProp} in full\n\n---\n\nclosing\n`).length
+    sampleCoverage(`---\ndocuments: brandInput\nomits: ${allButSome}\n---\n\ncovers \`${someProp}\` in full\n\n---\n\nclosing\n`).length
   ) {
     bad.push('a property documented ABOVE a body `---` rule is flagged as uncovered — the frontmatter strip went greedy and ate the body');
   }
@@ -938,7 +1005,9 @@ const COMMAND = '.claude/commands/review-pr.md';
 //
 // WHAT IT CANNOT SEE: whether the advice is right. It checks the rule is stated, not that it is true.
 let ownerSelfRuns = 0;
-type OwnerRule = { id: string; skills: string[]; roles: RegExp[]; must: RegExp[]; resolve: string[] };
+/** `section`, when set, is the heading the rule must sit under (`## 7.`): its patterns are matched only between that
+ *  heading and the next `## `, so a rule moved to another section fails by its id (#4603 review, M5). */
+type OwnerRule = { id: string; skills: string[]; roles: RegExp[]; must: RegExp[]; resolve: string[]; section?: string };
 const OWNER_RULES: OwnerRule[] = [
   {
     // Q690 A: no on-media link role. Over a photograph a link is `inverse.text.primary`, underlined, on
@@ -980,6 +1049,77 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/remote Prism3 key in a file that holds Prism3 locally is a finding/i],
     resolve: [],
   },
+  // #4468 (owner decision A): every build ends with a ledger under four headings, in this order of the
+  // decision. The rule's sentence names all four in one paragraph, and the worked example writes each as a
+  // heading of its own, so dropping a heading from either fails by its own id.
+  {
+    id: '#4468 end every build with a ledger',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/end every build with a[^.]*ledger/i, /\*\*Used\*\*/, /\*\*Composed\*\*/, /\*\*Invented\*\*/, /\*\*Unsure\*\*/],
+    resolve: [],
+  },
+  {
+    // Owner decision 7175625635 (A): Composed is built only from Prism3's own parts, never a stand-in. The worked
+    // example's brief asks for a card, which Prism3 only plans, so the example leaves it out and names it.
+    id: '#4468 the worked ledger leaves out what Prism3 lacks',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/"Not built: the card/, /no card component yet \(it is planned\)/, /rather than build a stand-in/],
+    resolve: [],
+  },
+  {
+    id: '#4468 the worked ledger',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    // The brief's link is Prism3's `link` component, placed, not a hand-styled link (#4603 review).
+    must: [/^> \*\*Used:\*\*/m, /^> \*\*Composed:\*\*/m, /^> \*\*Invented:\*\*/m, /^> \*\*Unsure:\*\*/m, /^> \*\*Used:\*\*[^\n]*`link`/m],
+    resolve: [],
+  },
+  // #4469 part 1 (owner decision A): a layer built by hand because no component fits is named `GAP / …`, the
+  // audit counts those layers by name, Outline view is the check by eye, and the end-of-job note lists them.
+  // Four placements, one rule each.
+  {
+    id: '#4469 name a hand-built layer GAP / (section 1)',
+    skills: ['prism3-rebind'],
+    section: '## 1.',
+    roles: [],
+    must: [/by hand because no component fits/i, /`GAP \/ `/, /"GAP \/ [A-Z]/],
+    resolve: [],
+  },
+  {
+    id: '#4469 the audit counts GAP layers by name (section 7)',
+    skills: ['prism3-rebind'],
+    section: '## 7.',
+    roles: [],
+    must: [/count the `GAP \/ ` layers by name/i],
+    resolve: [],
+  },
+  {
+    id: '#4469 the Outline view check (section 7)',
+    skills: ['prism3-rebind'],
+    section: '## 7.',
+    roles: [],
+    must: [/Cmd\/Ctrl\+Y/, /library instances in purple/i],
+    resolve: [],
+  },
+  {
+    id: '#4469 the end-of-job note (section 9)',
+    skills: ['prism3-rebind'],
+    section: '## 9.',
+    roles: [],
+    must: [/end-of-job note/i, /instances you placed/i, /`GAP \/ ` layers/, /worth suggesting/i],
+    resolve: [],
+  },
+  // #4467 (owner decision A): with the MCP, an agent lists the components, then gets each one it places, before it
+  // composes. One paragraph names both tools and the order.
+  {
+    id: '#4467 list, then get, before composing',
+    skills: ['prism3-build-ui'],
+    roles: [],
+    must: [/list, then get/i, /`list_components`/, /`get_component`/, /before you compose/i],
+    resolve: [],
+  },
 ];
 const blocks = (text: string): string[] => text.split(/\n(?=\s*\n|- |\d+\. )/);
 export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => string | undefined, color: Record<string, { avoid_when?: string }>, paths: Set<string>): Finding[] => {
@@ -990,7 +1130,12 @@ export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => 
   for (const s of rule.skills) {
     const text = skillText(s);
     if (text === undefined) { out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: the skill is gone` }); continue; }
-    if (!blocks(text).some((b) => missing(b).length === 0)) out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: no paragraph states it (each must match in one block: ${rule.must.map((r) => r.source).join(', ')})` });
+    const start = rule.section ? text.split('\n').findIndex((l) => l.startsWith(rule.section!)) : -1;
+    if (rule.section && start < 0) { out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: the skill has no section headed "${rule.section}"` }); continue; }
+    const lines = text.split('\n');
+    const end = rule.section ? lines.findIndex((l, i) => i > start && l.startsWith('## ')) : -1;
+    const scope = rule.section ? lines.slice(start, end < 0 ? undefined : end).join('\n') : text;
+    if (!blocks(scope).some((b) => missing(b).length === 0)) out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: no paragraph states it (each must match in one block: ${rule.must.map((r) => r.source).join(', ')})` });
   }
   for (const re of rule.roles) if (!Object.keys(color).some((k) => re.test(k))) out.push({ file: 'packages/engine/ai-metadata.ts', kind: 'owner rule', detail: `${rule.id}: no emitted role matches ${re.source}; the rule is held over nothing there` });
   const roles = Object.keys(color).filter((k) => rule.roles.some((re) => re.test(k)));
@@ -1027,6 +1172,64 @@ export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => 
     process.exit(1);
   }
   for (const rule of OWNER_RULES) findings.push(...ownerRuleFindings(rule, read, color, TOKEN_PATHS));
+}
+
+// ---- 8b. THE WORKED LEDGER'S COMPONENTS (#4468 review, M3; delta review, B2) ---------------------------------------
+// The worked ledger in `prism3-build-ui` teaches an agent what goes under each heading, so its names are held:
+//   · **Used:** each code span that is not a token path (no dot) and not a prop value (no `=`) is a registered
+//     component id. Checks 1-3 read only token paths, so `password-input` for `password-field` passed.
+//   · **Composed:** the same for each code span, and it names at least one registered component, so it says what it
+//     was built from. And no component that exists only in a `planned` list (`card`, `form`, `split-button`) appears in
+//     it, in code or in prose: Composed is built only from Prism3's own parts, never a stand-in for a missing one (owner
+//     decision 7175625635). Before, the card could sit under Composed while the report also called it not built.
+// The oracles are the registry (`componentDefs`) and its `planned` lists; the subject is the skill text.
+export const ledgerComponentFindings = (text: string, ids: ReadonlySet<string>, plannedOnly: ReadonlySet<string> = new Set()): Finding[] => {
+  const file = 'skills/prism3-build-ui/SKILL.md';
+  const lines = text.split('\n');
+  /** The entry that starts at `> **<heading>:**`, up to the next blank quote line. */
+  const entry = (heading: string): string | undefined => {
+    const i = lines.findIndex((l) => l.startsWith(`> **${heading}:**`));
+    if (i < 0) return undefined;
+    const out: string[] = [];
+    for (let j = i; j < lines.length && lines[j].startsWith('>') && lines[j].trim() !== '>'; j++) out.push(lines[j].replace(/^>\s?/, ''));
+    return out.join(' ');
+  };
+  const out: Finding[] = [];
+  for (const heading of ['Used', 'Composed']) {
+    const body = entry(heading);
+    if (body === undefined) { out.push({ file, kind: 'ledger component', detail: `the worked ledger has no **${heading}:** entry to check` }); continue; }
+    const spans = [...body.matchAll(/`([^`]+)`/g)].map((m) => m[1]).filter((n) => !n.includes('.') && !n.includes('='));
+    for (const name of spans) if (!ids.has(name)) out.push({ file, kind: 'ledger component', detail: `the worked ledger's **${heading}** names \`${name}\`, which no component definition registers` });
+    if (heading !== 'Composed') continue;
+    if (!spans.some((n) => ids.has(n))) out.push({ file, kind: 'ledger component', detail: 'the worked ledger\'s **Composed** names no registered component, so it does not say what it was built from' });
+    const words = body.toLowerCase();
+    for (const p of plannedOnly) {
+      const re = new RegExp(`(^|[^a-z0-9-])(${p.replace(/-/g, '[- ]')})(?![a-z0-9-])`, 'i');
+      if (re.test(words)) out.push({ file, kind: 'ledger component', detail: `the worked ledger's **Composed** names \`${p}\`, which exists only in a \`planned\` list: a stand-in for a missing component, not a composition (leave it out and name it)` });
+    }
+  }
+  return out;
+};
+{
+  const ids = new Set(componentDefs.map((d) => d.id));
+  const plannedOnly = new Set(componentDefs.flatMap((d) => (d.composition as { planned?: string[] } | undefined)?.planned ?? []).filter((p) => !ids.has(p)));
+  // Self-check, both directions: a ledger of real ids passes; a made-up id under Used, a planned-only name in Composed's
+  // prose, and a Composed that names no component each fail once; a ledger with neither entry fails twice.
+  const good = '> **Used:** `button` (`appearance="filled"`); `text.primary`.\n>\n> **Composed:** a row of the `button` and the `link`.\n>\n';
+  const self: [string, number, number][] = [
+    ['a real ledger', ledgerComponentFindings(good, ids, plannedOnly).length, 0],
+    ['a made-up id under Used', ledgerComponentFindings(good.replace('`button` (', '`password-input`, `button` ('), ids, plannedOnly).length, 1],
+    ['a planned-only name in Composed', ledgerComponentFindings(good.replace('a row of', 'the card itself, a row of'), ids, plannedOnly).length, plannedOnly.has('card') ? 1 : 0],
+    ['a Composed that names no component', ledgerComponentFindings(good.replace('a row of the `button` and the `link`', 'a row of controls'), ids, plannedOnly).length, 1],
+    ['no ledger', ledgerComponentFindings('no ledger here\n', ids, plannedOnly).length, 2],
+  ];
+  const brokenSelf = self.filter(([, got, want]) => got !== want);
+  if (brokenSelf.length || !plannedOnly.has('card')) {
+    console.error(`\n❌ the ledger-component check is broken: ${brokenSelf.map(([w, g, n]) => `${w} gave ${g} finding(s), expected ${n}`).join('; ') || `no planned-only \`card\` to hold it against (planned-only: ${[...plannedOnly].join(', ') || 'none'})`}`);
+    process.exit(1);
+  }
+  const ui = join(skillsDir, 'prism3-build-ui', 'SKILL.md');
+  if (existsSync(ui)) findings.push(...ledgerComponentFindings(readFileSync(ui, 'utf8'), ids, plannedOnly));
 }
 
 // ---- 9. RETIRED SKILL NAMES (#3412) --------------------------------------------------------------

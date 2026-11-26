@@ -208,6 +208,10 @@ export class TypographyConverter {
       }
     }
 
+    // prism3 #4366: bound to a library variable, the weight is its resolved value. The cache below matches a local
+    // variable by value, which would alias an unrelated local token that happens to hold the same weight.
+    const external = !!boundVariable && !!context.externalIds && context.externalIds.has(boundVariable.id);
+
     // Try cached lookup (O(1) instead of O(n))
     const expectedWeight = this.getExpectedFontWeight(fontStyle);
     const weightName = this.extractWeightName(fontStyle);
@@ -220,7 +224,7 @@ export class TypographyConverter {
       weightName.replace(' ', ''),
     ];
 
-    for (const key of cacheKeys) {
+    for (const key of external ? [] : cacheKeys) {
       const cachedVariable = context.fontWeightCache[key];
       if (cachedVariable) {
         return this.createAlias(cachedVariable, context.tokenNameCase, context.namespace);
@@ -292,8 +296,11 @@ export class TypographyConverter {
       }
     }
 
+    // prism3 #4366: bound to a library variable, the line height is its resolved value, never a cache match.
+    const external = !!boundVariable && !!context.externalIds && context.externalIds.has(boundVariable.id);
+
     // Try cached lookup for PERCENT values (O(1))
-    if (lineHeight.unit === 'PERCENT') {
+    if (lineHeight.unit === 'PERCENT' && !external) {
       const targetUnitless = lineHeight.value / 100;
 
       // Try multiple cache keys

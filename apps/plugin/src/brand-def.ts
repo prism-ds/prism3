@@ -5,6 +5,7 @@
  *
  * Three levers, all read off the ONE persisted `BrandInput` the caller already restored:
  *
+ *   · `icons` (#3076) — the brand icon map: which brand icon stands in for each Prism3 icon, applied first (`icon-map.ts`).
  *   · `controlShape` (#1163) — the corner a pill brand builds its controls with.
  *   · `fieldStyle` (#2695) — the edge every field draws: the outline box, or one line under the value.
  *   · `searchFieldStyle` (#2888) — the search field's own edge, which follows `fieldStyle` unless the brand sets it apart.
@@ -35,8 +36,13 @@
  * before. A persisted brand whose theme fails to build falls back the same way — the build still runs,
  * against the defaults, which is what the `controlShape` read already did on an untrusted input.
  */
-import { applyControlShape, applyFieldStyle, fieldStyleFor, applyTagStyle, applyDialogTitleSize, applyBannerStyle, applyCurrentIndicator, applyWeightIntent, applyOutlineInteraction, applyButtonLayout, applySpacingDensity, applyMinWidthRatio, DEFAULT_WEIGHT_AVAILABILITY, DEFAULT_BUTTON_LAYOUT, type WeightAvailability, type ButtonLayout, type ComponentDef } from '@prism3/engine/components';
+import { applyIconMap, applyControlShape, applyFieldStyle, fieldStyleFor, applyTagStyle, applyDialogTitleSize, applyBannerStyle, applyCurrentIndicator, applyWeightIntent, applyOutlineInteraction, applyButtonLayout, applySpacingDensity, applyMinWidthRatio, DEFAULT_WEIGHT_AVAILABILITY, DEFAULT_BUTTON_LAYOUT, type WeightAvailability, type ButtonLayout, type ComponentDef } from '@prism3/engine/components';
 import { componentSizes, sizeRefPx, SPACE_BASE, type SizeStep, type Density, brandTheme, weightAvailability, type BrandInput, type Theme } from '@prism3/engine';
+
+/** #4237: how many times `brandLevers` has built a brand's theme in this process, so a test can hold "once per run" by a
+ *  count, not by how the caller is spelled. Read-only outside this module. */
+let leverBuilds = 0;
+export const brandLeverBuilds = (): number => leverBuilds;
 
 /** The theme-derived levers, off ONE `brandTheme` call — or the defaults when there is no usable brand. */
 const brandLevers = (input: BrandInput | null): { avail: WeightAvailability; outline: Theme['outlineInteraction']; sizes: SizeStep[]; density: Density } => {
@@ -45,6 +51,7 @@ const brandLevers = (input: BrandInput | null): { avail: WeightAvailability; out
   const fallback = { avail: DEFAULT_WEIGHT_AVAILABILITY, outline: 'overlay-neutral' as const, sizes: componentSizes('comfortable', SPACE_BASE), density: 'comfortable' as Density };
   if (!input) return fallback;
   try {
+    leverBuilds++;
     const theme = brandTheme(input);
     // `solid-tint` binds the tinted-wash VARIABLE (#1614, #1646): the opacity step the engine chose for this
     // brand lives in that variable's value, so nothing brand-specific rides on the def beyond the lever.
@@ -81,6 +88,6 @@ export const materializeForBrand = (def: ComponentDef, input: BrandInput | null)
 export const materializerFor = (input: BrandInput | null): ((def: ComponentDef) => ComponentDef) => {
   const { avail, outline, sizes, density } = brandLevers(input);
   return (def) => applyMinWidthRatio(applyButtonLayout(
-    applySpacingDensity(applyOutlineInteraction(applyWeightIntent(applyCurrentIndicator(applyBannerStyle(applyDialogTitleSize(applyTagStyle(applyFieldStyle(applyControlShape(def, input?.controlShape ?? 'rounded'), fieldStyleFor(def, input)), input?.tagStyle ?? 'pill'), input?.dialogTitleSize ?? 'large'), input?.bannerStyle ?? 'tinted'), input?.currentIndicator ?? 'partial'), avail), outline), density),
+    applySpacingDensity(applyOutlineInteraction(applyWeightIntent(applyCurrentIndicator(applyBannerStyle(applyDialogTitleSize(applyTagStyle(applyFieldStyle(applyControlShape(applyIconMap(def, input?.icons), input?.controlShape ?? 'rounded'), fieldStyleFor(def, input)), input?.tagStyle ?? 'pill'), input?.dialogTitleSize ?? 'large'), input?.bannerStyle ?? 'tinted'), input?.currentIndicator ?? 'partial'), avail), outline), density),
     brandButtonLayout(input), sizeRefPx(sizes)), sizeRefPx(sizes));
 };

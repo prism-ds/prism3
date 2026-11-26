@@ -78,6 +78,9 @@ export type UpdateFileLend = {
     /** The style guide's retired tables (Q412 A), and whether their removal is out. */
     readonly retired: readonly { readonly id: string; readonly name: string }[];
     readonly cleanupBusy: boolean;
+    /** #4480 (Q2 A): how many tables the Style guides step will draw, from Documentation's saved settings over the file's
+     *  tables as the host last listed them; null until the host has listed them. */
+    readonly guides: number | null;
     /** Q2909.8 A: the background pass's hand edits by set, and the scoped check's last answer (`pending` while out). */
     readonly handEdits: ReadonlyMap<string, { readonly members: number; readonly edited: number }>;
     readonly updateCheck: { readonly previewHash: string; readonly sets: readonly CheckedSetView[]; readonly error: string | null } | 'pending' | null;
@@ -119,6 +122,9 @@ export type UpdateFileLend = {
   readonly pruneCheck: () => void;
   readonly pruneDelete: () => void;
   readonly cleanUp: (ids: readonly string[]) => void;
+  /** #4480 (Q2 A): ask the host to list the file's style-guide tables (`style-guide-catalog-request`), so the Style guides
+   *  row can count them. */
+  readonly countGuides: () => void;
 };
 
 /** Mount the button and the overlay. The bar places `button`; the frame places `layer` last, over everything. */
@@ -144,6 +150,8 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
   /** #3137: Clean up's panel count was asked for in this opening; the Usage panels group's names are shown. */
   let panelsAsked = false;
   let panelsOpen = false;
+  /** #4481: the library callout's full list is shown in this opening. */
+  let libOpen = false;
   /** The sets this opening asked the scoped check for, or null before it has (Q2909.8 A). */
   let checkedFor: readonly string[] | null = null;
   /** #3422 Q44 A: the live recount as this opening found it. Theme's default tick and its "Up to date" tag read it, and
@@ -155,6 +163,12 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
   const seen = new Set<string>();
   /** #3129: the control the next repaint focuses, set by a removal whose own button the repaint drops. */
   let refocus: string | null = null;
+  /** #4217: a control an answer still out will draw (Clean up's result line, after Remove). Until it lands, focus waits
+   *  on the dialog rather than falling to its first control. */
+  let awaitKey: string | null = null;
+  /** #4218: the refusal last announced (its def, direction and words), so a repaint draws the line without saying it
+   *  again. Cleared by the next turn off or on, so the same refusal a second time is said again. */
+  let announcedOff: string | null = null;
   /** #3150, the chrome's motion: a frame has shown the open overlay, so a repaint marks its scrim `data-still` and the
    *  dialog does not scale in again; the last repaint was still reading the file; the sets whose check line was still
    *  pending. What lands after a wait is armed for a frame (`armEnter`) and marked `data-land`, and fades in. */
@@ -175,6 +189,7 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     pruneAsked = false;
     panelsAsked = false;
     panelsOpen = false;
+    libOpen = false;
     checkedFor = null;
     rechecking = false;
     shownFile = null;
@@ -187,6 +202,7 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
       liveAtOpen = r.liveDue;
       // #3422 Q44 A: the brand Theme's default tick picks (#3023 Q701 B); a file not set up ticks Theme always.
       lend.check(themeDueOf(liveAtOpen) || r.fileSets?.setUp === false);
+      lend.countGuides();
     }
     paint();
     const d = layer.querySelector<HTMLElement>('[data-p3="update-dialog"]');
@@ -335,6 +351,7 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
      *  checklist stays as drawn meanwhile, and the answer ticks the due sets afresh, so a set turned off leaves Due and one
      *  turned back on that is due joins it, ticked. */
     const setOff = (id: string, off: boolean): void => {
+      announcedOff = null;
       rechecking = true;
       asked = f;
       checkedFor = null;
@@ -593,7 +610,16 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
       comps.append(grp);
     }
     // #2956: a turn off or back on the host could not write says so, in the check's own error ink. DRAFT.
-    if (r.updatesOffError) comps.append(hook(h('p', 'p3-sg-error', `${r.updatesOffError.off ? UPDATE_COPY.turnOff : UPDATE_COPY.turnOn}: ${r.updatesOffError.error}.`), 'update-off-error'));
+    if (r.updatesOffError) {
+      const e = r.updatesOffError;
+      const line = hook(h('p', 'p3-sg-error', `${e.off ? UPDATE_COPY.turnOff : UPDATE_COPY.turnOn}: ${e.error}.`), 'update-off-error');
+      line.id = 'p3-upd-off-error';
+      // #4218: said once as it lands (an alert), and kept as the description of the button that was refused.
+      const said = JSON.stringify([e.def, e.off, e.error]);
+      if (announcedOff !== said) { announcedOff = said; line.setAttribute('role', 'alert'); }
+      comps.querySelector(`[data-key="${CSS.escape(`turn-${e.off ? 'off' : 'on'}=${e.def}`)}"]`)?.setAttribute('aria-describedby', line.id);
+      comps.append(line);
+    }
     // The section's last line (#3137): a version is saved before the update, Due and the panels alike.
     if (ticked.length || (t.panels && panelSets.length) || keptSets.some((id) => (t.kept.get(id) ?? 'keep') !== 'keep')) comps.append(hook(h('p', 'p3-sub p3-upd-saves', UPDATE_COPY.saves), 'update-saves'));
     if (comps.children.length > 1) {
@@ -614,7 +640,10 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
       if (!open) comps.replaceChildren(compsHead);
       body.push(comps);
     }
-    body.push(item('guides', t.guides, UPDATE_COPY.guides, UPDATE_COPY.guidesSub, () => { ticks = { ...t, guides: !t.guides }; }));
+    // #4480 (Q2 A): the chip says how many tables the step will draw, before the run.
+    const guides = r.guides;
+    body.push(item('guides', t.guides, UPDATE_COPY.guides, UPDATE_COPY.guidesSub, () => { ticks = { ...t, guides: !t.guides }; },
+      guides === null ? null : hook(h('span', 'p3-sg-tag', UPDATE_COPY.guidesCount(guides)), 'update-guides-count')));
     const t2 = ticks ?? t;
     // The update waits on the check's answer: its counts are what the person reviews, and its hash what the update echoes.
     const updatable = answered ? updateDefsOf(t2, answered, panelSets, keptSets) : [];
@@ -688,11 +717,28 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     }
     // #3711 (Q-UF2 A): the callout directly above the button it qualifies; #3712 (Q-UD2): the foot's last message row,
     // a boxed warning with its glyph.
+    // #4481 (owner decision A): one line counting the changes by what they do, then "Show the changes", which opens the
+    // full list in a short box that scrolls inside itself, so a long list never pushes the steps out of view.
     if (lib.count) {
       const call = hook(h('div', 'p3-sg-note p3-sg-warn p3-upd-libcall'), 'update-library');
       const text = h('div', 'p3-sg-warn-text');
-      text.append(hook(h('b', undefined, UPDATE_COPY.library), 'update-library-title'), hook(h('p', 'p3-sub', UPDATE_COPY.librarySub(lib.count)), 'update-library-sub'));
-      for (const line of lib.lines) text.append(hook(h('p', 'p3-sub', line), 'update-library-line'));
+      text.append(hook(h('p', 'p3-sub', UPDATE_COPY.librarySummary(lib, nameOf)), 'update-library-summary'));
+      const more = hook(h('button', 'p3-btn p3-btn-ghost p3-upd-disclose'), 'update-library-show');
+      more.type = 'button';
+      more.dataset.key = 'library-show';
+      more.setAttribute('aria-expanded', String(libOpen));
+      more.setAttribute('aria-controls', 'p3-upd-library-list');
+      more.append(glyph('chev'), document.createTextNode(libOpen ? UPDATE_COPY.libraryHide : UPDATE_COPY.libraryShow));
+      more.onclick = () => { libOpen = !libOpen; paint(); };
+      const list = hook(h('div', 'p3-upd-liblist'), 'update-library-list');
+      list.id = 'p3-upd-library-list';
+      list.hidden = !libOpen;
+      // A box that scrolls is reached by keyboard, so its lines can be read without a pointer.
+      list.tabIndex = 0;
+      list.setAttribute('role', 'region');
+      list.setAttribute('aria-label', UPDATE_COPY.libraryList);
+      for (const line of lib.lines) list.append(hook(h('p', 'p3-sub', line), 'update-library-line'));
+      text.append(more, list);
       call.append(glyph('warn'), text);
       messages.push(call);
     }
@@ -717,10 +763,16 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     if (p.busy) body.push(card(hook(h('p', 'p3-upd-line', UPDATE_COPY.cleanChecking), 'clean-checking')));
     else if (p.preview) {
       body.push(card(hook(h('p', 'p3-upd-summary', p.preview.summary), 'clean-prune-summary')));
-      const del = btn('p3-btn p3-btn-primary', 'clean-prune-confirm', 'prune', `Delete ${p.preview.count} item${p.preview.count === 1 ? '' : 's'}`, () => lend.pruneDelete());
+      const del = btn('p3-btn p3-btn-primary', 'clean-prune-confirm', 'prune', `Remove ${p.preview.count} item${p.preview.count === 1 ? '' : 's'}`, () => { awaitKey = 'prune-result'; lend.pruneDelete(); });
       if (r.off) { del.disabled = true; del.title = r.off; }
       foot.push(del);
-    } else if (p.verdict) body.push(card(hook(h('p', 'p3-upd-summary', p.verdict.count === 0 && !p.verdict.applied ? UPDATE_COPY.cleanNone : p.verdict.summary), 'clean-prune-result')));
+    } else if (p.verdict) {
+      // #4217: focusable from script only, so Remove's answer can take focus where Remove was.
+      const res = hook(h('p', 'p3-upd-summary', p.verdict.count === 0 && !p.verdict.applied ? UPDATE_COPY.cleanNone : p.verdict.summary), 'clean-prune-result');
+      res.dataset.key = 'prune-result';
+      res.tabIndex = -1;
+      body.push(card(res));
+    }
     // #3137 Q3137.7 A: while Documentation has panels off, the panels drawn while it had them on; edited ones stay.
     // A count already out (Documentation asks when panels turn off) is this opening's: its answer is the one drawn.
     if (r.panelsOff && !panelsAsked) { panelsAsked = true; if (!r.panelsClean.busy) lend.panelsClean(false); }
@@ -764,6 +816,10 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     if (!open) { shown = false; waited = false; pendingLines = new Set(); for (const n of [...layer.children]) leave(n as HTMLElement); return; }
     const focused = refocus ?? (document.activeElement instanceof HTMLElement && layer.contains(document.activeElement) ? document.activeElement.dataset.key ?? null : null);
     refocus = null;
+    // #4217: what the repaint replaces, in order, and whether focus was parked on the dialog itself.
+    const prevKeys = [...layer.querySelectorAll<HTMLElement>(':scope > :not([data-leaving="true"]) [data-key]')].map((n) => n.dataset.key!);
+    const onDialog = document.activeElement instanceof HTMLElement && document.activeElement.dataset.p3 === 'update-dialog' && layer.contains(document.activeElement);
+    if (tab !== 'clean') awaitKey = null;
     // #3082: a repaint (a tick, a host answer) keeps where the body was scrolled, on the same tab; a new tab starts at the top.
     const was = layer.querySelector<HTMLElement>(':scope > :not([data-leaving="true"]) [data-p3="update-body"]');
     const scrolled = was && was.dataset.tab === tab ? was.scrollTop : 0;
@@ -828,8 +884,25 @@ export const mountUpdateFile = (lend: UpdateFileLend, cleanups: (() => void)[]):
     bodyEl.scrollTop = scrolled;
     // A control gone from the repaint (Theme's box while its toggle checks the file again, #3023) leaves focus on the
     // dialog, never outside the modal.
-    if (focused) (layer.querySelector<HTMLElement>(`[data-key="${CSS.escape(focused)}"]`) ?? dlg).focus({ preventScroll: true });
+    const at = (k: string): HTMLElement | null => layer.querySelector<HTMLElement>(`[data-key="${CSS.escape(k)}"]`);
+    const awaited = awaitKey ? at(awaitKey) : null;
+    if (awaited) { awaitKey = null; awaited.focus({ preventScroll: true }); }
+    else if (focused) (at(focused) ?? movedFrom(focused, prevKeys, at) ?? dlg).focus({ preventScroll: true });
+    else if (awaitKey && onDialog) dlg.focus({ preventScroll: true });
     else if (!dlg.contains(document.activeElement)) (focusables(dlg)[0] ?? dlg).focus({ preventScroll: true });
+  };
+  /** #4217: where focus goes when a turn off or back on redraws its own button away. The set's row moved: to the button
+   *  that now undoes it, if the set has one; else the next row with the same action, else the one before; else the
+   *  Components fold. Any other control gone from a repaint keeps the old rule (the dialog). */
+  const movedFrom = (key: string, prev: readonly string[], at: (k: string) => HTMLElement | null): HTMLElement | null => {
+    const m = /^turn-(on|off)=(.+)$/.exec(key);
+    if (!m) return null;
+    const undo = at(`turn-${m[1] === 'on' ? 'off' : 'on'}=${m[2]}`);
+    if (undo) return undo;
+    const i = prev.indexOf(key);
+    const same = (k: string): boolean => k.startsWith(`turn-${m[1]}=`);
+    for (const k of [...prev.slice(i + 1), ...prev.slice(0, Math.max(i, 0)).reverse()]) if (same(k) && at(k)) return at(k);
+    return at('fold=components');
   };
   for (const t of ['host', 'host:update', 'host:components', 'host:filesetup', 'host:styleguide', 'host:sgpage', 'host:run'] as const) cleanups.push(subscribe(t, paint));
   cleanups.push(() => layer.replaceChildren());

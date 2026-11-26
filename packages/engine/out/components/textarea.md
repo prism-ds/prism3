@@ -47,10 +47,6 @@ Use for free-form text expected to exceed one line — comments, descriptions, m
 ### Do
 
 - Set `maxRows` whenever auto-growing — uncapped growth pushes the submit affordance off-screen on a long paste
-- Enforce a character limit softly (allow over, flag invalid, block submit) and count by grapheme, not by string length
-- Announce the over-limit through the live region and `aria-invalid` — color alone is not a signal
-- Normalize \r\n to \n on paste before counting or storing, and resize once per paste rather than once per inserted line
-- Keep a read-only textarea scrollable and selectable, so the whole value stays reachable — far more text is hidden here than in a single-line field
 - Reserve space in the footer for the validation message and the counter, so an over-limit error does not push the resize handle
 
 ### Don't
@@ -104,6 +100,11 @@ Counter reads "240 / 280" or "40 characters remaining"; over-limit reads "12 cha
 
 ## Building it in code
 
+- Enforce a character limit softly (allow over, flag invalid, block submit) and count by grapheme, not by string length
+- Announce the over-limit through the live region and `aria-invalid` — color alone is not a signal
+- Normalize \r\n to \n on paste before counting or storing, and resize once per paste rather than once per inserted line
+- Keep a read-only textarea scrollable and selectable, so the whole value stays reachable — far more text is hidden here than in a single-line field
+
 ### Props
 
 | Name | Type | Default | Required | Description |
@@ -112,7 +113,7 @@ Counter reads "240 / 280" or "40 characters remaining"; over-limit reads "12 cha
 | `value` | string | — | no | Controlled value; pair with onChange. The same prop as TextField's. |
 | `onChange` | function | — | no | Change handler (also onBlur / onFocus). The same prop as TextField's. |
 | `placeholder` | string | — | no | An example only; vanishes on input; nothing load-bearing lives here. The same prop as TextField's. |
-| `helpText` | string \| node | — | no | Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format and any length limit before failure. The same prop as TextField's. |
+| `helpText` | string \| node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format and any length limit before failure. The same prop as TextField's. |
 | `showMessage` | boolean | `false` | no | Whether the composed FieldMessage is shown. Off by default; turn it on to render the helper or validation message below the field. The same prop as TextField's. Never hides a message the field needs. |
 | `rows` | number | `3` | no | Initial and minimum height, in lines not pixels — a line count recomputes against the current line-height when the user raises their font size, where a pixel floor does not. Also a content cue: two rows signals brevity, six signals "write more". cols is dead on the web; width comes from CSS. |
 | `resize` | enum: 'none' \| 'vertical' \| 'auto' | `vertical` | no | The sizing model in one prop, so two props cannot contradict each other. vertical (the drag handle) for standalone form fields; auto (grow within minRows/maxRows) for composers; none where layout stability wins. Never horizontal or both — altering the inline dimension shatters grid and flex layouts for no user gain. |

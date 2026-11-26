@@ -104,9 +104,46 @@ const ADDED: Record<string, number> = {
   // prism3 #731 — gradient paint styles were never scanned, so every gradient was missing from the export. Now
   // scanned and written to `gradients.json` as DTCG `gradient` tokens, stop colors bound to variables as aliases.
   'tests/unit/gradient-paint-styles.test.ts': 6,
+  // prism3 #2365 — a tinted wash (a color alias at an opacity) exported `components: [null, null, null]`. It is now the
+  // color the alias resolves to in the wash's mode at that alpha, with both aliases in `$extensions` when asked for.
+  'tests/unit/tinted-wash.test.ts': 8,
+  // prism3 #4166 — an alias to a team-library variable exports as a reference by the target's name, marked
+  // `$extensions.figma.externalAlias`, instead of a `{VariableID:…}` the validator called broken.
+  'tests/unit/external-library-alias.test.ts': 8,
   // prism3 #4121 — the manifest asks for no `currentuser` permission, and no source reads `figma.currentUser`,
   // which throws once the permission is gone.
   'tests/unit/manifest-permissions.test.ts': 3,
+  // prism3 #2365 × #4166 — a tinted wash over a team-library variable resolves, through the library collection's
+  // default mode, and a wash over an id nothing resolves is a broken alias, as a bare alias is.
+  'tests/unit/tinted-wash-library.test.ts': 5,
+  // prism3 #4475 — a color alias with an opacity on the referencing variable exported `null`: the DTCG file before
+  // #4299, the dot-notation format (`rgb(NaN, NaN, NaN)`) after it. The reference and the opacity are both kept.
+  'tests/unit/alias-opacity-null.test.ts': 5,
+  // prism3 #4490 — a library alias exported a reference to a token the export does not hold, which Style Dictionary
+  // and the CSS format cannot resolve. It now exports the library value, the reference kept in `externalAlias`.
+  'tests/unit/library-alias-standalone.test.ts': 8,
+  // prism3 TokenPress versioning — package.json is the one source: the built panel's label and the built exporter's
+  // `generator.version` both read it, and the panel source holds a placeholder, never a number.
+  'tests/unit/version-single-source.test.ts': 6,
+  // prism3 #4477 — with Color Space: HSL the CSS format wrote every color as `[object Object]`, and a shadow layer
+  // with an HSL color lost it. Both are written in hsl() notation now; the sRGB output is unchanged.
+  'tests/unit/css-hsl-color.test.ts': 4,
+  // prism3 #4478 — a tinted wash whose color aliases another wash lost its own opacity. The inner wash resolves, in
+  // its own collection and mode, and the outer opacity multiplies its alpha.
+  'tests/unit/wash-over-wash.test.ts': 9,
+  // prism3 #3885 — a paint style layering a gradient with other paints is skipped, and its name only reached the dev
+  // console. The sandbox now posts it with the export result, and the panel's footer names it beside the blur skips.
+  // prism3 3.0.3 grows the export-summary test: the solid paint styles (#3884) and the tokens left out of the CSS file
+  // (#3886) reach the footer, through the sandbox and the panel, as the layered gradients do.
+  'tests/unit/skipped-gradient-summary.test.ts': 11,
+  // prism3 #3884 — a paint style whose visible paints are all solid is named as skipped, not dropped silently.
+  'tests/unit/solid-paint-styles.test.ts': 4,
+  // prism3 #3886 — the CSS format writes easing as cubic-bezier() and durations in ms, and leaves out (and names)
+  // any other value it has no CSS form for, where it wrote JSON.
+  'tests/unit/css-motion-values.test.ts': 7,
+  // prism3 #4366 — a composite sub-property bound to a team-library variable is its resolved value, with an
+  // externalAlias marker per sub-property (#4490's fields).
+  'tests/unit/composite-external-alias.test.ts': 8,
 };
 
 // ---- the harness checks itself first -------------------------------------------------------

@@ -92,15 +92,15 @@
  *                   per name, the names whose set is in the file linked to it by node and underlined, every other plain;
  *                   a set built after the draw makes the panel due, and the redraw links it. Mutations: the links key
  *                   dropped from `docPanelDue` → `qa/links due`; the hyperlink call dropped → `qa/related links`.
- *   width/…         #2970 items 1 and 4 (Q1 A, Q2 A): Banner and Checkbox.Row, each specimen at its member's width (480,
+ *   width/…         #2970 items 1 and 4 (Q1 A, Q2 A): Banner and Text field, each specimen at its member's width (480,
  *                   320, typed here), inside its stage, no text narrower than its longest word; Theming stacked for
- *                   Banner, side by side for the Row; a member built wider makes the panel due, the redraw is wider by
+ *                   Banner, side by side for Text field; a member built wider makes the panel due, the redraw is wider by
  *                   as much and a live spec panel moves to stay 40 past it; the dry run moves the next set 160 past the
  *                   spec column beside the panel as drawn, and nothing after the draw; `markers/widths`: every lead's
  *                   panel is drawn as wide as Update spaces it for. `width/hug` shows the host squeezing a hugging
- *                   instance, the failure the fix guards. Mutations: the width forced to 560 → `width/checkbox-row`,
+ *                   instance, the failure the fix guards. Mutations: the width forced to 560 → `width/text-field`,
  *                   `width/room`, `width/seat`, `markers/widths`; the specimen not sized to its member →
- *                   `width/banner`, `width/checkbox-row`.
+ *                   `width/banner`, `width/text-field`.
  *   collapse/…      (#3205) every lead's examples, in this host: none narrower than the width its member is built at
  *                   (`placementWidth`) or its literal floor (`minWidth`), read off the projection's root kept on each member,
  *                   and no wrapping text box under 4em that does not hold its text on one line. `collapse/hug read`: Dialog's
@@ -117,7 +117,7 @@
  *                   showed Dialog's specimen after #3211 (FIXED, 62px). Mutation: the specimens not sized again once
  *                   the panel is on the page → `collapse/dialog` and every `collapse/<def>` built at a width,
  *                   `collapse/hug read`, `collapse/after reset`, `update/redraw in place`, `width/banner`,
- *                   `width/checkbox-row`.
+ *                   `width/text-field`.
  *   owner/…         (#3205, the owner's review of 2026-11-13) THE MEASURED RULE (`insideInstance`): Figma drops a width
  *                   written to a layer inside an instance (`resize`, `minWidth`) and keeps its sizing mode and padding,
  *                   so 4–6's FIXED + `resize` + `minWidth` froze each specimen at what it hugged. `owner/accordion`: the
@@ -134,7 +134,7 @@
  *                   specimen FILLs its stage and the stage's padding sets its width (`fitSpecimens`). Mutations: the
  *                   FIXED + `resize` + `minWidth` sizing restored → 25 arms, among them `owner/accordion` (120 against
  *                   320), every `collapse/<def>` built at a width, `width/banner`, `format due/redrawn`; the padding fit
- *                   removed → `owner/accordion` (579), `width/banner`, `width/checkbox-row`, `collapse/hug read`,
+ *                   removed → `owner/accordion` (579), `width/banner`, `width/text-field`, `collapse/hug read`,
  *                   `format due/redrawn`; `PANEL_FORMAT` left at 6 → `format due/offered`, `update/redraw in place`.
  *                   `collapse/after reset` is retired: it held the floor a hug reset could not take, and Figma never
  *                   keeps that floor on a nested layer.
@@ -228,7 +228,7 @@ import { componentDefs, docSections, MAINTAINER_REGISTER, NAMES_A_TOOL, type Com
 import { applyComponentPlan } from './src/write-components';
 import { SWAP_TARGET } from './src/build-deps';
 import { fixHostMethods, makeShim, type Node } from './component-shim';
-import { anatomyEntry, anatomyMarks, clearOrphanPanels, containerSides, leftColumns, panelUnedited, codeRuns, docPanelReach, docPanelReaches, drawDocPanel, docPanelDue, lastChangedKey, leadsPanel, planDocPanel, panelItems, printV2, printV3, PANEL_FORMAT, type PanelApi, type PNode } from './src/doc-panel';
+import { anatomyEntry, anatomyMarks, clearOrphanPanels, containerSides, leftColumns, panelUnedited, codeRuns, docPanelReach, docPanelReaches, drawDocPanel, docPanelDue, lastChangedKey, leadsPanel, planDocPanel, panelItems, panelPrint, printV2, printV3, printV4, PANEL_FORMAT, type PanelApi, type PNode } from './src/doc-panel';
 import { dueOf, entryFor, readLedger, recordSets, type LedgerEntry } from './src/as-built-ledger';
 import { RELEASES } from './src/library-about';
 import { EXECUTOR_REVISION } from './src/executor-revision';
@@ -539,8 +539,63 @@ const blockInstance = (type: string): N => {
     }
   };
   i.setExplicitVariableModeForCollection = (_c: unknown, modeId: string) => { i.pinned = modeId; };
-  return liveInstances ? live(i) : i;
+  const out = liveInstances ? live(i) : i;
+  if (styledTexts) for (const q of walk(i)) if (q.type === 'TEXT') styleText(q, q.name === 'heading' ? 'S:title/md/strong' : 'S:body/md/default');
+  return out;
 };
+/**
+ * A TEXT IN A TEXT STYLE, AS THE HOST KEEPS ONE (#4470). The `_Doc-block` template draws each text in a style
+ * (`doc-block.ts`, `setTextStyleIdAsync`), and the file's styles bind their family to a font variable, so a theme that
+ * changes a family re-resolves every styled text's font. Modelled from Figma's text-style behavior, never read off the
+ * print: `fontName` reads the style's font (`THEME_FONTS`, which a theme rewrites) until a font, size or letter-spacing
+ * is set on the text, which DETACHES the style (`textStyleId` reads '', and the text keeps the font it showed); a code
+ * span drawn in the code style (`setRangeTextStyleIdAsync`) splits it into runs, so `fontName` and `textStyleId` read
+ * mixed and `getStyledTextSegments` lists each run with its own style and font. On an instance the host lists (`live`), the
+ * range style is an override of the text's runs, its style and its font. On for the arms that read it.
+ */
+let styledTexts = false;
+const MIXED = Symbol('figma.mixed');
+const THEME_FONTS: Record<string, { family: string; style: string }> = {};
+const themeFont = (style: string) => THEME_FONTS[style] ?? (style === CODE_TEXT_STYLE.id ? CODE_TEXT_STYLE.fontName : { family: 'Inter', style: style.includes('strong') ? 'Semi Bold' : 'Regular' });
+function styleText(t: N, styleId: string): void {
+  let style = styleId, own: unknown;
+  const codes = () => ((t._codes ?? []) as { text: string; id: string }[]);
+  const detach = (): void => { if (style) { own = own ?? themeFont(style); style = ''; } };
+  Object.defineProperty(t, 'fontName', { configurable: true, enumerable: true, get: () => (style && codes().length ? MIXED : own ?? themeFont(style)), set: (v: unknown) => { detach(); own = v; } });
+  Object.defineProperty(t, 'textStyleId', { configurable: true, enumerable: true, get: () => (style && codes().length ? MIXED : style), set: (v: unknown) => { style = String(v); own = undefined; } });
+  // A size or tracking set on a styled text detaches its style, as Figma's does; whatever accessor `live` put there still runs.
+  for (const f of ['fontSize', 'letterSpacing']) {
+    const was = Object.getOwnPropertyDescriptor(t, f);
+    let v = was && 'value' in was ? was.value : undefined;
+    Object.defineProperty(t, f, { configurable: true, enumerable: true, get: () => (was?.get ? was.get() : v), set: (x: unknown) => { detach(); if (was?.set) was.set(x); else v = x; } });
+  }
+  const range = t.setRangeTextStyleIdAsync as (s: number, e: number, id: string) => Promise<void>;
+  t.setRangeTextStyleIdAsync = async (s0: number, e0: number, id: string) => {
+    await range(s0, e0, id);
+    const ovr = t._ovr as Set<string> | undefined;
+    if (ovr) for (const f of ['styledTextSegments', 'textStyleId', 'fontName']) ovr.add(f);
+  };
+  t.getStyledTextSegments = (fields: string[]) => {
+    const s = String(t.characters ?? '');
+    // Each code span by where its text first sits from the last cut: the runs in order, the rest in the text's own style.
+    const cuts: { start: number; end: number; id: string }[] = [];
+    let at = 0;
+    for (const c of codes()) { const i = s.indexOf(c.text, at); if (i >= 0) { cuts.push({ start: i, end: i + c.text.length, id: c.id }); at = i + c.text.length; } }
+    const runs: { start: number; end: number; id: string }[] = [];
+    let from = 0;
+    for (const c of cuts) { if (c.start > from) runs.push({ start: from, end: c.start, id: style }); runs.push(c); from = c.end; }
+    if (from < s.length || !runs.length) runs.push({ start: from, end: s.length, id: style });
+    return runs.map((r) => {
+      const seg: Record<string, unknown> = { characters: s.slice(r.start, r.end), start: r.start, end: r.end };
+      const font = r.id ? themeFont(r.id) : (own as { family: string; style: string } | undefined) ?? themeFont('');
+      if (fields.includes('fontName')) seg.fontName = font;
+      if (fields.includes('textStyleId')) seg.textStyleId = r.id;
+      if (fields.includes('fontSize')) seg.fontSize = t.fontSize ?? 14;
+      if (fields.includes('fontWeight')) seg.fontWeight = font.style === 'Semi Bold' ? 600 : 400;
+      return seg;
+    });
+  };
+}
 /**
  * THE HOST'S INSTANCES FOLLOW THEIR MAIN (#3303), as Figma's do. Each layer of a block instance (a specimen's aside, the
  * set's) holds two values per field: what it inherits from its main (`_inh`), and what was set on it (an override). A
@@ -741,10 +796,13 @@ const overlapsBox = (p: { x: number; y: number; width: number; height: number },
   p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height;
 const overlap = (a: N, b: N): boolean => { const p = boxOf(a), q = boxOf(b); return p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h; };
 const names = (id: string) => componentDefs.find((d) => d.id === id)?.name ?? id;
-const withSets = componentDefs.filter((d) => CANVAS_FURNITURE.has(d.id));
+// #4008, #4007: a set of one member (Popover, Menu, Menu.Group) builds a set but has no canvas furniture, so "builds a
+// set" is read off the def, not off the furniture list.
+const buildsSet = (id: string): boolean => { const d = componentDefs.find((x) => x.id === id); return !!d?.figmaProperties && !d.figmaProperties.emitAsComponents; };
+const withSets = componentDefs.filter((d) => buildsSet(d.id));
 /** THE FAMILIES, as the oracle reads them (#2927): each taxonomy page's defs that build a set, and its lead, the page's
  *  `lead` or its one def. Read off the taxonomy data, not through `panelFamily`. */
-const FAMILIES = TAXONOMY.sections.flatMap((s) => s.leaves).map((l) => ({ page: l.page, lead: l.lead ?? (l.defs.length === 1 ? l.defs[0] : ''), members: l.defs.filter((d) => CANVAS_FURNITURE.has(d)) })).filter((f) => f.members.length);
+const FAMILIES = TAXONOMY.sections.flatMap((s) => s.leaves).map((l) => ({ page: l.page, lead: l.lead ?? (l.defs.length === 1 ? l.defs[0] : ''), members: l.defs.filter(buildsSet) })).filter((f) => f.members.length);
 const familyOf = (id: string) => FAMILIES.find((f) => f.members.includes(id))!;
 const leads = withSets.filter((d) => familyOf(d.id).lead === d.id);
 
@@ -1396,11 +1454,11 @@ section('parts list/… — each anatomy entry draws its marker\'s disc, and its
 /* ── width: each specimen at its member's own width, the panel widening to fit ─────────────────────────── */
 section('width/… — each specimen at its member\'s width, the panel as wide as that needs, the spec column past it (#2970 Q1 A, Q2 A)');
 {
-  // THE BUILT WIDTHS, read by hand off each def's root (`placementWidth`, #1757): Banner 480, Checkbox.Row 320 (the
-  // Checkbox family's lead, so its default is the family panel's specimen). The panel's least width, its padding and the stage's, from the owner's decision and the template:
+  // THE BUILT WIDTHS, read by hand off each def's root (`placementWidth`, #1757): Banner 480, Text field 320 (the
+  // Text field family's lead, so its default is the family panel's specimen; Checkbox.Row hugs its label since #4473). The panel's least width, its padding and the stage's, from the owner's decision and the template:
   // 560, 24 and 24. Theming side by side is 2 × (member + 48) + 16 + 48; at 960 or more the modes stack.
-  const BUILT: Record<string, number> = { banner: 480, 'checkbox-row': 320 };
-  const STACKS: Record<string, boolean> = { banner: true, 'checkbox-row': false };
+  const BUILT: Record<string, number> = { banner: 480, 'text-field': 320 };
+  const STACKS: Record<string, boolean> = { banner: true, 'text-field': false };
   const longestWord = (t: string): number => Math.max(0, ...t.split(/\s+/).filter(Boolean).map((w) => runWidth(w)));
   for (const id of Object.keys(BUILT)) {
     const d = componentDefs.find((x) => x.id === id)!;
@@ -1574,8 +1632,9 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
   const related = (id: string) => planDocPanel(componentDefs.find((d) => d.id === id)!, { modes: ['light', 'dark'], names }).sections.find((s) => s.id === 'related')!.blocks
     .flatMap((b) => (b.type === 'Links' && b.label !== 'Replaces' ? [`${b.label}: ${b.items.map((i) => `${i.name}>${i.def}`).join(' / ')}`] : []));
   // #3555 Q-MD10 A: `alternativeTo` is symmetric, so Checkbox gains TextField (which names it) and Button gains Tag and Link.
-  const cb = ['Instead, consider: Switch>switch-row / Radio>radio-row / TextField>text-field', 'Often used with: FieldLabel>field-label / FieldMessage>field-message / FocusRing>focus-ring / Buttons>button'];
-  const bt = ['Built from: FocusRing>focus-ring / Spinner>spinner', 'Instead, consider: Icon button>icon-button / Switch>switch-row / Tag>tag / Link>link', 'Often used with: Icon>icon / Popover>popover'];
+  // #4112: Checkbox.Row, Button and Tag name ToggleButton back (it was planned), so each gains the Toggle button family.
+  const cb = ['Instead, consider: Switch>switch-row / Radio>radio-row / TextField>text-field / Toggle button>toggle-button', 'Often used with: FieldLabel>field-label / FieldMessage>field-message / FocusRing>focus-ring / Buttons>button'];
+  const bt = ['Built from: FocusRing>focus-ring / Spinner>spinner', 'Instead, consider: Icon button>icon-button / Switch>switch-row / Tag>tag / Link>link / Toggle button>toggle-button', 'Often used with: Icon>icon / Popover>popover / Menu>menu / Tooltip>tooltip'];
   ok(related('checkbox-row').join('\n') === cb.join('\n'), 'family/related: Checkbox names families, its own parts dropped, Built from gone', related('checkbox-row').join(' | '));
   ok(related('button').join('\n') === bt.join('\n'), 'family/related buttons: Buttons as the wireframe has it', related('button').join(' | '));
   // A list naming one family twice, through two members: one entry.
@@ -1588,7 +1647,7 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
   // Tag names Badge, Checkbox.Group and Radio.Group as alternatives and as partners, so they stay under Instead, consider. Then over every lead: no family or component in two lists.
   ok(related('dialog').join('\n') === ['Built from: Flush Icon Button>flush-icon-button / Divider>divider / Buttons>button', 'Instead, consider: Accordion>accordion / Toast>toast / Banner>banner / Popover>popover',
     'Often used with: TextField>text-field / Select>select / Checkbox>checkbox-row / Radio>radio-row'].join('\n'), 'related/dialog: Buttons once, under Built from', related('dialog').join(' | '));
-  ok(related('tag').join('\n') === ['Built from: FocusRing>focus-ring', 'Instead, consider: Badge>badge / Buttons>button / Checkbox>checkbox-row / Radio>radio-row', 'Often used with: Icon>icon / Popover>popover'].join('\n'),
+  ok(related('tag').join('\n') === ['Built from: FocusRing>focus-ring', 'Instead, consider: Badge>badge / Buttons>button / Checkbox>checkbox-row / Radio>radio-row / Toggle button>toggle-button', 'Often used with: Icon>icon / Avatar>avatar / Popover>popover'].join('\n'),
     'related/tag: Badge, Checkbox and Radio once, under Instead, consider', related('tag').join(' | '));
   const twiceIn: string[] = [];
   for (const d of componentDefs.filter((x) => leadsPanel(x.id))) {
@@ -1634,14 +1693,16 @@ section('family/… — one panel per taxonomy page, beside its lead; the member
   const shown = texts(live[0]);
   ok(!!dd && dd.type === 'Do-Dont' && dd.do.join('|') === want.slice(0, 4).join('|') && (want.length <= 4 || shown.some((t) => t.includes(`of ${want.length} Do items`))),
     `family/do: the first 4 of the family's ${want.length} Do items, the Row's first`);
-  // Each item once, over families whose defs repeat lines (Buttons repeats 28 Do and 10 Don't lines across its four
+  // Each item once, over families whose defs repeat lines (Buttons repeats its shared Do and Don't lines across its four
   // defs; Icon button repeats 6). EXPECTED is typed here, read off the defs, not derived through the panel's own merge.
+  // #2778 moved Button's nine build rules and Icon button's one out of Do, into `docs.implementation`, which the panel
+  // does not draw: Buttons' Do count went 19 → 10 and Icon button's 4 → 3.
   const famBlocks = (id: string) => planDocPanel(componentDefs.find((d) => d.id === id)!, { modes: ['light', 'dark'], names }).sections.flatMap((x) => x.blocks);
   const countLine = (id: string) => famBlocks(id).flatMap((b) => b.type === 'Paragraph' && b.text.startsWith('Showing') ? [b.text] : []);
-  ok(countLine('button').join('|') === "Showing 4 of 19 Do items and 4 of 9 Don't items.",
+  ok(countLine('button').join('|') === "Showing 4 of 10 Do items and 4 of 9 Don't items.",
     `family/once: Buttons counts each repeated item once (${JSON.stringify(countLine('button'))})`);
   const ib = famBlocks('icon-button').find((b) => b.type === 'Do-Dont');
-  ok(!countLine('icon-button').length && !!ib && ib.type === 'Do-Dont' && ib.do.length === 4 && ib.dont.length === 3 && new Set([...ib.do, ...ib.dont]).size === 7,
+  ok(!countLine('icon-button').length && !!ib && ib.type === 'Do-Dont' && ib.do.length === 3 && ib.dont.length === 3 && new Set([...ib.do, ...ib.dont]).size === 6,
     `family/once: Icon button's family fits the panel once its repeats are merged (${JSON.stringify(countLine('icon-button'))})`);
 }
 
@@ -1894,7 +1955,7 @@ section('overlap/… — a panel lies on nothing');
   const set = fakeSet(q, 'tag', 0, 0, 600, 400);
   q.appendChild!(mk('FRAME', 'Notes', [], { x: 700, y: 100, _w: 300, _h: 300 }));
   const r = await drawDocPanel(host([q]), set, componentDefs.find((d) => d.id === 'tag')!, { names });
-  ok(!r.drawn && panelsOn(q).length === 0 && panelItems(r).join(' ') === 'No usage panel for tag: "Notes" sits right of the set, where the panel goes. Move it, then build or update again',
+  ok(!r.drawn && panelsOn(q).length === 0 && panelItems(r).join(' ') === 'No usage panel for tag: "Notes" sits right of the set, where the panel goes. Move it, then build again or run Update file',
     `overlap/blocked: no panel drawn, and the run says to move the layer, not to Update, which never moves it: "${panelItems(r).join(' ')}"`);
   // A backdrop reaching into the panel's spot (#2902): the set's own, tagged as Prism3 draws it, never blocks; one a
   // designer placed, untagged, blocks as Notes does (Q172.5), and so does another set's.
@@ -1914,7 +1975,7 @@ section('overlap/… — a panel lies on nothing');
   const handSet = fakeSet(hand, 'tag', 0, 0, 600, 400);
   bg(hand, handSet, null);
   const rh = await drawDocPanel(host([hand]), handSet, tagDef, { names });
-  ok(!rh.drawn && panelItems(rh).join(' ') === 'No usage panel for tag: "inverse-bg" sits right of the set, where the panel goes. Move it, then build or update again',
+  ok(!rh.drawn && panelItems(rh).join(' ') === 'No usage panel for tag: "inverse-bg" sits right of the set, where the panel goes. Move it, then build again or run Update file',
     `overlap/hand backdrop: an untagged inverse-bg still blocks (Q172.5): "${panelItems(rh).join(' ')}"`);
   const other = page('↳ Other backdrop');
   const otherSet = fakeSet(other, 'tag', 0, 0, 600, 400);
@@ -2073,7 +2134,7 @@ const roomPage = async (name: string, also?: (p: N, a: N) => void) => {
 };
 {
   const { p, a, b, ra, rb, uh, targets, livePanel } = await roomPage('↳ Room apply');
-  ok(rb.drawn && !ra.drawn && panelItems(ra).join(' ') === 'No usage panel for badge: "divider" sits right of the set, where the panel goes. Run Update to make room, then the panel is drawn',
+  ok(rb.drawn && !ra.drawn && panelItems(ra).join(' ') === 'No usage panel for badge: "divider" sits right of the set, where the panel goes. Run Update file to make room, then the panel is drawn',
     `overlap/blocked by a set: a Prism3 set later in the row is the one case the run sends to Update ("${panelItems(ra).join(' ')}")`);
   const pre = await previewUpdate(uh, targets);
   const pa = pre.sets.find((x) => x.set === 'badge'), pb = pre.sets.find((x) => x.set === 'divider');
@@ -2217,6 +2278,98 @@ section('own draw/… — Update redraws a panel nobody touched in place, the co
   ok(g.moved > 20 && g.all.length === 2 && g.kept.length === 1 && g.kept[0] === g.old, `own draw/v2 rebuilt: once a component it nests is rebuilt, it is kept, as before #3303 (the safe rule)`,
     `panels ${g.all.map((n) => n.name).join(' | ')}`);
   liveInstances = false;
+}
+
+/* ── theme font: a family the theme changes is not a hand edit (#4470) ───────────────────────────────────────────── */
+section('theme font/… — Update redraws a panel nobody touched in place after the theme changed its type families (#4470)');
+{
+  // The owner's run (2026-11-22): the template's title and display family changed through the theme, then Update file
+  // kept about 35 usage panels aside as "(edited)". Button built by the executor (its Do item carries a code span), its panel drawn on a host whose texts sit
+  // in their styles (`styleText`), the panel made due, then THE THEME: each style's family moves, and every styled text
+  // re-resolves, the code style's runs included. Nobody touches the panel. Update, as `main.ts` runs it, must replace it
+  // in place. Twice: on a host that lists each instance's overrides (`live`), and on one that lists none, where the print
+  // reads each block whole. Mutation: `panelPrint` reads without `bindings` (the resolved fonts, as the fourth form did) →
+  // `theme font/untouched`.
+  const run = async (label: string, listed: boolean, o: { edit?: (old: N) => void; age?: (old: N) => Promise<void>; theme?: boolean } = {}) => {
+    liveInstances = listed;
+    styledTexts = true;
+    for (const k of Object.keys(THEME_FONTS)) delete THEME_FONTS[k];
+    try {
+      const p = page(`↳ theme font ${label}`);
+      const { api, sets } = await buildAll(p, ['button']);
+      const set = sets[0];
+      // The components the plan nests or swaps to, which the shim holds off the page: here on the page, where the update finds them.
+      for (const [k, name] of [SWAP_TARGET, 'focus-ring', 'icon/check', 'icon/close', 'spinner/small', 'spinner/x-small', 'spinner/medium'].entries()) p.appendChild!(mk('COMPONENT', name, [], { x: -4000, y: k * 40, _w: 24, _h: 24 }));
+      for (const m of set.children) members.set(String(m.id), m);
+      const panels = host([p]);
+      // The file's styles, the brand's inline code style among them (#3552), so the Do item's code span is drawn in it.
+      const shimStyles = (api as { getLocalTextStylesAsync: () => Promise<unknown[]> }).getLocalTextStylesAsync;
+      const uh = fixHostMethods({ ...api, getLocalTextStylesAsync: async () => [...await shimStyles(), CODE_TEXT_STYLE], root: fixHostMethods({ ...(api.root as object), findAllWithCriteria: (c: never) => labelHost(panels).root.findAllWithCriteria(c) }) }) as unknown as UpdateHost & PanelApi & FurnitureApi;
+      const d = componentDefs.find((x) => x.id === 'button')!;
+      await drawDocPanel(uh, set, d, { names });
+      const old = panelsOn(p)[0];
+      await o.age?.(old);
+      const at = { x: Number(old.x), y: Number(old.y) };
+      old.setSharedPluginData!('prism3', 'docPanelPlan', `${old.getSharedPluginData!('prism3', 'docPanelPlan')}-engine-n`);
+      const styled = walk(old).filter((q) => q.type === 'TEXT' && q.textStyleId);
+      const runs = walk(old).filter((q) => q.type === 'TEXT' && typeof q.textStyleId === 'symbol');
+      const before = await panelUnedited(uh, old);
+      // THE THEME: the title, display and body families move; every text in those styles follows (`themeFont`).
+      if (o.theme !== false) for (const s of ['S:title/md/strong', 'S:body/md/default']) THEME_FONTS[s] = { family: 'Display Serif', style: s.includes('strong') ? 'Semi Bold' : 'Regular' };
+      o.edit?.(old);
+      const targets: UpdateTarget[] = [{ def: 'button', plans: plansOf('button'), doc: { def: d, names } }];
+      const pre = await previewUpdate(uh, targets);
+      const due = pre.sets.find((x) => x.set === 'button')?.furniture?.panels;
+      const furnish = async (def: string) => { await furnishUpdate(uh, { outcomes: [{ def }] }, targets, (s0, id) => drawDocPanel(uh, s0 as unknown as PNode, componentDefs.find((x) => x.id === id)!, { names })); };
+      await applyUpdate(uh as never, uh as never, targets, previewHashOf(pre), { furnish });
+      const all = panelsOn(p);
+      return { all, old, at, due, before, styled: styled.length, runs: runs.length, live: all.filter((n) => tagOf(n).state === 'live'), kept: all.filter((n) => tagOf(n).state === 'kept') };
+    } finally { styledTexts = false; liveInstances = false; }
+  };
+  const line = (old: N) => walk(old).find((c) => c.type === 'TEXT' && c.name === 'text' && String(c.characters).length > 20 && typeof c.textStyleId === 'string')!;
+  for (const listed of [true, false]) {
+    const host0 = listed ? 'overrides listed' : 'no overrides';
+    const a = await run(`untouched ${host0}`, listed);
+    ok(a.styled > 10 && a.runs > 0 && a.before, `theme font premise (${host0}): the panel holds ${a.styled} styled texts, ${a.runs} of them with a code run, and reads unedited before the theme`);
+    ok(a.due === 1 && a.all.length === 1 && a.live.length === 1 && a.live[0] !== a.old && a.old.removed === true
+      && Number(a.live[0].x) === a.at.x && Number(a.live[0].y) === a.at.y && !a.all.some((n) => String(n.name).endsWith('(edited)')),
+      `theme font/untouched (${host0}): the theme moved the families, and one Update replaces the panel in place, no "(edited)" copy`,
+      `due ${a.due}, panels ${a.all.length} [${a.all.map((n) => n.name).join(' | ')}]`);
+    // A REAL HAND EDIT IS STILL ONE, beside the theme's change: a line rewritten, and a font set by hand on a styled text.
+    const b = await run(`text edit ${host0}`, listed, { edit: (old) => { line(old).characters = 'Our team uses buttons for forms only.'; } });
+    ok(b.all.length === 2 && b.live.length === 1 && b.kept.length === 1 && b.kept[0] === b.old && String(b.old.name).endsWith(' (edited)') && texts(b.old).includes('Our team uses buttons for forms only.'),
+      `theme font/text edit (${host0}): a rewritten line still keeps the panel aside as "${b.old.name}", its edit intact`, `panels ${b.all.map((n) => n.name).join(' | ')}`);
+  }
+  // A FONT SET BY HAND detaches the text from its style: that is the designer's, theme or not. Read on the host with no
+  // overrides listed, where the text is read whole (on a listed host the font is an override the print reads the same way).
+  const c = await run('hand font', false, { theme: false, edit: (old) => { line(old).fontName = { family: 'Comic Neue', style: 'Bold' }; } });
+  ok(c.kept.length === 1 && c.kept[0] === c.old && c.live.length === 1, `theme font/hand font: a font set by hand on a styled text keeps the panel aside`, `panels ${c.all.map((n) => n.name).join(' | ')}`);
+  // A TEXT IN NO STYLE reads its font: the part marker's numeral, which the panel sets in Inter itself (`disc`). A font set
+  // on it by hand is the designer's; the same text with its family bound to a font variable reads the variable, so the
+  // theme moving that variable's value is not. Mutation: an unstyled text's font left out of `typeByBinding` →
+  // `theme font/unstyled hand font`; the binding read as its value → `theme font/font variable`.
+  const numeral = (old: N) => walk(old).find((q) => q.type === 'TEXT' && q.name === 'count' && !q.textStyleId && typeof q.fontName === 'object')!;
+  const g = await run('unstyled hand font', false, { theme: false, edit: (old) => { numeral(old).fontName = { family: 'Comic Neue', style: 'Bold' }; } });
+  ok(g.kept.length === 1 && g.kept[0] === g.old && g.live.length === 1, `theme font/unstyled hand font: a font set by hand on a text in no style keeps the panel aside`, `panels ${g.all.map((n) => n.name).join(' | ')}`);
+  const bindFamily = async (old: N) => {
+    const t = numeral(old);
+    // A TextNode lists each bound text field as an array of aliases (`VariableAlias[]`, plugin-api.d.ts); only a styled
+    // segment's `boundVariables` holds one alias. Mutation: `boundOf` reading `.id` only → `theme font/font variable`.
+    t.boundVariables = { ...((t.boundVariables ?? {}) as object), fontFamily: [{ type: 'VARIABLE_ALIAS', id: 'V:font/family/display' }] };
+    old.setSharedPluginData!('prism3', 'docPanelPrint', await panelPrint(old));
+  };
+  const h = await run('font variable', false, { theme: false, age: bindFamily, edit: (old) => { const t = numeral(old); t.fontName = { ...(t.fontName as { style: string }), family: 'Display Serif' }; } });
+  ok(h.all.length === 1 && h.live.length === 1 && h.old.removed === true && numeral(h.old).fontName && (numeral(h.old).fontName as { family: string }).family === 'Display Serif',
+    `theme font/font variable: a family bound to a font variable whose value the theme moved is not a hand edit; one Update replaces the panel`, `panels ${h.all.map((n) => n.name).join(' | ')}`);
+  // A PANEL PRINTED IN THE FOURTH FORM (before #4470) is compared in that form: untouched and no theme change, it is
+  // replaced; after the theme moves its fonts, that form cannot tell the theme from a designer, so it is kept, as before.
+  const v4 = (old: N) => printV4(old).then((pr) => old.setSharedPluginData!('prism3', 'docPanelPrint', pr));
+  const e = await run('v4 unchanged', false, { theme: false, age: v4 });
+  ok(e.all.length === 1 && e.live.length === 1 && e.old.removed === true, `theme font/v4 unchanged: a panel printed in the fourth form, untouched and its fonts as drawn, is replaced`,
+    `panels ${e.all.map((n) => n.name).join(' | ')}`);
+  const f = await run('v4 themed', false, { age: v4 });
+  ok(f.all.length === 2 && f.kept.length === 1 && f.kept[0] === f.old, `theme font/v4 themed: a fourth-form panel whose fonts the theme moved is kept, as before #4470 (the stated limit)`,
+    `panels ${f.all.map((n) => n.name).join(' | ')}`);
 }
 
 /* ── format due: a panel behind PANEL_FORMAT on a set otherwise current (#3205) ───────────────────────────── */
@@ -2448,17 +2601,18 @@ section('template/… — `_Doc-block`');
 /* ── code: a backtick span drawn as code (#3552 Q-UG2 A) ──────────────────────────────────────────────────── */
 section('code/… — a code span is written without its backticks and drawn in the brand\'s inline code style (#3552 Q-UG2 A)');
 {
-  // The one panel line with code spans today, typed from Button's def: its first Do item.
-  const want = "Place the icons the way the brand's buttonIcons setting says; attached (Attached to label, the default) keeps them beside the label with the group centered";
+  // A panel line with a code span, typed from Button's def: its inverse-surface Do item. (Its first Do item with code
+  // spans, the `buttonIcons` line, moved to `docs.implementation` with #2778, and the panel leaves that section out.)
+  const want = 'Set surface=inverse for a button on a dark or brand-filled band, so its fill, ink, border and disabled treatment bind the inverse counterparts instead of losing contrast against the flipped ground';
   const drawButton = async (o: { codeStyle?: boolean } = {}) => {
     const p = page(`↳ code ${o.codeStyle === false ? 'none' : 'style'}`);
     const r = await drawDocPanel(host([p], o), fakeSet(p, 'button'), componentDefs.find((d) => d.id === 'button')!, { names });
-    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Place the icons the way'));
+    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Set surface=inverse for a button'));
     return { r, t };
   };
   const a = await drawButton();
-  ok(a.t?.characters === want && JSON.stringify(a.t?._codes) === JSON.stringify([{ text: 'buttonIcons', id: 'S:code' }, { text: 'attached', id: 'S:code' }]),
-    'code/button: Button\'s Do item reads without backticks, buttonIcons and attached in code/inline/default', `${String(a.t?.characters)} ${JSON.stringify(a.t?._codes)}`);
+  ok(a.t?.characters === want && JSON.stringify(a.t?._codes) === JSON.stringify([{ text: 'surface=inverse', id: 'S:code' }]),
+    'code/button: Button\'s Do item reads without backticks, surface=inverse in code/inline/default', `${String(a.t?.characters)} ${JSON.stringify(a.t?._codes)}`);
   const b = await drawButton({ codeStyle: false });
   ok(b.t?.characters === want && !(b.t?._codes as unknown[]).length && b.r.misses.some((m) => m.includes('code/inline/default')),
     'code/no style: a file without the code style writes the same text plain and names the style', `${JSON.stringify(b.t?._codes)} misses ${b.r.misses.join('; ')}`);
@@ -2468,7 +2622,7 @@ section('code/… — a code span is written without its backticks and drawn in 
     const api = host([p]);
     api.loadFontAsync = async (f) => { if (f.family === CODE_TEXT_STYLE.fontName.family) throw new Error('no font'); };
     const r = await drawDocPanel(api, fakeSet(p, 'button'), componentDefs.find((d) => d.id === 'button')!, { names });
-    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Place the icons the way'));
+    const t = walk(panelsOn(p)[0]).find((c) => c.type === 'TEXT' && String(c.characters).startsWith('Set surface=inverse for a button'));
     ok(t?.characters === want && !(t?._codes as unknown[]).length && r.misses.some((m) => m.includes('JetBrains Mono Regular unavailable')),
       'code/no font: the code style\'s font won\'t load, so the text is plain, no code range is set, and the miss names the font', `${JSON.stringify(t?._codes)} misses ${r.misses.join('; ')}`);
   }
@@ -2513,8 +2667,9 @@ section('code/… — a code span is written without its backticks and drawn in 
   // The issue's named identifiers (N5) and a sample of its code syntax, typed by hand with the lead whose panel draws each.
   const MARKED: [string, string][] = [
     ['field-label', 'htmlFor'], ['radio-row', 'onChange'], ['text-field', 'readOnly'], ['textarea', 'maxRows'],
-    ['password-field', 'autoComplete'], ['card-number-field', 'brandName'], ['card-number-field', 'renderInput'],
-    ['slider', 'onChangeEnd'], ['icon-button', 'isInactive'], ['button', 'buttonIcons'],
+    // #2778: Password field's autoComplete, Card number field's brandName and renderInput, Slider's onChangeEnd and
+    // Button's buttonIcons left the panel with the build rules (the panel does not draw "Building it in code").
+    ['icon-button', 'isInactive'], ['button', 'surface=inverse'],
     ['button', '<button>'], ['icon-button', 'div[role=button]'], ['text-field', 'type="number"'],
     ['checkbox-row', '<input type="checkbox">'], ['checkbox-row', 'aria-checked'], ['switch-row', 'aria-pressed'],
   ];
@@ -2572,8 +2727,8 @@ section('qa/… — usage panels QA round 1 (#2970): titles, the space above Do 
   const lists = rows.map((x) => `${String(x.label.characters)}: ${String(x.text.characters).split('\n').join(' / ')}`);
   ok(lists.join('\n') === [
     'Built from: FocusRing',
-    'Instead, consider: Badge / Buttons / Checkbox / Radio',
-    'Often used with: Icon / Popover',
+    'Instead, consider: Badge / Buttons / Checkbox / Radio / Toggle button',
+    'Often used with: Icon / Avatar / Popover',
     'Replaces: a removable token list built as a listbox / a clickable div styled as a pill / a bare × glyph with no accessible name',
   ].join('\n'), 'qa/related lists: 4 lists, one line per name, no chips', lists.join(' | '));
   ok(!related.children.some((b) => walk(b).some((c) => /^chip\d/.test(String(c.name)))) && rows.every((x) => JSON.stringify(x.text._lists) === `[{"s":0,"e":${String(x.text.characters).length},"o":{"type":"UNORDERED"}}]`),

@@ -120,7 +120,7 @@ export const textarea: ComponentDef = {
     { name: 'value', type: 'string', required: false, description: 'Controlled value; pair with onChange. The same prop as TextField\'s.' },
     { name: 'onChange', type: 'function', required: false, description: 'Change handler (also onBlur / onFocus). The same prop as TextField\'s.' },
     { name: 'placeholder', type: 'string', required: false, description: 'An example only; vanishes on input; nothing load-bearing lives here. The same prop as TextField\'s.' },
-    { name: 'helpText', type: 'string | node', required: false, description: 'Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format and any length limit before failure. The same prop as TextField\'s.' },
+    { name: 'helpText', type: 'string | node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format and any length limit before failure. The same prop as TextField\'s.' },
     { name: 'showMessage', type: 'boolean', default: false, required: false, description: 'Whether the composed FieldMessage is shown. Off by default; turn it on to render the helper or validation message below the field. The same prop as TextField\'s. Never hides a message the field needs.' },
     { name: 'rows', type: 'number', default: 3, required: false, description: 'Initial and minimum height, in lines not pixels — a line count recomputes against the current line-height when the user raises their font size, where a pixel floor does not. Also a content cue: two rows signals brevity, six signals "write more". cols is dead on the web; width comes from CSS.' },
     { name: 'resize', type: "enum: 'none' | 'vertical' | 'auto'", values: ['none', 'vertical', 'auto'], default: 'vertical', required: false, description: 'The sizing model in one prop, so two props cannot contradict each other. vertical (the drag handle) for standalone form fields; auto (grow within minRows/maxRows) for composers; none where layout stability wins. Never horizontal or both — altering the inline dimension shatters grid and flex layouts for no user gain.' },
@@ -594,11 +594,13 @@ export const textarea: ComponentDef = {
     usage: 'Use for free-form text expected to exceed one line — comments, descriptions, messages, feedback, multi-line addresses. Pick the sizing model by context: fixed-height-plus-scroll for a field inside a long form (so the form does not reflow as the user types), auto-grow for a composer (so the message box follows the message). Right-size the initial rows to the expected input. Compose FieldLabel above and FieldMessage below exactly as TextField does; the host wires the ids and the `aria-describedby` chain. Pick the size with the form: medium is the default, large for a roomy form, small for a dense one on fine pointers only — on a touch screen the small field renders at 16px, because a smaller field makes iOS zoom the page on focus.',
     do: [
       'Set `maxRows` whenever auto-growing — uncapped growth pushes the submit affordance off-screen on a long paste',
+      'Reserve space in the footer for the validation message and the counter, so an over-limit error does not push the resize handle',
+    ],
+    implementation: [
       'Enforce a character limit softly (allow over, flag invalid, block submit) and count by grapheme, not by string length',
       'Announce the over-limit through the live region and `aria-invalid` — color alone is not a signal',
       'Normalize \\r\\n to \\n on paste before counting or storing, and resize once per paste rather than once per inserted line',
       'Keep a read-only textarea scrollable and selectable, so the whole value stays reachable — far more text is hidden here than in a single-line field',
-      'Reserve space in the footer for the validation message and the counter, so an over-limit error does not push the resize handle',
     ],
     dont: [
       'Offer horizontal or both resize — it shatters grid and flex layouts and breaks responsive viewports',

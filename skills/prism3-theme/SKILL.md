@@ -13,7 +13,7 @@ description: >-
 documents: brandInput
 # Deliberately out of scope for a BRIEF-authoring skill: the per-mode override layer and the
 # fine-tuning knobs are studio work done after a theme exists, not things a brand brief states.
-omits: customModes, overrides, modeAnchors, modeLevers, roleColors, disabledMin, baseMd,
+omits: customModes, overrides, modeAnchors, modeLevers, modePalettes, roleColors, disabledMin, baseMd,
   actionAnchorStep, destructiveAnchorStep, linkStateRungs, accentPalette, interactivePalettes,
   outlineInteraction, outlineHoverFill, outlineWash, neutralEmphasis, strictInteractiveContrast
 when_to_use: >-
@@ -51,6 +51,9 @@ primary: { l: 0.50, c: 0.18, h: 285 }   # the hero color, in OKLCH
 neutral: { hue: 285, chroma: 0.008 }      # the gray cast (a hint of the brand hue)
 ```
 
+Set `name` too, the brand's display name as people read it (`name: Aurora`). It is identity, not a
+lever, and no token emits from it; unset, a reader that shows the brand by name uses `id` as written.
+
 That alone compiles to a full system on sensible defaults. Everything below is optional
 and **omitting a lever selects its default** — a plain brief is a valid brief (the
 "plain-spec guarantee"). Add a lever only when the brand actually calls for it.
@@ -63,14 +66,16 @@ minimal — read both, they are the reference; the directory also holds a standa
 |---|---|---|
 | `root` | string (default `prism`) | the brand needs its own token namespace (`nbds`, …) |
 | `brandColors` | `[{ name, oklch: {l,c,h} }]` | the brand has accents beyond the hero |
-| `actionPalette` | a `brandColors` name | interactive UI runs on an **accent**, not the hero (decouple) |
+| `actionPalette` | `primary` \| `neutral` \| a `brandColors` name | interactive UI runs on an **accent**, not the hero (decouple), or on a near-black or gray (`neutral`). Defaults to `primary` |
 | `linkPalette` | `primary` \| `neutral` \| a `brandColors` name | links need their **own** color, independent of actions. Defaults to following the action color; the ink is still rated to its contrast floor. A palette that is not color-distinct from body text (e.g. `neutral`) is flagged in the notes to underline links for WCAG 1.4.1 — pair it with `typography.links` |
 | `status` | `{ success/warning/danger/info: {l,c,h,chroma} }` | the brand *specifies* status hues; omit any (or all) to let the engine synthesize + carve a danger red |
 | `surfaces` | `{ light: { base: 50 } }` | the page is a **tinted off-white**, not pure white (the contrast floor moves with it). `floorStep` sets the floor itself: every floor-gated text and link ink (all but `*.primary`) is promised its bar on the floor surface and anything nearer the page, and nothing deeper. To put text on `background.tertiary`, set `floorStep` to its step and the inks re-derive |
 | `raisedSurface` | `card` \| `page` \| `white` | the brand's **dialogs** sit on white, or on the page color, instead of the card color. It sets `color.foreground.raised`, the panel every dialog and sheet draws over the scrim, in light and hc-light. `card` (default) holds the card surface, `color.foreground.primary`; `page` holds `color.background.primary`; `white` holds pure white. Dark and hc-dark always hold the card surface, so the panel keeps its lift above a dark page. One token's value moves; Dialog binds the same token either way |
 | `scrimStrength` | `standard` \| `strong` | the brand's **dialogs** sit over a heavy black backdrop, so the page behind stops competing. It sets which step `color.scrim.default` aliases. `standard` (default) is 40% light, 60% dark, 60% hc-light, 70% hc-dark: the page behind stays readable. `strong` is 80% light and dark, 90% in both high-contrast modes. No token name changes; the dialog binds the same token either way |
 | `secondaryTextGround` | `floor` \| `page` | the brand's **secondary copy and placeholders** run as light as the page allows. It sets where `text.secondary` and `icon.secondary` are fitted. `floor` (default) clears 4.5:1 (7:1 in high contrast) on `background.secondary`, so the ink holds on every page tier down to it. `page` clears it on `background.primary` only, the lightest secondary that still passes there, and it may fall below the bar on `background.secondary` and cards on that step; the `.ai.json` per-surface wording says where it holds. `page` applies in light and dark; high contrast and the inverse band keep their floor. No token name changes |
+| `interactiveGround` | `floor` \| `page` | the brand **never puts a control on the secondary or tertiary background**, or on a card on that step, and wants its field borders, disabled text and destructive outline as light as the page allows. It sets the ground every interactive contrast check is measured on. `floor` (default) measures the interactive fills, disabled text and icon, field borders, the destructive outline and the field status borders on the contrast floor, so they hold on every page tier. `page` measures them on `background.primary` (on the inverse band, `inverse.background.primary`), so a field border runs a step lighter and falls below 3:1 on `background.secondary`. It is a commitment: a control on an excluded surface is a defect. Light and dark only; high contrast keeps the floor. Button borders that follow their label do not move. No token name changes (#3339) |
 | `glassRoles` | `{ card: { role: foreground.primary, alpha: 70 } }` | a glass band set on a **card** (or another surface) should read as that surface, not as white glass. Each entry adds `color.glass.<name>`: one color source, `role` (a semantic role's palette color, per mode) or `palette` (one palette color: a ramp name and its step joined by a dot, or `white` or `black`), at `alpha` percent (1–99). The engine emits it as a palette alpha step, so a Figma fill bound to it stays translucent. `color.glass.surface` is unchanged and its name is refused. Brand-dependent: the role exists only for this brand, so bind it in this brand's own designs, not in a shared component |
+| `modes` | a list of `light` \| `dark` \| `hc-light` \| `hc-dark` \| `wireframe` | the brand ships other modes than the default four (light, dark, hc-light, hc-dark). `light` is required; a light-only brand sets `[light]`. `wireframe` is a generated grayscale mode, opt-in only |
 | `density` | `comfortable` \| `compact` \| `spacious` | a dense tool vs a roomy reading product |
 | `radiusScale` | number, or a named stop: `sharp` \| `modest` \| `standard` \| `soft` \| `round` | radius softness |
 | `controlShape` | `rounded` \| `pill` \| `boxed` \| `hairline` | the corner shape of buttons, fields and checkboxes — a brand-identity choice, orthogonal to softness. `rounded` (default) follows `radiusScale`; `boxed` gives them a sharp 0px corner; `hairline` a 1px corner; `pill` rounds the ends of **buttons** fully (height ÷ 2) whatever the softness, while fields and checkboxes keep their own corner |
@@ -89,15 +94,22 @@ minimal — read both, they are the reference; the directory also holds a standa
 | `buttonBorderWeight` | `hairline` \| `thick` | The border of an outline button, in every button set at once. `thick` (Thick) binds `border-width.thick`, 2px; `hairline` (Thin, default) binds `border-width.hairline`, 1px. Each set keeps its own border color. Icon buttons follow too: the outline icon button's edge and the round flush icon button's edge |
 | `radiusHairline` | `true` \| `false` | **retired — do not set it.** The fixed 1px `radius.hairline` rung now ships for every brand, so this changes nothing; it is accepted only so older brand files still load. For 1px-cornered controls, use `controlShape: hairline` |
 | `iconContrast` | `text` \| `3:1` | let non-text icons run lighter (WCAG 1.4.11 floor) |
-| `motionPersonality` | `{ tempo: snappy \| standard \| relaxed }` | brand energy → motion pace |
-| `typography` | `{ families, weightRoles, typeScale: compact\|default\|expressive, displayCeiling, titleFloor, captionFloor, sizeFloor, responsive: { fluid, minViewport, maxViewport }, sizes, tracking }` | custom faces / weight remap / fluid type; `families` is keyed by CATEGORY (`display`/`title`/`body`/`label`/`caption`/`eyebrow`/`code`), and **an omitted category takes the engine default (Inter, or JetBrains Mono for `code`), with a system fallback stack appended**. `sizes` and `tracking`: see the note under this table |
+| `motionPersonality` | `{ tempo: snappy \| standard \| relaxed, easingRoles, curves, presets, patterns, brandOnly }` | brand energy → motion pace. `tempo` scales every duration step, so every preset follows it. `easingRoles` sets which curve each motion role resolves to, brand-wide: `default`, `enter`, `exit` or `emphasized` → `linear` \| `standard` \| `decelerate` \| `accelerate` \| `expressive` \| `calm`, or a curve from `curves`. An absent role keeps the engine default. `curves` adds the brand's own named curves beside the six, as a brand adds colors: `{ landing: [0.3, 0, 0.1, 1] }` emits a `motion.easing.<name>` curve named `landing`. A curve stays inside the 0–1 box (one that overshoots is a spring's job), takes a name that isn't one of the six, and fits the role that uses it: a curve on `enter` decelerates and one on `exit` accelerates. `presets` re-points the slots of a motion preset, `motion.preset.<name>`. The presets are `state`, `fade`, `crossfade`, `move`, `reveal`, `draw`, `surface`, `expand`, `step`, `settle`, `pop` and `press`. Each takes `duration` (`duration.<step>`, a step of `instant` … `longest`), `easing` (`easing-role.<role>`, `easing.<curve>` or `spring.<name>`: `snappy`, `gentle`, `bouncy` or `effects`) and `delay` (`delay.show`, `delay.min-show`, `delay.hide` or `delay.skip`), each a motion path, never a number: `{ surface: { duration: duration.longer, easing: easing.landing } }`. An arriving preset (`fade`, `reveal`, `surface`, `settle`, `pop`) also takes `exit`, the same three slots for its closing half, `motion.preset.<name>.exit`, which defaults to one step shorter on the `exit` role: `{ surface: { exit: { duration: duration.fast } } }`. An in-place preset has no exit half, so `exit` on it is refused. A preset eased by a spring plays for that spring's settle time, so its duration is `spring-duration.<the same spring>`, filled in when absent. The reduced duration follows the duration and can't be set. An absent slot keeps the engine default; an unknown preset, slot or target is refused by name. `patterns` changes a track of a motion pattern (what a component's open, close or change moves), keyed by the pattern and the track, `<element>.<property>`: `{ 'dialog/enter': { 'panel.transform': { scale: 0.9 } } }`. A track takes `preset` (`preset.<name>` or `preset.<name>.exit`; an entrance's track names an entering half and an exit's track an exit half, so to retime an exit re-point `presets.<name>.exit`), `distance` (`distance.nudge`, a `space.<step>` the scale has, or a number of px above 0), `scale` (a start scale above 0 and at most 1) and `reduced` (`fade`, `keep` or `off`, what it does under reduced motion). A brand changes a track, never which tracks exist: an unknown pattern, track or field is refused by name, and so is an override that leaves a pattern with every track `off` under reduced motion, since it would show no cue. The patterns are listed in the agent file's `motion_patterns`. `brandOnly` holds values only this brand needs, each emitted as `motion.brand.<name>` and outside the guaranteed names. A name is lowercase letters, digits and hyphens; each value is `{ kind: spring, damping, stiffness }`, `{ kind: distance, baseMs, msPerPx, minMs, maxMs }` (a duration that grows with the distance moved) or `{ kind: gesture, coastTauMs, rubberBand, parallax }`. Set it only when the brief names such a value |
+| `typography` | `{ families, weightRoles, typeScale: compact\|default\|expressive, displayCeiling, titleFloor, captionFloor, sizeFloor, responsive: { fluid, minViewport, maxViewport }, sizes, tracking, leading, faces }` | custom faces / weight remap / fluid type; `faces` pins the exact Figma `{ family, style }` per category and weight role; `families` is keyed by CATEGORY (`display`/`title`/`body`/`label`/`caption`/`eyebrow`/`code`), and **an omitted category takes the engine default (Inter, or JetBrains Mono for `code`), with a system fallback stack appended**. `sizes`, `tracking` and `leading`: see the note under this table |
+| `typography.weights` | `{ <group>: [weight roles] }` | a group ships a different or larger set than its default weights (the list replaces the set), e.g. `display: [strong, max]` for a black hero. Adding a weight adds styles and renames none |
+| `typography.italics` / `typography.italicDefault` | lists of groups | `italics`: the group also ships an italic of each style. `italicDefault`: the group's only cut is italic. Not both for one group |
+| `typography.lineHeights` / `typography.letterSpacings` | `{ <rung>: <ladder step> }` | binds a named leading or tracking rung to another step of its ladder; every style on that rung moves. The value must be a ladder step and the rungs stay in order |
+| `typography.leadingShift` / `typography.trackingShift` | `{ <group>: rungs }`, typically -1, 0 or +1 | shifts a group's whole leading or tracking curve by rungs without flattening it. Positive is more open |
+| `typography.typefaceLibrary` | a list of family names | faces the brand has but binds to no category yet; each emits a typeface primitive, so binding it later changes no token name |
+| `typography.sizeOverrides` | `{ <group>: { <rung>: { desktop, mobile } } }` | pins a heading rung's desktop or mobile size, in place of the fluid size for that rung alone. `mobile` needs fluid type (`responsive: { fluid }`) |
 | `typography.captionFloor` | `11` \| `10` | opt-in (off by default) — `10` adds **caption.sm = 10px**, a fine-print rung (10 is already on the size ladder). Floors caption at 11px otherwise; opt in for dense legal / footer / product-attribute text |
 | `typography.sizeFloor` | `10` \| `8` | opt-in **escape hatch** (off by default) — `8` pushes the size ladder to an **8px floor** and adds **caption.xs = 8px**. 8px sits below the size range the system's contrast ratios were reasoned about, so the engine **flags it in the decisions notes**. Ship it only for genuine fine print that has an accessible alternative |
 | `typography.underline` | `{ thickness, offset }`, each a share of the font size (e.g. `{ thickness: 0.05, offset: 0.25 }`) or `auto` | the brand specifies its link underline. Both default to `auto`, which emits no token and leaves the line to the font. A set value is held to a whole percent and **clamped**, not refused: thickness 1–20%, offset 0–50%. It emits two tokens, core.font.underline.thickness and core.font.underline.offset (`$type: number`), only for a brand that sets them, so they are not in the default tree. It is written as a PERCENT into every `-link` text style in Figma (labels included), and is read in CSS as `calc(var(…) * 1em)` |
 | `shadow` | `{ softness, tint: { hue, amount } }` | softer marketing elevation, tinted to the brand |
-| `layout` | `{ breakpoints: [...], containerMax }` | a non-default breakpoint ladder / content cap |
+| `layout` | `{ breakpoints: [...], containerMax, containerNarrow, columns, columnOverrides }` | a non-default breakpoint ladder / content cap. `containerNarrow` is the reading-measure container (720px default). `columns` is the base column count (12 default); `columnOverrides` sets a breakpoint's count, e.g. `{ sm: 4 }` |
 | `layout.marginOverrides` / `layout.gutterOverrides` | `{ <breakpoint>: px }`, e.g. `{ md: 44 }` | the brand specifies its own grid margin or gutter at a breakpoint (keyed by the breakpoint name, `sm`…`2xl`); an unset breakpoint keeps the engine's value. The value is never rounded to a step. `grid/margin` (or `grid/gutter`) links to the first of these that exists: **(1)** the `space/*` step with that px; **(2)** otherwise the brand's `core/dimension/*` step with that px (e.g. 36 → `core/dimension/36`); **(3)** otherwise a plain px, flagged off-scale in its description and in the decisions notes. Spacing always comes first, so 24 links to `space/300`, never to `core/dimension/24`. The Figma grid style for that breakpoint carries the same px as its offset |
 | `gradients` | `[{ name, kind: linear\|radial, angle/center/shape, stops: [{ palette, step, position }] }]` | opt-in brand gradients (most systems ship none — omit) |
+| `icons` | `{ map: { plus: add, check: checkmark }, glyphs: { add: { path: "M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z" } } }` | the brand has its own icons. `map` names which brand icon replaces each Prism3 icon, in every generated component that uses it, and a mapped Prism3 icon is no longer built into the brand's file. `glyphs` is the brand's art: one filled path on a 24×24 artboard (`fillRule: evenodd` for counters). A glyph named like a Prism3 icon (`close`) redraws that icon. A key must be a Prism3 icon; a value must be a Prism3 icon or a key in `glyphs`, and may not itself be mapped. Map each `-filled` twin with its line form (`plus-filled: add`): Prism3 draws the pair identically, so leaving one unmapped keeps a duplicate |
 | `disabledStrategy` | `full` \| `reduced` (legacy aliases: `accessible`, `conventional`) | `reduced` (default) — disabled ink clears a dialable `disabledMin` floor (3–4.5, default 3); `full` promises a fixed 4.5:1 (AA text) instead. Neither goes below 3:1 — this system does not use the WCAG 1.4.3/1.4.11 inactive-component exemption, so there is no sub-AA "exempt" look to select. (`accessible`/`conventional` are accepted as legacy aliases; both normalize to `reduced` — they do not select `full` and `conventional` no longer means low-contrast.) |
 
 
@@ -110,13 +122,19 @@ minimal — read both, they are the reference; the directory also holds a standa
   `captionFloor`.
 - `tracking: { display: open, body: open }` gives every size of a text type one letter spacing name, any of
   tightest, tighter, tight, snugger, snug, normal, open, wide or wider. It replaces the size-based letter spacing and
-  the `trackingShift` nudge for that text type only. Use it when a nudge can't land the value: no nudge reaches open
+  the `typography.trackingShift` nudge for that text type only. Use it when a nudge can't land the value: no nudge reaches open
   (+1%), and display's letter spacing changes at 96px, so a nudge can't make display one value.
+- `leading: { title: cozy }` does the same for line height: every size of the text type uses one of tight, snug,
+  compact, cozy, normal, relaxed or loose, in place of the size-based line height and the `leadingShift` nudge.
+  Title's line height changes with its size, so no nudge can give title one value.
 
 ## How to author
 
-1. **Pin the anchors in OKLCH.** Convert the brand's exact hero hex to OKLCH and set
-   `primary`. Do the same for accents (`brandColors`). Pin the brand's *real* colors —
+1. **Pin the anchors in OKLCH.** Convert the brand's exact hero hex to OKLCH with
+   `npx tsx packages/engine/oklch.ts '#2f6b4f'` and set `primary` to the object it prints. Do
+   the same for accents (`brandColors`). The engine also takes the hex itself
+   (`primary: "#2f6b4f"`; an 8- or 4-digit hex has its alpha dropped) and records the converted
+   value in its notes, but the numbers in the brief are what a reader and a diff can check. Pin the brand's *real* colors —
    the engine reproduces an anchor exactly (ΔE00 ~0) and grows the ramp around it, so
    fidelity to the brand comes from accurate anchors, not from you placing steps.
 2. **Choose the neutral cast.** `neutral: { hue, chroma }` derives a gray with a hint of
@@ -125,6 +143,9 @@ minimal — read both, they are the reference; the directory also holds a standa
    anchor overrides them, so set them to the anchor's own hue and chroma.
 3. **Decide action.** If the brand's interactive color *is* the hero, do nothing
    (`action` defaults to `primary` — the engine notes it so it stays a confirmed choice).
+   A hero far from mid-lightness is placed on its ramp by lightness, and the action fill is a
+   different step chosen for contrast. If the button must be the exact hero, check
+   `interactive.primary.fill.rest` in the `.ai.json`.
    If interactive UI uses an accent, set `actionPalette: <accent-name>`. Links follow the action
    palette unless you set `linkPalette` — point it at `primary`, `neutral`, or an accent to give links
    their own color; a non-color-distinct choice (like `neutral`) is flagged to underline links (WCAG 1.4.1).
@@ -166,9 +187,12 @@ Read the output — it is the contract:
   chroma down if you meant it to be exact), the tinted-surface floor, etc. Read every
   note; each is a decision to confirm or fix.
 - **Exit 0** = clean. **Exit 1** = a schema violation, a broken alias, or a **failed
-  contrast contract** — the message names it. Fix the *input* and re-run: a failing
-  action-on-surface contrast usually means nudging the primary's lightness or moving the
-  surface base; an out-of-gamut anchor means lowering its chroma.
+  contrast contract** — the message names it. Fix the *input* and re-run. A failed contrast
+  contract almost always comes from the page or floor surfaces: move the tinted `surfaces`
+  base back toward its mode's extreme (white in light, black in dark), or `floorStep` nearer
+  the page. Don't move the primary's lightness: a
+  primary at any lightness compiles clean, because the engine picks the action fill's step for
+  contrast. An out-of-gamut anchor means lowering its chroma.
 
 Loop until it exits 0 with all contracts passing. That closing loop **is** the
 deliverable — a `design.md` that compiles clean is a brand the engine can carry to every
@@ -219,7 +243,8 @@ Then run the compile loop. Say in the prose which picks the report left open, so
 ## If you have the MCP surface
 
 `list_levers` enumerates the knobs and their allowed values. `theme_from_brief` takes a
-`design.md` brief (frontmatter and prose) directly — the callable form of this skill's loop.
+`design.md` brief in either dialect directly — the callable form of this skill's loop. For a
+standard brief it also returns `xWarnings`, the `x-prism3:` keys and typography faces it skipped, as the CLI prints them.
 `theme_brand` compiles a `BrandInput` you already hold. Both return the contract results,
 alias integrity and the notes by default; the token tree and the `.ai.json` come back only
 when asked for with `include`, and they are large. To get the actual files, call

@@ -152,7 +152,7 @@ export const select: ComponentDef = {
     { name: 'placeholder', type: 'string', required: false, description: 'The null state shown before a choice is made — plainly the thing to choose ("Country"), not an instruction ("Select a country from the list"), and omittable when the label suffices. Muted, and never load-bearing — it is not the label, not a real option, and it vanishes once a value is chosen.' },
     { name: 'options', type: 'array', required: false, description: 'The bounded set of choices. The select band is 8 to about 15 familiar options: at 7 or fewer an always-visible Radio.Group reads better, and past about 15 a filtering combobox (not built yet) scans better.' },
     { name: 'onChange', type: 'function', required: false, description: 'Fires with the newly chosen value (also onBlur / onFocus). A controlled value with no onChange is read-only by accident.' },
-    { name: 'helpText', type: 'string | node', required: false, description: 'Persistent guidance, rendered as the nested FieldMessage in its default status; wired via aria-describedby. Show the constraint before failure.' },
+    { name: 'helpText', type: 'string | node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the field as the nested FieldMessage in its default status. Show the constraint before failure.' },
     // The UI reads "Validation"; the Figma variant axis is `status` so it drives the nested message's own
     // `status` by name (see the header). Values match field-message's status values exactly.
     { name: 'validation', type: "enum: 'default' | 'error' | 'warning' | 'success'", values: ['default', 'error', 'warning', 'success'], default: 'default', required: false, description: 'The validation state. Each non-default status swaps the control border to its own boundary (border-only — error → danger, warning → warning, success → success) and sets the nested message to the matching status; default is neutral. The values align with FieldMessage\'s status axis, so this drives the nested message directly.' },
@@ -684,6 +684,8 @@ export const select: ComponentDef = {
       'Render a visible, associated label (FieldLabel) above the control',
       'Show a muted placeholder as a prompt, never as the label or a real option',
       'Drive validation through the status axis so the border and the nested message agree',
+    ],
+    implementation: [
       'Prefer the native control where its OS menu is acceptable — the listbox contract is correct for free',
     ],
     dont: [
@@ -709,12 +711,12 @@ export const select: ComponentDef = {
   composition: {
     // What the anatomy nests (#1700). The leading glyph and the chevron are partners, not parts.
     composesWith: ['field-label', 'field-message'],
-    alternativeTo: ['text-field', 'radio-group', 'checkbox-group', 'segmented-control', 'textarea', 'radio-row', 'tabs', 'counter'],
+    alternativeTo: ['text-field', 'radio-group', 'checkbox-group', 'segmented-control', 'textarea', 'radio-row', 'tabs', 'counter', 'menu'],
     replacesPatterns: ['a bare `<select>` with no label wiring', 'placeholder-as-label'],
     // Nothing supersedes the select — combobox / radio / text-field are sibling alternatives chosen by
     // intent and scale, not replacements.
     supersededBy: [],
-    planned: ['form', 'menu', 'combobox'],
+    planned: ['form', 'combobox'],
   },
 
   // KB select brief §8. The signature motion is the open list's, which this def does not model; what the closed
@@ -732,7 +734,6 @@ export const select: ComponentDef = {
       'Native <select> vs a custom listbox — this def models the closed control both share and leaves the open menu to the platform (native-first). A fully custom, styleable menu is a separate listbox/popover surface, chosen when the native menu\'s look is unacceptable and the extra ARIA cost is accepted.',
       'SINGLE vs MULTIPLE choice — the brief carries a `multiple` prop (§3, §15: value becomes an array, Space toggles and keeps the list open, a token or count summary, leading checkboxes). This def is single-choice by decision (#1699, owner-delegated): a choice of several values goes to Checkbox.Group, or to a multi-select, not built yet. The alternative is `multiple` here, which changes the keyboard contract and the value type, so it is a second component\'s worth of behavior behind one flag.',
       'THE BRIEF\'S OTHER VARIANT AXES, NOT DECLARED (brief §4, §15). `size` [small, medium, large] was deferred (#1699 decision 2) and is now declared and projected (#2266, the field sizing system). `density` [comfortable, compact] follows the brand\'s density lever rather than a per-component axis. `selection` [single, multiple] and `multi-summary` [count, tokens] are the single-choice decision above. `rendering` [native, custom] is the native-first call in the first entry: this def models the closed control both share. `mode: creatable` blurs toward a combobox (brief §4) and belongs with that component, not built yet. None is in `VARIANT_AXES` today, which is closed (#847).',
-      'error as a border swap vs a full validation border set — settled as text-field settles it. Until #1517 error was the ONLY status that colored the border; #1517 (owner-directed, Prism 2 parity) extended the swap to warning and success, which the token tier already emits as `border.warning`/`border.success`, so every non-default status now colors its own boundary AND carries the message.',
     ],
     unverified: [
       'The nested label and message now FILL the field\'s width (#1503, `crossAxisFill` → `layoutAlign: STRETCH`), spanning the 320 control rather than hugging narrower — the gap this note used to record (a `nest` cannot bind sizing, #1299, so it once sat at its natural width) is closed. The root is built at 320 (`placementWidth`, #2292) and the control fills it above its own 320 floor (`minWidth`), so an unplaced field reads at 320, a field set to fill its column stretches the control with it, and the two nested parts stretch to match, each instance FIXED across (#1751) so its text wraps at that width (#1757); `test:roundtrip` measures the stretch and the wrap on the offline host, but whether a real host keeps the stretch on a nested INSTANCE is the standing offline-arm caveat (below).',
@@ -741,6 +742,8 @@ export const select: ComponentDef = {
     ],
     // KB select brief §13, the three-phase through-line the brief adopts as its framing.
     evolution: [
+      // Moved from `contested` (#1716): each describes a decision already taken, so it is evolution.
+      'error as a border swap vs a full validation border set — settled as text-field settles it. Until #1517 error was the ONLY status that colored the border; #1517 (owner-directed, Prism 2 parity) extended the swap to warning and success, which the token tier already emits as `border.warning`/`border.success`, so every non-default status now colors its own boundary AND carries the message.',
       'READ-ONLY KEEPS THE EDITABLE FIELD\'S BOUNDARY (owner decision, 2026-09-29, #1710). The read-only member binds `field.border.rest`, the same border as the rest and filled members, in every mode. The earlier `border.secondary` binding measured 2.69–2.81:1 on `background.secondary` in light, below the 1.4.11 floor, and `field.border.rest` is already the quietest neutral step that clears 3:1 there, so no fainter read-only edge can pass. Read-only is carried by its semantics (aria-readonly; still focusable and submitted) and by the affordances its member does not draw (no caret), not by a fainter edge.',
       'STYLING ERA (~2015–2020): custom <div> listboxes to escape the unstyleable native element, at the cost of industry-wide accessibility regressions (KB select brief §13).',
       'ACCESSIBILITY ERA (~2020–2024): headless libraries (React Aria, Radix) codify the ARIA 1.2 listbox and combobox patterns correctly, with JavaScript positioning and focus management dominating the payload.',

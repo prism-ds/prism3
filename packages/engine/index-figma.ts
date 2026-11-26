@@ -12,10 +12,13 @@ export type {
   WritePlan,
 } from './write-plan';
 export { CORE_COLLECTION, UNSCOPED_TYPES, buildFigmaColor } from './emit-figma-color';
+export { ANIMATION_STYLE_SWITCHES, STATE_PATTERNS, animationGuideOnlyRows, animationReducedWords, animationStyleName, buildAnimationStylesPlan, presetVariable } from './figma-animation-styles';
+export type { AnimationEntryKind, AnimationEntryRow, AnimationStyleRow, AnimationStylesPlan } from './figma-animation-styles';
 export type { FigmaEasing } from './emit-figma-color';
 export { buildFigmaTextStyles } from './emit-figma-font';
 export type { FigmaEffect } from './emit-figma-styles';
 export { verifyFloatReadback, verifyReadback, verifyStylesReadback } from './read-back';
+export { treeBuilds, withSharedTree } from './tree';
 export type { DeclaredModesInput, ReadValue, ReadbackSnapshot, ReadbackVerdict } from './read-back';
 export {
   COLLECTION_RENAMES, composeVariableRenames, deriveVariableRenames, isRefusal, openMigration, planCollectionRenames,

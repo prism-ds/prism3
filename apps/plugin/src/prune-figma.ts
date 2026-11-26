@@ -257,8 +257,10 @@ const ENGINE_DESCRIPTION: Record<'grid' | 'effect' | 'paint', RegExp> = {
   ].join('|')),
   /** `buildFigmaGradient`: the leaf's `gradient <key> — <kind>, N stops, <interp> interpolation` prose. The
    *  emitter appends nothing here, so the signature is the leaf template and the tail is left open (the
-   *  brand-gradient suffix is `tree.ts`'s, not this emitter's). */
-  paint: /^gradient \S+ — (?:linear \d+(?:\.\d+)?°|radial \([^)]+\)), \d+ stops?, (?:oklch|srgb) interpolation/,
+   *  brand-gradient suffix is `tree.ts`'s, not this emitter's). The angle is any number the description formatter
+   *  prints (`figmaGradientDescription`: `${angle}°`, JavaScript's own number form): a sign, decimals, an exponent
+   *  (#1908). The brand schema does not bound it. */
+  paint: /^gradient \S+ — (?:linear -?\d+(?:\.\d+)?(?:e[+-]\d+)?°|radial \([^)]+\)), \d+ stops?, (?:oklch|srgb) interpolation/,
 };
 
 /**
@@ -321,6 +323,26 @@ export const isEngineDescription = (
  * arm in `test-write-preflight.ts` (a real Rename, then this) holds the two spellings together.
  */
 const RENAMED = / \(Prism3\)$/;
+/** A name with every trailing ` (Prism3)` stripped: what a collision Rename wrote it in place of (#3558, #3869). */
+const unrenamed = (name: string): string => {
+  let n = name;
+  while (RENAMED.test(n)) n = n.replace(RENAMED, '');
+  return n;
+};
+/**
+ * THE PLAN'S OWN NAME, AS A RENAME WROTE IT (#3869, #3860; owner decision A, 2026-11-18). A variable or style whose
+ * name, with every ` (Prism3)` suffix stripped, is a planned name is the plan's own, whatever else the file holds: a
+ * collision Rename (#1909) wrote it there. It is never an orphan, so Prune never offers it, and Apply Theme's orphan
+ * notes never count it. A renamed variable is a live alias target (#3869's reproduction left 44 aliases pointing at
+ * the deleted one), and sparing only ever errs toward keeping. A name with no suffix is not touched by this: it is
+ * planned or not exactly as before. The one rule Prune's variables arm, `orphanStyles` and Apply's variable note read.
+ */
+export const isRenamedPlanned = (name: string, planned: ReadonlySet<string>): boolean => name !== unrenamed(name) && planned.has(unrenamed(name));
+/** `orphans` without the names `isRenamedPlanned` gives back to the plan. Order kept. */
+export const unlessRenamedPlanned = (orphans: readonly string[], planned: Iterable<string>): string[] => {
+  const set = new Set(planned);
+  return orphans.filter((n) => !isRenamedPlanned(n, set));
+};
 export const ownedCollectionNames = (planned: Iterable<string>, file: readonly FileCollection[]): { of: (name: string) => string; kept: string[] } => {
   const stamped = (c: FileCollection | undefined): boolean => !!c?.ownedModeIds?.length;
   const byName = new Map(file.map((c) => [c.name, c] as const));
@@ -328,12 +350,7 @@ export const ownedCollectionNames = (planned: Iterable<string>, file: readonly F
   const kept: string[] = [];
   for (const p of new Set(planned)) {
     if (stamped(byName.get(p))) continue;
-    const renamed = file.filter((c) => {
-      let n = c.name;
-      if (!RENAMED.test(n)) return false;
-      while (RENAMED.test(n)) n = n.replace(RENAMED, '');
-      return n === p && stamped(c);
-    });
+    const renamed = file.filter((c) => RENAMED.test(c.name) && unrenamed(c.name) === p && stamped(c));
     if (renamed.length !== 1) continue;
     to.set(p, renamed[0].name);
     if (byName.has(p)) kept.push(p);
@@ -355,8 +372,8 @@ export const ownedCollectionNames = (planned: Iterable<string>, file: readonly F
  * next apply renames in place (`LEGACY_GRID_PREFIX`), not a stale one.
  *
  * Exported since #1737: Apply Theme reports this set as the styles the brand does not plan, so its report and Prune's
- * offer share one rule. They differ only in the planned names each passes: Apply adds the names a collision Rename
- * wrote, Prune does not yet (#3860), so after a Rename Prune offers the `… (Prism3)` style and Apply's note does not.
+ * offer share one rule. A style a collision Rename wrote (`<planned> (Prism3)`) is the plan's own and never an orphan
+ * (`unlessRenamedPlanned`, #3860), so the two agree after a Rename too, whichever planned names each passes.
  */
 export const orphanStyles = (fileStyles: FileStyles, plannedStyles: StyleNames): PrunePlan['styles'] => {
   const styles: PrunePlan['styles'] = [];
@@ -367,7 +384,7 @@ export const orphanStyles = (fileStyles: FileStyles, plannedStyles: StyleNames):
     const live = (fileStyles[kind] ?? []).map(asFileStyle);
     const described = new Map(live.map((s) => [s.name, s.description ?? ''] as const));
     const byProvenance: string[] = [];
-    const orphans = orphansOf(live.map((s) => s.name), planned).filter((n) => {
+    const orphans = unlessRenamedPlanned(orphansOf(live.map((s) => s.name), planned), planned).filter((n) => {
       if (awaitingRename.has(n)) return false;
       if (plannedGroups.has(styleGroup(n))) return true;
       if (!isEngineDescription(kind, described.get(n) ?? '', planned)) return false;
@@ -390,11 +407,12 @@ export const computePrunePlan = (input: PruneInput): PrunePlan => {
 
   // VARIABLES — orphans inside a plan-owned collection, restricted to the engine namespace. `orphansOf`
   // is the exact subtraction the executors' orphan reports use; the `inRoot` filter is the only addition,
-  // and it is what leaves a hand-added foreign-root variable alone.
+  // and it is what leaves a hand-added foreign-root variable alone. A variable a collision Rename wrote
+  // (`<planned> (Prism3)`) is the plan's own, never offered (#3869): it is what the plan's aliases point at.
   const variables: PrunePlan['variables'] = [];
   for (const c of input.collections) {
     if (!ownedCollections.has(c.name)) continue;
-    const orphans = orphansOf(c.variableNames, plannedVars).filter((n) => inRoot(n, root));
+    const orphans = unlessRenamedPlanned(orphansOf(c.variableNames, plannedVars), plannedVars).filter((n) => inRoot(n, root));
     if (orphans.length) variables.push({ collection: c.name, names: orphans });
   }
 
@@ -452,7 +470,7 @@ export const computePrunePlan = (input: PruneInput): PrunePlan => {
 export const styleOrphanNote = (styles: PrunePlan['styles']): string => {
   const n = styles.reduce((t, g) => t + g.names.length, 0);
   if (n === 0) return '';
-  return `⚠ ${n} orphaned style${n === 1 ? '' : 's'} not in the plan (${styles.map((g) => `${g.kind}: ${g.names.length}`).join(', ')}) — likely from an earlier brand; nothing was deleted`;
+  return `⚠ ${n} style${n === 1 ? '' : 's'} the brand no longer writes (${styles.map((g) => `${g.kind}: ${g.names.length}`).join(', ')}). Nothing was deleted — Update file › Clean up lists them`;
 };
 
 /** Total items a prune plan would remove — the count shown to the designer before they confirm. */
@@ -720,13 +738,12 @@ export const prunePreviewSummary = (p: PrunePlan): string => {
   const styles = p.styles.reduce((n, g) => n + g.names.length, 0);
   const count = prunePlanCount(p);
   if (count === 0) {
-    return 'No stale items — every style, mode, variable and collection in this file is in the current plan.';
+    return 'No stale items — every style, mode, variable and collection in this file is one the brand writes.';
   }
   const one = count === 1;
   return (
-    `${parts(styles, modes, vars, p.collections.length)} ${one ? 'is' : 'are'} in this file but not in ` +
-    `the current plan, all within this theme's namespace. Deleting ${one ? 'it' : 'them'} also removes any ` +
-    `bindings made to ${one ? 'it' : 'them'}; anything outside the namespace is left in place.` +
+    `${parts(styles, modes, vars, p.collections.length)} the brand no longer uses, all within this theme's namespace. ` +
+    `Deleting ${one ? 'it' : 'them'} unbinds any layer that uses ${one ? 'it' : 'them'}; nothing outside the namespace is touched.` +
     varNote(p) +
     modeNote(p) +
     styleNote(p)
@@ -748,7 +765,7 @@ export const pruneAppliedSummary = (r: PruneResult): string => {
  */
 export const PRUNE_COPY = {
   /** The confirm's input is not the brand the file holds (`holdsInput`), so the plan may name what the file still uses. */
-  notApplied: "Nothing removed — the file doesn't hold this brand yet. Apply the theme first, then check again.",
+  notApplied: "Nothing removed — the file doesn't hold this brand yet. Run Update file with Theme ticked, then check again.",
   /** The confirm's `previewHash` is not the plan a fresh read gives now. */
   moved: 'Nothing removed — the file changed after the check. Check again.',
   /** The named version could not be saved, so nothing is removed. */
@@ -758,7 +775,7 @@ export const PRUNE_COPY = {
   /** A throw outside a removal, with the counts removed before it. */
   stopped: (r: PruneResult, why: string): string => {
     const total = r.variables + r.collections + r.modes + r.styles;
-    return `Prune stopped — ${why}. ` + (total
+    return `Clean up stopped — ${why}. ` + (total
       ? `Removed ${total} stale item${total === 1 ? '' : 's'} before it stopped: ${parts(r.styles, r.modes, r.variables, r.collections)}.`
       : 'Nothing was removed.');
   },

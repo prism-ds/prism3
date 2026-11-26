@@ -274,8 +274,8 @@ console.log('3c. subcomponent pages: alphabetical within their own section, no p
     const { api, children, names } = makePagesShim();
     await scaffoldSkeleton(api, TAXONOMY);
     // #2457 — the flush icon button joins the section (owner Q283.14 A), between Field Message and Focus Ring.
-    for (const id of ['spinner', 'field-message', 'flush-icon-button', 'image-placeholder', 'focus-ring', 'field-label']) await resolveComponentPage(api, id, TAXONOMY);
-    ok(JSON.stringify(spanOf(names(), 'Subcomponents')) === JSON.stringify(['↳ Field Label', '↳ Field Message', '↳ Flush Icon Button', '↳ Focus Ring', '↳ Image Placeholder', '↳ Spinner']),
+    for (const id of ['spinner', 'field-message', 'flush-icon-button', 'image', 'focus-ring', 'field-label']) await resolveComponentPage(api, id, TAXONOMY);
+    ok(JSON.stringify(spanOf(names(), 'Subcomponents')) === JSON.stringify(['↳ Field Label', '↳ Field Message', '↳ Flush Icon Button', '↳ Focus Ring', '↳ Image', '↳ Spinner']),
       `order/sub new page: each new Subcomponents page lands at its alphabetical place (${JSON.stringify(spanOf(names(), 'Subcomponents'))})`);
     ok(pagesOutOfOrder(children).length === 0, 'order/sub new page: a file built only by the build reads in order');
   }
@@ -283,12 +283,12 @@ console.log('3c. subcomponent pages: alphabetical within their own section, no p
   {
     const { api, children, names } = makePagesShim();
     await scaffoldSkeleton(api, TAXONOMY);
-    for (const id of ['field-label', 'focus-ring', 'image-placeholder', 'spinner']) await resolveComponentPage(api, id, TAXONOMY);
+    for (const id of ['field-label', 'focus-ring', 'image', 'spinner']) await resolveComponentPage(api, id, TAXONOMY);
     const at = (name: string) => children.findIndex((p) => p.name === name);
     const memo = api.createPage(); memo.name = 'Sub notes';
-    api.root.insertChild(at('↳ Image Placeholder'), memo);
+    api.root.insertChild(at('↳ Image'), memo);
     api.root.insertChild(at('↳ Field Label'), children[at('↳ Spinner')]);   // Spinner to the front
-    // Now: Spinner, Field Label, Focus Ring, Sub notes, Image Placeholder.
+    // Now: Spinner, Field Label, Focus Ring, Sub notes, Image.
     const before = names();
     const listed = pagesOutOfOrder(children);
     const handed: string[] = [];
@@ -296,7 +296,7 @@ console.log('3c. subcomponent pages: alphabetical within their own section, no p
     reorderPages({ root: { get children() { return children; }, insertChild: (i, p) => { handed.push(p.name); insert(i, p); } } });
     const near = (n: string[], x: string) => [n[n.indexOf(x) - 1], n[n.indexOf(x) + 1]];
     ok(JSON.stringify(listed) === JSON.stringify(['↳ Spinner'])
-      && JSON.stringify(spanOf(names(), 'Subcomponents')) === JSON.stringify(['↳ Field Label', '↳ Focus Ring', 'Sub notes', '↳ Image Placeholder', '↳ Spinner'])
+      && JSON.stringify(spanOf(names(), 'Subcomponents')) === JSON.stringify(['↳ Field Label', '↳ Focus Ring', 'Sub notes', '↳ Image', '↳ Spinner'])
       && !handed.includes('Sub notes') && JSON.stringify(near(names(), 'Sub notes')) === JSON.stringify(near(before, 'Sub notes')),
       `order/sub designer page: Subcomponents put in order, the designer page never moved and keeps its neighbors (listed ${JSON.stringify(listed)}; ${JSON.stringify(spanOf(names(), 'Subcomponents'))}; moved ${JSON.stringify(handed)})`);
   }
@@ -334,7 +334,7 @@ console.log('3d. the #2597 file: update, file-setup and builds move only the com
   interface FixturePage extends PageLike { id: string; _kids: unknown[] }
   // The order the file held before its first Update, as restored from its saved version ("Live replay results" on #2597).
   const COMPONENT_PAGES = ['↳ Buttons', '↳ Checkbox', '↳ Icon button', '↳ Radio', '↳ Select', '↳ Switch', '↳ Textarea', '↳ Text field', '↳ Tag', '↳ Tabs', '↳ Divider', '↳ Accordion', '↳ Badge', '↳ Veil'];
-  const SUB_PAGES = ['↳ Field Message', '↳ Field Label', '↳ Focus Ring', '↳ Image Placeholder', '↳ Spinner'];
+  const SUB_PAGES = ['↳ Field Message', '↳ Field Label', '↳ Focus Ring', '↳ Image', '↳ Spinner'];
   // [name, id]; a divider is `---`. The pages Prism3 builds hold their sets (`_kids`), so a page recreated in place
   // of one would show up empty.
   const ORIGINAL: [string, string][] = [
@@ -426,7 +426,7 @@ console.log('3d. the #2597 file: update, file-setup and builds move only the com
         `${tag}: after the update, file-setup and the five builds leave the page list exactly as they found it (changed by ${JSON.stringify(steps)})`);
       ok(JSON.stringify(spanOf(end, 'Components')) === JSON.stringify(['↳ Accordion', '↳ Badge', '↳ Buttons', '↳ Checkbox', '↳ Divider', '↳ Icon button', '↳ Radio', '↳ Select', '↳ Switch', '↳ Tabs', '↳ Tag', '↳ Text field', '↳ Textarea', '↳ Veil']),
         `${tag}: alphabetical/Components: the section reads A to Z straight after its header (${JSON.stringify(spanOf(end, 'Components'))})`);
-      ok(JSON.stringify(spanOf(end, 'Subcomponents')) === JSON.stringify(['↳ Field Label', '↳ Field Message', '↳ Focus Ring', '↳ Image Placeholder', '↳ Spinner']),
+      ok(JSON.stringify(spanOf(end, 'Subcomponents')) === JSON.stringify(['↳ Field Label', '↳ Field Message', '↳ Focus Ring', '↳ Image', '↳ Spinner']),
         `${tag}: alphabetical/Subcomponents: the section reads A to Z straight after its header (${JSON.stringify(spanOf(end, 'Subcomponents'))})`);
       const endFixed = fixedOrder(f.children);
       const movedOf = (names: readonly string[]): string[] => start.filter((p) => names.includes(p.isPageDivider ? '---' : p.name))
@@ -523,6 +523,35 @@ console.log('3d. the #2597 file: update, file-setup and builds move only the com
         ok(JSON.stringify(plain(d.label())) === JSON.stringify(wantD),
           `created header/designer ${designer[0][0]}, ${run}, ${reading} reading: Components on its own divider, the designer's pages kept behind theirs (${JSON.stringify(plain(d.label()).slice(5, 12))})`);
       }
+    }
+  }
+
+  // #2634: THE FIRST SECTION'S CREATED HEADER, the same case for the section anchored on Cover. `Foundations` deleted, its
+  // divider and its pages kept: it comes back on that divider, ahead of its own pages, never straight after Cover with
+  // a new divider of its own and the old one left between it and its pages. A Foundations build (`icon`) ensures the
+  // header the same way. The expected lists are typed here. Mutation: the first section anchored on Cover alone →
+  // `first header/kept pages, …`.
+  for (const reading of ['host', 'splice'] as const) {
+    for (const run of ['build', 'file-setup'] as const) {
+      const f = fixture(ORIGINAL.filter(([, id]) => id !== '1:668'), reading);
+      if (run === 'build') await resolveComponentPage(f.api, 'icon', TAXONOMY); else await scaffoldSkeleton(f.api, TAXONOMY);
+      const want = [...HEAD, '--- 1:674', 'Components', ...COMPONENT_PAGES, ...TAIL];
+      ok(JSON.stringify(plain(f.label())) === JSON.stringify(want),
+        `first header/kept pages, ${run}, ${reading} reading: Foundations comes back on its own divider, ahead of its pages (${JSON.stringify(plain(f.label()).slice(0, 8))})`);
+
+      // A DESIGNER'S PAGE after the divider that follows Cover, Foundations deleted: the divider stays with the
+      // designer's page, and the created header goes before it on a divider of its own, so it never takes `My notes`
+      // into Foundations' span. The same rule as `created header/designer …` for later sections. Mutation: `coverAnchor`
+      // anchoring on any divider after Cover, dropping the `ownIn` check → `first header/designer …` (Foundations on
+      // `--- 1:669`, then `My notes` with no divider between).
+      const pages = ORIGINAL.filter(([, id]) => id !== '1:668');
+      pages.splice(pages.findIndex(([, id]) => id === '1:669') + 1, 0, ['My notes', '7:4']);
+      const d = fixture(pages, reading);
+      if (run === 'build') await resolveComponentPage(d.api, 'icon', TAXONOMY); else await scaffoldSkeleton(d.api, TAXONOMY);
+      const wantD = ['Cover', '--- new', 'Foundations', '--- 1:669', 'My notes', '↳ Primitive tokens', '↳ Semantic tokens', '↳ Icons & assets',
+        '--- 1:674', 'Components', ...COMPONENT_PAGES, ...TAIL];
+      ok(JSON.stringify(plain(d.label())) === JSON.stringify(wantD),
+        `first header/designer My notes, ${run}, ${reading} reading: Foundations on its own divider, the designer's page kept behind theirs (${JSON.stringify(plain(d.label()).slice(0, 6))})`);
     }
   }
 }

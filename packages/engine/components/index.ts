@@ -47,6 +47,7 @@ import type { ComponentDef } from '../component-schema';
 import { button, buttonDestructive, buttonNeutral } from './button';
 import { iconButton, iconButtonDestructive, iconButtonNeutral } from './icon-button';
 import { flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral } from './flush-icon-button';
+import { toggleButton, toggleIconButton } from './toggle-button';
 import { icon } from './icon';
 import { providerLogo } from './provider-logo';
 import { walletButton } from './wallet-button';
@@ -66,15 +67,19 @@ import { switchControl } from './switch-control';
 import { switchRow } from './switch-row';
 import { select } from './select';
 import { veil } from './veil';
-import { imagePlaceholder } from './image-placeholder';
+import { image } from './image';
 import { spinner } from './spinner';
+import { skeleton } from './skeleton';
 import { badge } from './badge';
+import { avatar } from './avatar';
 import { tag } from './tag';
 import { tagGroup } from './tag-group';
 import { tab } from './tab';
 import { tabs } from './tabs';
 import { pageNavItem } from './page-nav-item';
 import { pageNav } from './page-nav';
+import { stepItem } from './step-item';
+import { steps } from './steps';
 import { divider } from './divider';
 import { accordionIndicator } from './accordion-indicator';
 import { accordion } from './accordion';
@@ -90,6 +95,7 @@ import { passwordField } from './password-field';
 import { searchField } from './search-field';
 import { cardNumberField } from './card-number-field';
 import { toast } from './toast';
+import { tooltip } from './tooltip';
 import { breadcrumbSeparator } from './breadcrumb-separator';
 import { breadcrumbItem } from './breadcrumb-item';
 import { breadcrumbs } from './breadcrumbs';
@@ -98,6 +104,7 @@ import { sliderThumb, slider } from './slider';
 import { codeInputCell, codeInput } from './code-input';
 import { progress } from './progress';
 import { popover } from './popover';
+import { menuItem, menuGroup, menu } from './menu';
 
 /** Named access, kept ALONGSIDE the set rather than replaced by it. Most of `test.ts`'s component
  *  assertions are about one def's specific fields (`button.variants.appearance`,
@@ -105,7 +112,7 @@ import { popover } from './popover';
  *  be a worse call site, not a better one — a lookup that can return `undefined` standing in for a
  *  binding that cannot. The set is for iteration; these are for the assertions that are ABOUT one
  *  component. */
-export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, imagePlaceholder, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, popover };
+export { button, buttonDestructive, buttonNeutral, iconButton, iconButtonDestructive, iconButtonNeutral, flushIconButton, flushIconButtonDestructive, flushIconButtonNeutral, toggleButton, toggleIconButton, icon, providerLogo, focusRing, fieldLabel, fieldMessage, textField, textarea, checkboxControl, checkboxRow, checkboxGroup, radioControl, radioRow, radioGroup, switchControl, switchRow, select, veil, image, spinner, badge, tag, tagGroup, tab, tabs, divider, accordionIndicator, accordion, listItem, list, segmentedControlSegment, segmentedControl, link, buttonGroup, dialog, passwordField, counter, searchField, cardNumberField, breadcrumbSeparator, breadcrumbItem, breadcrumbs, progress, banner, paginationItem, pagination, codeInputCell, codeInput, sliderThumb, slider, walletButton, signInButton, pageNavItem, pageNav, avatar, skeleton, popover, stepItem, steps, menuItem, menuGroup, menu, tooltip };
 
 /** Every component def the engine defines. The one thing a projection should iterate. */
 export const componentDefs: readonly ComponentDef[] = [
@@ -140,6 +147,10 @@ export const componentDefs: readonly ComponentDef[] = [
   flushIconButton,
   flushIconButtonDestructive,
   flushIconButtonNeutral,
+  // #4112 — the toggle pair (owner OD-T1 to OD-T5 A): Button and IconButton that stay pressed, built from their
+  // factories' paint and spacing. They nest `focus-ring` and swap in `icon`, so they follow the icon buttons.
+  toggleButton,
+  toggleIconButton,
   fieldLabel,
   fieldMessage,
   textField,
@@ -198,15 +209,17 @@ export const componentDefs: readonly ComponentDef[] = [
   // (`value` × `intensity`) are neither the button family's nor the selection family's — a media
   // component, not a form control.
   veil,
-  // `image-placeholder` (#1316) — the empty-state media frame. Like `veil` it nests nothing and is
-  // nested by nothing, so it sits at the end: a standalone box sharing no factory or `inherits` chain.
+  // `image` (#4113, renamed from `image-placeholder`, #1316) — content imagery in an aspect-locked frame. It nests
+  // Skeleton for its loading state and is nested by nothing: a standalone box sharing no factory or `inherits` chain.
   // It is the first def to carry an aspect-ratio LOCK (its `ratio` axis derives the lock) and the first
   // to opt into `clipsContent`. A media component, not a form control.
-  imagePlaceholder,
+  image,
   // `spinner` (#1670) — the indeterminate loading indicator. Nests nothing; the button's pending state swaps
   // it into the icon slot by name, like the `icon` it sits beside in the slot.
   spinner,
   badge,
+  // `avatar` (#4110) — nests Badge's dot for presence, so it registers after Badge.
+  avatar,
   // `tag` — the interactive counterpart to `badge`. It nests `icon-button-neutral` (its remove button) and
   // `focus-ring`, both above it; nothing reads this array's order (see the header).
   tag,
@@ -281,7 +294,21 @@ export const componentDefs: readonly ComponentDef[] = [
   // The item nests `link`, above; the row nests the item in its items slot, so it comes after it.
   pageNavItem,
   pageNav,
+  // `skeleton` (#4109) — the content-shaped placeholder for a first load, beside Spinner and Progress. Nests nothing.
+  skeleton,
   // `popover` (#4008, owner Q-FL2) — a non-modal panel anchored to its trigger. Nests the neutral flush icon button
   // (close) and the button group (footer), both above.
   popover,
+  // `step-item` and `steps` (#3055, owner decisions 2026-11-19) — one step and the indicator. The item nests `link`,
+  // above; Steps nests the item in its items slot, so it comes after it.
+  stepItem,
+  steps,
+  // `menu-item`, `menu-group` and `menu` (#4007, owner Q-FL2) — a list of actions on Popover's raised surface. The item
+  // nests `focus-ring`; the group and the menu nest the item in their items slots, so it builds first.
+  menuItem,
+  menuGroup,
+  menu,
+  // `tooltip` (#4009, owner Q-FL2) — a short label or description on the inverse surface, shown on hover and keyboard
+  // focus. It nests nothing; its arrow is a component-owned glyph.
+  tooltip,
 ];

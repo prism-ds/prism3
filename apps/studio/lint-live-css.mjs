@@ -63,10 +63,16 @@
  *     every run, so it does not go quiet.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** #4583: is this file the one node was started with? Real paths on both sides, so a symlinked path (macOS's /var
+ *  and /tmp) cannot make a direct run skip its check. The engine's `isEntry` (entry-point.ts), inline for plain node. */
+function isEntry() {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '../..');
@@ -300,7 +306,7 @@ const accept = async () => {
   // Build first: the plugin suites do not check their bundle's freshness (#2101), and a sweep over a stale
   // bundle records the old UI.
   for (const w of ['@prism3/studio', '@prism3/plugin']) if (run('npm', ['run', '-w', w, 'build'], { stdio: 'ignore' }) !== 0) { console.error(`✗ live-css --accept: ${w} build failed`); process.exit(1); }
-  const tmp = mkdtempSync(join(tmpdir(), 'live-css-'));
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), 'live-css-'));
   const keyFile = join(tmp, 'keys.json');
   writeFileSync(keyFile, JSON.stringify({ keys: keys.map(({ key, sel, conds }) => ({ key, sel, conds })), fingerprint: current.fingerprint }));
   const seen = {}, coverage = {};
@@ -352,6 +358,6 @@ const accept = async () => {
   console.log(`✓ live-css --accept: ${Object.keys(live).length} live, ${dead.length} drawn by no page, over ${CORNERS.map((c) => `${c.replace('|', ' ')} ${coverage[c]}`).join(', ')} frames. Wrote ${relative(REPO, join(REPO, BASELINE_PATH))}.`);
 };
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isEntry()) {
   if (process.argv.includes('--accept')) await accept(); else await check();
 }

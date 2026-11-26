@@ -88,9 +88,10 @@ Use an Accordion to compress a set of independent sections into scannable header
 
 ### Motion
 
-- **Enter:** The panel eases open to its content height (motion.transition.enter), and the indicator turns to its open glyph.
-- **Exit:** The panel eases closed (motion.transition.exit), and the indicator turns back.
-- **Reduced motion:** Under prefers-reduced-motion the height changes at once, and the panel's fade stays, on motion.duration-reduced.normal to open and to close. The indicator swaps without turning. A fade is not movement, and it keeps the cue that the panel opened or closed.
+- **Patterns:** `accordion/expand`, `accordion/collapse`
+- **Enter:** The panel eases open to its content height and fades in on motion.preset.expand; the indicator turns to its open position on motion.preset.move.
+- **Exit:** The panel eases closed and fades out on motion.preset.expand; the indicator turns back on motion.preset.move.
+- **Reduced motion:** Under prefers-reduced-motion, the panel fades in on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. The panel fades out on motion.preset.expand.duration-reduced, and its size changes at once; the indicator doesn't turn. A fade is not movement, and it keeps the cue that the panel opened or closed.
 
 ## Content guidelines
 
@@ -138,12 +139,12 @@ Generated from the plan that builds the design-file component: 48 members. Value
 | `container/header/titleRow/leadingIndicator/leadingGlyph` | instance | iconPosition=leading |
 | `container/header/titleRow/titleBox` | frame | every member |
 | `container/header/titleRow/titleBox/label` | text | every member |
+| `container/content` | slot | every member |
+| `container/content/placeholder` | text | every member |
 | `container/divider` | instance | every member |
 | `container/header/focusRing` | instance | state=focus-visible |
 | `container/header/titleRow/trailingIndicator` | frame | iconPosition=trailing |
 | `container/header/titleRow/trailingIndicator/trailingGlyph` | instance | iconPosition=trailing |
-| `container/content` | slot | expansion=expanded |
-| `container/content/placeholder` | text | expansion=expanded |
 
 ### Spacing and size
 
@@ -203,48 +204,56 @@ Keyed by `expansion`, `iconPosition`, `indicator`, `state`.
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=leading, indicator=chevron, state=focus-visible**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=leading, indicator=plus-minus, state=rest**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=leading, indicator=plus-minus, state=focus-visible**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=trailing, indicator=chevron, state=rest**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=trailing, indicator=chevron, state=focus-visible**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=trailing, indicator=plus-minus, state=rest**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=collapsed, iconPosition=trailing, indicator=plus-minus, state=focus-visible**
 
 | Part | Fill | Stroke | Ink | Icon |
 | --- | --- | --- | --- | --- |
 | `container/header/titleRow/titleBox/label` | — | — | `color.interactive.neutral.text.rest` | — |
+| `container/content/placeholder` | — | — | `color.text.primary` | — |
 
 **expansion=expanded, iconPosition=leading, indicator=chevron, state=rest**
 
@@ -305,10 +314,10 @@ Keyed by `expansion`, `iconPosition`, `indicator`, `state`.
 ### Nesting and properties
 
 - `container/header/titleRow/leadingIndicator/leadingGlyph` nests `_accordion-indicator` at `indicator=chevron, expansion=collapsed, size=medium`; follows `indicator`, `expansion`, `size`
+- `container/content` is a slot
 - `container/divider` nests `divider` at `orientation=horizontal, inset=none, labeled=false, emphasis=subtle`
 - `container/header/focusRing` nests `focus-ring` at `surface=default`
 - `container/header/titleRow/trailingIndicator/trailingGlyph` nests `_accordion-indicator` at `indicator=chevron, expansion=collapsed, size=medium`; follows `indicator`, `expansion`, `size`
-- `container/content` is a slot
 
 | Property | Type | Default |
 | --- | --- | --- |

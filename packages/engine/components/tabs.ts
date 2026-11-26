@@ -12,6 +12,7 @@
  * centered list in a full-width bar.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 const tabNest = (selection: 'selected' | 'unselected') => ({
   kind: 'nest' as const,
@@ -213,7 +214,7 @@ export const tabs: ComponentDef = {
   ai: {
     primaryPurpose: 'Switch between peer panels of related content in place, one at a time.',
     whenToUse: 'Two to about six peer sections of one subject, viewed one at a time, where switching is quick and the address need not change.',
-    avoidWhen: 'The selection changes the page or the address (PageNav, a navigation of links), filters or re-sorts the current view (SegmentedControl, or Select), is a required sequence (a stepper, not built yet), or has many independent sections (Accordion).',
+    avoidWhen: 'The selection changes the page or the address (PageNav, a navigation of links), filters or re-sorts the current view (SegmentedControl, or Select), is a required sequence (Steps), or has many independent sections (Accordion).',
     commonPartners: ['tab-item', 'badge', 'icon'],
     triggerKeywords: ['tabs', 'tab list', 'tab bar', 'tabbed panels', 'tabbed content', 'switch panels'],
     generationPriority: 2,
@@ -227,11 +228,8 @@ export const tabs: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'None. On a change, the underline slides to the new tab and the panel cross-fades, on motion.transition.default.',
-    exit: 'The outgoing panel fades out under the incoming one. Panels never slide sideways.',
-    reduceMotion: 'Under prefers-reduced-motion the underline snaps to the new tab, and the incoming panel fades in on motion.duration-reduced.fast.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['tabs/select'], { exit: 'The outgoing panel fades out under the incoming one. Panels never slide sideways.' }),
 
   notes: {
     contested: [],

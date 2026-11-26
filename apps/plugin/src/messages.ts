@@ -177,6 +177,10 @@ export type UiToMain =
   /** #2956 (owner decisions 2026-11-17): Update file's "Turn off updates" (`off` true) and "Turn updates back on" (`off`
    *  false) on the set for `def`. Writes the set's mark only (`updates-off.ts`). Guarded; answered with one `updates-off`. */
   | { type: 'updates-off'; def: string; off: boolean }
+  /** #3119 (owner decision 2026-11-18 A): "Show the set in Figma", from a bad Build set result: make the page holding
+   *  `def`'s set current and fit the viewport to the set. Writes nothing. Answered with `set-in-file` only when the
+   *  file no longer holds the set, so the drawer stops offering it. */
+  | { type: 'show-set'; def: string }
   /** #3309: the panel's own summary of a run of several writes, which only the panel computes: a build of several sets
    *  (`components`) or Update file's run (`update`), as the Activity drawer and the status strip show it. Kept in the
    *  main thread's activity log for the agent link's `activity` command. Writes nothing; never refused. */
@@ -223,8 +227,11 @@ export type CheckedSet = {
   breaks?: string;
   /** #3711 (Q-UF2 A) — the same changes, each named (`consumerLines`, capped as the check's section is), and how many
    *  in all, for the callout above Update file's button. Absent where `breaks` is. */
-  changes?: { count: number; lines: string[] };
+  changes?: { count: number; lines: string[]; kinds: ChangeKinds };
 };
+/** #4481 — those changes counted by what they do to files that use the library (`changeKinds`): break them, retire a
+ *  member, or take the set out of the library. The three add up to `count`. */
+export type ChangeKinds = { breaks: number; retired: number; leaves: number };
 
 /** A style-guide specimen (#259) — the `type` axis of `_style-guide-swatches` a table row instances. */
 export type SwatchType = 'default' | 'text' | 'icon' | 'border' | 'transparency';
@@ -286,7 +293,7 @@ export interface StyleGuideOptions {
 /** The kinds of table the Build style guides page groups by (owner decision H8): color; spacing and size (every
  *  `dimension` table, radius included); the five font-variable kinds; the text styles; (#2353 batch 2a) the effect
  *  styles and the gradient paint styles; and (#3171) the grid styles. */
-export type StyleGuideKind = 'color' | 'dimension' | 'font' | 'text' | 'effect' | 'gradient' | 'grid';
+export type StyleGuideKind = 'color' | 'dimension' | 'font' | 'text' | 'effect' | 'gradient' | 'grid' | 'animation';
 /** One table a run with no filter would draw, in the order it draws them. */
 export interface StyleGuideCatalogTable {
   /** The table's key (`<type>|<collection id>|<group path>`): what the `tables` option matches besides the title. */
@@ -441,7 +448,10 @@ export type MainToUi =
     /** #3711 (Q-UF3 A): the applied update went through every set it was given, none stopped or refused, and no stop
      *  was asked for (`applyVerdict`). Not `ok` with it: every set written, some left to check, so Update file's run goes
      *  on as a warning. Absent from every other verdict of this kind. */
-    completed?: boolean }
+    completed?: boolean;
+    /** #4067: the sets the applied update wrote to (`wroteTo` in `update-apply.ts`), the count its headline gives, so
+     *  Update file's run line says the same number. Absent from every other verdict of this kind. */
+    sets?: number }
   /** Result of a `file-setup` scaffold (#1554) — the same `{ok, headline, summary}` shape as
    *  `apply-result` / `component-result`, a DISTINCT variant for the same one-kind-per-fact reason: "did
    *  the page skeleton get laid" is separately true and separately actionable from a theme or component
@@ -511,14 +521,17 @@ export type MainToUi =
    *  loops over the same member count, so a bare fraction would appear to restart at 0 halfway through a
    *  build that is progressing perfectly. `chunkMs` is what the chunk cost, carried up so a live run can
    *  CALIBRATE the chunk size: the shim has no event loop, so that number cannot be gated and has to be
-   *  observed. See `CHUNK` in `write-components.ts`. */
-  | { type: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number }
+   *  observed. See `CHUNK` in `write-components.ts`.
+   *
+   *  `throttled` (#4476, on this reading, `style-guide-progress` and `run-progress`): set once the run's hand-backs read
+   *  as throttled by a hidden Figma window (`handBack` in `pace.ts`), so the progress line carries its note. */
+  | { type: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number; throttled?: true }
   /** A style-guide run is UNDERWAY (#1778) — posted once before the first table (`done: 0`) and after each
    *  table, so the pending pill reads "Drawing table 7 of 22…" while the executor yields to the host between
    *  tables. Its own kind for the `component-progress` reason: a reading is not a verdict, and it must not
    *  land in either action's result slot. `tableMs` is what the last table cost, the live run's calibration
    *  data for the executor's yield spacing (`CELLS_PER_YIELD` in `style-guide.ts`); 0 on the first reading. */
-  | { type: 'style-guide-progress'; done: number; total: number; tableMs: number }
+  | { type: 'style-guide-progress'; done: number; total: number; tableMs: number; throttled?: true }
   /** #3170 part 2 (Q3170.1–2 A): how far a run the panel started has got, for the status strip at the panel's foot.
    *  `run`: the read after open (`read`, a page at a time), the panel's in-place update (`update`), or its Apply Theme
    *  (`apply-theme`). `phase`: `check`, the read before the first write (no item yet); `work`, `item` being done, with
@@ -528,7 +541,7 @@ export type MainToUi =
    *  the `component-progress` reason: a reading is not a verdict. Never sent for an agent's update or Apply Theme.
    *  #3189: also an agent's Capture baseline (`capture`) and Adopt (`adopt`), which the panel never starts: `check`, the
    *  file being read; `work`, the def `item` reached, `done` of `total` before it; `finish`, every def done. */
-  | { type: 'run-progress'; run: RunProgressKind; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number }
+  | { type: 'run-progress'; run: RunProgressKind; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number; throttled?: true }
   /** Boot read-back (#109): whether an existing Prism3 theme in the file passes the contract, plus a
    *  human summary. Informational — the actual knob-rehydration is `restore-input` below.
    *
@@ -663,6 +676,9 @@ export type MainToUi =
   | { type: 'add-queue'; queued: string[]; error?: string }
   /** #2956: the answer to `updates-off`: the set and what was asked; `error` when it could not be written. */
   | { type: 'updates-off'; def: string; off: boolean; ok: boolean; error?: string }
+  /** #3119: whether the file holds `def`'s set, posted after every Build set (the panel's or an agent's) and when a
+   *  `show-set` finds none. The drawer offers "Show the set in Figma" on a bad build only while this says it does. */
+  | { type: 'set-in-file'; def: string; inFile: boolean }
   /** #2909 Q2909.8 A: one set's hand edits from the background pass (`handEditsOf`), or the pass's end (`done`). */
   | { type: 'hand-edits'; def: string; members: number; edited: number }
   | { type: 'hand-edits'; done: true }

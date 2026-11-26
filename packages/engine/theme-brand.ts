@@ -8,12 +8,15 @@ import { radiusScale, componentSizes, type RadiusStep, type SizeStep, controlSiz
 import { inGamut, maxChroma, deltaE2000, ACHROMATIC_C } from './color';
 import type { ModeName } from './modes';
 import { resolveVocabulary } from './vocabulary';
-import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
+import { resolveHexAnchors } from './hex-anchors';
+import { iconMapErrors } from './icon-map';
+import { type BrandInputAuthored, type Theme, type BrandInput, ALL_MODES, VALID_MODES, validOutlineHoverFill, validOutlineWash, outlineWashSteps, OUTLINE_INTERACTION_VALUES, RAISED_SURFACE_VALUES, SCRIM_STRENGTH_VALUES, SECONDARY_TEXT_GROUND_VALUES, INTERACTIVE_GROUND_VALUES, validGlassRoles, n2, n4, type PaletteBuild, type Role, type InteractivePalette, type InverseSurfaceSpec, type SurfaceStep, CORE_TIER } from './theme-types';
 import { PALETTE_NAME_RE, RESERVED_PALETTES, STATUS_DEFAULTS, statusRamp, inRedTerritory, hueDist, RED_CHROMA_FLOOR, normalizeDisabledStrategy, normalizeDisabledMin } from './theme-color';
 import { buildDims } from './theme-dims';
-import { buildMotion, type MotionAxis } from './theme-motion';
+import { buildMotion, checkCurveForRole, REDUCED_CAP_MS, type MotionAxis } from './theme-motion';
+import { resolvePatterns } from './motion-patterns';
 import { LINE_HEIGHT_KEYS, LETTER_SPACING_KEYS, DISPLAY_VARIANTS, buildTypography, withLabelDefault, WEIGHT_ROLE_DEFAULT, type FontFamilyBinding, type WeightRole, deriveFamilies, WEIGHT_ROLE_ORDER, type TypeGroup, deriveTypefaces, PER_MODE_SIZE_GROUPS, type PerModeSizeGroup, HEADING_SIZE_FLOOR, mobileEndpoint, TYPE_GROUPS } from './theme-type';
-import { buildShadow, type ShadowAxis, type ShadowStep, type ShadowLayer } from './theme-shadow';
+import { buildShadow, darkShadowSeed, type ShadowAxis, type ShadowStep, type ShadowLayer } from './theme-shadow';
 import { buildLayout, gridGapNotes } from './theme-layout';
 import { buildGradient } from './theme-gradient';
 
@@ -42,7 +45,11 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // numbers; `personality` traits fill levers the brief left absent, never one it set. Each
   // inference lands in `notes` alongside the engine's own defaults — the whole point is that a
   // choice made FOR the author is as visible as one they made themselves.
-  const resolved = resolveVocabulary(brandInput);
+  // #4133 (owner decision A, 2026-11-19): a hex anchor becomes OKLCH first, with a note naming the converted value,
+  // so nothing past this line sees a string where an anchor goes.
+  const hexed = resolveHexAnchors(brandInput);
+  notes.push(...hexed.notes);
+  const resolved = resolveVocabulary(hexed.input);
   const input = resolved.input as BrandInput;
   notes.push(...resolved.notes);
   // #3875: the id names every file the CLI writes (`<id>.tokens.json` and the rest, `emit-dtcg.ts`), so a separator in
@@ -86,11 +93,15 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // (DECISIONS LOG arm) renders every producer below and fails any note that drifts back.
   if (stdModes.length < ALL_MODES.length) notes.push(`modes: ${stdModes.join(', ')} only — the brand turns off ${ALL_MODES.filter((m) => !stdModes.includes(m)).join(', ')}.`);
   if (modes.includes('wireframe')) notes.push('modes: wireframe added — a grayscale mode: each color role takes its neutral equivalent, and every radius is 0.');
-  // User-added custom modes (Phase C1) — each `{ name, base }` LIVE-INHERITS a customizable
-  // built-in (`base` = light/dark only): it re-derives exactly like its base each build (a cloned
-  // descriptor, same kind/family/mins, new name), then its own overrides/modeAnchors deviate it.
-  // Names must be slug-safe, non-reserved (not a built-in), and unique; the base must be light/dark
-  // AND a mode this brand generates. Validated here (in-memory BrandInput skips schema validation).
+  // User-added custom modes (Phase C1; a SNAPSHOT since #1946, owner decision 2026-11-18 A). Each
+  // `{ name, base }` is a mode in its own right: its per-mode input (overrides, modeLevers,
+  // modeAnchors, surfaces, outlineHoverFill under its own name) was copied from the mode it started
+  // from when it was created, and nothing reads the source's per-mode input again. `base` records
+  // that source (provenance) and picks the appearance the mode derives with (light or dark: a cloned
+  // descriptor, same kind/family/mins). So the source mode may be off: turning Dark off, or editing
+  // it, leaves a custom mode that started from Dark as it was. Names must be slug-safe, non-reserved
+  // (not a built-in), and unique; `base` must be light or dark. Validated here (in-memory BrandInput
+  // skips schema validation).
   const CUSTOM_MODE_RE = /^[a-z0-9][a-z0-9-]*$/;
   const customModes = input.customModes ?? [];
   const customNames: string[] = [];
@@ -103,14 +114,12 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
       throw new Error(`customModes: duplicate custom mode name '${cm.name}' — custom mode names must be unique`);
     if (cm.base !== 'light' && cm.base !== 'dark')
       throw new Error(`customModes: '${cm.name}' base '${cm.base}' must be a CUSTOMIZABLE built-in (light or dark) — hc/wireframe cannot be a custom-mode base`);
-    if (!modes.includes(cm.base))
-      throw new Error(`customModes: '${cm.name}' base '${cm.base}' is not in this brand's generated modes (${modes.join(', ')})`);
     customNames.push(cm.name);
   }
   // The full mode list: built-ins first, customs appended (canonical order). A fresh array so the
   // shared ALL_MODES constant is never mutated when `input.modes` was omitted.
   const modesAll: ModeName[] = customNames.length ? [...modes, ...customNames] : modes;
-  if (customModes.length) notes.push(`custom modes: ${customModes.map((cm) => `${cm.name} (based on ${cm.base})`).join(', ')} — each rebuilds from its base on every build; overrides and modeAnchors adjust it.`);
+  if (customModes.length) notes.push(`custom modes: ${customModes.map((cm) => `${cm.name} (started from ${cm.base})`).join(', ')} — each keeps the copy of that mode's settings taken when it was made, and later changes to that mode do not reach it.`);
   // Per-mode colour overrides (Phase A1) — customizable modes only. A mode this brand doesn't
   // generate can't carry overrides; the generate-only built-ins (hc-light/hc-dark/wireframe) are
   // baseline-only (a later phase makes HC/wireframe customizable). Malformed palette/step refs
@@ -166,12 +175,13 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     const lev = input.modeLevers![m]!;
     if (lev.radius !== undefined && (!Number.isFinite(lev.radius) || lev.radius < 0 || lev.radius > 2))
       throw new Error(`modeLevers: mode '${m}' radius ${lev.radius} is out of range — must be a finite number in [0, 2]`);
-    // Per-mode weight values must be a valid font-weight (a whole number in [100, 900]; whole because the value keys
-    // a primitive, #3871). Role ordering is NOT
+    // Per-mode weight values must be a valid font-weight: a whole number in DTCG's [1, 1000], the global
+    // `typography.weightRoles` range (#3871), so a mode can move a weight as far as the brand can set one (#4214,
+    // owner decision A); whole because the value keys a primitive (#3871). Role ordering is NOT
     // enforced here (the UI owns that) — the engine accepts any valid weight per role.
     for (const [role, w] of Object.entries(lev.weights ?? {})) {
-      if (w !== undefined && (!Number.isInteger(w) || w < 100 || w > 900))
-        throw new Error(`modeLevers: mode '${m}' weight '${role}' ${w} is out of range — must be a whole number in [100, 900]`);
+      if (w !== undefined && (!Number.isInteger(w) || w < 1 || w > 1000))
+        throw new Error(`modeLevers: mode '${m}' weight '${role}' ${w} is out of range — must be a whole number in [1, 1000]`);
     }
     // #296 — per-mode leading/tracking name a RUNG on both sides (source key → target key). Both must
     // be real rungs; a NUMBER here is the old pre-#296 shape and is rejected with a pointer, because
@@ -284,12 +294,16 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     { path: 'raisedSurface', value: input.raisedSurface, options: RAISED_SURFACE_VALUES },
     { path: 'scrimStrength', value: input.scrimStrength, options: SCRIM_STRENGTH_VALUES },
     { path: 'secondaryTextGround', value: input.secondaryTextGround, options: SECONDARY_TEXT_GROUND_VALUES },
+    { path: 'interactiveGround', value: input.interactiveGround, options: INTERACTIVE_GROUND_VALUES },
     { path: 'radioDot', value: input.radioDot, options: RADIO_DOT_SHARES },
   ];
   for (const { path, value, options } of enumLevers) {
     if (value !== undefined && !(options as readonly unknown[]).includes(value))
       throw new Error(`${path}: ${JSON.stringify(value)} is invalid — must be one of ${options.join('/')}`);
   }
+  // The brand icon map (#3076): every rule, by name (`icon-map.ts`). The first broken one stops the build.
+  const iconErrors = iconMapErrors(input.icons);
+  if (iconErrors.length) throw new Error(iconErrors.join('; '));
   const glassRoles = validGlassRoles(input.glassRoles);
   const rangeLevers: { path: string; value: unknown; min: number; max: number }[] = [
     { path: 'radiusScale', value: input.radiusScale, min: 0, max: 2 },
@@ -408,6 +422,11 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   palettes.push(status('success'), status('warning'), status('info'));
 
   // ---- action role (decoupled from brand) ----
+  // #4207 (owner decision A, 2026-11-19): `actionPalette` and `roleColors.action` are schema aliases, so two that
+  // name DIFFERENT palettes are refused, naming both. Before, `roleColors.action` won silently, and the action note
+  // below described a lever the brand never authored. Equal values are the same instruction twice, and pass. DRAFT.
+  if (input.actionPalette !== undefined && input.roleColors?.action !== undefined && input.actionPalette !== input.roleColors.action)
+    throw new Error(`actionPalette is '${input.actionPalette}' and roleColors.action is '${input.roleColors.action}'; both set the action palette, so set one of them, or give both the same palette.`);
   const actionPalette = input.actionPalette ?? 'primary';
   if (!palettes.some((p) => p.palette === actionPalette)) {
     throw new Error(`actionPalette '${actionPalette}' is not a defined palette (have: ${palettes.map((p) => p.palette).join(', ')})`);
@@ -415,10 +434,15 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // Worded from the palette action RESOLVES to, `roleColors.action` before the lever (#3845, owner-decided
   // Q-BK1 A, option A): the two are schema aliases, so a brand that sets either reads the same line. Said here,
   // before the roleColors pass, so a corpus brand's notes keep their order; that pass validates the name.
+  // #3284 (owner decision A, 2026-11-18): "not set" only when neither spelling is set. A brand that names `primary`
+  // itself gets its own line, approved wording: "the primary palette, as the brand sets".
   const notedAction = input.roleColors?.action ?? actionPalette;
-  notes.push(notedAction === 'primary'
-    ? `action: the primary palette, by default — actionPalette is not set.`
-    : `action: uses the '${notedAction}' palette instead of primary, as the brand sets.`);
+  const actionUnset = input.roleColors?.action === undefined && input.actionPalette === undefined;
+  notes.push(notedAction !== 'primary'
+    ? `action: uses the '${notedAction}' palette instead of primary, as the brand sets.`
+    : actionUnset
+      ? `action: the primary palette, by default — actionPalette is not set.`
+      : `action: the primary palette, as the brand sets.`);
 
   // ---- danger carve ----
   const roleToPalette: Record<Role, string> = {
@@ -591,12 +615,14 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   notes.push(`dimensions: ${baseUnit}px grid, ${spaceBase}px spacing rhythm, '${density}' density (sets component sizes), radius scale ${n2(rScale)} (base radius ${n2(baseMd)}px).`);
   // #2053: the lever is retired. A brand file that still sets it is told it changes nothing.
   if (input.radiusHairline !== undefined) notes.push(`radius: radiusHairline is retired — radius.hairline (1px) is always emitted, so the setting changes nothing.`);
-  notes.push(`motion: '${input.motionPersonality?.tempo ?? 'standard'}' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.`);
+  notes.push(`motion: '${input.motionPersonality?.tempo ?? 'standard'}' tempo sets the durations; each reduced-motion twin is a short fade of at most ${REDUCED_CAP_MS}ms.`);
   // Per-mode MOTION TEMPO (Phase D): a customizable mode overriding `tempo` re-derives its duration ramp
   // (+ reduce-motion + stagger) via the SAME buildMotion the baseline uses, just at the mode's tempo.
   // Only a mode whose tempo DIFFERS from the baseline gets an entry (no-diff suppression) → byte-identical
   // when unused. Easing/spring/transitions are tempo-invariant, so they're not re-emitted.
   const motion = buildMotion(input.motionPersonality);
+  // The patterns (#2857 phase 2): the engine's, with the brand's track overrides, each checked by name (Q-PT15 A).
+  motion.patterns = resolvePatterns(input.motionPersonality?.patterns, motion.presets.map((p) => p.preset));
   const baseTempo = input.motionPersonality?.tempo ?? 'standard';
   const motionByMode: NonNullable<MotionAxis['motionByMode']> = {};
   for (const [m, lev] of Object.entries(modeLevers)) {
@@ -617,6 +643,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     for (const [role, curve] of pairs) {
       if (!ROLES.includes(role)) throw new Error(`modeLevers.${m}.easings: unknown motion role '${role}' (have: ${ROLES.join(', ')})`);
       if (!CURVES.includes(curve)) throw new Error(`modeLevers.${m}.easings.${role}: unknown easing curve '${curve}' (have: ${CURVES.join(', ')})`);
+      checkCurveForRole(role, curve, motion.easing, motion.brandCurves, `modeLevers.${m}.easings.${role}`);
     }
     const base = Object.fromEntries(motion.easingRoles.map((r) => [r.role, r.curve]));
     const diff = pairs.filter(([role, curve]) => curve !== base[role]);
@@ -663,6 +690,10 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     for (const s of shadow.steps) layers[s.name] = s.dark;
     shadowByMode[cm.name] = { appearance: 'dark', colorRgb: shadow.colorRgb, softness: shadow.softness, tint: shadow.tint, layers };
   }
+  // The built-in `hc-dark` is a dark-appearance mode too (#4131, owner decision A): it takes the same
+  // global reduced dark layers, so the shadow model holds in every dark mode. It is generate-only, so it
+  // never carries an override of its own.
+  if (modes.includes('hc-dark') && !shadowByMode['hc-dark']) shadowByMode['hc-dark'] = darkShadowSeed(shadow);
   if (Object.keys(shadowByMode).length) shadow.shadowByMode = shadowByMode;
   const gradient = buildGradient(input.gradients, palettes, root);
   const [firstGradient] = gradient.gradients;
@@ -856,6 +887,8 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   if (capSizes.length) notes.push(`typography: caption sizes set by the brand: ${capSizes.map(([v, px]) => `caption.${v} ${px}px`).join(', ')}, one size in every mode.`);
   const trackPins = TYPE_GROUPS.filter((g) => input.typography?.tracking?.[g]).map((g) => `${g} ${input.typography!.tracking![g]}`);
   if (trackPins.length) notes.push(`typography: letter spacing pinned per text type: ${trackPins.join(', ')}. Every size in a pinned text type uses that letter spacing, in place of the size-based one and its nudge.`);
+  const leadPins = TYPE_GROUPS.filter((g) => input.typography?.leading?.[g]).map((g) => `${g} ${input.typography!.leading![g]}`);
+  if (leadPins.length) notes.push(`typography: line height pinned per text type: ${leadPins.join(', ')}. Every size in a pinned text type uses that line height, in place of the size-based one and its nudge.`);
   // Sub-10px flag (#1363). 8px is below every practical legibility floor and below the size range
   // this system's contrast ratios were reasoned about, so an opted-in sub-10px rung is flagged here the
   // way `actionPalette` flags a decoupled action colour — a deliberate, recorded exception rather than a
@@ -905,6 +938,13 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     }
     throw new Error(`${where}: ${JSON.stringify(value)} is not ${noun}. Use ${alts}${ramp}.`);
   };
+  // A `surfaces` key names light, dark or a declared custom mode (#1946). The schema takes any key since a custom mode
+  // carries its own `surfaces.<name>`, and in-memory input skips the schema, so a typo (`drak`), a derived mode
+  // (`hc-light`) or an undeclared custom mode would otherwise be read by no mode and silently ignored.
+  for (const mode of Object.keys(input.surfaces ?? {})) {
+    if (mode !== 'light' && mode !== 'dark' && !customNames.includes(mode))
+      throw new Error(`surfaces.${mode}: '${mode}' is not light, dark or a custom mode of this brand${customNames.length ? ` (custom modes: ${customNames.join(', ')})` : ''}, so no mode reads these surfaces. Use light, dark or a name in customModes.`);
+  }
   for (const [mode, sf] of Object.entries(input.surfaces ?? {})) {
     for (const key of ['base', 'secondary', 'tertiary'] as const) {
       if (sf?.[key] != null && typeof sf[key] === 'object') {
@@ -979,15 +1019,16 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   // the fill at the same step, and the note below fires for either (owner decision pending on #1896).
   const resolvedAction = roleToPalette.action;
   const actionBrandColor = (input.brandColors ?? []).find((b) => b.name === resolvedAction);
-  const actionAnchorStep = resolvedAction === 'primary' ? anchorStep
-    : actionBrandColor ? autoPlaceStep(actionBrandColor.oklch.l)
-    : 500;
+  const actionAnchorStep = interactiveStepFor(resolvedAction);   // #4214: the helper's three cases, never a copy
   // A pinned `actionAnchorStep` is applied exactly (`modes.ts` `restFill`, `exact`, #331) and never moved, so
   // the note reports the pin, not the auto-placed step, and drops the auto-move clause (#1894). Its floor miss
-  // is reported as the role's own ratio. Wording: DRAFT for the owner (#1894 Q-block).
-  if (actionBrandColor) notes.push(input.actionAnchorStep !== undefined
-    ? `action: pinned at '${resolvedAction}' step ${input.actionAnchorStep} by actionAnchorStep — applied exactly, never moved; a miss of 3:1 (7:1 in high contrast) is reported, not corrected.`
-    : `action: anchored at '${resolvedAction}' step ${actionAnchorStep}, the brand's own shade — moved only if it misses 3:1 (7:1 in high contrast) against the contrast floor or background.tertiary.`);
+  // is reported as the role's own ratio. Wording: DRAFT for the owner (#1894 Q-block). The pin applies on ANY
+  // action palette (`modes.ts` reads `theme.actionAnchorStep` whatever the palette), so the pin sentence is said for
+  // any pin, primary included, not only under a brand color (#3284, owner decision A: widened to match).
+  if (input.actionAnchorStep !== undefined)
+    notes.push(`action: pinned at '${resolvedAction}' step ${input.actionAnchorStep} by actionAnchorStep — applied exactly, never moved; a miss of 3:1 (7:1 in high contrast) is reported, not corrected.`);
+  else if (actionBrandColor)
+    notes.push(`action: anchored at '${resolvedAction}' step ${actionAnchorStep}, the brand's own shade — moved only if it misses 3:1 (7:1 in high contrast) against the contrast floor or background.tertiary.`);
 
   // ---- link palette (#1496) ----
   // Links DEFAULT to following the action colour: an unset `linkPalette` resolves to the palette the action
@@ -1001,10 +1042,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   const linkPalette = input.linkPalette ?? roleToPalette.action;
   if (!palettes.some((p) => p.palette === linkPalette))
     throw new Error(`linkPalette '${linkPalette}' is not a defined palette (have: ${palettes.map((p) => p.palette).join(', ')})`);
-  const linkBrandColor = (input.brandColors ?? []).find((b) => b.name === linkPalette);
-  const linkAnchorStep = linkPalette === 'primary' ? anchorStep
-    : linkBrandColor ? autoPlaceStep(linkBrandColor.oklch.l)
-    : 500;
+  const linkAnchorStep = interactiveStepFor(linkPalette);   // #4214: the helper's three cases, never a copy
   // Compared against the RESOLVED action palette, not the `actionPalette` lever (#1895, owner 2026-10-01):
   // with `roleColors.action` set the two differ, and the note must say whether links match the color the
   // action fill actually uses.
@@ -1029,6 +1067,51 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     // citation stays verbatim.
     notes.push(`links: the '${linkPalette}' palette is too close in color to body text for WCAG 1.4.1 (Use of Color) — links need an underline; typography.links adds an underlined link style. Warned, not forced.`);
 
+  // ---- per-mode palette swaps (#1729) ----
+  // `modePalettes[mode]` maps a palette to its replacement for that one mode. Resolved here, where the routing
+  // it rewrites is final: each role, the link and each interactive column on a swapped palette moves to the
+  // replacement and re-anchors at the replacement's own shade (`interactiveStepFor`, the rule every brand color
+  // anchors by). The contrast floors are untouched, so `resolveMode` re-gates every moved role the same way.
+  // Validated against the customizable modes; `light` is the baseline every swap is measured from.
+  const brandColorNames = new Set((input.brandColors ?? []).map((b) => b.name));
+  const modePalettes: NonNullable<Theme['modePalettes']> = {};
+  const gradientsByMode: Record<string, ReturnType<typeof buildGradient>['gradients']> = {};
+  for (const [m, swaps] of Object.entries(input.modePalettes ?? {}) as [ModeName, Record<string, string>][]) {
+    if (!modesAll.includes(m))
+      throw new Error(`modePalettes: mode '${m}' is not in this brand's modes (${modesAll.join(', ')})`);
+    if (!CUSTOMIZABLE_MODES.includes(m))
+      throw new Error(`modePalettes: mode '${m}' is generate-only and not customizable — only ${CUSTOMIZABLE_MODES.join('/')} accept a palette swap`);
+    if (m === 'light')
+      throw new Error(`modePalettes: 'light' is the baseline every swap is measured from — change the palette itself (primary or brandColors), not modePalettes.light`);
+    for (const [from, to] of Object.entries(swaps ?? {})) {
+      if (from !== 'primary' && !brandColorNames.has(from))
+        throw new Error(`modePalettes.${m}: '${from}' is not a palette a mode can swap — use primary or a brandColors name (${[...brandColorNames].join(', ') || 'none declared'})`);
+      if (!brandColorNames.has(to))
+        throw new Error(`modePalettes.${m}.${from}: '${to}' is not a brandColors name — a replacement must be declared in brandColors, so its ramp ships in every mode`);
+      if (from === to)
+        throw new Error(`modePalettes.${m}.${from}: swaps the palette for itself — drop the entry`);
+    }
+    if (!Object.keys(swaps ?? {}).length) continue;
+    const sw = (pal: string): string => swaps[pal] ?? pal;
+    const r2p = Object.fromEntries(Object.entries(roleToPalette).map(([r, pal]) => [r, sw(pal)])) as Record<Role, string>;
+    const baseAnchors: Record<Role, number> = { brand: anchorStep, neutral: 500, success: 500, warning: 500, danger: 500, info: 500, action: actionAnchorStep };
+    // brand and action anchor at their palette's own shade; the status roles and neutral anchor at the 500 pivot
+    // whatever palette they draw from, so only the first two re-anchor when their palette moves.
+    const anchors = Object.fromEntries(Object.entries(baseAnchors).map(([r, st]) =>
+      [r, (r === 'brand' || r === 'action') && r2p[r as Role] !== roleToPalette[r as Role] ? interactiveStepFor(r2p[r as Role]) : st])) as Record<Role, number>;
+    const swappedLink = sw(linkPalette);
+    modePalettes[m] = {
+      swaps: { ...swaps }, roleToPalette: r2p, roleAnchorStep: anchors,
+      linkPalette: swappedLink, linkAnchorStep: swappedLink === linkPalette ? linkAnchorStep : interactiveStepFor(swappedLink),
+      interactivePalettes: interactivePalettes.map((ip) => sw(ip.palette) === ip.palette ? ip
+        : { ...ip, palette: sw(ip.palette), anchorStep: ip.anchorPinned ? ip.anchorStep : interactiveStepFor(sw(ip.palette)) }),
+    };
+    const moved = buildGradient(input.gradients, palettes, root, swaps).gradients;
+    if (JSON.stringify(moved) !== JSON.stringify(gradient.gradients)) gradientsByMode[m] = moved;
+    notes.push(`modePalettes: in ${m}, ${Object.entries(swaps).map(([f, t]) => `${f} → ${t}`).join(', ')} — every role, link, interactive column and gradient stop on a swapped palette uses its replacement there, anchored at the replacement's own shade and held to the same contrast floors.`);
+  }
+  if (Object.keys(gradientsByMode).length) gradient.gradientsByMode = gradientsByMode;
+
   // The inverse surface context has no lever since #895.
   const neutralEmphasis = input.neutralEmphasis ?? 'subtle';
   notes.push(`neutral interactive emphasis: '${neutralEmphasis}'${neutralEmphasis === 'strong' ? ' — a bold near-black or near-white fill' : ' (default) — a light gray fill'}; inverse-surface variants are always generated.`);
@@ -1041,9 +1124,11 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
   return {
     id: input.id, root, namespace: `${root}.${CORE_TIER}.palette`, colorFormat: 'hex', modes: modesAll, palettes, roleToPalette, notes,
     ...(customModes.length ? { customModes } : {}),
+    ...(input.icons && (Object.keys(input.icons.map ?? {}).length || Object.keys(input.icons.glyphs ?? {}).length) ? { icons: input.icons } : {}),
     ...(Object.keys(radiusByMode).length || Object.keys(familiesByMode).length || Object.keys(weightRolesByMode).length || Object.keys(lineHeightRepointByMode).length || Object.keys(letterSpacingRepointByMode).length || Object.keys(motionByMode).length || Object.keys(easingRolesByMode).length || Object.keys(shadowByMode).length || Object.keys(sizesByMode).length ? { modeLevers } : {}),
     roleAnchorStep: { brand: anchorStep, neutral: 500, success: 500, warning: 500, danger: 500, info: 500, action: actionAnchorStep },
     linkPalette, linkAnchorStep,
+    ...(Object.keys(modePalettes).length ? { modePalettes } : {}),
     surfaces: input.surfaces,
     overrides: input.overrides,
     modeAnchors: input.modeAnchors,
@@ -1057,6 +1142,7 @@ export const brandTheme = (brandInput: BrandInputAuthored): Theme => {
     ...(input.raisedSurface ? { raisedSurface: input.raisedSurface } : {}),
     ...(input.scrimStrength ? { scrimStrength: input.scrimStrength } : {}),
     ...(input.secondaryTextGround ? { secondaryTextGround: input.secondaryTextGround } : {}),
+    ...(input.interactiveGround ? { interactiveGround: input.interactiveGround } : {}),
     ...(glassRoles ? { glassRoles } : {}),
     ...(radioDot !== RADIO_DOT_DEFAULT ? { radioDot } : {}),
     actionAnchorStep: input.actionAnchorStep, destructiveAnchorStep: input.destructiveAnchorStep,

@@ -45,17 +45,22 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { brandTheme, BrandInput, type Theme } from './theme';
-import { buildTree, validateBrandInput } from './emit-dtcg';
+import { buildTree, validateBrandInput, windowsInvalidName } from './emit-dtcg';
 import { buildOverlaySet } from './emit-dtcg-overlay';
 import { buildAiMetadata } from './ai-metadata';
-import { buildLeverManifest } from './levers';
+import { buildLeverManifest, type Lever } from './levers';
 import { figmaArtifacts } from './emit-figma';
 import { scoreConsumption, scoreContractCompliance, UsedPair } from './eval';
+import { floorRatio } from './color';
 import { parseDesignMd } from './design-md';
+import { parseStandardDesignMd, isStandardDesignMd, standardToBrandInput } from './standard-design-md';
 import { ENGINE_VERSION } from './version';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
+import { webThemeHandoff, shadcnFiles, tailwindFiles } from './web-themes';
+import { listComponents, getComponent } from './mcp-components';
 import { BUILD_IDENTITY } from './build-identity';
+import { isEntry } from './entry-point';
 
 // Reads the shared constant rather than restating it: a hardcoded duplicate is exactly how a
 // server ends up reporting a version the artifacts it emits do not agree with.
@@ -76,8 +81,6 @@ export const SERVER_INFO = { name: 'prism3-engine', version: BUILD_IDENTITY };
  *  not know, so there is no need to branch the RESPONSE shape on the negotiated version. */
 export const PROTOCOL_VERSIONS = ['2026-07-28', '2024-11-05'] as const;
 export const LATEST_PROTOCOL_VERSION = PROTOCOL_VERSIONS[0];
-/** Retained for the older handshake's reply. */
-export const PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION;
 /** What `initialize` answers when the client asks for a version this server does not speak (#1867).
  *  A client that sends `initialize` is on a pre-2026 revision, because `2026-07-28` removed the
  *  handshake. So the answer is the newest HANDSHAKE revision we speak, never `2026-07-28`: Claude Code
@@ -197,22 +200,69 @@ export const summarizeDescription = (d: string): string => {
   return d;
 };
 
-/** The brand schema as `tools/list` inlines it (#1760): every `description` cut to its summary, and
- *  every other keyword (types, enums, ranges, defaults, `required`, `$defs`, `$ref`, `$id`) left exactly
- *  as the file has it. Validation is unchanged because nothing but prose moves, and the full prose stays
- *  one call away: `list_levers` with `describe`.
+/** The brand schema as `tools/list` inlines it, compacted in two steps. Every keyword but `description`
+ *  (types, enums, ranges, defaults, `required`, `$defs`, `$ref`, `$id`) is left exactly as the file has it,
+ *  so validation is unchanged: only prose moves, and all of it stays one `list_levers` `describe` call away.
  *
- *  WHY, measured on the schema as #1759 left it: the inlined schema was 52,589 of `tools/list`'s 59,969
- *  characters, and 32,333 of those were description prose (191 descriptions). Structure alone was about
- *  17,000. So prose was the part growing, and the part every lever had been trimming to fit. Moving it
- *  out takes the list to 42,314 (measured). A new lever then costs its structure plus a one-line summary
- *  (`test.ts` caps a summary at 200 characters). Its full description, however long, costs nothing
- *  here. */
+ *  STEP 1 (#1760): each description cut to its summary. Measured on the schema as #1759 left it, the inlined
+ *  schema was 52,589 of `tools/list`'s 59,969 characters, 32,333 of them description prose. Cutting it took
+ *  the list to 42,314.
+ *
+ *  STEP 2 (owner decision 2026-11-21, "compress, not raise" again): prose stays inline only where an agent
+ *  needs it before its first call. That is the schema's own description, each TOP-LEVEL field's summary,
+ *  and the summaries beneath the REQUIRED fields (`id`, `primary`, `neutral`) and in the `$defs` they reach
+ *  (`oklch`), so a minimal valid call can be written from `tools/list` alone. Every other description, under
+ *  an optional field (its nested properties, items, `oneOf` branches) or in a `$defs` entry only optional
+ *  fields use, is dropped. By 2026-11 the list had grown back to 54,509, 491 under the 55,000 alarm (54,897 by merge), and
+ *  these deeper descriptions were most of what was growing. Dropping them took it to 41,731 (measured).
+ *  What an agent gives up is the prose under an optional field it has not chosen yet; that field's summary,
+ *  its whole structure and the enums, ranges and defaults that say what it accepts all stay. `list_levers`
+ *  with `describe` returns the field exactly as the file has it, every nested description and the `$defs`
+ *  it references included (`test.ts` and `mcp-test.ts` each hold an arm on that). A new optional lever now
+ *  costs its structure plus one summary, however much prose its sub-fields carry. */
 export const compactSchema = (schema: unknown): unknown => {
-  if (Array.isArray(schema)) return schema.map(compactSchema);
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema;
+  const root = schema as { properties?: Record<string, unknown>; required?: unknown; $defs?: Record<string, unknown> };
+  const required = new Set(Array.isArray(root.required) ? root.required as string[] : []);
+  const keptDefs = new Set(Object.keys(referencedDefs(
+    Object.fromEntries(Object.entries(root.properties ?? {}).filter(([k]) => required.has(k))), root.$defs ?? {})));
+  return Object.fromEntries(Object.entries(schema as Record<string, unknown>).map(([k, v]) => {
+    if (k === 'description' && typeof v === 'string') return [k, summarizeDescription(v)];
+    if ((k === 'properties' || k === '$defs') && v && typeof v === 'object' && !Array.isArray(v)) {
+      const keep = (name: string): boolean => (k === 'properties' ? required.has(name) : keptDefs.has(name));
+      return [k, Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([name, field]) =>
+        [name, keep(name) ? prose(field, true) : k === 'properties' ? ownSummaryOnly(field) : prose(field, false)]))];
+    }
+    return [k, prose(v, false)];
+  }));
+};
+
+/** An optional top-level field: its own description summarized, every description beneath it dropped. */
+const ownSummaryOnly = (field: unknown): unknown => {
+  if (!field || typeof field !== 'object' || Array.isArray(field)) return field;
+  const out = prose(field, false) as Record<string, unknown>;
+  const d = (field as Record<string, unknown>).description;
+  return typeof d === 'string' ? { ...out, description: summarizeDescription(d) } : out;
+};
+
+/** Keywords whose value is a map of NAMES to schemas, and keywords whose value is data, not a schema.
+ *  Under a name map a key is a field name, so a field called `default` or `description` is walked as a
+ *  schema; a data value (a `default` object, an `enum` list) is copied as it is. */
+const SCHEMA_MAPS = new Set(['properties', '$defs', 'patternProperties']);
+const DATA_KEYWORDS = new Set(['default', 'enum', 'const', 'examples']);
+
+/** A schema with every `description` keyword in it summarized (`keep`) or removed, and nothing else changed. */
+const prose = (schema: unknown, keep: boolean): unknown => {
+  if (Array.isArray(schema)) return schema.map((x) => prose(x, keep));
   if (!schema || typeof schema !== 'object') return schema;
-  return Object.fromEntries(Object.entries(schema as Record<string, unknown>).map(([k, v]) =>
-    [k, k === 'description' && typeof v === 'string' ? summarizeDescription(v) : compactSchema(v)]));
+  return Object.fromEntries(Object.entries(schema as Record<string, unknown>)
+    .filter(([k, v]) => keep || !(k === 'description' && typeof v === 'string'))
+    .map(([k, v]) => [k,
+      k === 'description' && typeof v === 'string' ? summarizeDescription(v)
+      : DATA_KEYWORDS.has(k) ? v
+      : SCHEMA_MAPS.has(k) && v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([n, x]) => [n, prose(x, keep)]))
+        : prose(v, keep)]));
 };
 
 /** Every `$defs` entry a schema fragment reaches through `$ref: "#/$defs/<name>"`, followed transitively,
@@ -233,6 +283,30 @@ export const referencedDefs = (fragment: unknown, defs: Record<string, unknown>)
   return Object.fromEntries(Object.keys(out).sort().map((k) => [k, out[k]]));
 };
 
+/** #4151: what `theme_brand` returns (and `theme_from_brief`, plus `derivedBrandInput`). Both returned structuredContent
+ *  with no outputSchema, so a client, and the generated reference, read them as untyped. Open, not
+ *  `additionalProperties: false`: a field added to the payload must not make every older client reject it. */
+const THEME_OUTPUT_PROPERTIES = {
+  id: { type: 'string' },
+  modes: { type: 'array', items: { type: 'string' } },
+  contracts: {
+    type: 'object', description: 'Every declared contrast pair across every mode: how many were checked, how many pass, and each failure.',
+    properties: { checks: { type: 'number' }, pass: { type: 'number' }, failures: { type: 'array', items: { type: 'string' } } },
+    required: ['checks', 'pass', 'failures'],
+  },
+  aliases: {
+    type: 'object', description: 'Alias integrity: how many aliases, how many resolve, and each broken one.',
+    properties: { total: { type: 'number' }, resolved: { type: 'number' }, broken: { type: 'array' } },
+    required: ['total', 'resolved', 'broken'],
+  },
+  omitted: { type: 'array', items: { type: 'string' }, description: 'The sections this result leaves out.' },
+  hint: { type: 'string', description: 'How to add the sections it leaves out.' },
+  notes: { type: 'array', items: { type: 'string' }, description: 'With include notes (the default): the decisions log.' },
+  tokens: { type: 'object', description: 'With include tokens: the DTCG token tree.' },
+  aiMetadata: { type: 'object', description: 'With include aiMetadata: the agent metadata.' },
+} as const;
+const THEME_OUTPUT_REQUIRED = ['id', 'modes', 'contracts', 'aliases', 'omitted'];
+
 /** Tool catalogue.
  *
  *  `theme_brand` takes `{ brand, include }` rather than a bare BrandInput. The old shape is still
@@ -248,11 +322,13 @@ export const toolDefs = (brandSchema: unknown) => [
   {
     name: 'list_levers',
     title: 'List brand controls',
-    description: 'List the complete BrandInput surface an agent can set: the lever catalog (grouped, labeled, typed, with enums, defaults and UI ranges — the same manifest the Figma plugin and web playground render from) PLUS the non-lever fields the manifest does not carry (identity, mode set, and the per-mode override layers). Call this first to learn what theme_brand accepts. Pass `describe` with field names to get those fields\' full schema descriptions instead.',
+    // #4200 E (DRAFT): what it lists, without the history of why the non-lever fields were added.
+    description: 'List every brand field theme_brand accepts: the levers (typed, with enums, defaults and ranges) and the non-lever fields (id, modes, per-mode overrides). Call first; pass `summary: true` for the compact form (about 7,000 characters: each field\'s key, control, range or options and default, without the prose). Pass `describe` with field names for those fields\' full schema descriptions instead.',
     inputSchema: {
       type: 'object',
       properties: {
         describe: { type: 'array', items: { type: 'string' }, description: 'BrandInput field names (e.g. ["typography", "radiusHairline"]). Returns each field\'s schema entry with every description in full, plus the $defs it references, instead of the catalog.' },
+        summary: { type: 'boolean', description: 'true returns the compact catalog: one entry per lever (key, group, control, range or option values, default), the non-lever fields by key, and the required fields. No labels or descriptions; `describe` returns those.' },
       },
       additionalProperties: false,
     },
@@ -261,7 +337,7 @@ export const toolDefs = (brandSchema: unknown) => [
     // MCP asks of an outputSchema) while still requiring all three catalog fields on a catalog call.
     outputSchema: {
       type: 'object',
-      anyOf: [{ required: ['levers', 'nonLeverFields', 'required'] }, { required: ['described'] }],
+      anyOf: [{ required: ['levers', 'nonLeverFields', 'required'] }, { required: ['described'] }, { required: ['summary', 'nonLeverFields', 'required'] }],
       properties: {
         levers: { type: 'object', description: 'The lever manifest — UI presentation contract.' },
         nonLeverFields: {
@@ -270,6 +346,7 @@ export const toolDefs = (brandSchema: unknown) => [
         },
         required: { type: 'array', items: { type: 'string' }, description: 'Fields theme_brand will reject a call without.' },
         described: { type: 'object', description: 'With `describe`: { properties, $defs }, the named fields\' full schema.' },
+        summary: { type: 'array', description: 'With `summary: true`: one compact entry per lever, in the catalog\'s order.', items: { type: 'object', properties: { key: { type: 'string' }, group: { type: 'string' }, control: { type: 'string' } }, required: ['key', 'group', 'control'] } },
       },
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
@@ -277,11 +354,11 @@ export const toolDefs = (brandSchema: unknown) => [
   {
     name: 'theme_brand',
     title: 'Generate a design-token system',
-    description: 'Generate a full design-token system from a brand input, and verify it. Returns the contrast-contract results (every declared a11y pair, computed on the resolved colors across all modes), alias integrity, and the decisions log by default. The DTCG token tree and the .ai.json agent metadata are OPT-IN via `include` because they are large — for a four-mode brand they measure roughly 890,000 and 590,000 characters respectively (~370,000 tokens combined). Arguments: { brand, include }. Call list_levers to see the controls, or validate_brand to check an input first. Each field description in the `brand` schema below is a one-line summary; list_levers with `describe` returns the full text.',
+    description: `Generate a full design-token system from a brand input, and verify it. Returns the contrast-contract results (every declared a11y pair, computed on the resolved colors across all modes, each failure as { role, mode, ratio, against, min }), alias integrity, and the decisions log by default. The DTCG token tree and the .ai.json agent metadata are OPT-IN via \`include\` because they are large — for a four-mode brand they measure roughly ${PAYLOAD_CHARS.tokens.toLocaleString('en-US')} and ${PAYLOAD_CHARS.aiMetadata.toLocaleString('en-US')} characters respectively (~250,000 tokens combined). Arguments: { brand, include }; the plugin's agent link takes the same object as \`input\`. Call list_levers to see the controls, or validate_brand to check an input first. Each field description in the \`brand\` schema below is a one-line summary; list_levers with \`describe\` returns the full text.`,
     inputSchema: {
       type: 'object',
       properties: {
-        // Compacted (#1760): prose cut to one-line summaries, every other keyword verbatim.
+        // Compacted (#1760, then 2026-11-21): summaries for every top-level field and beneath the required ones, every other keyword verbatim.
         brand: compactSchema(brandSchema),
         include: {
           type: 'array', description: 'Sections to return, replacing the default ["notes"]. Add "tokens" and/or "aiMetadata" for the large payloads; pass [] for the verification result alone.',
@@ -291,6 +368,7 @@ export const toolDefs = (brandSchema: unknown) => [
       required: ['brand'],
       additionalProperties: false,
     },
+    outputSchema: { type: 'object', properties: THEME_OUTPUT_PROPERTIES, required: THEME_OUTPUT_REQUIRED },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
   {
@@ -324,7 +402,7 @@ export const toolDefs = (brandSchema: unknown) => [
       type: 'object',
       properties: {
         consumption: { type: 'object', description: 'total / valid / invented / inventedRate / primitiveLeaks / primitiveLeakRate.' },
-        contracts: { type: 'object', description: 'checked / pass / rate / failures / unresolved — omitted when no pairs were given.' },
+        contracts: { type: 'object', description: 'checked / pass / rate / vacuous / coverage / failures / unresolved / leaks — omitted when no pairs were given. vacuous is true when no pair resolved in any mode, so rate 1 measured nothing. coverage is the share of pair-and-mode checks that resolved, 0 to 1. leaks lists pairs measured through a raw palette color (core.palette.*) rather than a role.' },
       },
       required: ['consumption'],
     },
@@ -333,7 +411,7 @@ export const toolDefs = (brandSchema: unknown) => [
   {
     name: 'theme_from_brief',
     title: 'Generate from a markdown brief',
-    description: 'Generate a token system from a design.md brief — YAML frontmatter plus prose — instead of a hand-assembled BrandInput. The natural entry point when working from a written brand description rather than known numbers: it parses the brief, reports the BrandInput it derived, and returns the same verification payload as theme_brand (with the same opt-in `include`). Call theme_brand directly when you already hold exact values.',
+    description: 'Generate a token system from a design.md brief — YAML frontmatter plus prose — instead of a hand-assembled BrandInput. The natural entry point when working from a written brand description rather than known numbers: it parses the brief in either dialect (engine-native frontmatter, or the standard shape: a flat colors: hex map, typography tokens and an optional x-prism3: block), reports the BrandInput it derived, and returns the same verification payload as theme_brand (with the same opt-in `include`). For a standard brief it also returns dialect: "standard", how each color was classified (classification), the x-prism3 keys it applied (xApplied), and what it skipped (xWarnings): unknown x-prism3 keys, and typography faces it does not read. Call theme_brand directly when you already hold exact values.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -343,12 +421,17 @@ export const toolDefs = (brandSchema: unknown) => [
       required: ['brief'],
       additionalProperties: false,
     },
+    outputSchema: {
+      type: 'object',
+      properties: { ...THEME_OUTPUT_PROPERTIES, derivedBrandInput: { type: 'object', description: 'The BrandInput the brief was read as.' } },
+      required: [...THEME_OUTPUT_REQUIRED, 'derivedBrandInput'],
+    },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
   {
     name: 'export_theme',
     title: 'Write the token system to disk',
-    description: 'Generate a brand and WRITE its artifacts to a directory, returning a manifest of what was written — never the content. Use this instead of theme_brand include:["tokens"] whenever you want the actual files: the DTCG tree alone is roughly 890,000 characters for a four-mode brand, which no tool result should carry. Files carry the names the CLI writes. "tokens" writes <id>.tokens.json (the full DTCG tree), <id>.base.tokens.json and one <id>.<mode>.overlay.tokens.json per other mode (the set a multi-mode code build reads); "aiMetadata" writes <id>.ai.json; "figma" writes a figma/ directory of Figma collection files; "componentSpecs" writes <id>.component-contracts.json (every component contract, with the brand\'s settings resolved), <id>.component-defs.json (the same file under its old name) and <id>.component-defs.specs.json (the same in the Specs format). `include` replaces the default ["tokens", "aiMetadata", "figma"]; for everything, pass all four. For one release each file is also written under its old unprefixed name (tokens.json, ai-metadata.json, component-contracts.json, component-defs.json, component-defs.specs.json). Arguments: { brand, outDir, include }. `outDir` must be a RELATIVE path. Requires a host that granted filesystem access; returns an error if not.',
+    description: 'Generate a brand and WRITE its artifacts to a directory, returning a manifest of what was written — never the content. Use this instead of theme_brand include:["tokens"] whenever you want the actual files: the DTCG tree alone is roughly ' + PAYLOAD_CHARS.tokens.toLocaleString('en-US') + ' characters for a four-mode brand, which no tool result should carry. Files carry the names the CLI writes. "tokens" writes <id>.tokens.json (the full DTCG tree), <id>.base.tokens.json and one <id>.<mode>.overlay.tokens.json per other mode (the set a multi-mode code build reads); "aiMetadata" writes <id>.ai.json; "figma" writes a figma/ directory of Figma collection files; "componentSpecs" writes <id>.component-contracts.json (every component contract, with the brand\'s settings resolved), <id>.component-defs.json (the same file under its old name) and <id>.component-defs.specs.json (the same in the Specs format). "shadcn" writes shadcn/<id>.css (the shadcn/ui theme\'s light and dark variables) and shadcn/<id>.registry-item.json (the registry item a shadcn/ui project installs, with the full-strength focus ring); "tailwind" writes tailwind/<id>.theme.css (a Tailwind v4 theme). `include` replaces the default ["tokens", "aiMetadata", "figma"]; for everything, pass all six. For one release each file is also written under its old unprefixed name (tokens.json, ai-metadata.json, component-contracts.json, component-defs.json, component-defs.specs.json). Arguments: { brand, outDir, include }. `outDir` must be a RELATIVE path. Requires a host that granted filesystem access; returns an error if not.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -357,7 +440,7 @@ export const toolDefs = (brandSchema: unknown) => [
         brand: { type: 'object', description: 'The same BrandInput you would pass to theme_brand — see that tool for the full input schema.' },
         outDir: { type: 'string', description: 'Relative directory to write into (e.g. "./tokens"). Absolute paths and ".." segments are refused.' },
         include: {
-          type: 'array', description: 'Artifact families to write, replacing the default ["tokens", "aiMetadata", "figma"]. componentSpecs is written only when named, so pass all four for everything.',
+          type: 'array', description: 'Artifact families to write, replacing the default ["tokens", "aiMetadata", "figma"]. componentSpecs, shadcn and tailwind are written only when named, so pass all six for everything.',
           items: { type: 'string', enum: [...EXPORT_SECTIONS] },
         },
       },
@@ -403,6 +486,58 @@ export const toolDefs = (brandSchema: unknown) => [
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   },
+  // #4467 (owner decision A, 2026-11-25): the component surface, so an agent asks for one component instead of
+  // reading the whole contract export. Both read `componentDefs` and the export live (`mcp-components.ts`).
+  {
+    name: 'list_components',
+    title: 'List the components',
+    description: `List every component the system defines: its id, name, one-line summary and status. About ${COMPONENT_LIST_CHARS.toLocaleString('en-US')} characters. Call it before composing UI, then call get_component for each component you place, so you build from the contract rather than from what a component usually looks like elsewhere.`,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number', description: 'How many components are listed.' },
+        components: {
+          type: 'array', description: 'One entry per component, in registry order.',
+          items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, summary: { type: 'string' }, status: { type: 'string' } }, required: ['id', 'name', 'summary', 'status'] },
+        },
+      },
+      required: ['total', 'components'],
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: 'get_component',
+    title: 'Get one component\'s contract',
+    description: 'One component\'s contract: its props with their allowed values and defaults, its variants and states, each part with the tokens it may bind (grouped by the property it binds), when to use it and when not (whenToUse, avoidWhen), its partners, and its motion: the motion.* tokens it binds and its motion patterns, each track naming the preset it plays on. Pass `brand`, the same BrandInput theme_brand takes, to resolve it for that brand: the token names the brand\'s settings bind, and `values`, each named token\'s value (a color as a hex per mode). Without `brand` the answer is brand-neutral: token names at the default settings. Take the id from list_components; an unknown id is refused, with the nearest ids. At most ' + COMPONENT_RESULT_CEILING.toLocaleString('en-US') + ' characters.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'A component id from list_components, such as "button".' },
+        brand: { type: 'object', description: 'Optional. The same BrandInput you pass to theme_brand — see that tool for the full input schema.' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }, name: { type: 'string' }, status: { type: 'string' }, summary: { type: 'string' },
+        brand: { description: 'null when brand-neutral; else the brand\'s id, token root and modes.' },
+        props: { type: 'array', description: 'The code API: each prop with its type, allowed values, default and whether it is required.' },
+        variants: { type: 'object', description: 'Each variant axis and its values.' },
+        states: { type: 'array', items: { type: 'string' } },
+        parts: { type: 'array', description: 'Each part: its path, kind, when it is present, and the tokens it may bind, by property.' },
+        values: { type: 'object', description: 'With brand: each named token\'s value for the brand.' },
+        whenToUse: { type: 'string' }, avoidWhen: { type: 'string' },
+        partners: { type: 'object', description: 'commonPartners, composesWith and alternativeTo: component ids.' },
+        motion: { type: 'object', description: 'The motion prose, the motion.* tokens it binds and, where the component has them, its motion patterns (with brand, the brand\'s overrides applied).' },
+        digest: { type: 'string', description: 'A change signal for this component\'s contract.' },
+      },
+      required: ['id', 'name', 'props', 'parts', 'partners', 'motion'],
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  },
 ];
 
 /** Sections included when the caller does not say. `notes` is the decisions log — every gap the
@@ -417,13 +552,23 @@ export const toolDefs = (brandSchema: unknown) => [
  *
  *  (Measured when `notes` became a default. Re-measured 2026-09-24, #1623: tokens ~850,000 and
  *  aiMetadata ~500,000; re-measured 2026-09-26, #1670: ~890,000 and ~590,000, the aiMetadata figure having
- *  drifted to the edge of the test's 15% band — the tool descriptions carry the current figures.)
+ *  drifted to the edge of the test's 15% band; re-measured 2026-11-21, #3510 with #2857: ~900,000 and ~694,000, the
+ *  aiMetadata figure past the band again. #4150: the text block went compact, so on that same tree (2026-11-22)
+ *  the figures are ~440,000 and ~565,000: the same trees, unindented. The tool descriptions carry the current figures.)
  *
  *  Withholding the two huge payloads is right — no client can spend half a megabyte on one result.
  *  Withholding 3.6KB cost an agent the single most decision-relevant thing the engine produces, and
  *  did it silently: an agent that never passes `include` gets a themed brand with no indication that
  *  fifteen choices were made for it. Defaults decide what most callers actually see. */
 export const DEFAULT_THEME_SECTIONS = ['notes'];
+/** #4467: the size `list_components` states in its description, and the ceiling `get_component` states and keeps. Both
+ *  are held in `mcp-test.ts`: the list within 15% of this figure, and every component's result, neutral and for a brand,
+ *  at or under the ceiling. */
+export const COMPONENT_LIST_CHARS = 13_000;
+export const COMPONENT_RESULT_CEILING = 25_000;
+/** #4200 D (DRAFT): the two large payloads' size for a four-mode brand, one figure each, stated once. The description and
+ *  the withheld-section hint both read it, and test.ts holds it to ±15% of the measured size. */
+export const PAYLOAD_CHARS = { tokens: 440_000, aiMetadata: 565_000 } as const;
 
 /** Accept both `{ brand, include }` and a bare BrandInput (the pre-wrap calling convention). Detected
  *  by the presence of a `brand` key, which BrandInput itself has no property named. */
@@ -432,6 +577,10 @@ export const readThemeArgs = (args: any): { brand: any; include: string[] } =>
     ? { brand: args.brand, include: Array.isArray(args.include) ? args.include : [...DEFAULT_THEME_SECTIONS] }
     : { brand: args, include: [...DEFAULT_THEME_SECTIONS] };
 
+/** #4200 C (DRAFT): the two failure headers every brand-taking tool uses, one for the shape and one for a value the
+ *  engine refuses, so an agent reads one phrase per kind across the surface. */
+export const FAILS_SCHEMA = 'the brand input fails the schema';
+export const REFUSED_BY_ENGINE = 'the engine refused the brand input';
 /** #4120: the brand a tool was given. `{ brand }` is the shape every brand-taking tool declares; a bare BrandInput
  *  (validate_brand's old shape, which theme_brand also read) is still accepted for one release where `bare` is set. */
 const readBrandArg = (args: any, bare: boolean): unknown =>
@@ -446,9 +595,32 @@ const text = (obj: unknown, isError = false): ToolResult =>
 
 /** A result carrying BOTH `structuredContent` (what a client validates against `outputSchema`) and the
  *  serialised JSON in a text block — the spec asks for the text copy for backwards compatibility with
- *  clients that do not read structured content. */
+ *  clients that do not read structured content.
+ *
+ *  #4150: the text copy is COMPACT. Indented, it was half again the size of the object: `theme_brand`
+ *  with tokens and aiMetadata came to 2.7 MB, the text 1.58 MB of it beside a 1.06 MB structuredContent.
+ *  A client that reads the text copy parses it, and a parser does not need the indentation. The result
+ *  still carries the object twice, because the spec asks for both. */
 const structured = (obj: unknown): ToolResult =>
-  ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }], structuredContent: obj });
+  ({ content: [{ type: 'text', text: JSON.stringify(obj) }], structuredContent: obj });
+
+/** #4147: the compact lever catalog `list_levers {summary: true}` returns. The full catalog was 43,000
+ *  characters of text, and the tool descriptions tell an agent to call it first, so discovery cost about
+ *  20,000 tokens before any work. This keeps what an agent needs to write a valid input (the key, the
+ *  kind of control, its range or option values, the default, whether it is required, whether it is
+ *  retired) and drops the labels and descriptions, which `describe` returns in full. Fields are only
+ *  carried when the lever has them, so nothing here is a placeholder. */
+export const leverSummary = (levers: Lever[]): Record<string, unknown>[] =>
+  levers.map((l) => ({
+    key: l.key, group: l.group, control: l.control,
+    ...(l.required ? { required: true } : {}),
+    ...(l.options ? { options: l.options.map((o) => o.value) } : {}),
+    ...(l.min !== undefined ? { min: l.min } : {}),
+    ...(l.max !== undefined ? { max: l.max } : {}),
+    ...(l.stops ? { stops: Object.keys(l.stops) } : {}),
+    ...(l.default !== undefined ? { default: l.default } : {}),
+    ...(l.deprecated ? { deprecated: true } : {}),
+  }));
 
 /** Dispatch a tools/call. Pure — imports of the core are all pure functions. Tool-level
  *  failures (bad brand, generation throw) come back as `isError` results, not RPC errors,
@@ -465,7 +637,7 @@ const stampBuild = (built: ReturnType<typeof buildTree>): ReturnType<typeof buil
 };
 const buildBrand = (brand: unknown): { theme: Theme; built: ReturnType<typeof buildTree> } | ToolResult => {
   try { const theme = brandTheme(brand as BrandInput); return { theme, built: stampBuild(buildTree(theme)) }; }
-  catch (e) { return text({ error: 'BrandInput refused by the engine', errors: [(e as Error).message] }, true); }
+  catch (e) { return text({ error: REFUSED_BY_ENGINE, errors: [(e as Error).message] }, true); }
 };
 const refused = (r: ReturnType<typeof buildBrand>): r is ToolResult => 'content' in r;
 
@@ -503,17 +675,21 @@ const scoreInputErrors = (refs: unknown[], pairs: unknown): string[] => {
  *  two can never report a brand differently depending on how it was supplied. */
 const themePayload = (brand: unknown, include: string[]): ToolResult => {
   const errors = validateBrandInput(brand);
-  if (errors.length) return text({ error: 'BrandInput failed schema validation', errors }, true);
+  if (errors.length) return text({ error: FAILS_SCHEMA, errors }, true);
   const b = buildBrand(brand);
   if (refused(b)) return b;
   const { theme, built: { tree, modes, stats } } = b;
-  let checks = 0, pass = 0; const failures: string[] = [];
+  // #4200 owner decision 4 (a), 2026-11-19: each failure is data, { role, mode, ratio, against, min }, the fields
+  // the CLI's failure line (#4271) prints, instead of the string `dark.text.secondary 4.39<4.5`. score_consumption's
+  // failures share mode, ratio and min, but key by `pair` and carry no `against`. The ratio is
+  // floored for display, never rounded up onto the floor (#3759).
+  let checks = 0, pass = 0; const failures: { role: string; mode: string; ratio: number; against: string; min: number }[] = [];
   for (const m of modes) for (const [k, r] of Object.entries(m.roles)) {
-    const rr = r as { min: number; ratio: number };
-    if (rr.min > 0) { checks++; if (rr.ratio >= rr.min) pass++; else failures.push(`${m.mode}.${k} ${rr.ratio}<${rr.min}`); }
+    const rr = r as { min: number; ratio: number; against: string };
+    if (rr.min > 0) { checks++; if (rr.ratio >= rr.min) pass++; else failures.push({ role: k, mode: m.mode, ratio: floorRatio(rr.ratio), against: rr.against, min: rr.min }); }
   }
   // The VERIFICATION payload is the default, because that is what "generate and verify" is worth over
-  // one call — and because the two omitted sections measure ~1,350,000 characters for a four-mode
+  // one call — and because the two omitted sections measure ~1,000,000 characters for a four-mode
   // brand, which no client can spend on a single tool result.
   const out: Record<string, unknown> = {
     id: theme.id,
@@ -526,8 +702,10 @@ const themePayload = (brand: unknown, include: string[]): ToolResult => {
   if (include.includes('aiMetadata')) out.aiMetadata = buildAiMetadata(theme, tree);
   if (include.includes('notes')) out.notes = theme.notes;
   // Say what was withheld and how to get it — a silently partial result is worse than a big one.
+  // #4200 D (DRAFT): true whether the caller passed `include` or not, with the sizes from the one constant.
   if ((out.omitted as string[]).length) {
-    out.hint = `Withheld by default: ${(out.omitted as string[]).join(', ')}. Re-call with include: [...] to add them (tokens ~850KB, aiMetadata ~500KB for a four-mode brand).`;
+    const size = (k: string): string => (k in PAYLOAD_CHARS ? ` (~${PAYLOAD_CHARS[k as keyof typeof PAYLOAD_CHARS].toLocaleString('en-US')} characters for a four-mode brand)` : '');
+    out.hint = `Not included: ${(out.omitted as string[]).map((k) => k + size(k)).join(', ')}. Add them with include: [...].`;
   }
   return structured(out);
 };
@@ -547,7 +725,7 @@ export interface ExportIo {
 /** Artifact families `export_theme` can write. Distinct from `THEME_SECTIONS` (what `theme_brand`
  *  can INLINE) because the sets genuinely differ: `figma` is a whole directory of collection files
  *  that has never been inlineable at any size, and would be meaningless as a single blob. */
-export const EXPORT_SECTIONS = ['tokens', 'aiMetadata', 'figma', 'componentSpecs'] as const;
+export const EXPORT_SECTIONS = ['tokens', 'aiMetadata', 'figma', 'componentSpecs', 'shadcn', 'tailwind'] as const;
 /** What `export_theme` writes when the caller does not say: the token families, as before #3425. `componentSpecs` (the
  *  brand's component-defs export and its Specs projection, about 3.7 MB) is opt-in, so an existing call writes what
  *  it always wrote. */
@@ -577,7 +755,45 @@ export const unsafeOutDir = (dir: string): string | undefined => {
   return undefined;
 };
 
+/** #4122: one argument check for every tool. Each inputSchema says `additionalProperties: false`, and `include` is an
+ *  enum, but only `export_theme` enforced either, so a typo such as `include: ["tokenz"]` quietly returned less. Read
+ *  from the declared schemas, so a new argument needs no second list here. It refuses undeclared keys, a present
+ *  array argument that is not an array, and a value outside an array argument's `items.enum` (no top-level scalar
+ *  `enum` is declared today, so none is checked). The one named exception is a call with no `brand` key to a tool
+ *  whose schema requires one (#4120): theme_brand and validate_brand read it as a bare BrandInput for one release,
+ *  whose keys are the brand's and the schema validator's to judge, and export_theme and score_consumption name the
+ *  missing `brand` (`missingBrand`) rather than the keys that were sent in its place.
+ *  Wording is DRAFT; the include message is the one `export_theme` already used. */
+let declaredInputs: Map<string, any> | undefined;
+export const argumentErrors = (name: string, args: unknown): string[] => {
+  declaredInputs ??= new Map(toolDefs({}).map((t) => [t.name, t.inputSchema as any]));
+  const schema = declaredInputs.get(name);
+  if (!schema || schema.additionalProperties !== false || !schema.properties || args == null) return [];
+  if (typeof args !== 'object' || Array.isArray(args)) return [`${name} takes an object of arguments`];
+  if (!('brand' in args) && schema.required?.includes('brand')) return [];
+  const props = schema.properties as Record<string, any>;
+  const errors: string[] = [];
+  const unknown = Object.keys(args).filter((k) => !Object.hasOwn(props, k));
+  if (unknown.length) errors.push(`unknown argument(s): ${unknown.join(', ')}. Valid: ${Object.keys(props).join(', ')}`);
+  for (const [k, p] of Object.entries(props)) {
+    const allowed = p?.items?.enum, given = (args as Record<string, unknown>)[k];
+    // A present argument declared `type: 'array'` that is not one is refused too (#4277 review): `include: "tokens"`
+    // or `include: null` otherwise fell through to the default sections with no error, the #4122 shape, and reached
+    // export_theme's `want.filter` as a throw (#4281).
+    if (p?.type === 'array' && Object.hasOwn(args, k) && !Array.isArray(given)) {
+      errors.push(`${k} must be an array (got ${given === null ? 'null' : typeof given})`);
+      continue;
+    }
+    if (!Array.isArray(allowed) || !Array.isArray(given)) continue;
+    const bad = given.filter((v) => !allowed.includes(v));
+    if (bad.length) errors.push(`unknown ${k} section(s): ${bad.join(', ')}. Valid: ${allowed.join(', ')}`);
+  }
+  return errors;
+};
+
 export const callTool = (name: string, args: any, brandSchema?: unknown, io?: ExportIo): ToolResult => {
+  const argErrors = argumentErrors(name, args);
+  if (argErrors.length) return text({ error: argErrors.join(' '), errors: argErrors }, true);
   if (name === 'export_theme') {
     if (!io) return text({ error: 'export_theme is unavailable: this host did not grant filesystem access.' }, true);
     const { brand, outDir, include } = (args ?? {}) as { brand?: unknown; outDir?: string; include?: string[] };
@@ -586,7 +802,7 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
     const noBrand = missingBrand('export_theme', brand);
     if (noBrand) return noBrand;
     const errors = validateBrandInput(brand);
-    if (errors.length) return text({ error: 'BrandInput failed schema validation', errors }, true);
+    if (errors.length) return text({ error: FAILS_SCHEMA, errors }, true);
     const want = include?.length ? include : [...DEFAULT_EXPORT_SECTIONS];
     const unknown = want.filter((s) => !EXPORT_SECTIONS.includes(s as never));
     if (unknown.length) return text({ error: `unknown include section(s): ${unknown.join(', ')}. Valid: ${EXPORT_SECTIONS.join(', ')}` }, true);
@@ -628,6 +844,18 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
       }
     }
 
+    // The web themes (the lane after #2997): `web-themes.ts`, the projector regen writes `out/shadcn/**` and
+    // `out/tailwind/**` with, over the brand's consumer set, at the same relative paths.
+    if (want.includes('shadcn') || want.includes('tailwind')) {
+      const h = webThemeHandoff(tree, id);
+      for (const f of [...(want.includes('shadcn') ? shadcnFiles(h) : []), ...(want.includes('tailwind') ? tailwindFiles(h) : [])]) files.push({ path: f.path, content: f.text });
+    }
+
+    // #4214 (owner decision, 2026-11-20): a brand id that names no file Windows can write is refused here, where the
+    // files are written, with the reason; the input schema stays as it is. Checked over every name before the first write.
+    const notWindows = files.map((f) => f.path.split('/').map(windowsInvalidName).find(Boolean)).find(Boolean);
+    if (notWindows) return text({ error: `${notWindows}; nothing was written.` }, true);
+
     const written: { path: string; bytes: number }[] = [];
     try {
       const dirs = new Set(files.map((f) => (f.path.includes('/') ? `${outDir}/${f.path.slice(0, f.path.lastIndexOf('/'))}` : outDir!)));
@@ -640,7 +868,7 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
     } catch (e) { return text({ error: `write failed: ${(e as Error).message}`, written }, true); }
 
     // The MANIFEST is the result — never the content. That is the entire point of this tool: the
-    // payload it produces is over 1,350,000 characters for a four-mode brand, and returning any of it here
+    // payload it produces is over 1,000,000 characters for a four-mode brand, and returning any of it here
     // would reintroduce the cost the export exists to avoid.
     return structured({
       id: theme.id,
@@ -652,6 +880,31 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
     });
   }
 
+  if (name === 'list_components') {
+    const components = listComponents(componentDefs);
+    return structured({ total: components.length, components });
+  }
+  if (name === 'get_component') {
+    const id = args?.id;
+    if (typeof id !== 'string' || !id) return text({ error: 'get_component requires `id`: a component id from list_components', errors: [`id is ${shapeOf(id)}; it takes a component id, such as "button"`] }, true);
+    // the id first: an unknown one is refused before any brand is built
+    if (!componentDefs.some((d) => d.id === id)) {
+      const words = id.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const nearest = componentDefs.map((d) => d.id).filter((c) => words.some((w) => c.includes(w))).slice(0, 5);
+      return text({ error: `get_component: no component has the id "${id}"`, errors: [`"${id}" is not a component id; list_components returns every id${nearest.length ? `. Nearest: ${nearest.join(', ')}` : ''}`], ...(nearest.length ? { nearest } : {}) }, true);
+    }
+    let brand: { input: BrandInput; theme: Theme; tree: unknown } | undefined;
+    if (args && typeof args === 'object' && 'brand' in args) {
+      const noBrand = missingBrand('get_component', args.brand);
+      if (noBrand) return noBrand;
+      const errors = validateBrandInput(args.brand);
+      if (errors.length) return text({ error: FAILS_SCHEMA, errors }, true);
+      const b = buildBrand(args.brand);
+      if (refused(b)) return b;
+      brand = { input: args.brand as BrandInput, theme: b.theme, tree: b.built.tree };
+    }
+    return structured(getComponent(componentDefs, id, brand)!);
+  }
   if (name === 'list_levers') {
     // `describe` returns the prose `tools/list` summarizes (#1760): the named fields exactly as the
     // schema file has them, so every field stays describable in full however the inline copy is cut.
@@ -670,6 +923,15 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
       return structured({ described: { properties, ...(Object.keys(defs).length ? { $defs: defs } : {}) } });
     }
     const levers = buildLeverManifest();
+    if (args?.summary !== undefined && args.summary !== false) {
+      if (args.summary !== true) return text({ error: 'list_levers `summary` must be true or false' }, true);
+      const nonLever = brandSchema ? nonLeverFields(brandSchema, manifestRootKeys(levers)) : [];
+      return structured({
+        summary: leverSummary(levers.levers),
+        nonLeverFields: nonLever.map(({ key, required }) => ({ key, required })),
+        required: ((brandSchema as { required?: string[] } | undefined)?.required) ?? [],
+      });
+    }
     // The manifest ALONE was the bug: it is the UI catalogue, not the input contract. Shipping the
     // non-lever fields beside it makes this tool's promise ("what theme_brand accepts") true.
     const nonLever = brandSchema ? nonLeverFields(brandSchema, manifestRootKeys(levers)) : [];
@@ -702,7 +964,7 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
     const noBrand = missingBrand('score_consumption', args?.brand);
     if (noBrand) return noBrand;
     const errors = validateBrandInput(args?.brand);
-    if (errors.length) return text({ error: 'BrandInput failed schema validation', errors }, true);
+    if (errors.length) return text({ error: FAILS_SCHEMA, errors }, true);
     if (!Array.isArray(args?.refs)) return text({ error: 'score_consumption requires `refs`: an array of token refs' }, true);
     const bad = scoreInputErrors(args.refs, args.pairs);
     if (bad.length) return text({ error: 'score_consumption input failed validation', errors: bad }, true);
@@ -718,19 +980,36 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
 
   if (name === 'theme_from_brief') {
     if (typeof args?.brief !== 'string') return text({ error: 'theme_from_brief requires `brief`: a design.md string' }, true);
-    let parsed;
     // A malformed brief is a TOOL error, not an RPC one — the model wrote it and can fix it, which is
     // exactly the case the spec says to report with isError so the client can feed it back.
-    try { parsed = parseDesignMd(args.brief); }
+    // #4118: the SAME dialect detection `cli.ts` runs. A standard design.md (a flat `colors:` hex map, the shape
+    // an extraction exports) goes through the standard converter; anything else is the engine-native dialect.
+    // Before this the tool ran only `parseDesignMd`, so every standard brief was refused as a malformed BrandInput.
+    let input: unknown;
+    let report: Record<string, unknown>;
+    try {
+      const std = parseStandardDesignMd(args.brief);
+      if (isStandardDesignMd(std)) {
+        const { input: converted, classification, xApplied, xWarnings } = standardToBrandInput(std);
+        input = converted;
+        report = { dialect: 'standard', classification: classification.log, xApplied, xWarnings };
+      } else {
+        // No report keys here: an engine-native brief returns exactly theme_brand's sections plus
+        // `derivedBrandInput` (#1868 holds the two key sets equal).
+        input = parseDesignMd(args.brief).input;
+        report = {};
+      }
+    }
     catch (e) { return text({ error: `could not parse the design.md brief: ${(e as Error).message}` }, true); }
     // Same default as theme_brand (#1868): the description promises the same payload, and an empty
     // default silently dropped the decisions log from every call that named no sections.
-    const result = themePayload(parsed.input, Array.isArray(args.include) ? args.include : [...DEFAULT_THEME_SECTIONS]);
+    const result = themePayload(input, Array.isArray(args.include) ? args.include : [...DEFAULT_THEME_SECTIONS]);
     if (result.isError) return result;
     // Report what the brief RESOLVED to. A brief is lossy by nature, and an agent cannot correct a
     // misreading it never sees — this is the field that makes the round trip debuggable.
     const payload = JSON.parse(result.content[0].text);
-    payload.derivedBrandInput = parsed.input;
+    payload.derivedBrandInput = input;
+    Object.assign(payload, report);
     return structured(payload);
   }
 
@@ -739,7 +1018,7 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
     return themePayload(brand, include);
   }
 
-  return text({ error: `unknown tool: ${name}` }, true);
+  return text({ error: `Unknown tool: ${name}` }, true);   // #4200 C: one casing, the protocol error's
 };
 
 /** Handle one JSON-RPC message. Returns the response, or `null` for a notification
@@ -804,7 +1083,7 @@ export const handleRpc = (req: RpcRequest, brandSchema: unknown, io?: ExportIo):
 // --------------------------------------------------------------------------- I/O shell
 // stdio transport: newline-delimited JSON-RPC (MCP messages carry no embedded newlines).
 // Read stdin, dispatch each line, write single-line responses to stdout; stderr is the log.
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const here = dirname(fileURLToPath(import.meta.url));
   const brandSchema = JSON.parse(readFileSync(resolve(here, './schema/theme-schema.json'), 'utf8'));
@@ -826,10 +1105,12 @@ if (isMain) {
       if (!line) continue;
       let req: RpcRequest;
       try { req = JSON.parse(line); }
-      catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); continue; }
+      // #4200 A (DRAFT): the next action, not only the code.
+      catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error: a line on stdin is not JSON; send one JSON-RPC object per line' } }); continue; }
       let res: RpcResponse | null;
       try { res = handleRpc(req, brandSchema, fsIo); }
-      catch (e) { res = { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32603, message: `internal error: ${(e as Error).message}` } }; }
+      // #4200 B (DRAFT): the backstop says the failure is the server's, so the caller does not rewrite a valid input.
+      catch (e) { res = { jsonrpc: '2.0', id: req.id ?? null, error: { code: -32603, message: `${req.method ?? 'the request'} failed inside the server: ${(e as Error).message}. The input may be valid; report it with the request that caused it.` } }; }
       if (res) send(res);
     }
   });

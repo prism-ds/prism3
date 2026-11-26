@@ -18,14 +18,17 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { parseDesignMd } from './design-md';
+import { EXAMPLE_DESCRIPTIONS, EXAMPLE_IDS } from './example-registry';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const EX = resolve(here, './examples');
 const OUT = resolve(here, './schema/example-brands.json');
 
-/** The example ids surfaced to the hosts, in menu order. `prism3` is first because it is the boot
- *  default — the canonical default theme (#1296); aurora and harbor stay as the two contrasting briefs. */
-export const EXAMPLE_IDS = ['prism3', 'aurora', 'harbor'] as const;
+/** The example ids surfaced to the hosts, in menu order, from the registry (`example-registry.ts`, #3977), which
+ *  holds each beside the line the hosts show under it. `prism3` is first because it is the boot default — the
+ *  canonical default theme (#1296); aurora and harbor stay as the two contrasting briefs. */
+export { EXAMPLE_DESCRIPTIONS, EXAMPLE_IDS };
 
 export const exampleBrands = (): Record<string, unknown> => {
   const brands: Record<string, unknown> = {};
@@ -37,7 +40,7 @@ export const exampleBrands = (): Record<string, unknown> => {
 
 export const exampleBrandsJson = (): string => JSON.stringify(exampleBrands(), null, 2) + '\n';
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   writeFileSync(OUT, exampleBrandsJson());
   console.log(`[written] ${OUT}`);

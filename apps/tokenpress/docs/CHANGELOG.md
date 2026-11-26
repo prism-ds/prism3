@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-11-25
+
+A patch release: library bindings inside composites say where they came from,
+the CSS format writes motion values, and two more skips reach the summary.
+
+### Fixed
+- **A composite names a library binding.** A text style, shadow or gradient
+  stop bound to a variable from another library exported the value with no
+  record of where it came from, and a font weight could come out as an alias
+  to an unrelated local variable that held the same weight. Each such
+  sub-property now exports its resolved value, with an `externalAlias` marker
+  per sub-property in `$extensions.figma` (the same fields a whole-token
+  library alias carries, keyed by the sub-property's path, such as
+  `fontWeight` or `0.color`).
+- **The CSS format writes easing and durations.** An easing curve read
+  `[0.2,0,0,1]` and a duration `{"value":100,"unit":"ms"}`. They are now
+  `cubic-bezier(0.2, 0, 0, 1)` and `100ms` (a duration in seconds is
+  converted). A value with no CSS form, such as a gradient or a spring, is
+  left out of `tokens.css` instead of written as JSON, and the footer names it.
+- **The export summary names skipped solid paint styles.** A paint style
+  whose visible paints are solid colors is not exported, and the export used
+  to leave it out without saying so. The footer now names it, beside the
+  other skips.
+
+## [3.0.2] - 2026-11-24
+
+A patch release: two exports that wrote a wrong or unusable color, and a skip
+the panel did not report.
+
+### Fixed
+- **The CSS format writes HSL colors.** With Color Space set to HSL, every
+  color in `tokens.css` read `[object Object]`, and a shadow with an HSL color
+  lost its color. Both are now written in HSL notation: `hsl(0, 100%, 50%)`,
+  or `hsla(0, 100%, 50%, 0.4)` below full opacity. sRGB output is unchanged.
+- **A wash over a wash keeps both opacities.** A color variable at an opacity
+  whose color is another variable at an opacity exported the bare reference,
+  and its own opacity was lost (in the dot-notation format, it read `null`).
+  Every format now exports the color they resolve to, with both opacities
+  multiplied into the alpha: 40% over 50% is an alpha of 0.2. Each resolves
+  in its own collection and mode, as Figma resolves it.
+- **The export summary names skipped layered-gradient styles.** A paint style
+  that stacks a gradient with other paints has no single-gradient form and is
+  left out. The panel's footer now names it, beside any skipped blur-only
+  effect styles, instead of only the developer console.
+
+## [3.0.1] - 2026-11-23
+
+A patch release. Its headline fix is the first entry under Fixed: a color
+alias with an opacity no longer exports as `null` or `rgb(NaN, NaN, NaN)`. It also carries
+every change merged since 3.0.0, listed below.
+
+### Changed
+- **The panel shows the plugin's real version.** The version beside the name
+  read `v2.2.2` while exports said `3.0.0`. Both now read the same number,
+  written in one place, so the panel and an export's
+  `$extensions.generator.version` always agree.
+
 ### Security
 - **No `currentuser` permission.** The manifest no longer asks Figma for the
   signed-in user's name, id and photo. The plugin read them only to check that
@@ -14,6 +71,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used them. The check is gone with the permission.
 
 ### Fixed
+- **A color alias with an opacity keeps both in every export.** The
+  dot-notation format wrote a color variable that aliases another at an
+  opacity as `rgb(NaN, NaN, NaN)`. It now writes the reference, the opacity
+  and the color they resolve to: `"{color.brand} @ 40%" -> "rgba(255, 128, 0, 0.40)"`.
+  With Figma extensions on, a typed-in opacity is kept in
+  `$extensions.figma.aliasOf` beside the color's alias (`"opacity": 40`), as an
+  opacity alias already was, so the reference can be rebuilt either way.
+- **A tinted wash exports as a color.** A color variable whose value is an
+  alias at an opacity (a tinted wash: the fill at 30%) now exports as the color
+  the alias resolves to in that mode, with the opacity as its alpha:
+  `{ "colorSpace": "srgb", "components": [0.24, 0.41, 0.99], "alpha": 0.3 }`.
+  With Figma extensions on, both aliases are kept in
+  `$extensions.figma.aliasOf` (`{ "color": "{…}", "opacity": "{…}" }`), so a
+  tool can rebuild the reference. Before, the value exported with `null`
+  components, which is not valid DTCG. An alias into another collection
+  resolves through that collection's default mode, as Figma resolves it. A
+  wash over a team-library variable resolves the same way, and a wash over a
+  variable that no longer exists is reported as a broken alias.
+- **An alias to a team-library variable exports as the library's value.** A
+  local variable that aliases a variable from an enabled team library now
+  exports as the value that variable resolves to, so the export builds on its
+  own: `button/fill` aliasing the library's `brand/primary` exports as
+  `brand/primary`'s color. The value is read in the library collection's
+  default mode, as Figma resolves an alias into another collection, and a
+  library variable that is itself an alias is followed to its value. The
+  token's `$extensions.figma.externalAlias` keeps the reference
+  (`"reference": "{brand.primary}"`) with the target's `variableId`,
+  `variableKey` and the name of its collection, so a tool that exports the
+  library too can rebuild it. The marker is written whether or not Figma
+  metadata is on. Before, the export wrote the raw `{VariableID:…}`, validation
+  reported it as a broken alias, which blocks the export, and the raw Figma
+  format named the target `Unknown`. Targets are looked up with
+  `figma.variables.getVariableByIdAsync`, which needs no new permission. An id
+  it can't resolve is still reported as broken, and a library chain that
+  doesn't reach a value keeps the reference. With a namespace set, the kept
+  reference takes this export's namespace.
 - **Gradients are exported.** Gradient paint styles now export to
   `gradients.json` (`shared/gradients.json` in a multi-mode export) as DTCG
   `gradient` tokens: an array of `{ color, position }` stops, with a stop bound

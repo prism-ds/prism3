@@ -113,7 +113,7 @@
  *      included, and one emptied by hand never removed; an inverse family with no default past Semantic colors' last
  *      column in Inverse colors; effect styles below the groups; a header set with no Size=Large.
  *  38. A GROUP YOU MADE (Q412 A, superseded 2026-10-19): its inverse guides move out to Inverse colors, its defaults into
- *      one grid, once; the cleanup offer for a table the generator no longer draws.
+ *      one grid, once; the cleanup offer for a table Prism3 no longer draws.
  *  39. THE MEASURED FILE (owner decision, 2026-10-19): a fixed, clipping frame you made with the inverse guides in a second
  *      row, running over the frames below. Inverse colors is its own titled group 320 below, column-aligned (read off the
  *      shim's layout model); the fixed frame grows to fit; the frames below move clear, order and gap kept; a rerun is
@@ -331,9 +331,9 @@ import { dirname, join } from 'node:path';
 import { ensureStyleGuideCells } from './src/style-guide-cells';
 import type { CellsApi } from './src/style-guide-cells';
 import { STYLE_GUIDE_GROUPS, styleGuideGroupOf } from '@prism3/engine/figma';
-import { planStyleGuide, runStyleGuide, removeRetiredTables, styleGuideSummary, contrastText, humanizeName, varKind, sizeByPadding, catalogFor, isSetUp, tableMovesDue, relocateTables } from './src/style-guide';
+import { planStyleGuide, runStyleGuide, removeRetiredTables, fingerprintOf, styleGuideSummary, contrastText, humanizeName, varKind, sizeByPadding, catalogFor, isSetUp, tableMovesDue, relocateTables } from './src/style-guide';
 import { createRunGuard, busyMessage } from './src/run-guard';
-import type { StyleGuideApi, SgCatalog, SgTable, TableOutcome, StyleGuideResult, StyleGuideRun, StyleGuideOptions, StyleGuideProgress } from './src/style-guide';
+import type { StyleGuideApi, SgNode, SgCatalog, SgCollection, SgVariable, SgTable, TableOutcome, StyleGuideResult, StyleGuideRun, StyleGuideOptions, StyleGuideProgress } from './src/style-guide';
 import { parseDesignMd, brandTheme, resolveAllModes } from '@prism3/engine';
 
 let failures = 0;
@@ -409,8 +409,19 @@ const padOf = (n: N, side: 'paddingLeft' | 'paddingRight' | 'paddingTop' | 'padd
   return v ? Number(valueAt(active!, n, v)) : Number(n[side] ?? 0);
 };
 const padX = (n: N): number => padOf(n, 'paddingLeft') + padOf(n, 'paddingRight');
+/**
+ * THE HOST RE-MEASURES A TEXT BY ITS FONT (#4482, review B1 of #4568). Off by default, so every other section keeps 7px a
+ * character and 20px a line; section 44 switches it on. A hugging text is as wide as its characters times its family's
+ * `width` factor (1 for a family not listed), and a text whose line height is AUTO (its style's, when it has one) is its
+ * lines times its font size times its family's `autoLine` factor (1.2 when not listed). A family change then moves a
+ * hugging text's width and an AUTO text's height, and every size that follows from them, as it does in Figma. Its own
+ * figures, not the plugin's.
+ */
+let familyMetrics: { width: Record<string, number>; autoLine: Record<string, number> } | null = null;
+const familyOf = (t: N): string => String((t.fontName as { family?: unknown } | undefined)?.family ?? '');
 /** A text node's width set on one line. */
-const naturalOf = (t: N): number => Math.max(0, ...String(t.characters ?? '').split('\n').map((l) => l.length)) * CHAR_W;
+const naturalOf = (t: N): number => Math.max(0, ...String(t.characters ?? '').split('\n').map((l) => l.length)) * CHAR_W
+  * (familyMetrics?.width[familyOf(t)] ?? 1);
 /** The lines a text sets in: one per "\n" while it hugs; a HEIGHT text breaks at spaces to its box, and a word
  *  wider than the box breaks inside it, as the host does ("Default" in 30px is two lines). 20px a line. */
 const linesOf = (t: N): number => String(t.characters ?? '').split('\n').reduce((n, para) => {
@@ -426,6 +437,14 @@ const linesOf = (t: N): number => String(t.characters ?? '').split('\n').reduce(
   return n + lines;
 }, 0);
 const LINE_H = 20;
+/** A text's line: 20px, or, with `familyMetrics` on and an AUTO line height, its font size by its family's factor. */
+const lineOf = (t: N): number => {
+  if (!familyMetrics) return LINE_H;
+  const st = t.textStyleId ? active?.styles.find((x) => x.id === t.textStyleId) : undefined;
+  const lh = (st ? st.lineHeight : (t as { lineHeight?: unknown }).lineHeight) as { unit?: string } | undefined;
+  if (lh?.unit !== 'AUTO') return LINE_H;
+  return Math.round(Number(st?.fontSize ?? (t as { fontSize?: unknown }).fontSize ?? 16) * (familyMetrics.autoLine[familyOf(t)] ?? 1.2));
+};
 const padY = (n: N): number => padOf(n, 'paddingTop') + padOf(n, 'paddingBottom');
 /** Out of an auto-layout frame's flow: an ABSOLUTE child takes no part in what the frame hugs. */
 const inFlow = (k: N): boolean => k.layoutPositioning !== 'ABSOLUTE';
@@ -507,8 +526,9 @@ class N {
   strokes: unknown = [];
   characters?: string;
   fontName?: unknown;
-  /** A mixed-font text node's segments, as `getStyledTextSegments(['fontName'])` returns them. */
-  segments?: { fontName: unknown }[];
+  /** A mixed-font text node's segments, as `getStyledTextSegments(['fontName'])` returns them. A segment may list the
+   *  overrides applied over its text style (`textStyleOverrides`, #4482): a semantic bold or italic keeps the style. */
+  segments?: { fontName: unknown; textStyleOverrides?: { type: string }[]; start?: number; end?: number }[];
   visible = true;
   mainComponent: N | null = null;
   componentProperties?: Record<string, { type: string; value: unknown }>;
@@ -559,7 +579,7 @@ class N {
   // auto-layout frame that hugs vertically is its padding plus its children (summed down a column, the tallest
   // across a row).
   get height(): number {
-    if (this.type === 'TEXT') return linesOf(this) * LINE_H;
+    if (this.type === 'TEXT') return linesOf(this) * lineOf(this);
     const lsv = this.layoutSizingVertical as string | undefined;
     const p = this.parent;
     if (lsv === 'FILL' && p?.layoutMode === 'GRID' && this.gridRow !== undefined) return Math.max(trackH(p, this.gridRow), Number(this.minHeight ?? 0));
@@ -782,7 +802,7 @@ const contentW = (n: N): number => {
   return padX(n) + inner;
 };
 const contentH = (n: N): number => {
-  if (n.type === 'TEXT') return linesOf(n) * LINE_H;
+  if (n.type === 'TEXT') return linesOf(n) * lineOf(n);
   if (n.layoutMode === 'GRID') return hugGridH(n);
   if (!isAuto(n)) return n.layoutSizingVertical === 'FILL' ? Number(n.minHeight ?? 0) : n.h;
   if (n.layoutMode === 'HORIZONTAL' && n.layoutWrap === 'WRAP') {
@@ -1003,7 +1023,10 @@ const makeShim = (pages: N[], cols: ShimCol[], vars: ShimVar[], styles: ShimStyl
 
 /** The prism3 variables, as a theme write leaves them: `core` (Default) and `color` (four modes). */
 const prism3Variables = (): { cols: ShimCol[]; vars: ShimVar[] } => {
-  const core = readJson('core.palette.json');
+  // The four appearance modes' file: Brand B (#1729), the default theme's custom mode, is left out with its two ramps,
+  // so every count below is the four-mode file's. The style guide draws a custom mode's ramps like any other palette.
+  const core0 = readJson('core.palette.json');
+  const core = { ...core0, variables: core0.variables.filter((v) => !/\/core\/palette\/brand-b-/.test(v.name)) };
   const modes = ['light', 'dark', 'hc-light', 'hc-dark'];
   const byMode = modes.map((m) => readJson(`color.${m}.json`));
   const cols: ShimCol[] = [
@@ -1029,7 +1052,12 @@ const prism3Variables = (): { cols: ShimCol[]; vars: ShimVar[] } => {
   return { cols, vars };
 };
 
-const input = parseDesignMd(readFileSync(join(here, '../../packages/engine/examples/prism3.design.md'), 'utf8')).input;
+const input0 = parseDesignMd(readFileSync(join(here, '../../packages/engine/examples/prism3.design.md'), 'utf8')).input;
+// The contract for the same four-mode file: prism3 without Brand B (#1729), its custom mode, palette swap and two ramps.
+const { customModes: _bbModes, modePalettes: _bbSwap, modeLevers: _bbLevers, ...input1 } = input0;
+// Brand B's own surfaces (its snapshot of light's, #1946) go with it: no mode reads them once it is gone.
+const { 'brand-b': _bbSurfaces, ...surfaces1 } = (input1.surfaces ?? {}) as Record<string, unknown>;
+const input = { ...input1, ...(input1.surfaces ? { surfaces: surfaces1 as typeof input1.surfaces } : {}), brandColors: (input1.brandColors ?? []).filter((c) => !c.name.startsWith('brand-b-')) };
 const contract = resolveAllModes(brandTheme(input));
 
 /** The owner-cell Text table's width (section 2): its fourteen HUG tracks, 2,940px by the shim's own metric, with no
@@ -1098,7 +1126,8 @@ const phase2Variables = (): { cols: ShimCol[]; vars: ShimVar[]; styles: ShimStyl
   ];
   // Every file's variables, per collection and mode, ids assigned before any alias is read.
   const sources: [string, string[], Em[][]][] = [
-    ['core', ['core:0'], [[...em('core.dimension.json'), ...em('core.font.json')]]],
+    // `core.font.Default.json`: prism3's per-mode font (Brand B, #1729) splits `core.font.json` by mode; Default is the base.
+    ['core', ['core:0'], [[...em('core.dimension.json'), ...em('core.font.Default.json')]]],
     ['space', ['space:0'], [em('space.json')]],
     ['radius', ['radius:0'], [em('radius.json')]],
     ['size', ['size:0'], [em('size.json')]],
@@ -1384,8 +1413,15 @@ const main = async (): Promise<void> => {
     ok(hover.cells[0].contrast?.ink === 'text/primary' && hover.cells[0].contrast?.ground === 'background/primary' && contrastText(hover.cells[0].contrast).startsWith('15.42:1 — clears the 4.5:1 floor'), '3: text/primary over interactive.primary.overlay.hover on background.primary, light: 15.42:1');
     const noBrand = planStyleGuide(catalog, null);
     ok(noBrand.tables.every((t) => t.rows.every((r) => r.cells.every((c) => c.contrast === null))) && noBrand.notes.some((n) => n.startsWith('No saved brand')), '3: no saved brand — every contrast "—", said once');
-    ok(planStyleGuide(catalog, contract, { types: ['motion'] }).tables.length === 0 && planStyleGuide(catalog, contract, { types: ['motion'] }).notes.includes('motion: not in this phase — this phase draws color, dimension, borderWidth, opacity, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, typography, shadow, gradient, grid'), '3: a later-phase type is named, not drawn');
+    ok(planStyleGuide(catalog, contract, { types: ['motion'] }).tables.length === 0 && planStyleGuide(catalog, contract, { types: ['motion'] }).notes.includes('motion: not in this phase — this phase draws color, dimension, borderWidth, opacity, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, typography, shadow, gradient, grid, animation'), '3: a later-phase type is named, not drawn');
     ok(planStyleGuide(catalog, contract, { valueFormat: 'rgba' }).tables.find((t) => t.title === 'Scrim')!.rows[0].cells[0].value === 'rgba(0, 0, 0, 0.4)', '3: rgba format');
+    // Brand B's two ramps (#1729), left out of the four-mode file above, title as the Studio names the mode: "Brand B
+    // primary", never "Brand b primary" (owner decision 2026-11-19 on #4269). The titles are typed here.
+    const bbCol: SgCollection = { id: 'VariableCollectionId:bb', name: 'core', modes: [{ modeId: 'bb:0', name: 'Default' }], defaultModeId: 'bb:0' };
+    const bbVars: SgVariable[] = readJson('core.palette.json').variables.filter((v) => /\/core\/palette\/(brand-b-(primary|accent)|primary)\//.test(v.name))
+      .map((v, i) => ({ id: `VariableID:bb:${i}`, name: v.name, variableCollectionId: bbCol.id, resolvedType: v.resolvedType, description: v.description, valuesByMode: { 'bb:0': v.value } }));
+    const bbTitles = planStyleGuide({ collections: [bbCol], variables: bbVars }, null).tables.filter((t) => t.kind === 'primitive').map((t) => t.title);
+    ok(JSON.stringify(bbTitles) === JSON.stringify(['Primary', 'Brand B primary', 'Brand B accent']), `3: #1729 Brand B's ramps title "Brand B primary" and "Brand B accent" (${JSON.stringify(bbTitles)})`);
   }
 
   console.log('4. numeric order');
@@ -1611,7 +1647,7 @@ const main = async (): Promise<void> => {
     ok(!tableFrame(f.sem, 'Scrim') && JSON.stringify(again.deleted) === JSON.stringify(['Style guide — Scrim']) && again.kept.length === 0, '6: an unedited stale table is deleted');
     const s = styleGuideSummary(again);
     ok(s.summary.includes('Text: 1 added, 1 removed, 1 changed'), '6: the summary names the changes');
-    ok(s.summary.includes('1 table the generator no longer draws was deleted, unedited: Style guide — Scrim'), '6: the summary names the deleted table');
+    ok(s.summary.includes('1 table Prism3 no longer draws was deleted, unedited: Style guide — Scrim'), '6: the summary names the deleted table');
   }
 
   console.log('7. skips');
@@ -1745,7 +1781,7 @@ const main = async (): Promise<void> => {
     ok(tablesOn(f9.sem).length === 39 && tablesOn(f9.prim).length === 21 && again.tables.every((t) => t.status === 'updated'), '9: rerun: every table updated in place, no duplicates');
     ok(JSON.stringify(again.replaced) === JSON.stringify(['Style guide — Nbds']) && again.stale.length === 0, '9: the per-root table is reported as replaced, not stale');
     ok(old.parent === f9.sem && JSON.stringify(again.kept) === JSON.stringify([{ name: 'Style guide — Nbds', reason: 'unrecorded' }]), '9: the per-root table has no fingerprint, so it is left in place');
-    ok(styleGuideSummary(again).summary.includes('1 table the generator no longer draws was left in place — drawn before edits were tracked, so the generator never deletes it; delete it by hand if no longer needed: Style guide — Nbds'), '9: the summary names the kept table and why it is kept');
+    ok(styleGuideSummary(again).summary.includes('1 table Prism3 no longer draws was left in place — drawn before edits were tracked, so Prism3 never deletes it; delete it by hand if no longer needed: Style guide — Nbds'), '9: the summary names the kept table and why it is kept');
     ok(prim.name === 'Style guide — Primary — nbds' && pTitle.characters === 'Primary — nbds', `9: an earlier run's title is rewritten to name its root (${prim.name} / ${pTitle.characters})`);
     ok(nTitle.characters === 'Grays' && neu.name === 'Style guide — Neutral — nbds', '9: a title the designer typed is kept');
 
@@ -1923,7 +1959,7 @@ const main = async (): Promise<void> => {
     const light = tableFrame(a.sh.prim, 'Light')!;
     ok(cellOf(dark) === a.at.cell && cellOf(light) === '0,1' && dark.parent === light.parent && dark.parent?.gridColumnCount === 2,
       `11: the group closes over the deleted table: Dark takes Legacy's cell ${a.at.cell}, Light the next, two columns (${cellOf(dark)}, ${cellOf(light)}; ${dark.parent?.gridColumnCount} columns)`);
-    ok(summaryOf(a.r).includes('1 table the generator no longer draws was deleted, unedited: Style guide — Legacy'), '11: the summary names the deleted table');
+    ok(summaryOf(a.r).includes('1 table Prism3 no longer draws was deleted, unedited: Style guide — Legacy'), '11: the summary names the deleted table');
     ok(styleGuideSummary(a.r).headline === '✓ 2 tables, 1 deleted', `11: the headline counts the deletion: "✓ 2 tables, 1 deleted" (got "${styleGuideSummary(a.r).headline}")`);
 
     // A VARIABLE'S VALUE MOVING is not an edit. The host repaints a bound paint's color, and carries a color
@@ -1969,14 +2005,14 @@ const main = async (): Promise<void> => {
       ok(keptAs(r, 'edited') && t.parent !== null, `11: a replaced table with ${what} by hand is kept, reported as edited`);
     }
     const b = await afterEdit((t) => { valueText(t).characters = '#7F7F7F'; });
-    ok(summaryOf(b.r).includes('1 table the generator no longer draws was left in place — edited: Style guide — Legacy'), '11: the summary names the edited table and its reason');
+    ok(summaryOf(b.r).includes('1 table Prism3 no longer draws was left in place — edited: Style guide — Legacy'), '11: the summary names the edited table and its reason');
 
     // MOVED (#2801: a guide sits in its group, which places it): dragged out of its group onto the page, into a designer's
     // frame, onto another page at the same x and y. Moved to another cell of its own group, it is still where the
     // generator keeps it, and is deleted.
     const across = await afterEdit((t, sh) => { const [x, y] = [t.x, t.y]; sh.prim.appendChild(t); t.x = x + 400; t.y = y; });
     ok(keptAs(across.r, 'moved'), '11: a guide dragged out of its group onto the page is kept, reported as moved');
-    ok(summaryOf(across.r).includes('1 table the generator no longer draws was left in place — moved: Style guide — Legacy'), '11: the summary says it was moved, not edited');
+    ok(summaryOf(across.r).includes('1 table Prism3 no longer draws was left in place — moved: Style guide — Legacy'), '11: the summary says it was moved, not edited');
     const down = await afterEdit((t) => { const g = t.parent!; g.gridColumnCount = 2; g.gridColumnSizes = [{ type: 'HUG' }, { type: 'HUG' }]; t.setGridChildPosition(0, 1); });
     ok(JSON.stringify(down.r.deleted) === JSON.stringify([LEGACY]) && down.t.removed, `11: a guide moved to another cell of its own group is still the generator's: deleted (${JSON.stringify(down.r.kept)})`);
     const nested = await afterEdit((t, sh) => {
@@ -1996,7 +2032,7 @@ const main = async (): Promise<void> => {
     dropLegacy(d);
     const rd = await draw(d.api, contract, WITH_CORE);
     ok(!legD.removed && JSON.stringify(rd.stale) === JSON.stringify([LEGACY]) && keptAs(rd, 'unrecorded'), '11: a table with no fingerprint is kept');
-    ok(summaryOf(rd).includes('1 table the generator no longer draws was left in place — drawn before edits were tracked, so the generator never deletes it; delete it by hand if no longer needed: Style guide — Legacy'), '11: the summary says a table from before the fingerprint is never deleted, and to delete it by hand');
+    ok(summaryOf(rd).includes('1 table Prism3 no longer draws was left in place — drawn before edits were tracked, so Prism3 never deletes it; delete it by hand if no longer needed: Style guide — Legacy'), '11: the summary says a table from before the fingerprint is never deleted, and to delete it by hand');
 
     // STALE and unedited, while the run still draws core: deleted.
     const st = await fullFile();
@@ -2031,7 +2067,7 @@ const main = async (): Promise<void> => {
     const re = await draw(e.api, contract, WITH_CORE);
     ok(!foreign.removed && foreign.parent === e.prim && foreign.x === 3000 && foreign.y === 0 && Object.keys(foreign.pluginData).length === 0, '11: a frame the generator did not make, named like its table, is never touched');
     ok(legE.removed && copy.parent === e.prim && JSON.stringify(re.deleted) === JSON.stringify([LEGACY]) && JSON.stringify(re.kept) === JSON.stringify([{ name: LEGACY, reason: 'copied' }]), '11: a duplicate of a generator table is never deleted; the table it copies is');
-    ok(summaryOf(re).includes('1 table the generator no longer draws was left in place — a copy: Style guide — Legacy'), '11: the summary says it is a copy');
+    ok(summaryOf(re).includes('1 table Prism3 no longer draws was left in place — a copy: Style guide — Legacy'), '11: the summary says it is a copy');
 
     // An unedited table the host will not remove is named as such, not as edited.
     const nr = await afterEdit((t) => { (t as unknown as { remove: undefined }).remove = undefined; });
@@ -2043,7 +2079,7 @@ const main = async (): Promise<void> => {
     g0.vars.splice(0);
     const r0 = await draw(g0.api, contract);
     ok(r0.deleted.length === 0 && r0.kept.length === 30 && r0.kept.every((k) => k.reason === 'nothing-drawn') && tablesOn(g0.prim).length + tablesOn(g0.sem).length === 30, `11: a run that draws nothing deletes nothing: 30 tables kept (${r0.deleted.length} deleted)`);
-    ok(summaryOf(r0).includes('30 tables the generator no longer draws were left in place — nothing was drawn this run: ') && summaryOf(r0).includes(' and 27 more'), '11: the summary gives the reason and caps the list at three names');
+    ok(summaryOf(r0).includes('30 tables Prism3 no longer draws were left in place — nothing was drawn this run: ') && summaryOf(r0).includes(' and 27 more'), '11: the summary gives the reason and caps the list at three names');
     // The variables moved to a library: no local collection, no local variable. Every table's collection is gone.
     const lib = await fullFile();
     await draw(lib.api, contract);
@@ -2064,7 +2100,7 @@ const main = async (): Promise<void> => {
     await draw(many.api, contract, { collections: ['color'] });
     for (let i = many.vars.length - 1; i >= 0; i--) if (/^pds3\/color\/(scrim|veil|field|disabled)\//.test(many.vars[i].name)) many.vars.splice(i, 1);
     const rm = await draw(many.api, contract, { collections: ['color'] });
-    ok(rm.deleted.length === 4 && summaryOf(rm).includes('4 tables the generator no longer draws were deleted, unedited: ') && summaryOf(rm).includes(' and 1 more') && styleGuideSummary(rm).headline === '✓ 15 tables, 4 deleted', `11: four deleted: three named and "and 1 more"; headline "✓ 15 tables, 4 deleted" (got "${styleGuideSummary(rm).headline}", ${rm.deleted.length})`);
+    ok(rm.deleted.length === 4 && summaryOf(rm).includes('4 tables Prism3 no longer draws were deleted, unedited: ') && summaryOf(rm).includes(' and 1 more') && styleGuideSummary(rm).headline === '✓ 15 tables, 4 deleted', `11: four deleted: three named and "and 1 more"; headline "✓ 15 tables, 4 deleted" (got "${styleGuideSummary(rm).headline}", ${rm.deleted.length})`);
   }
 
   console.log("12. the owner's grid model: a table dragged wider");
@@ -2185,11 +2221,11 @@ const main = async (): Promise<void> => {
     ok(JSON.stringify(p13.unmatched) === JSON.stringify([PRIMARY]) && p13.notes.includes(`No table is titled or keyed "${PRIMARY}"; this run draws no tables`), '13: a name asked for in a run that draws no color is still reported');
 
     // A RENAMED GROUP, drawn under its new title by a filtered run: the new table is created, and the old one, which
-    // the generator no longer draws, stays until an unfiltered run judges it — and the report says so.
+    // Prism3 no longer draws, stays until an unfiltered run judges it — and the report says so.
     for (const v of f13.vars) if (v.name.startsWith('nbds/core/palette/info/')) v.name = v.name.replace('/info/', '/notice/');
     const r6 = await draw(f13.api, contract, { tables: ['Notice — nbds'] });
     ok(r6.tables.length === 1 && r6.tables[0].status === 'created' && !!tableFrame(f13.prim, 'Info — nbds')
-      && styleGuideSummary(r6).summary.includes('Style guide — Info — nbds stays in place: the generator no longer draws it, and a run filtered to named tables deletes nothing. The next run without a Tables filter decides whether to delete it'),
+      && styleGuideSummary(r6).summary.includes('Style guide — Info — nbds stays in place: Prism3 no longer draws it, and a run filtered to named tables deletes nothing. The next run without a Tables filter decides whether to delete it'),
       `13: a filtered run that draws a renamed group's new table says the old one stays until a run without a Tables filter (${styleGuideSummary(r6).summary.slice(0, 200)})`);
   }
 
@@ -2485,7 +2521,7 @@ const main = async (): Promise<void> => {
     ok((await draw(dup.api, contract, { tables: ['Font size'] })).unmatched.length === 1, '19: "Font size" alone matches neither disambiguated title, and is reported');
     // THE PHASE BOUNDARY: a type outside it is named, not drawn; the later-phase variables are counted.
     const out = await draw(p2.api, contract, { types: ['dimension', 'motion'] });
-    ok(out.tables.length === 6 && out.tables.every((t) => t.key.startsWith('dimension|')) && out.notes.includes('motion: not in this phase — this phase draws color, dimension, borderWidth, opacity, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, typography, shadow, gradient, grid'),
+    ok(out.tables.length === 6 && out.tables.every((t) => t.key.startsWith('dimension|')) && out.notes.includes('motion: not in this phase — this phase draws color, dimension, borderWidth, opacity, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, typography, shadow, gradient, grid, animation'),
       `19: types [dimension, motion] draws the 6 dimension tables and names motion as outside this phase (${out.notes.join(' / ')})`);
     // Since #2353 every variable phase 2's file holds is drawn: its 13 font styles in the Text styles table, its 12
     // opacities in their own. The note's counts are asserted in 21 and 35.
@@ -3360,7 +3396,7 @@ const main = async (): Promise<void> => {
 
     // (3) FONT WEIGHT SPLIT (owner decision Q133 A): the raw weights on Primitive tokens beside font family and size, the
     // weight roles on Semantic tokens. Which is which is read off the emission: a literal is a raw weight, an alias a role.
-    const fontEm = (JSON.parse(readFileSync(join(OUT, 'core.font.json'), 'utf8')) as { variables: { name: string; resolvedType: string; alias: unknown; scopes?: string[] }[] }).variables
+    const fontEm = (JSON.parse(readFileSync(join(OUT, 'core.font.Default.json'), 'utf8')) as { variables: { name: string; resolvedType: string; alias: unknown; scopes?: string[] }[] }).variables
       .filter((v) => /\/core\/font\/weight(-role)?\//.test(v.name));
     const rawW = fontEm.filter((v) => !v.alias).map((v) => v.name);
     const roleW = fontEm.filter((v) => v.alias).map((v) => v.name);
@@ -3515,9 +3551,9 @@ const main = async (): Promise<void> => {
     // ICON SIZE: a dimension table of its own collection, drawn as a size is: no type of its own.
     const icon = byTitle('Icon size');
     ok(!!icon && icon.type === 'dimension' && icon.key === 'dimension|VariableCollectionId:icon|pds3/icon/size' && icon.page === SEM
-      && JSON.stringify(icon.rows.map((r) => `${r.token}=${r.cells[0].value}/${r.cells[0].rem}`)) === JSON.stringify(['xs=16px/1rem', 'sm=20px/1.25rem', 'md=24px/1.5rem', 'lg=32px/2rem', 'xl=40px/2.5rem'])
+      && JSON.stringify(icon.rows.map((r) => `${r.token}=${r.cells[0].value}/${r.cells[0].rem}`)) === JSON.stringify(['xs=16px/1rem', 'sm=20px/1.25rem', 'md=24px/1.5rem', 'lg=32px/2rem', 'xl=40px/2.5rem', '2xl=64px/4rem'])
       && icon.rows.every((r) => r.specimen?.kind === 'spacing'),
-      `35: icon/size draws in a dimension table, xs 16px … xl 40px, with the spacing specimen (${icon?.key}; ${icon?.rows.map((r) => r.cells[0].value).join(', ')})`);
+      `35: icon/size draws in a dimension table, xs 16px … 2xl 64px (Avatar's x-large, #4110), with the spacing specimen (${icon?.key}; ${icon?.rows.map((r) => r.cells[0].value).join(', ')})`);
 
     // OPACITY: a table of its own on Primitive tokens, each value a percentage with its swatch, no REM.
     const op = byTitle('Opacity');
@@ -3890,8 +3926,9 @@ const main = async (): Promise<void> => {
     const fx = plan.tables.find((t) => t.type === 'shadow');
     const gr = plan.tables.find((t) => t.type === 'gradient');
     const EFFECT_ROWS = ['shadow/xs', 'shadow/sm', 'shadow/md', 'shadow/lg', 'shadow/xl', 'shadow/2xl', 'shadow/inset',
-      'shadow-dark/xs', 'shadow-dark/sm', 'shadow-dark/md', 'shadow-dark/lg', 'shadow-dark/xl', 'shadow-dark/2xl', 'shadow-dark/inset', 'glass', 'Brand/Frost'];
-    ok(plan.tables.length === 2 && fx?.key === 'shadow|effect-styles|' && fx.title === 'Effect styles' && fx.page === SEM && fx.description === '16 effect styles in this file'
+      'shadow-dark/xs', 'shadow-dark/sm', 'shadow-dark/md', 'shadow-dark/lg', 'shadow-dark/xl', 'shadow-dark/2xl', 'shadow-dark/inset',
+      'shadow-hc-dark/xs', 'shadow-hc-dark/sm', 'shadow-hc-dark/md', 'shadow-hc-dark/lg', 'shadow-hc-dark/xl', 'shadow-hc-dark/2xl', 'shadow-hc-dark/inset', 'glass', 'Brand/Frost'];   // hc-dark's set: #4131
+    ok(plan.tables.length === 2 && fx?.key === 'shadow|effect-styles|' && fx.title === 'Effect styles' && fx.page === SEM && fx.description === '23 effect styles in this file'
       && JSON.stringify(fx.columns) === JSON.stringify(['Token', 'Specimen', 'Type', 'X', 'Y', 'Blur', 'Spread', 'Color', 'Description']),
       `36: the effect styles draw one table, "Effect styles" on Semantic tokens: Token · Specimen · Type · X · Y · Blur · Spread · Color · Description (${fx?.key}; ${fx?.columns.join(', ')}; "${fx?.description}")`);
     ok(JSON.stringify(fx?.rows.map((r) => r.tokenCell)) === JSON.stringify(EFFECT_ROWS),
@@ -3952,7 +3989,7 @@ const main = async (): Promise<void> => {
       `36: a file with no effect or gradient style draws neither table, and a collections filter leaves both out (${bare.tables.map((t) => t.title).join(', ')})`);
     // THE PHASE BOUNDARY MOVED: shadow and gradient are in it; motion still is not.
     const motion = planStyleGuide(cat36, contract, { types: ['shadow', 'gradient', 'motion'] }).notes;
-    ok(motion.includes('motion: not in this phase — this phase draws color, dimension, borderWidth, opacity, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, typography, shadow, gradient, grid')
+    ok(motion.includes('motion: not in this phase — this phase draws color, dimension, borderWidth, opacity, fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, typography, shadow, gradient, grid, animation')
       && !motion.some((n) => n.startsWith('shadow:') || n.startsWith('gradient:')),
       `36: the note names shadow and gradient among the types this phase draws, and no longer either as outside it (${motion.join(' / ')})`);
 
@@ -4017,10 +4054,10 @@ const main = async (): Promise<void> => {
     refuseStyle = true;
     const refused = await draw(f.api, contract, { types: ['shadow', 'gradient'] });
     refuseStyle = false;
-    ok(refused.unbound === 19 && refused.misses.some((m) => m.startsWith('16 effect styles are not bound to their style, so they show the cell component\'s own value ('))
+    ok(refused.unbound === 26 && refused.misses.some((m) => m.startsWith('23 effect styles are not bound to their style, so they show the cell component\'s own value ('))
       && refused.misses.some((m) => m.startsWith('3 gradient styles are not bound to their style, so they show the cell component\'s own value ('))
       && !styleGuideSummary(refused).ok,
-      `36: a style the host refuses to apply is counted (19), named by kind, and not a pass (${refused.unbound}; ${refused.misses.filter((m) => m.includes('style')).join(' / ')})`);
+      `36: a style the host refuses to apply is counted (26), named by kind, and not a pass (${refused.unbound}; ${refused.misses.filter((m) => m.includes('style')).join(' / ')})`);
     // Q272 A: the miss names the style in plain words. No internal kind key reaches the user, in the misses or the summary.
     const keyLeaks = [...refused.misses, styleGuideSummary(refused).summary, ...styleGuideSummary(refused).lines].filter((m) => /\b(effect|gradient)-style\b/.test(m));
     ok(keyLeaks.length === 0, `36: the refused styles' miss says "effect styles" / "gradient styles", never a raw kind key (${keyLeaks.join(' / ') || 'none'})`);
@@ -4203,7 +4240,7 @@ const main = async (): Promise<void> => {
       `37: with no Size=Large header, a group's title uses Size=Medium, and the run says so (${rmh.misses.filter((m) => m.includes('Size=')).join(' / ')})`);
   }
 
-  console.log('38. a group you made gives its inverse guides to Inverse colors (owner decision, 2026-10-19; Q412 A, #2816); a table the generator no longer draws is offered, removed only on confirm');
+  console.log('38. a group you made gives its inverse guides to Inverse colors (owner decision, 2026-10-19; Q412 A, #2816); a table Prism3 no longer draws is offered, removed only on confirm');
   {
     const KEY = 'prism3-style-guide';
     const keyOf = (k: N): string => k.pluginData[KEY] ?? '';
@@ -4323,8 +4360,8 @@ const main = async (): Promise<void> => {
     const rc = await draw(c.api, contract);
     ok(!old.removed && old.parent === box && JSON.stringify(rc.retired) === JSON.stringify([{ id: String(old.id), name: 'Style guide — Inverse' }])
       && rc.kept.some((k) => k.name === 'Style guide — Inverse' && k.reason === 'copied'),
-      `38: a run never removes a table the generator no longer draws by itself; it lists it as an offer (${JSON.stringify(rc.retired)})`);
-    ok(styleGuideSummary(rc).summary.includes('1 table the generator no longer draws can be removed on the Style guides page, once you confirm'),
+      `38: a run never removes a table Prism3 no longer draws by itself; it lists it as an offer (${JSON.stringify(rc.retired)})`);
+    ok(styleGuideSummary(rc).summary.includes('1 table Prism3 no longer draws can be removed on the Style guides page, once you confirm'),
       '38: the run\'s result offers the cleanup');
     // Not confirmed: nothing. Confirmed with a table that is still drawn: that one is left, by id.
     const none = await removeRetiredTables(c.api, contract, []);
@@ -4907,6 +4944,120 @@ const main = async (): Promise<void> => {
         && JSON.stringify(rows.map((r) => r.token)) === JSON.stringify(REF[1]),
         `43l: a breakpoint with no grid style keeps its row, its Columns chip "⚠ no grid style", and no other row carries it (${lg?.extra?.[0].value} [${lg?.extra?.[0].alias}]; elsewhere: ${others.join(', ') || 'none'})`);
     }
+  }
+
+  console.log('44. a theme type family is not a hand edit on a table (#4482)');
+  {
+    // THE THEME'S FAMILY MOVES, as Apply Theme moves it: a font family variable takes a new value, and the host
+    // re-resolves every text that follows it — a text in a style whose family is bound to it, and a text whose own family
+    // is bound to it — each in the mode pinned on it. The shim's own re-resolve (docs/34): the plugin's reading is not used.
+    const themeFamily = (sh: Shim, varName: string, family: string): number => {
+      const v = sh.vars.find((x) => x.name === varName)!;
+      for (const m of Object.keys(v.valuesByMode)) v.valuesByMode[m] = family;
+      const follows = (id: string | undefined, node: N): string | null => {
+        const bv = id ? sh.vars.find((x) => x.id === id) : undefined;
+        const val = bv ? valueAt(sh.world, node, bv) : undefined;
+        return typeof val === 'string' ? val : null;
+      };
+      const roots: N[] = [];
+      for (const st of sh.styles) { const ff = st.boundVariables.fontFamily?.id; if (ff) { const val = follows(ff, new N('TEXT')); if (val) st.fontName = { ...st.fontName, family: val }; } }
+      let moved = 0;
+      for (const p of sh.pages) roots.push(...p.findAll((k) => k.type === 'TEXT'));
+      for (const t of roots) {
+        const st = t.textStyleId ? sh.styles.find((x) => x.id === t.textStyleId) : undefined;
+        const fam = st ? follows(st.boundVariables.fontFamily?.id, t) : follows(t.boundVariables.fontFamily?.id, t);
+        const cur = t.fontName as { family?: string; style?: string } | undefined;
+        if (fam && cur && typeof cur === 'object' && cur.family !== fam) { t.fontName = { ...cur, family: fam }; moved++; }
+      }
+      return moved;
+    };
+    // A STALE TEXT-STYLES TABLE: every style moved under one folder, so the table is drawn under a new key and the one
+    // drawn before is superseded. The style ids stay, so its specimens keep their styles.
+    const regroupStyles = (sh: Shim): void => { for (const st of sh.styles) st.name = `brand/${st.name}`; };
+    const TS = 'Style guide — Text styles';
+    const FONT_VAR = 'pds3/core/font/family/body';
+    const editedOf = (r: StyleGuideResult): string[] => r.kept.filter((k) => k.reason === 'edited').map((k) => k.name);
+    const editedNames = (sh: Shim): string[] => sh.pages.flatMap((p) => p.findAll((k) => / \(edited\)$/.test(k.name)).map((k) => k.name));
+    // THE HOST'S RE-MEASURE, on for this section (review B1 of #4568): a hugging text in Proof Sans is 1.15 times as wide
+    // as in Inter, so a family change moves every specimen's width, its cell's, its column's and the grid's, as Figma does.
+    // Without it the shim's text width ignored the font, and the print's widths could not see the family move.
+    const specimen = (t: N): N => t.findAll((k) => k.type === 'TEXT' && !!k.textStyleId && k.characters === 'Abc 123')[0];
+    const WIDER = { width: { 'Proof Sans': 1.15 }, autoLine: {} };
+    familyMetrics = WIDER;
+    // The table's own size: it hugs its grid, which hugs its tracks, so it moves when any re-measured text does.
+    const sizeOf = (t: N): string => `${Math.round(t.width)}x${Math.round(t.height)}`;
+    /** A file with every table drawn, `edit` applied to the Text styles table by hand, the theme's body family moved to
+     *  Proof Sans, and, when `stale`, the styles regrouped so that table is superseded; then Update file's style-guide run. */
+    const scenario = async (o: { stale: boolean; font: boolean; edit?: (t: N, sh: Shim) => void; age?: boolean; autoLine?: boolean }): Promise<{ r: StyleGuideResult; t: N; sh: Shim; moved: number; size: [string, string] }> => {
+      const sh = await phase2File();
+      // AUTO LINE HEIGHT: every style whose family follows the body family takes the font's own line height.
+      if (o.autoLine) for (const st of sh.styles) if (sh.vars.find((v) => v.id === st.boundVariables.fontFamily?.id)?.name === FONT_VAR) st.lineHeight = { unit: 'AUTO' };
+      await draw(sh.api, contract);
+      const t = tableFrame(sh.sem, 'Text styles')!;
+      // AGED: the table's print rewritten as a run before #4482 recorded it, the default reading (no form prefix).
+      if (o.age) t.pluginData['prism3-style-guide-print'] = await fingerprintOf(t as unknown as SgNode);
+      o.edit?.(t, sh);
+      const was = sizeOf(t);
+      const moved = o.font ? themeFamily(sh, FONT_VAR, 'Proof Sans') : 0;
+      const size: [string, string] = [was, sizeOf(t)];
+      if (o.stale) regroupStyles(sh);
+      return { r: await draw(sh.api, contract), t, sh, moved, size };
+    };
+
+    // UPDATE FILE AFTER A THEME FONT CHANGE, NOTHING ELSE: every table is drawn again under its own key, none is judged by
+    // its print, none is kept aside.
+    const plain = await scenario({ stale: false, font: true });
+    ok(plain.moved > 0 && editedOf(plain.r).length === 0 && plain.r.kept.length === 0 && editedNames(plain.sh).length === 0 && !plain.t.removed,
+      `44: theme font/redrawn: after the body family moves (${plain.moved} texts re-resolved), Update keeps no table aside and names nothing "(edited)" (kept ${JSON.stringify(plain.r.kept)})`);
+
+    // THE CONTROL: superseded with no font change, the table is deleted, so every "kept" below is the font's or the edit's doing.
+    const ctl = await scenario({ stale: true, font: false });
+    ok(JSON.stringify(ctl.r.stale) === JSON.stringify([TS]) && JSON.stringify(ctl.r.deleted) === JSON.stringify([TS]) && ctl.t.removed,
+      `44: theme font/control: a superseded Text styles table nobody touched is deleted (stale ${JSON.stringify(ctl.r.stale)}, deleted ${JSON.stringify(ctl.r.deleted)}, kept ${JSON.stringify(ctl.r.kept)})`);
+
+    // #4482: the same table, superseded in the Update that follows a theme font change. Its specimens re-resolved to the new
+    // family under the same style: no one edited it, so it is deleted, never kept aside as edited.
+    const font = await scenario({ stale: true, font: true });
+    ok(font.moved > 0 && font.size[0].split('x')[0] !== font.size[1].split('x')[0] && JSON.stringify(font.r.deleted) === JSON.stringify([TS]) && editedOf(font.r).length === 0 && editedNames(font.sh).length === 0 && font.t.removed,
+      `44: theme font/superseded: a theme family change is not a hand edit; the superseded Text styles table is deleted, not kept as edited (${font.moved} texts re-resolved; table ${font.size[0]} → ${font.size[1]}; deleted ${JSON.stringify(font.r.deleted)}, kept ${JSON.stringify(font.r.kept)})`);
+
+    // A REAL HAND EDIT IS STILL ONE, after the same font change. Each edit made on a specimen, the text drawn "Abc 123" in
+    // the body style.
+    const edits: [string, (t: N, sh: Shim) => void][] = [
+      // A font picked by hand detaches the style: the text reads by its values.
+      ['font picked', (t) => { const x = specimen(t); x.textStyleId = ''; x.fontName = { family: 'Inter', style: 'Bold' }; }],
+      ['another style', (t, sh) => { const x = specimen(t); x.textStyleId = sh.styles.find((st) => st.id !== x.textStyleId)!.id; }],
+      // Cmd+B over the whole line keeps the style and lists the override (review B1 of #4486).
+      ['semantic bold', (t) => { const x = specimen(t); x.fontName = { family: 'Inter', style: 'Bold' }; x.segments = [{ fontName: x.fontName, start: 0, end: 7, textStyleOverrides: [{ type: 'SEMANTIC_WEIGHT' }] }]; }],
+      ['text retyped', (t) => { specimen(t).characters = 'Abc 124'; }],
+      // The grid's column gap widened by hand: the grid's width is left out of the print (it is measured from the
+      // specimens' fonts), so what it is measured from is read instead (review B1 of #4568).
+      ['column gap', (t) => { const g = gridOf(t); g.gridColumnGap = Number(g.gridColumnGap ?? 0) + 8; }],
+    ];
+    for (const [what, edit] of edits) {
+      const e = await scenario({ stale: true, font: true, edit });
+      ok(JSON.stringify(editedOf(e.r)) === JSON.stringify([TS]) && e.r.deleted.length === 0 && !e.t.removed,
+        `44: theme font/hand edit (${what}): a superseded Text styles table edited by hand is kept, reported as edited, after the theme font change too (kept ${JSON.stringify(e.r.kept)}, deleted ${JSON.stringify(e.r.deleted)})`);
+    }
+
+    // A PRINT RECORDED BEFORE #4482 is compared the way it was taken: untouched, it still matches and the table is deleted.
+    // After a theme font change it cannot match (nothing recorded the old font): kept, the safe direction.
+    const aged = await scenario({ stale: true, font: false, age: true });
+    ok(JSON.stringify(aged.r.deleted) === JSON.stringify([TS]) && aged.t.removed,
+      `44: theme font/aged print: a print taken before #4482 still matches an untouched table, which is deleted (deleted ${JSON.stringify(aged.r.deleted)}, kept ${JSON.stringify(aged.r.kept)})`);
+    const agedFont = await scenario({ stale: true, font: true, age: true });
+    ok(JSON.stringify(editedOf(agedFont.r)) === JSON.stringify([TS]) && !agedFont.t.removed,
+      `44: theme font/aged print, font moved: a print taken before #4482 reads the resolved font, so it is kept as edited, the safe direction (kept ${JSON.stringify(agedFont.r.kept)})`);
+
+    // HEIGHTS (review B1 of #4568): the body styles' line height AUTO, the font's own, which is taller in Proof Sans than in
+    // Inter; the two families set a line at the same width. A family change moves every specimen's height, its row's and
+    // the grid's and the table's, and no width. The superseded table nobody touched is still deleted.
+    familyMetrics = { width: {}, autoLine: { Inter: 1.2, 'Proof Sans': 1.45 } };
+    const tall = await scenario({ stale: true, font: true, autoLine: true });
+    const [w0, h0] = tall.size[0].split('x'), [w1, h1] = tall.size[1].split('x');
+    ok(tall.moved > 0 && h0 !== h1 && w0 === w1 && JSON.stringify(tall.r.deleted) === JSON.stringify([TS]) && editedOf(tall.r).length === 0 && tall.t.removed,
+      `44: theme font/auto line height: a family change that moves an AUTO line height is not a hand edit; the superseded Text styles table is deleted (table ${tall.size[0]} → ${tall.size[1]}; deleted ${JSON.stringify(tall.r.deleted)}, kept ${JSON.stringify(tall.r.kept)})`);
+    familyMetrics = null;
   }
 
   if (failures) { console.error(`\n${failures} style-guide check(s) failed`); process.exit(1); }

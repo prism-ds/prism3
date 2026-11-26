@@ -50,6 +50,7 @@
  * the copy off. US English, `docs/voice-standard.md`.
  */
 import type { Catalog, CatalogEntry } from './component-catalog';
+import { must } from '../must';
 
 export type GroupKind = 'components' | 'subcomponents';
 
@@ -179,6 +180,9 @@ export const sentenceCase = (s: string): string =>
 
 /** A component name as words: "ImagePlaceholder" → "Image placeholder", "Icon" → "Icon". */
 const words = (name: string): string => sentenceCase(name.replace(/\./g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2'));
+/** #4191 T4 A (owner decision 2026-11-19): a set's name in the Components list, as words, every part lowercase after the
+ *  first: "CodeInput.Cell" → "Code input cell", "PageNav" → "Page nav". The code name stays on the detail pane. */
+export const listNameOf = (name: string): string => words(name);
 
 /** The sections, in order: those with settings (`SETTING_SECTIONS`), Other components, Subcomponents. Rows alphabetical
  *  in each, sets alphabetical in each family. A section with no rows is dropped. */
@@ -195,7 +199,7 @@ export const groupsOf = (catalog: Catalog): GroupSection[] => {
   const rows: GroupRow[] = [...byKey].map(([key, g]) => {
     const ids = [...g.ids].sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'en'));
     const pageIsComponents = g.section === 'Components' || g.section === 'Subcomponents';
-    const label = g.page && (pageIsComponents || ids.length > 1) ? sentenceCase(g.page) : words(nameOf(ids[0]));
+    const label = g.page && (pageIsComponents || ids.length > 1) ? sentenceCase(g.page) : words(nameOf(must(ids[0], `${key}'s first id`)));
     return { key, label, page: g.page, kind: g.kind, ids, family: ids.length > 1 };
   });
   const sectionOf = (r: GroupRow): SectionKind =>

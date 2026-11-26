@@ -20,7 +20,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "section": "Foundations",
     "buildable": true,
     "reason": null,
-    "members": 46,
+    "members": 48,
     "nests": []
   },
   {
@@ -489,6 +489,89 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     ]
   },
   {
+    "id": "toggle-button",
+    "name": "ToggleButton",
+    "category": "form",
+    "summary": "A button that stays pressed, for a mode that persists, such as Pin or Show archived.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "size.medium.padding-x",
+        "ref": "space.200"
+      },
+      {
+        "key": "size.small.padding-x",
+        "ref": "space.200"
+      },
+      {
+        "key": "size.large.padding-x",
+        "ref": "space.300"
+      },
+      {
+        "key": "size.medium.padding-x-visual",
+        "ref": "space.150"
+      },
+      {
+        "key": "size.small.padding-x-visual",
+        "ref": "space.150"
+      },
+      {
+        "key": "size.large.padding-x-visual",
+        "ref": "space.200"
+      },
+      {
+        "key": "size.medium.padding-y",
+        "ref": "space.100"
+      },
+      {
+        "key": "size.small.padding-y",
+        "ref": "space.075"
+      },
+      {
+        "key": "size.large.padding-y",
+        "ref": "space.100"
+      },
+      {
+        "key": "size.medium.gap",
+        "ref": "space.100"
+      },
+      {
+        "key": "size.small.gap",
+        "ref": "space.100"
+      },
+      {
+        "key": "size.large.gap",
+        "ref": "space.150"
+      }
+    ],
+    "page": "Toggle button",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 120,
+    "nests": [
+      "icon",
+      "focus-ring"
+    ]
+  },
+  {
+    "id": "toggle-icon-button",
+    "name": "ToggleIconButton",
+    "category": "form",
+    "summary": "An icon-only button that stays pressed, such as Bold or Mute. Needs an accessible name.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Toggle button",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 60,
+    "nests": [
+      "icon",
+      "focus-ring"
+    ]
+  },
+  {
     "id": "field-label",
     "name": "FieldLabel",
     "category": "form",
@@ -696,7 +779,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "id": "radio-control",
     "name": "Radio.Control",
     "category": "form",
-    "summary": "Outlined radio ring; dot and brand ring on select. Nested by a radio row; no label.",
+    "summary": "Outlined radio ring; dot and action color on select. Nested by a radio row; no label.",
     "unit": "variants",
     "spacing": [],
     "page": "Radio",
@@ -887,26 +970,27 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "nests": []
   },
   {
-    "id": "image-placeholder",
-    "name": "ImagePlaceholder",
+    "id": "image",
+    "name": "Image",
     "category": "foundations",
-    "summary": "Empty media frame locked to a ratio, from 2:3 portrait to 16:9. Drop an image fill onto it.",
+    "summary": "Image in a frame locked to a ratio, with empty, loading, loaded and error states.",
     "unit": "variants",
     "spacing": [],
-    "page": "Image Placeholder",
+    "page": "Image",
     "section": "Subcomponents",
     "buildable": true,
     "reason": null,
-    "members": 7,
+    "members": 28,
     "nests": [
-      "icon"
+      "icon",
+      "skeleton"
     ]
   },
   {
     "id": "spinner",
     "name": "Spinner",
     "category": "foundations",
-    "summary": "Indeterminate loading indicator on the icon ladder. Announces \"Loading\" unless its host hides it.",
+    "summary": "Indeterminate loading indicator in the icon sizes. Announces \"Loading\" unless its host hides it.",
     "unit": "components",
     "spacing": [],
     "page": "Spinner",
@@ -919,7 +1003,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
   {
     "id": "badge",
     "name": "Badge",
-    "category": "foundations",
+    "category": "feedback",
     "summary": "A static status label, count or dot. Nothing to click; color is not meant to be the only signal.",
     "unit": "variants",
     "spacing": [],
@@ -931,9 +1015,26 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "nests": []
   },
   {
+    "id": "avatar",
+    "name": "Avatar",
+    "category": "foundations",
+    "summary": "A person or organization, shown as a photo, initials or a generic glyph, in that order.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Avatar",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 30,
+    "nests": [
+      "badge",
+      "icon"
+    ]
+  },
+  {
     "id": "tag",
     "name": "Tag",
-    "category": "foundations",
+    "category": "form",
     "summary": "An interactive token a user toggles or removes. A static label is a badge.",
     "unit": "variants",
     "spacing": [
@@ -1358,7 +1459,7 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     "section": "Components",
     "buildable": true,
     "reason": null,
-    "members": 24,
+    "members": 16,
     "nests": [
       "flush-icon-button-neutral",
       "icon",
@@ -1857,6 +1958,20 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
     ]
   },
   {
+    "id": "skeleton",
+    "name": "Skeleton",
+    "category": "foundations",
+    "summary": "Content-shaped placeholder for a first load. Reserves the box so nothing shifts on arrival.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Skeleton",
+    "section": "Subcomponents",
+    "buildable": true,
+    "reason": null,
+    "members": 4,
+    "nests": []
+  },
+  {
     "id": "popover",
     "name": "Popover",
     "category": "overlay",
@@ -1873,5 +1988,137 @@ export const COMPONENT_CATALOG_DATA: Catalog = [
       "icon",
       "button-group"
     ]
+  },
+  {
+    "id": "step-item",
+    "name": "StepItem",
+    "category": "navigation",
+    "summary": "One step of a step indicator: a numbered disc, the step name and a line to the next step.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "size.medium.gap",
+        "ref": "space.100"
+      },
+      {
+        "key": "size.small.gap",
+        "ref": "space.075"
+      }
+    ],
+    "page": "Steps",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 16,
+    "nests": [
+      "icon",
+      "link"
+    ]
+  },
+  {
+    "id": "steps",
+    "name": "Steps",
+    "category": "navigation",
+    "summary": "A person's place in a fixed sequence of steps. Size and orientation apply to the items you haven't edited. After editing an item, select the items and set their size and orientation.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "size.medium.gap",
+        "ref": "space.100"
+      },
+      {
+        "key": "size.small.gap",
+        "ref": "space.075"
+      }
+    ],
+    "page": "Steps",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 4,
+    "nests": [
+      "step-item"
+    ]
+  },
+  {
+    "id": "menu-item",
+    "name": "Menu.Item",
+    "category": "overlay",
+    "summary": "One action in a menu: a label, an optional icon, check, description, shortcut or submenu arrow.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "padding-x",
+        "ref": "space.150"
+      },
+      {
+        "key": "gap",
+        "ref": "space.100"
+      }
+    ],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 15,
+    "nests": [
+      "icon",
+      "focus-ring"
+    ]
+  },
+  {
+    "id": "menu-group",
+    "name": "Menu.Group",
+    "category": "overlay",
+    "summary": "A labeled run of items inside a menu: a section, or a set of radio choices.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 1,
+    "nests": [
+      "menu-item"
+    ]
+  },
+  {
+    "id": "menu",
+    "name": "Menu",
+    "category": "overlay",
+    "summary": "A list of actions on a raised panel, opened from a button. It closes once an action is chosen.",
+    "unit": "variants",
+    "spacing": [],
+    "page": "Menu",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 1,
+    "nests": [
+      "menu-item"
+    ]
+  },
+  {
+    "id": "tooltip",
+    "name": "Tooltip",
+    "category": "overlay",
+    "summary": "A short text label for the control under the pointer or focus. It never takes focus.",
+    "unit": "variants",
+    "spacing": [
+      {
+        "key": "pad-y",
+        "ref": "space.050"
+      },
+      {
+        "key": "pad-x",
+        "ref": "space.100"
+      }
+    ],
+    "page": "Tooltip",
+    "section": "Components",
+    "buildable": true,
+    "reason": null,
+    "members": 4,
+    "nests": []
   }
 ];

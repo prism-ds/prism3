@@ -78,6 +78,7 @@ import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
 import { CLIENT_NONCE_RE, CODE_ALPHABET, CODE_LENGTH, CLOSE, HELLO_LABEL, PAIR_LABEL, PAIRED_LABEL, TOKEN_LABEL, WELCOME_LABEL, formatCode } from '../../apps/plugin/src/bridge-auth';
 import type { AgentCommand, AgentResult, AgentLinkState, AgentProgress } from '../../apps/plugin/src/agent-protocol';
 import { ENGINE_VERSION } from '@prism3/engine/version';
+import { isEntry } from '../../packages/engine/entry-point';
 
 /** The plugin connects here — read from the relay, which the manifest's `allowedDomains` entry matches (#3147). */
 export const DEFAULT_PORT = BRIDGE_PORT;
@@ -668,7 +669,7 @@ export const TOOLS = [
   },
   {
     name: 'figma_run',
-    description: `Run one agent-link command in the connected plugin and return its result envelope (v, id, cmd, ok, startedAt, finishedAt, engineVersion, transport, result {verdict, data, logs} | error, progress). Commands: ${AGENT_COMMANDS.join(', ')}. The plugin runs it through the same handler the panel's button reaches. 'prune' with confirm: true deletes — preview with confirm: false first, and echo its previewHash.`,
+    description: `Run one agent-link command in the connected plugin and return its result envelope (v, id, cmd, ok, startedAt, finishedAt, engineVersion, transport, result {verdict, data, logs} | error, progress). Commands: ${AGENT_COMMANDS.join(', ')}. The plugin runs it through the same handler the panel's button reaches. 'prune' with confirm: true deletes — preview with confirm: false first, and echo its previewHash. apply-theme and prune take the brand as args.input, the object the engine's MCP tools call \`brand\`.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -815,7 +816,7 @@ export const handleRpc = async (req: Rpc, bridge: Bridge, notify: (method: strin
 
 /* ── I/O shell ──────────────────────────────────────────────────────────────────────────────────────── */
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const argv = process.argv.slice(2);
   const i = argv.indexOf('--port');

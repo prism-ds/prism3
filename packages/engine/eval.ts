@@ -112,11 +112,36 @@ export type ContractCompliance = {
   checked: number;        // (pair, mode) combinations where BOTH roles resolved to a colour
   pass: number;           // combinations that cleared the floor (on the RAW ratio — CR-01)
   rate: number;           // pass / checked  (1 when nothing resolved — vacuous; see `unresolved`)
+  /** #4200 owner decision 3 (b), 2026-11-19: true when no pair resolved in any mode, so `rate: 1` measured nothing.
+   *  Additive: `rate` keeps its value, and a reader that knew to check `checked` keeps working. */
+  vacuous: boolean;
+  /** #4125 owner decision A, 2026-11-20: the share of (pair, mode) combinations that resolved, 0 to 1:
+   *  `checked / (pairs × modes)`. `rate` says how many of the checked combinations passed; this says how many were
+   *  checked at all, so 12 checked and one pair unresolved in all four modes reads `rate: 1, coverage: 0.75`. It is 0
+   *  exactly when `vacuous` is true. Additive. */
+  coverage: number;
   failures: { pair: string; mode: string; ratio: number; min: number }[];
   unresolved: string[];   // pairs naming a role that isn't a resolvable colour role (unique, sorted)
+  /** #4125 owner decision A, 2026-11-20: pairs with a side that names a raw palette primitive (`core.palette.*`) rather
+   *  than a color role. The pair is measured like any other, so the UI that leaks a primitive still gets its contrast
+   *  checked, and is listed here as a leak (unique, sorted). Additive. */
+  leaks: string[];
 };
 
 const roleKey = (path: string): string => path.replace(/^\{|\}$/g, '').replace(/^[a-z][a-z0-9-]*\.color\.|^color\./, '');
+/** #4125: a palette primitive (`core.palette.<palette>.<step>`, `core.palette.white` / `black`; brace or root-qualified)
+ *  resolves to the hex the tree emits for it, which no mode changes (a mode swaps which palette a role reads, never a
+ *  palette's steps). The alpha ramps and `transparent` stay unresolved: a translucent color has no contrast of its own. */
+const primitiveHex = (path: string, theme: any): string | undefined => {
+  const p = path.trim().replace(/^\{|\}$/g, '').split('.');
+  const at = p.indexOf('core');
+  if (at < 0 || at > 1 || p[at + 1] !== 'palette') return undefined;
+  const [palette, step, extra] = p.slice(at + 2);
+  if (extra !== undefined) return undefined;
+  if (step === undefined) return palette === 'white' ? '#ffffff' : palette === 'black' ? '#000000' : undefined;
+  return (theme.palettes as { palette: string; steps: { key: string; hex: string }[] }[] | undefined)
+    ?.find((x) => x.palette === palette)?.steps.find((x) => x.key === step)?.hex;
+};
 const minForKind = (kind?: string): number => (kind === 'ui' || kind === 'large-text' ? 3 : 4.5);
 
 /**
@@ -128,14 +153,16 @@ export const scoreContractCompliance = (pairs: UsedPair[], theme: any): Contract
   const modes = resolveAllModes(theme);
   let checked = 0, pass = 0;
   const failures: ContractCompliance['failures'] = [];
-  const unresolved = new Set<string>();
+  const unresolved = new Set<string>(), leaks = new Set<string>();
   for (const pair of pairs) {
     const fgK = roleKey(pair.fg), bgK = roleKey(pair.bg), min = minForKind(pair.kind);
     const label = `${pair.fg} on ${pair.bg}`;
+    const fgPrim = primitiveHex(pair.fg, theme), bgPrim = primitiveHex(pair.bg, theme);
     let anyResolved = false;
     for (const m of modes) {
-      const fg = m.roles[fgK]?.hex, bg = m.roles[bgK]?.hex;
+      const fg = fgPrim ?? m.roles[fgK]?.hex, bg = bgPrim ?? m.roles[bgK]?.hex;
       if (!fg || !bg) continue;
+      if (fgPrim || bgPrim) leaks.add(label);
       anyResolved = true; checked++;
       const raw = contrast(hexToRgb(fg), hexToRgb(bg));    // CR-01: decide on the RAW ratio, floor only to display
       if (raw >= min) pass++;
@@ -143,5 +170,7 @@ export const scoreContractCompliance = (pairs: UsedPair[], theme: any): Contract
     }
     if (!anyResolved) unresolved.add(label);
   }
-  return { checked, pass, rate: checked ? pass / checked : 1, failures, unresolved: [...unresolved].sort() };
+  const combinations = pairs.length * modes.length;
+  return { checked, pass, rate: checked ? pass / checked : 1, vacuous: checked === 0, coverage: combinations ? checked / combinations : 0,
+    failures, unresolved: [...unresolved].sort(), leaks: [...leaks].sort() };
 };

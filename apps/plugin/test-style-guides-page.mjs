@@ -19,6 +19,8 @@
  *   · SG4: a catalog the host could not read says the approved words.
  *   · P2–P5, H4–H9: the tree, kinds, title box, Mode and the options, and every change kept in the file by key.
  *   · Q2909.23 A: a saved record is restored on open; Update file draws the saved selection and options, by literal.
+ *   · #4480 (Q1 A, Q2 A): a collection in view narrows what is drawn to its ticked tables, and Update file's Style guides
+ *     row counts, before the run, the tables the run then draws.
  *   · Q668 A, Q412 A: Clean up lists the retired tables and removes them only on its confirm.
  *   · Q667 A, #2977: the Usage panels and Cover switches save the whole record with that switch flipped.
  *   · #2995: two switches flipped before the host answers the first both stick.
@@ -333,13 +335,21 @@ console.log('\nselection and options, saved in the file (P2–P5, H4–H9, Q2909
 // asserted whole, by literal: the options a run takes, not the page's own spelling of them.
 console.log('\na saved record restored, and Update file draws with it (Q2909.23 A)');
 const SAVED = { tables: [ALL_KEYS[1], ALL_KEYS[3]], view: null, titles: '', opt: { ...DEFAULT_OPT, tokenNames: 'short', rem: true } };
-/** Open Update file on a set-up file holding every set, and run its Style guides item alone. */
+/** Open Update file on a set-up file holding every set, and run its Style guides item alone. The file's tables are
+ *  answered as the overlay opens, before the file's sets, so the checklist is drawn with them heard: `ticks.count` is
+ *  the Style guides row's count as the checklist shows it before the run (#4480 Q2 A), null when the row shows none, and
+ *  `ticks.asked` how many times opening Update file asked the main thread for the file's tables. */
 const runGuides = async (page) => {
+  const before = (await read(page)).sent.filter((m) => m.type === 'style-guide-catalog-request').length;
   await hooks.click(page.locator('[data-p3="update-file"]'));
   await posted(page, 'file-sets-request', 1);
+  await post(page, { type: 'style-guide-catalog', catalog: CAT });
   await post(page, { type: 'file-sets', present: [], setUp: true });
   await until(page, 'the checklist drawn', () => !!document.querySelector('[data-p3="update-check-guides"]'));
-  const ticks = await page.evaluate(() => ({ theme: document.querySelector('[data-p3="update-check-theme"]')?.getAttribute('aria-checked'), guides: document.querySelector('[data-p3="update-check-guides"]')?.getAttribute('aria-checked') }));
+  const ticks = await page.evaluate(() => ({ theme: document.querySelector('[data-p3="update-check-theme"]')?.getAttribute('aria-checked'), guides: document.querySelector('[data-p3="update-check-guides"]')?.getAttribute('aria-checked'),
+    count: document.querySelector('[data-p3="update-item-guides"] [data-p3="update-guides-count"]')?.textContent ?? null }));
+  // The checklist is drawn after the panel heard the answers to this opening's posts, so every post it made is caught.
+  ticks.asked = (await read(page)).sent.filter((m) => m.type === 'style-guide-catalog-request').length - before;
   // #3023 Q701 B: unticking Theme checks the file again; it is answered as the first read was. Since #3422 (Q44 A) Theme
   // opens unticked on a file that matches the brand, so there may be nothing to untick.
   if (ticks.theme === 'true') {
@@ -349,8 +359,10 @@ const runGuides = async (page) => {
     await until(page, 'the checklist drawn again', () => !!document.querySelector('[data-p3="update-check-guides"]'));
   }
   await hooks.click(page.locator('[data-p3="update-check-guides"]'));
+  // The step asks for the file's tables afresh as it starts: one more request than before Update file's action.
+  const asked = (await read(page)).sent.filter((m) => m.type === 'style-guide-catalog-request').length;
   await hooks.click(page.locator('[data-p3="update-go"]'));
-  await posted(page, 'style-guide-catalog-request', 2);
+  await posted(page, 'style-guide-catalog-request', asked + 1);
   await post(page, { type: 'style-guide-catalog', catalog: CAT });
   await posted(page, 'style-guide', 1);
   return ticks;
@@ -393,6 +405,7 @@ const runGuides = async (page) => {
   const WANT = { header: 'dark', aliases: true, description: true, titleCell: false, rem: true, valueFormat: 'hex', display: 'auto', dimensionDisplay: 'filled',
     fontDisplay: 'auto', paragraphSpacing: false, textDecoration: false, tokenNames: 'short', tables: [ALL_KEYS[1], ALL_KEYS[3]] };
   ok(canon(drawn) === canon(WANT), `Q2909.23 A: Update file draws the saved selection by key, with the saved options (${JSON.stringify(drawn)})`);
+  ok(ticks.count === '2 tables', `#4480 Q2 A: with a saved record of 2 tables, Update file's Style guides row says "2 tables" before the run (${JSON.stringify(ticks.count)})`);
   ok(sentOf(st, 'apply-theme').length === 0 && sentOf(st, 'build-components').length === 0, `an unticked item is not run: no theme, no sets (${sentOf(st, 'apply-theme').length}, ${sentOf(st, 'build-components').length})`);
   // The run's table list, as the main thread sends it before drawing (#2561 reads the verdict pill this run leaves).
   await post(page, { type: 'style-guide-tables', tables: [{ key: ALL_KEYS[1], title: 'Primary', page: '↳ Semantic tokens' }, { key: ALL_KEYS[3], title: 'Text', page: '↳ Semantic tokens' }] });
@@ -411,13 +424,46 @@ const runGuides = async (page) => {
   await page.close();
 }
 {
+  // #4480 (owner decisions Q1 A and Q2 A, 2026-11-23): the owner's path, as seen on the demo file. Nothing is saved when
+  // the panel opens. On the page: Collection = core, Deselect all, then the Color kind, each save answered as the main
+  // thread answers it (`doc-settings`, the record as kept). What the page shows is core's two color tables, and that is
+  // what is drawn: the page's summary says 2 tables, Update file's Style guides row says "2 tables" before the run, and
+  // the run posts those two keys and no other. Before Q1 A the other collections' tables, still selected out of view,
+  // were drawn too (5 of 7 here; nearly every table of 45 on the demo file), and before Q2 A the row said no count.
+  const { page, errors } = await openPage();
+  await page.evaluate(() => window.addEventListener('message', (e) => {
+    const m = e.data && e.data.pluginMessage;
+    if (m && m.type === 'doc-settings-save') window.postMessage({ pluginMessage: { type: 'doc-settings', settings: m.settings } }, '*');
+  }));
+  await post(page, { type: 'style-guide-catalog', catalog: CAT });
+  await treeDrawn(page);
+  await page.selectOption('[data-p3="sg-collection"]', 'C:core');
+  await until(page, 'core alone in view', () => document.querySelectorAll('[data-p3="sg-group"][data-id^="C:color:"]').length === 0);
+  await hooks.click(page.locator('[data-p3="sg-select-all"]'));
+  await hooks.click(page.locator('[data-p3="sg-kind-color"]'));
+  await posted(page, 'doc-settings-save', 3);
+  let st = await read(page);
+  ok(st.summary?.startsWith('2 tables') && lastSave(st)?.styleGuide?.view === 'C:core',
+    `#4480 Q1 A: with core in view, Deselect all then Color, the page says it draws 2 tables, and keeps the core view in the file (${JSON.stringify({ summary: st.summary, saved: lastSave(st)?.styleGuide })})`);
+  const ticks = await runGuides(page);
+  st = await read(page);
+  const drawn = sentOf(st, 'style-guide')[0]?.options;
+  ok(canon(drawn?.tables) === canon([ALL_KEYS[0], ALL_KEYS[1]]), `#4480 Q1 A: Update file with Style guides ticked draws only the tables shown picked on the page, core's two color tables (${JSON.stringify(drawn?.tables ?? 'every table')})`);
+  ok(ticks.count === '2 tables' && ticks.count === `${drawn?.tables?.length ?? ALL_KEYS.length} tables`,
+    `#4480 Q2 A: before the run, Update file's Style guides row says "2 tables", the number of tables the run then draws (row ${JSON.stringify(ticks.count)}, drawn ${drawn?.tables?.length ?? 'every table'})`);
+  ok(ticks.asked === 1, `#4480 Q2 A: opening Update file asks the main thread for the file's tables once, so the row counts the file as it is (${ticks.asked} asked)`);
+  ok(errors.length === 0, `no console errors (${errors.slice(0, 2).join(' · ')})`);
+  await page.close();
+}
+{
   // CONTROL: nothing saved draws every table with the defaults, and no tables filter, so the run judges superseded tables.
   const { page, errors } = await openPage();
   await post(page, { type: 'style-guide-catalog', catalog: CAT });
   await treeDrawn(page);
-  await runGuides(page);
+  const ticks = await runGuides(page);
   const st = await read(page);
   const drawn = sentOf(st, 'style-guide')[0]?.options;
+  ok(ticks.count === '7 tables', `#4480 Q2 A, control: with nothing saved, Update file's Style guides row says "7 tables", every table in the file (${JSON.stringify(ticks.count)})`);
   const WANT = { header: 'dark', aliases: true, description: true, titleCell: false, rem: false, valueFormat: 'hex', display: 'auto', dimensionDisplay: 'filled',
     fontDisplay: 'auto', paragraphSpacing: false, textDecoration: false, tokenNames: 'full' };
   ok(canon(drawn) === canon(WANT), `Q2909.23 A, control: with nothing saved, Update file draws every table with the defaults and no tables filter (${JSON.stringify(drawn)})`);
@@ -437,7 +483,7 @@ console.log('\nthe retired tables, in Update file › Clean up (Q668 A, Q412 A)'
   const offer = await page.evaluate(() => ({ text: document.querySelector('[data-p3="clean-tables"]')?.textContent ?? '', names: [...document.querySelectorAll('[data-p3="clean-tables"] li')].map((li) => li.textContent),
     label: document.querySelector('[data-p3="clean-tables-confirm"]')?.textContent ?? null }));
   let st = await read(page);
-  ok(offer.text.includes('2 style-guide tables the generator no longer draws.') && JSON.stringify(offer.names) === JSON.stringify(['Style guide — Inverse', 'Style guide — Legacy']) && sentOf(st, 'style-guide-cleanup').length === 0,
+  ok(offer.text.includes('2 style-guide tables Prism3 no longer draws.') && JSON.stringify(offer.names) === JSON.stringify(['Style guide — Inverse', 'Style guide — Legacy']) && sentOf(st, 'style-guide-cleanup').length === 0,
     `Q668 A, Q412 A: Clean up lists each retired table by name, and removes nothing (${JSON.stringify(offer)})`);
   await hooks.click(page.locator('[data-p3="clean-tables-confirm"]'));
   await posted(page, 'style-guide-cleanup', 1);
@@ -476,7 +522,7 @@ console.log('\nthe Usage panels and Cover switches (Q667 A, #2977)');
   ok(canon(lastSave(st)) === canon({ panels: false, cover: false, styleGuide: SAVED }), `#2977: the cover switch saves the whole record, cover off, panels as the file now has them (${JSON.stringify(lastSave(st))})`);
   await hooks.click(page.locator('[data-p3="docs-tab-specs"]'));
   const specs = await page.evaluate(() => document.querySelector('[data-p3="docs-specs"]')?.textContent ?? null);
-  ok(specs === 'Spec sheetsMeasured specs for each component set on this page, drawn beside its usage panel. Build and Update file never draw them.Draw specs… Drawing specs',
+  ok(specs === 'Spec drawingsMeasured specs for each component set on this page, drawn beside its usage panel. Build and Update file never draw them.Draw specs… Drawing specs',
     `#2830 Q2830.3 A: Specs offers Draw specs, its words DRAFT placeholders (Q685 A) (${JSON.stringify(specs)})`);
   ok(errors.length === 0, `no console errors (${errors.slice(0, 2).join(' · ')})`);
   await page.close();

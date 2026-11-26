@@ -427,6 +427,37 @@ ok(store.getPath(o, 'a.b.c') === 3 && store.getPath(o, 'a.x.c') === undefined, '
     `#4209 Undo load, then reload: the saved copy is the restored brand, with its origin and baseline (name ${r?.input.name}, origin ${JSON.stringify(r?.origin)})`);
 }
 
+// ---- #1946 O2 A: a brand saved before snapshots reloads looking as it did --------------------------------------------
+// Owner decision O2 A (2026-11-19). Before #1946 a custom mode followed its base's surfaces live; now it reads its own.
+// The saved storage here is typed as a pre-#1946 web session wrote it: a v2 blob, and its origin entry beside it, with
+// no surfaces.<custom>. EXPECTED: each custom mode's page is its base's, as the old engine drew it, read off the engine
+// for the base mode. ACTUAL: what the web boot restores, started as a session.
+// Mutation that fails here BY NAME: `deserializeBrandInput` returning a v2 input unmigrated → `#1946 O2 A reload: …`.
+{
+  const map = new Map<string, string>();
+  const local: LocalStore = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => { map.set(k, v); }, removeItem: (k) => { map.delete(k); } };
+  const shipped = (exampleBrands as Record<string, BrandInput>).harbor;
+  const old = { ...structuredClone(shipped), customModes: [{ name: 'promo', base: 'dark' }, { name: 'paper', base: 'light' }], surfaces: { light: { base: 50 }, dark: { base: 900 } } };
+  const blob = JSON.stringify({ v: 2, input: old });
+  map.set(BRAND_KEY, blob);
+  const r = restoreSession(local);
+  ok(r !== null && same((r.input.surfaces as Record<string, unknown>)?.promo, { base: 900 }) && same((r.input.surfaces as Record<string, unknown>)?.paper, { base: 50 }),
+    `#1946 O2 A reload: a brand saved before snapshots restores with its base's surfaces copied to each custom mode (${JSON.stringify(r?.input.surfaces)})`);
+  if (r) {
+    store.initSession(r.input, r.origin, r.baseline);
+    const { resolveAllModes } = await import('@prism3/engine');
+    const bg = (m: string): string | null => resolveAllModes(store.theme).find((x) => x.mode === m)?.roles['background.primary']?.path ?? null;
+    ok(bg('promo') === bg('dark') && bg('paper') === bg('light') && bg('promo') !== bg('paper'),
+      `#1946 O2 A reload: each saved custom mode keeps the page it showed (promo ${bg('promo')} = dark ${bg('dark')}, paper ${bg('paper')} = light ${bg('light')})`);
+    // Once: the next save is v3, and its custom modes hold their own surfaces.
+    store.setPersist((input, prov) => persistInput(local, input, prov));
+    store.rebuild();
+    store.setPersist(null);
+    const saved = JSON.parse(map.get(BRAND_KEY) ?? 'null');
+    ok(saved?.v === 3 && same(saved?.input?.surfaces?.promo, { base: 900 }), `#1946 O2 A reload: the next save is v3 and keeps the copy, so the migration runs once (v ${saved?.v})`);
+  }
+}
+
 // ---- #4234: one edit resolves every mode once — the store's resolve fills the cache the verdict reads -------------
 // Before #4234, `resolvePreview` ran `resolveAllModes` itself and the verdict ran it again on the same theme. Two
 // readings, neither derived from the subject: the cache's own run count across a rebuild and a verdict read, and a
@@ -453,6 +484,25 @@ ok(store.getPath(o, 'a.b.c') === 3 && store.getPath(o, 'a.x.c') === undefined, '
   role.hex = '#123456'; role.alpha = undefined;
   const rp = (resolvePreview as (...a: unknown[]) => typeof store.rp)(store.theme, undefined, modes);
   ok(rp.colors[ref]?.[modes[0]!.mode] === '#123456', `#4234 resolvePreview reads the modes it is given (${ref}: ${rp.colors[ref]?.[modes[0]!.mode]})`);
+}
+
+// ---- Undo load back to the boot brand (#4215) ---------------------------------------------------------------------------
+// `provenance === bootProvenance` reads "nothing chosen in this session" (#1197), and `main.ts` guards a late host read
+// with it. An Undo load back to the brand boot put there restored the boot OBJECT, so a slow boot read arriving after a
+// load and its undo behaved as if nothing had been chosen. Restored, the provenance is equal by value and a new object.
+// Mutation that fails here BY NAME: `restoreInput` assigning `prov` as given → `#4215 restoreInput: …`.
+{
+  const ids = Object.keys(exampleBrands);
+  store.initSession(structuredClone((exampleBrands as Record<string, BrandInput>)[ids[0]]), { kind: 'example', id: ids[0] });
+  ok(store.provenance === store.bootProvenance, '#4215 premise: the session starts on the boot provenance');
+  store.brandState.name = 'edited at boot';
+  const u = stashBefore(store.brandState, store.provenance, 'edited at boot', store.lastGoodInput);
+  store.loadInput((exampleBrands as Record<string, BrandInput>)[ids[1]], { kind: 'example', id: ids[1] });
+  store.restoreInput(u!.input, u!.provenance, u!.lastGood);
+  ok(store.provenance !== store.bootProvenance, '#4215 restoreInput: an Undo load back to the boot brand is a choice, never the boot provenance by identity');
+  ok(JSON.stringify(store.provenance) === JSON.stringify(store.bootProvenance) && Object.isFrozen(store.provenance) && Object.isFrozen(store.provenance.baseline),
+    '#4215 restoreInput: the restored provenance is the boot one by value, and frozen as every provenance is');
+  ok(isDirty(store.brandState, store.provenance), '#4215 restoreInput: the boot brand\'s edit comes back still unsaved');
 }
 
 console.log(`\n${executed - failed}/${executed} passed`);

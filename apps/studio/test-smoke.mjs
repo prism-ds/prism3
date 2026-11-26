@@ -805,18 +805,15 @@ const watchErrors = (page) => {
 // menu in UI redesign S8.2 (owner decision G19 A): the web has no legacy page left to reach. Every page is reached
 // through the tab row now.
 
-/** Open Type through the tab row (UI redesign S6.2: it left the Pages menu for the two panes), open Scale's and
- *  the page's Show advanced (S6.3: Individual sizes, Scale limits, Weights and styles, Line height and letter
- *  spacing), and wait for its levers to draw. */
+/** Open Type through the tab row (UI redesign S6.2: it left the Pages menu for the two panes), turn on its one Show
+ *  advanced settings switch (#3079, Q3079.2 A), and wait for its levers to draw. */
 const gotoType = async (page) => {
   await tabClick(page, 'type');
   await hooks.need(page, '[data-p3="type-levers"]');
-  for (const hk of ['scale-advanced', 'type-sections-advanced']) {
-    const sel = `[data-p3="${hk}"]`;
-    await hooks.need(page, sel);
-    if ((await page.locator(sel).getAttribute('aria-expanded')) !== 'true') await hooks.click(page.locator(sel));
-  }
-  await hooks.need(page, '[data-p3="weights-matrix"]');
+  const sel = '[data-p3="type-advanced"]';
+  await hooks.need(page, sel);
+  if ((await page.locator(sel).getAttribute('aria-checked')) !== 'true') await hooks.click(page.locator(sel));
+  await hooks.need(page, '[data-p3="weights-row"]');
   await page.evaluate(() => document.fonts.ready);
 };
 
@@ -1467,7 +1464,8 @@ const NOT_RAMPS = ['white', 'black', 'transparent', 'black-alpha', 'white-alpha'
  *  brand, from the committed emissions; a brand the start screen offers that is not listed fails by name. */
 const strips2 = (ps) => [...ps, 'opacity'].flatMap((p) => [`${p}-1`, `${p}-2`]);
 const EXPECT_STRIPS = {
-  prism3: strips2(['primary', 'accent', 'neutral', 'success', 'warning', 'danger', 'info']),
+  // prism3 adds Brand B's two ramps (#1729), the palettes its custom mode swaps in.
+  prism3: strips2(['primary', 'accent', 'brand-b-primary', 'brand-b-accent', 'neutral', 'success', 'warning', 'danger', 'info']),
   aurora: strips2(['primary', 'accent', 'neutral', 'success', 'warning', 'danger', 'info']),
   harbor: strips2(['primary', 'neutral', 'success', 'warning', 'danger', 'info']),
 };
@@ -2959,6 +2957,13 @@ const motionOracle = (tree, mode) => {
     durations: Object.fromEntries(leaves(mo.duration).map(([k, l]) => [k, ms(l)])),
     reduced: Object.fromEntries(leaves(mo['duration-reduced']).map(([k, l]) => [k, ms(l)])),
     roles: leaves(mo['easing-role']).map(([k]) => k), curve,
+    // #2857: each preset and the curve its easing slot resolves to in this mode, read off the emitted alias (a role is
+    // followed through `curve` above; a curve is read directly). A spring-eased preset has no curve to trace (null).
+    presets: leaves(mo.preset).map(([name, p]) => {
+      const v = String(p.easing?.$value ?? '').slice(1, -1).split('.');
+      const kind = v[v.length - 2], key = v[v.length - 1];
+      return [name, kind === 'easing-role' ? curve(key) : kind === 'easing' ? { name: key, bez: mo.easing?.[key]?.$value ?? null } : null];
+    }),
   };
 };
 /** What the Depth & motion preview draws for motion: each duration row and the spin block, each transition with the
@@ -2997,11 +3002,12 @@ const checkDepthMotion = (where, got, o) => {
   ok(got.rows.length > 0 && offMs.length === 0, `${where}: every duration row is the emitted ms and reduced ms for this mode${offMs.length ? ` — ${offMs.slice(0, 3).join(' | ')}` : ''}`);
   ok(!got.spinInTable && !!got.spin && got.spin.pills.includes('motion.duration.spin') && got.spin.text.includes(`${o.durations.spin}ms`) && got.spin.text.includes(`${o.reduced.spin}ms`),
     `T9: ${where}: the spinner's turn is drawn apart from the duration steps, as a loop, at its emitted ${o.durations.spin}ms (reduced ${o.reduced.spin}ms) — in the table ${got.spinInTable}, apart ${JSON.stringify(got.spin)}`);
-  const offTrace = o.roles.map((role) => ({ role, want: o.curve(role), t: got.traces.find((x) => x.name === role) }))
+  const offTrace = o.presets.map(([preset, want]) => ({ preset, want, t: got.traces.find((x) => x.name === preset) }))
     .filter(({ want, t }) => !t || !want || !sameBez(t.bez, want.bez) || !t.label.endsWith(want.name))
-    .map(({ role, want, t }) => `${role} traces ${t ? `${JSON.stringify(t.bez)} "${t.label}"` : 'nothing'}, the emission's motion.easing-role.${role} is ${want?.name} ${JSON.stringify(want?.bez)}`);
-  ok(got.traces.length === o.roles.length && offTrace.length === 0,
-    `#2046: ${where}: each transition traces the curve its role resolves to in this mode's emission${offTrace.length ? ` — ${offTrace.slice(0, 2).join(' | ')}` : ` (${got.traces.length} traced)`}`);
+    .map(({ preset, want, t }) => `${preset} traces ${t ? `${JSON.stringify(t.bez)} "${t.label}"` : 'nothing'}, the emission's motion.preset.${preset}.easing resolves to ${want?.name} ${JSON.stringify(want?.bez)}`);
+  // Twelve since #2857 phase 2 added pop and press; an exit half is a preset's own closing, not a trace of its own.
+  ok(o.presets.length === 12 && got.traces.length === o.presets.length && offTrace.length === 0,
+    `#2046, #2857: ${where}: each preset traces the curve its easing resolves to in this mode's emission${offTrace.length ? ` — ${offTrace.slice(0, 2).join(' | ')}` : ` (${got.traces.length} traced)`}`);
   const offTags = got.cards.filter((c) => JSON.stringify([...c.roles].sort()) !== JSON.stringify(o.roles.filter((r) => o.curve(r)?.name === c.curve).sort()))
     .map((c) => `${c.curve} tags ${c.roles.join(', ') || 'none'}`);
   ok(got.cards.length === 6 && offTags.length === 0, `${where}: each of the six curves is tagged with the roles the emission points at it in this mode${offTags.length ? ` — ${offTags.join(' | ')}` : ''}`);
@@ -3373,7 +3379,7 @@ s5aArm: for (const brand of BRANDS) {
   await page.goto(hookUrl.href);
   await gotoType(page);
   ok(await page.evaluate(() => typeof window.__prism3TestEdit === 'function'), `${brand}: the page opened with ?p3-test-hooks has the test edit hook`);
-  ok((await page.locator('[data-p3="title-floor-16"]').getAttribute('aria-checked')) === 'true', `${brand}: the hand-written brand loads with the 16px smallest title`);
+  ok((await page.locator('[data-p3="type-extra-switch"][data-group="title"][data-variant="2xs"]').getAttribute('aria-checked')) === 'true', `${brand}: the hand-written brand loads with title 2xs's switch on (the 16px title floor)`);
   ok((await page.locator('[data-p3="type-size-desktop"][data-group="title"][data-variant="2xs"]').getAttribute('data-set')) === 'true', `${brand}: the hand-written brand loads with title 2xs set individually`);
 
   const errState = () => page.evaluate(() => {
@@ -3438,7 +3444,7 @@ s5aArm: for (const brand of BRANDS) {
   // Put it back, and check the bar CLEARS. A surface that only ever appears is half a surface, and the
   // rest of this context (and the console-error drain below) needs a resolved theme.
   await gotoType(page);
-  await hooks.click(page.locator('[data-p3="title-floor-16"]'));
+  await hooks.click(page.locator('[data-p3="type-extra-switch"][data-group="title"][data-variant="2xs"]'));
   const cleared = await page.waitForFunction(() => {
     const e = document.querySelector('[data-p3="error-bar"]');
     return !!e && getComputedStyle(e).display === 'none';
@@ -3457,7 +3463,7 @@ s5aArm: for (const brand of BRANDS) {
   const otherErr = await errState();
   hooks.absent(ok, { seen: otherErr.shown && /typography\.sizes\.title\.2xs/.test(otherErr.text), state: 'the error bar shown for the title-floor refusal' },
     !(await fixState()).shown, `${brand}: Q189 A: an error that is not about the first breakpoint offers no action beside the line`);
-  await hooks.click(page.locator('[data-p3="title-floor-16"]'));
+  await hooks.click(page.locator('[data-p3="type-extra-switch"][data-group="title"][data-variant="2xs"]'));
   await page.waitForFunction(() => { const e = document.querySelector('[data-p3="error-bar"]'); return !!e && getComputedStyle(e).display === 'none'; }, null, { timeout: 5000 }).catch(() => {});
   const bpBefore = await inputAt(page);
   await page.evaluate(() => window.__prism3TestEdit('layout.breakpoints', [320, 768]));
@@ -3826,7 +3832,7 @@ for (const brand of BRANDS) {
       `#1854 (Q22): ${brand}: previewing Dark, Return to Auto clears modeLevers.dark.tempo (persisted ${JSON.stringify(b?.modeLevers?.dark ?? null)})`);
     const autoLine = await page.evaluate(() => document.querySelector('[data-p3="tempo-auto"]:not([hidden])')?.textContent ?? null);
     const label = LEVER_TEMPO_LABEL(lightTempo);
-    ok(autoLine === `Auto: follows Light (${label})`, `Q22: ${brand}: previewing Dark under Auto, the tempo says "Auto: follows Light (${label})" (says ${JSON.stringify(autoLine)})`);
+    ok(autoLine === `Auto · follows Light (${label})`, `Q22: ${brand}: previewing Dark under Auto, the tempo says "Auto · follows Light (${label})" (says ${JSON.stringify(autoLine)})`);
     await checkShown(`${brand}/Dark/Auto`, lightTempo);
     // The Auto-chip rule (#2078): on Auto, Light's tempo chip is the checked one; choosing it writes nothing.
     const onAuto = (await persistedBrand(page))?.modeLevers?.dark?.tempo === undefined && await waitChecked(page, TEMPO, lightTempo);
@@ -4060,13 +4066,16 @@ const pickEasing = async (page, role, curve) => {
   await hooks.click(page.locator(`[data-p3="value-picker"] [data-p3="value-picker-value"][data-value="${v}"]`));
   await page.waitForFunction(([r, c]) => (document.querySelector(`[data-p3="easing-pick"][data-role="${r}"]`)?.textContent ?? '').includes(c), [role, curve], { timeout: 5000 }).catch(() => {});
 };
-const tracedCurve = async (page, role) => (await readDepthMotion(page)).traces.find((t) => t.name === role) ?? null;
+// #2857: the preview traces the presets, so a role is read off a preset on it (typed: `fade` is on enter, `state` on
+// default). No default preset is on emphasized, so the arms below re-point a role a preset uses.
+const PRESET_ON_ROLE = { enter: 'fade', default: 'state' };
+const tracedCurve = async (page, role) => (await readDepthMotion(page)).traces.find((t) => t.name === PRESET_ON_ROLE[role]) ?? null;
 let easingTrips = 0;
 {
   const brand = BRANDS[0];
   const { ctx, page, drain } = await openBrand(brand);
   await gotoDepth(page);
-  const role = 'emphasized', curve = 'calm';
+  const role = 'enter', curve = 'calm';
   const lightBefore = (await persistedBrand(page))?.motionPersonality?.easingRoles?.[role];
   await chooseMode(page, 'dark');
   await pickEasing(page, role, curve);
@@ -4079,21 +4088,21 @@ let easingTrips = 0;
     ok(dark.curve(role)?.name === curve && light.curve(role)?.name !== curve,
       `#2046: ${brand}: the exported motion.easing-role.${role} is ${curve} in dark only (dark ${dark.curve(role)?.name}, light ${light.curve(role)?.name})`);
     const t = await tracedCurve(page, role);
-    ok(!!t && sameBez(t.bez, dark.curve(role)?.bez), `#2046: ${brand}: previewing Dark, the traced ${role} transition draws the exported dark curve ${JSON.stringify(dark.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
+    ok(!!t && sameBez(t.bez, dark.curve(role)?.bez), `#2046: ${brand}: previewing Dark, the ${role} role's traced preset (${PRESET_ON_ROLE[role]}) draws the exported dark curve ${JSON.stringify(dark.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
     await chooseMode(page, 'light');
     const tl = await tracedCurve(page, role);
-    ok(!!tl && sameBez(tl.bez, light.curve(role)?.bez), `#2046: ${brand}: previewing Light, the traced ${role} transition draws the exported light curve ${JSON.stringify(light.curve(role)?.bez)} (draws ${JSON.stringify(tl?.bez)})`);
+    ok(!!tl && sameBez(tl.bez, light.curve(role)?.bez), `#2046: ${brand}: previewing Light, the ${role} role's traced preset (${PRESET_ON_ROLE[role]}) draws the exported light curve ${JSON.stringify(light.curve(role)?.bez)} (draws ${JSON.stringify(tl?.bez)})`);
     easingTrips++;
   }
   // Picking Light's own curve in Dark is Auto (the legacy table never offered the self-map): it clears the override.
   await chooseMode(page, 'dark');
-  const lightCurve = (tree && motionOracle(tree.light, 'light').curve(role)?.name) ?? 'expressive';
+  const lightCurve = (tree && motionOracle(tree.light, 'light').curve(role)?.name) ?? 'decelerate';
   await pickEasing(page, role, lightCurve);
   const b2 = await persistedBrand(page);
   ok(b2?.modeLevers?.dark?.easings?.[role] === undefined,
     `Q22: ${brand}: previewing Dark, picking Light's own curve (${lightCurve}) for ${role} returns it to Auto (dark ${JSON.stringify(b2?.modeLevers?.dark ?? null)})`);
   const label = await page.evaluate((r) => document.querySelector(`[data-p3="easing-pick"][data-role="${r}"] .p3-btn-label`)?.textContent ?? null, role);
-  ok(label === `Auto: follows Light (${lightCurve})`, `Q22: ${brand}: under Auto, the ${role} row says "Auto: follows Light (${lightCurve})" (says ${JSON.stringify(label)})`);
+  ok(label === `Auto · follows Light (${lightCurve})`, `Q22: ${brand}: under Auto, the ${role} row says "Auto · follows Light (${lightCurve})" (says ${JSON.stringify(label)})`);
   const errs = drain();
   ok(errs.length === 0, `${brand} / easing: 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
   await ctx.close();
@@ -4119,7 +4128,7 @@ let easingTrips = 0;
     const o = motionOracle(tree.light, 'light');
     ok(o.curve(role)?.name === curve, `#2046: a one-mode brand's export carries motion.easing-role.${role} → ${curve} (exports ${o.curve(role)?.name})`);
     const t = await tracedCurve(page, role);
-    ok(!!t && sameBez(t.bez, o.curve(role)?.bez), `#2046: a one-mode brand's traced ${role} transition draws the exported curve ${JSON.stringify(o.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
+    ok(!!t && sameBez(t.bez, o.curve(role)?.bez), `#2046: a one-mode brand's ${role} preset trace (${PRESET_ON_ROLE[role]}) draws the exported curve ${JSON.stringify(o.curve(role)?.bez)} (draws ${JSON.stringify(t?.bez)})`);
     easingTrips++;
   }
   const errs = drain();
@@ -4730,7 +4739,9 @@ console.log(`\nOverwrite confirm (#1033)\n${'='.repeat(78)}`);
 // Before #3880 the reload restored the brand as its own baseline (origin `file`), and the pick replaced it, and the only
 // stored copy, with no confirm. EXPECTED typed here: the rename and the sentence, which names the example at risk.
 // Mutation that fails here BY NAME: `bootBrand` restoring origin `file` with the brand as its baseline, as before
-// (entry.ts) → `#3880 after a reload, an example load over the edits still asks first`.
+// (entry.ts) → `#3880 after a reload, an example load over the edits still asks first`. The leave prompt agrees with the
+// confirm straight after the reload (#3982): dropping entry.ts's `syncLeaving()` after `initSession` fails
+// `#3982 after a reload with unsaved edits, leaving asks first` by name.
 {
   const [atRisk, arriving] = BRANDS;
   const { ctx, page, drain } = await openBrand(atRisk);
@@ -4739,6 +4750,8 @@ console.log(`\nOverwrite confirm (#1033)\n${'='.repeat(78)}`);
   await page.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('prism3:brandInput'))?.input?.name === 'renamed-in-smoke'; } catch { return false; } }, null, { timeout: 5000 }).catch(() => {});
   await page.reload({ waitUntil: 'networkidle' });
   await hooks.need(page, '[data-p3="frame"]');
+  const leaveAsksNow = await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+  ok(leaveAsksNow === true, `#3982 after a reload with unsaved edits, leaving asks first, before any further edit (${leaveAsksNow})`);
   await hooks.click(page.locator('[data-p3="brand-switcher"]'));
   await hooks.need(page, '[data-p3="brand-menu"] [data-p3="brand-menu-example"]');
   await hooks.click(page.locator('[data-p3="brand-menu"] [data-p3="brand-menu-example"]').filter({ hasText: arriving }).first());
@@ -4858,6 +4871,42 @@ console.log(`\nOverwrite confirm (#1033)\n${'='.repeat(78)}`);
   ok(moved === shape && left === 0, `#1037 a lever edit to the loaded brand ends the Undo load offer (Control shape → ${shape}, now ${moved}; undo-load drawn ${left})`);
   const errs = drain();
   ok(errs.length === 0, `Undo load (lever edit): 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
+  await ctx.close();
+}
+
+// E — SAVE BEFORE REPLACING, AND ASK BEFORE LEAVING (#3982, owner decision Q-WS1 A). The replace confirm offers the
+// Export area's two downloads, and neither closes it or loads: the designer saves, then answers. The browser's
+// leave-page prompt is armed while the brand has unsaved edits and disarmed when it has none, read by dispatching a
+// cancelable `beforeunload` (an armed page cancels it). EXPECTED typed here: the filenames' shapes and the armed state
+// at each step. Mutations that fail here BY NAME (measured): a guard that arms but never disarms (`syncLeaving` calling
+// `sync(true)` only when dirty) → `#3982 after Replace brand loads an untouched example, leaving no longer asks`; a
+// download that also drops the staged load (`saveTokens` clearing `pendingLoad`) → `#3982 Download tokens leaves the
+// confirm open`. On main's source the arm fails `#3982 leaving after an edit asks first`.
+{
+  const [atRisk, arriving] = BRANDS;
+  const { ctx, page, drain } = await openBrand(atRisk);
+  const leaveAsks = () => page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+  const confirm = '[data-p3="brand-menu"] [data-p3="overwrite-confirm"]';
+  ok(await leaveAsks() === false, '#3982 leaving a just-opened example does not ask');
+  await tabClick(page, 'brand');
+  await page.fill('[data-p3="brand-name"]', 'renamed-in-smoke');
+  ok(await leaveAsks() === true, '#3982 leaving after an edit asks first');
+  await hooks.click(page.locator('[data-p3="brand-switcher"]'));
+  await hooks.need(page, '[data-p3="brand-menu"] [data-p3="brand-menu-example"]');
+  await hooks.click(page.locator('[data-p3="brand-menu"] [data-p3="brand-menu-example"]').filter({ hasText: arriving }).first());
+  await hooks.need(page, confirm);
+  const [brief] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), hooks.click(page.locator('[data-p3="overwrite-save-brief"]'))]);
+  ok(!!brief && brief.suggestedFilename().endsWith('.design.md'), `#3982 Download design.md writes the brief (${brief?.suggestedFilename() ?? 'no download'})`);
+  ok(await page.locator(confirm).count() === 1, '#3982 Download design.md leaves the confirm open');
+  const [tokens] = await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), hooks.click(page.locator('[data-p3="overwrite-save-tokens"]'))]);
+  ok(!!tokens && tokens.suggestedFilename().endsWith('.json'), `#3982 Download tokens writes the token set (${tokens?.suggestedFilename() ?? 'no download'})`);
+  ok(await page.locator(confirm).count() === 1, '#3982 Download tokens leaves the confirm open');
+  ok(await leaveAsks() === true, '#3982 with the confirm still open after the downloads, leaving still asks (nothing loaded)');
+  await hooks.click(page.locator('[data-p3="brand-menu"] [data-p3="overwrite-replace"]'));
+  await page.waitForSelector(confirm, { state: 'detached', timeout: 5000 }).catch(() => {});
+  ok(await leaveAsks() === false, '#3982 after Replace brand loads an untouched example, leaving no longer asks');
+  const errs = drain();
+  ok(errs.length === 0, `#3982 save before replacing: 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
   await ctx.close();
 }
 
@@ -5552,7 +5601,8 @@ console.log(`\nfacePin — Pin a cut control (#1467)\n${'='.repeat(78)}`);
   const brand = BRANDS[0];
   const { ctx, page, drain } = await openBrand(brand);
   await gotoType(page);
-  await hooks.need(page, '[data-p3="pin-cut-table"]');
+  // #3079 (Q3079.6 A): the pins sit in each text type's card, under its weights, with advanced on.
+  await hooks.need(page, '[data-p3="pin-cut-row"]');
 
   // FLOOR: the control is present and reachable for a slot that supports a pin. A studio that dropped
   // the section, or offered no pinnable slot, fails HERE — before any write is attempted.
@@ -5648,25 +5698,31 @@ console.log(`\nfacePin — Pin a cut control (#1467)\n${'='.repeat(78)}`);
 // an `-italic` twin for each upright style, italic, and keeps the upright ones upright; "Italic only" ships no
 // `-italic` twin and every leaf italic. A chip mapped to the wrong write fails by name.
 console.log(`\nItalic chips, through the exported DTCG (S6.3)\n${'='.repeat(78)}`);
+// ONE EXPORT PER PAGE (#4487). An export is five downloads (the base, then an overlay per mode, `exportTokens`), and
+// headless Chromium drops a page's downloads past ten in quick succession: three exports on one page under a second
+// apart delivered 10 files and 2 bases, the third export dropped whole, which is the merge queue's "no export" on
+// "Upright". So each chip gets its own page, where it replays the chips before it in the same order (each write is the
+// same transition as before: both, both → only, both → only → upright) and exports once. And the read waits for the
+// base by name, not the first download: within one export the base sometimes lands after the overlays (22 of 174
+// exports in a local loop), and an overlay read as the export has no `type.<text type>` leaves (CI's `()`).
 {
   const brand = BRANDS[0];
   const G = 'caption';
-  const { ctx, page, drain } = await openBrand(brand);
-  await gotoType(page);
-  const exported = async () => {
+  const errs = [];
+  const exported = async (page) => {
     await hooks.click(page.locator('[data-p3="rail-export"]'));
     await hooks.need(page, '[data-p3="export-page"]');
-    const pending = page.waitForEvent('download');
+    const pending = page.waitForEvent('download', { predicate: (d) => d.suggestedFilename().endsWith('.base.tokens.json'), timeout: 15000 });
     await hooks.click(page.locator('[data-p3="export-page"] [data-p3="dialog-confirm"]'));
-    const dl = await pending;
     try {
+      const dl = await pending;
       const tree = JSON.parse(await readFile(await dl.path(), 'utf8'));
       const root = tree[Object.keys(tree).find((k) => !k.startsWith('$'))];
       const out = [];
       const walk = (n, path) => { for (const [k, v] of Object.entries(n ?? {})) { if (k.startsWith('$') || !v || typeof v !== 'object') continue; if (v.$type === 'typography') out.push({ key: `${path}.${k}`, italic: v.$value?.fontStyle === 'italic' }); else walk(v, `${path}.${k}`); } };
       walk(root?.type?.[G], `type.${G}`);
       return out;
-    } catch { return null; } finally { await gotoType(page); }
+    } catch { return null; }
   };
   const RULE = {
     upright: (ls) => ls.length > 0 && ls.every((l) => !l.italic && !/-italic/.test(l.key)),
@@ -5676,16 +5732,24 @@ console.log(`\nItalic chips, through the exported DTCG (S6.3)\n${'='.repeat(78)}
   const WORDS = { upright: 'Upright', both: 'Upright + italic', only: 'Italic only' };
   const SAYS = { upright: 'no italic style', both: 'an italic twin for each upright style', only: 'fontStyle italic with no upright style' };
   const CHIP = { both: '[data-p3="italic-choice-both"]', only: '[data-p3="italic-choice-only"]', upright: '[data-p3="italic-choice-upright"]' };
-  for (const chip of ['both', 'only', 'upright']) {
-    const sel = `[data-p3="italic-row"][data-group="${G}"] ${CHIP[chip]}`;
-    await hooks.click(page.locator(sel));
-    await page.waitForFunction((x) => document.querySelector(x)?.getAttribute('aria-checked') === 'true', sel, { timeout: 5000 }).catch(() => {});
-    const ls = await exported();
-    ok(!!ls && RULE[chip](ls), `italics chip "${WORDS[chip]}" on ${G} exports ${SAYS[chip]} (${ls ? ls.map((l) => `${l.key.split('.').slice(2).join('.')}${l.italic ? '*' : ''}`).join(' ') : 'no export'})`);
+  const ORDER = ['both', 'only', 'upright'];
+  for (const [k, chip] of ORDER.entries()) {
+    const { ctx, page, drain } = await openBrand(brand);
+    await gotoType(page);
+    // Each click is read as pressed before the next (`aria-pressed`, `chipChoice`; the old wait read `aria-checked`,
+    // which the chip never carries, and swallowed the timeout), and a chip that never reads pressed says so (#4487).
+    let pressed = true;
+    for (const c of ORDER.slice(0, k + 1)) {
+      const sel = `[data-p3="italic-row"][data-group="${G}"] ${CHIP[c]}`;
+      await hooks.click(page.locator(sel));
+      pressed = pressed && await page.waitForFunction((x) => document.querySelector(x)?.getAttribute('aria-pressed') === 'true', sel, { timeout: 5000 }).then(() => true, () => false);
+    }
+    const ls = await exported(page);
+    ok(pressed && !!ls && RULE[chip](ls), `italics chip "${WORDS[chip]}" on ${G} exports ${SAYS[chip]} (${pressed ? '' : 'a chip never read pressed; '}${ls ? ls.map((l) => `${l.key.split('.').slice(2).join('.')}${l.italic ? '*' : ''}`).join(' ') : 'no export: the base file never arrived'})`);
+    errs.push(...drain());
+    await ctx.close();
   }
-  const errs = drain();
   ok(errs.length === 0, `${brand}: driving the italic chips raised 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
-  await ctx.close();
 }
 
 // =============================================================================================

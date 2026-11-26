@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "prism3-ai-metadata/0.5",
+  "$id": "prism3-ai-metadata/0.9",
   "title": "Prism3 agent metadata sidecar (<brand>.ai.json)",
   "description": "Agent-readable metadata for one generated brand, companion to its DTCG token tree (<brand>.tokens.json). Every token in the tree has exactly one entry, keyed by its path below the brand root. Every field is generated from the token data on each build. The sidecar's own `$schema` value equals this schema's `$id`; both change together when a field is added, renamed or removed.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "brand", "generated", "note", "color_fields", "typography_fields", "layout_fields", "motion_fields", "primitive_fields", "color", "typography", "layout", "motion", "primitives"],
+  "required": ["$schema", "brand", "generated", "note", "color_fields", "typography_fields", "layout_fields", "motion_fields", "primitive_fields", "color", "typography", "layout", "motion", "motion_presets", "motion_patterns", "primitives"],
   "properties": {
-    "$schema": { "const": "prism3-ai-metadata/0.5", "description": "The schema version this file follows. Equal to this schema's `$id`." },
+    "$schema": { "const": "prism3-ai-metadata/0.9", "description": "The schema version this file follows. Equal to this schema's `$id`." },
     "brand": { "$ref": "#/$defs/path", "description": "The brand id, as in the token tree's file name." },
     "generated": { "const": true, "description": "Always true: no field is hand-authored." },
     "note": { "type": "string", "minLength": 1, "description": "A one-paragraph guide to the tiers and fields, for a reader without this schema." },
@@ -41,6 +41,29 @@
       "additionalProperties": false,
       "patternProperties": { "^motion(\\.[a-z0-9-]+)+$": { "$ref": "#/$defs/thinEntry" } }
     },
+    "motion_presets": {
+      "type": "object",
+      "description": "Motion presets (`surface`, `crossfade`), keyed by preset name (#2857, Q-MS1 A). Each names the brand's `motion.preset.<name>` tokens, the published alias tier an agent binds, and in `resolves_to` what each of the preset's slots points at for this brand",
+      "additionalProperties": false,
+      "patternProperties": { "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)?$": { "$ref": "#/$defs/presetEntry" } }
+    },
+    "motion_patterns": {
+      "type": "object",
+      "description": "Motion patterns (`dialog/enter`, `toast/exit`), keyed by name (#2857 phase 2, Q-PT1 A). Each lists the tracks a component half moves, each binding one preset's tokens, with this brand's track overrides applied. A pattern holds no timing of its own.",
+      "additionalProperties": false,
+      "patternProperties": { "^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*$": { "$ref": "#/$defs/patternEntry" } }
+    },
+    "icons": {
+      "type": "object",
+      "description": "Present only when the brand sets an icon map (#3076). Component docs name Prism3 icons; resolve each through `map`.",
+      "additionalProperties": false,
+      "required": ["note", "map", "names"],
+      "properties": {
+        "note": { "type": "string", "description": "How to read the block." },
+        "map": { "type": "object", "description": "Prism3 icon name → the icon that replaces it in this brand.", "additionalProperties": { "type": "string" } },
+        "names": { "type": "array", "description": "The icon set this brand ships: Prism3's names less the mapped ones, then the brand's own.", "items": { "type": "string" } }
+      }
+    },
     "gradient": {
       "type": "object",
       "description": "Brand gradients, keyed by full tree path (`gradient.<name>`).",
@@ -55,6 +78,71 @@
     }
   },
   "$defs": {
+    "presetEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "duration", "easing", "delay", "duration_reduced", "resolves_to"],
+      "properties": {
+        "token": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.transition$", "description": "The preset's transition composite, motion.preset.<name>.transition." },
+        "duration": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.duration$", "description": "The preset's duration slot." },
+        "easing": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.easing$", "description": "The preset's easing slot." },
+        "delay": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.delay$", "description": "The preset's delay slot." },
+        "duration_reduced": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.duration-reduced$", "description": "The preset's reduced-motion duration, derived from its duration slot." },
+        "resolves_to": { "$ref": "#/$defs/presetResolvesTo" },
+        "exit": { "$ref": "#/$defs/exitEntry" }
+      }
+    },
+    "presetResolvesTo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration", "easing", "delay", "duration_reduced"],
+      "description": "What each slot points at for this brand, as a path in the motion tier.",
+      "properties": {
+        "duration": { "type": "string", "pattern": "^motion\\.(duration|spring-duration)\\.[a-z0-9-]+$", "description": "A duration step, or a spring's settle time." },
+        "easing": { "type": "string", "pattern": "^motion\\.(easing-role|easing|spring-easing)\\.[a-z0-9-]+$", "description": "An easing role, a curve, or a spring's CSS curve." },
+        "delay": { "type": "string", "pattern": "^motion\\.(delay|duration-ms)\\.[a-z0-9-]+$", "description": "A delay step, or the 0ms primitive when the preset starts at once." },
+        "duration_reduced": { "type": "string", "pattern": "^motion\\.(duration-reduced|duration-ms)\\.[a-z0-9-]+$", "description": "A step's reduced twin, or a millisecond primitive for a spring's short fade." }
+      }
+    },
+    "exitEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An arriving preset's exit half (#2857, Q-PT3 A): the same slots at motion.preset.<name>.exit.*, one step shorter on the exit role by default.",
+      "required": ["token", "duration", "easing", "delay", "duration_reduced", "resolves_to"],
+      "properties": {
+        "token": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.transition$", "description": "The exit half's transition composite, motion.preset.<name>.exit.transition." },
+        "duration": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.duration$", "description": "The exit half's duration slot." },
+        "easing": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.easing$", "description": "The exit half's easing slot." },
+        "delay": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.delay$", "description": "The exit half's delay slot." },
+        "duration_reduced": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+\\.exit\\.duration-reduced$", "description": "The exit half's reduced-motion duration, derived from its duration slot." },
+        "resolves_to": { "$ref": "#/$defs/presetResolvesTo" }
+      }
+    },
+    "patternEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One motion pattern (#2857 phase 2): a component half that moves, as tracks. Each track binds one preset's tokens.",
+      "required": ["half", "tracks"],
+      "properties": {
+        "half": { "enum": ["enter", "exit", "change"], "description": "enter and exit are a component arriving and leaving; change is a change in place." },
+        "tracks": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/trackEntry" }, "description": "What moves, in order: each track moves one element through one property group on a named preset." }
+      }
+    },
+    "trackEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["element", "property", "preset", "reduced"],
+      "properties": {
+        "element": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "The element the track moves." },
+        "property": { "enum": ["opacity", "transform", "size", "color"], "description": "The property group it moves." },
+        "transform": { "enum": ["scale", "slide", "turn", "travel"], "description": "With a transform, what it does." },
+        "preset": { "type": "string", "pattern": "^motion\\.preset\\.[a-z0-9-]+(\\.exit)?$", "description": "The preset whose tokens time the track: motion.preset.<name>, or motion.preset.<name>.exit for a closing half." },
+        "distance": { "anyOf": [{ "type": "string", "pattern": "^(motion\\.distance\\.[a-z0-9-]+|space\\.[0-9]+|self)$" }, { "type": "number", "exclusiveMinimum": 0 }], "description": "A slide's distance: a token path, the element's own size (self), or px from a brand override." },
+        "from": { "enum": ["bottom", "end", "below"], "description": "Where a slide comes from." },
+        "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "A scale's start scale." },
+        "reduced": { "enum": ["fade", "keep", "off"], "description": "What the track does under reduced motion: keep plays on the preset's reduced duration, off jumps to its end, fade swaps the movement for a fade." }
+      }
+    },
     "path": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9-]+)*$",
@@ -129,7 +217,7 @@
       "properties": {
         "token": { "$ref": "#/$defs/path", "description": "The role this one is measured against: its ground, or, for a translucent wash, the ink that has to stay legible on it." },
         "min": { "$ref": "#/$defs/ratio", "description": "The contrast floor in light mode. Where another mode holds a different floor, `requirement` names it." },
-        "ratio": { "type": "number", "minimum": 1, "description": "The measured ratio in light mode, to two decimals." },
+        "ratio": { "type": "number", "minimum": 1, "description": "The measured ratio in light mode, floored to two decimals, so it never reads at or above a floor it misses." },
         "composited_over": { "$ref": "#/$defs/path", "description": "For a translucent role: the ground it is composited over before `token` is measured on the result." },
         "requirement": { "type": "string", "minLength": 1, "description": "The contract as one normative sentence, and the only place this file uses an RFC 2119 keyword. Built from `min`, `token` and `composited_over`, so a reader can check it with the token tree alone: resolve both roles in each mode, composite a translucent one over its ground, and compare the ratio with the floor it states for that mode. Where the modes hold different floors, it names each mode's floor by its id in the token tree." }
       }
@@ -179,6 +267,7 @@
           "description": "A font role's alias, or a type style's composite value: each property an alias or a literal."
         },
         "used_by": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/path" }, "description": "The type styles that carry this weight role." },
+        "mode_overrides": { "type": "object", "description": "The value in each mode, keyed by mode name. Present only when a mode moves the role, such as a per-mode font family (#1729)." },
         "modifiers": {
           "type": "object",
           "additionalProperties": false,
@@ -228,6 +317,7 @@
         "when_to_use": { "$ref": "#/$defs/prose" },
         "avoid_when": { "$ref": "#/$defs/prose", "description": "Which ink holds on the gradient at every sampled point, and which does not." },
         "resolves_to": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/reference" }, "description": "The stop colors, in order." },
+        "mode_overrides": { "type": "object", "additionalProperties": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/reference" } }, "description": "The stop colors in each mode, keyed by mode name. Present only when a mode's palette swap moves a stop (#1729)." },
         "a11y": {
           "type": "object",
           "description": "The gradient's worst-case text contrast, sampled along it.",

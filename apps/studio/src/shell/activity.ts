@@ -84,7 +84,7 @@ export const HISTORY_MAX = 5;
 /** Concept v6's operation titles (`OP_TITLE`). The drawer lists operations in the order they first ran. */
 export const OP_TITLE: Readonly<Record<OpKey, string>> = {
   // "Style guides" since S11.2 (owner decision P11), matching the Build style guides page.
-  'apply': 'Theme', components: 'Build set', filesetup: 'Set up file', styleguide: 'Style guides', prune: 'Prune stale', readback: 'Read-back',
+  'apply': 'Apply theme', components: 'Build set', filesetup: 'Set up file', styleguide: 'Style guides', prune: 'Clean up', readback: 'Read-back',  // #4184 (owner decision 2026-11-19): "Apply theme" and "Clean up", one name per feature (was "Theme", "Prune stale").
   // #2830 Q713 A: Documentation › Specs' Draw specs, a row of its own. DRAFT wording (Q685 A).
   specs: 'Specs',
   // #3394 Q3394.7 A: the agent link's color overrides, their own row.
@@ -215,9 +215,9 @@ export type UpdateStepReading = { readonly title: string; readonly op: OpKey; re
 /** `n` counts the runs this session, so a new run is a change. `kind` and `verdict` are the run's once `done`: the status
  *  strip's tone and words for it (#3170), the same verdict the strip shows. */
 export type UpdateReading = { readonly n: number; readonly steps: readonly UpdateStepReading[]; readonly done: boolean; readonly kind: Kind | null; readonly verdict: string | null };
-/** A write the main thread declined while a run of the same operation was going (#1957). `n` counts
- *  them, so each is a change. */
-export type Refusal = { readonly op: OpKey; readonly message: string; readonly agent: boolean; readonly n: number };
+/** A write the main thread declined while another write held the file (#1957). `op`: the one asked for; `held`: the one
+ *  holding it, when the host named it (#3760). `n` counts them, so each is a change. */
+export type Refusal = { readonly op: OpKey; readonly held?: OpKey; readonly message: string; readonly agent: boolean; readonly n: number };
 /** What `main.ts` lends: every operation by key, the result a page asked to show (a page's verdict
  *  pill clicked, or a bad verdict landing), `null` when none is, and the last refusal. Pure; no DOM. */
 export type ActivityReading = { readonly ops: Readonly<Record<OpKey, OpReading>>; readonly detail: OpKey | null; readonly refused: Refusal | null;
@@ -234,6 +234,10 @@ export type ActivityLend = { readonly read: ActivitySource; readonly closeDetail
   /** #3326: a cause's subject (a def id) in the panel's words, the set's name. Absent, the id is shown. */
   readonly nameOf?: (id: string) => string;
   readonly again?: { readonly can: (k: RowKey) => boolean; readonly run: (k: RowKey) => void };
+  /** #3119 (owner decision 2026-11-18 A): "Show the set in Figma" on a Build set result that is not clean. `def` is the set
+   *  to offer, or null to offer none: no set named, or the file does not hold it. `can` says whether it may run now
+   *  (nothing else running), `show` asks the host. Absent (the web), never offered. */
+  readonly showSet?: { readonly def: () => string | null; readonly can: () => boolean; readonly show: (def: string) => void };
   /** #2069 (Q116 A): open Report a problem, from the button at the foot of the open drawer. Absent, no button. */
   readonly report?: (opener: HTMLElement) => void;
   /** #533 (Q110 A): a run the panel started has ended and nothing else runs; `line` is its short line (`noticeLine`). Read
@@ -249,6 +253,9 @@ export const AGAIN: Readonly<Partial<Record<RowKey, string>>> = {
 };
 /** Q3113.4 A: every bad result's last next step (DRAFT wording). */
 export const COPY_DETAILS = 'Copy details';
+/** #3119 (owner decision 2026-11-18 A): a Build set result's next step that shows its set (wording approved
+ *  by the owner 2026-11-18, on the PR). Offered only while the file holds the set. */
+export const SHOW_SET = 'Show the set in Figma';
 
 /** How a result reads (Q3113.2 A): clean, a warning or a failure. A write's verdict is `ok: false` for a failure and a
  *  warning alike. A bad result is a warning when its headline leads with "⚠" and it reports nothing it was asked to make as
@@ -293,6 +300,12 @@ export const finishLine = (k: RowKey, o: Pick<OpReading, 'state' | 'verdict' | '
   return `${ROW_TITLE[k]} ${warning ? 'finished with a warning' : 'failed'}${reason ? `: ${reason}` : ''}.`;
 };
 
+/** The status line's words when a request is declined (#1957, the owner's sentence, 2026-10-02). #3760: since #3697 R7
+ *  one write holds the whole file, so the write asked for and the one holding it can differ. The line names the one
+ *  holding it, as the row's own words do (`busyMessage(held)`, whose titles `test-agent-link.ts` keeps equal to
+ *  `OP_TITLE`), so a screen-reader user hears what a sighted one reads; the asked one when the host names no holder. */
+export const refusedLine = (r: Pick<Refusal, 'op' | 'held'>): string => `${OP_TITLE[r.held ?? r.op]} already running; the second request was declined.`;
+
 /** #533 (Q110 A): a run's short line, for the completion notice shown while the panel is minimized: the status line's
  *  words (`finishLine`) without the reason, which stays in Activity. DRAFT, listed in the PR for the owner. */
 export const noticeLine = (k: RowKey, kind: Kind): string =>
@@ -331,7 +344,7 @@ export const RUN_COPY = { notes: (n: number): string => (n === 1 ? 'Note' : 'Not
  *  dropped, its first letter raised. */
 const stepWords = (s: UpdateStepReading): string => {
   const w = s.state === 'skip' ? RUN_COPY.notRun : verdictWords(s.words);
-  return w ? w[0].toUpperCase() + w.slice(1) : w;
+  return w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
 };
 /** One operation's record: what the drawer has seen of it this session. `at` orders the records by what happened last,
  *  finer than `t`'s minute (#3326 PR 2: a run row and an operation's row can share one). */
@@ -397,7 +410,7 @@ export const mountActivity = (opts: { readonly lend: ActivityLend; readonly narr
   const sheetHead = hook(h('div', 'p3-drawer-head'), 'activity-sheet-head');
   const sheetCounts = h('span', 'p3-drawer-counts');
   // Shown while nothing has run: concept v6's line. Plugin only: the studio mounts no drawer (#3011, Q121 A).
-  const note = hook(h('p', 'p3-note p3-drawer-note', 'Results of Apply, Build and Prune appear here after they run.'), 'activity-note');
+  const note = hook(h('p', 'p3-note p3-drawer-note', 'Each Update file run, and the steps it takes, appear here.'), 'activity-note');
   // The agent link's full status line (#2213, AS1 A): the open drawer's first line, above the runs, while the plugin
   // reports one.
   const linkDetail = hook(h('p', 'p3-note p3-drawer-note p3-drawer-linkline'), 'activity-agent-detail');
@@ -582,6 +595,17 @@ export const mountActivity = (opts: { readonly lend: ActivityLend; readonly narr
       const can = again.can(k);
       if (!can) b.setAttribute('aria-disabled', 'true');
       b.onclick = () => { if (again.can(k)) again.run(k); };
+      box.append(b);
+    }
+    // #3119: a Build set result shows its set, after running it again and before Copy details, and only while the file
+    // holds it (`showSet.def`). An agent's build too: showing the set does not depend on whose input built it.
+    const showSet = opts.lend.showSet;
+    const setDef = k === 'components' ? showSet?.def() ?? null : null;
+    if (showSet && setDef !== null) {
+      const b = hook(h('button', 'p3-btn', SHOW_SET), 'op-show-set');
+      b.type = 'button';
+      if (!showSet.can()) b.setAttribute('aria-disabled', 'true');
+      b.onclick = () => { if (showSet.can()) showSet.show(setDef); };
       box.append(b);
     }
     const copy = hook(h('button', 'p3-btn p3-btn-ghost', COPY_DETAILS), 'op-copy');
@@ -898,7 +922,8 @@ export const mountActivity = (opts: { readonly lend: ActivityLend; readonly narr
       delete goingDot.dataset.p3;
       leave(goingDot);
     } else chevron.before(...lead0, runs);
-    chevron.after(h('span', 'p3-sr', `${open ? 'Collapse' : 'Expand'} Activity`));
+    // No hidden "Expand / Collapse Activity" after the chevron (#4226): the button's name is its visible "Activity", and
+    // `aria-expanded` says whether it is open.
     // The sheet's header row carries the same counts and the agent dot (Q3113.8 A).
     const sheetLink = linkEl();
     sheetCounts.replaceChildren(...countEls(), ...(sheetLink ? [sheetLink] : []));
@@ -1097,7 +1122,7 @@ export const mountActivity = (opts: { readonly lend: ActivityLend; readonly narr
       const t = now();
       if (!rec.t) { rec.t = t; rec.at = ++stamp; }
       rec.history = [{ ok: true, verdict: 'Refused', summary: r.message, agent: r.agent, t, ref: r, refused: true } as Result, ...rec.history].slice(0, HISTORY_MAX);
-      live.textContent = `${OP_TITLE[r.op]} already running; the second request was declined.`;
+      live.textContent = refusedLine(r);
       liveRunning = true;
     }
     // A result a page asked to show (its verdict pill clicked, or a bad verdict) opens the drawer on it.

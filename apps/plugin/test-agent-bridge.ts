@@ -99,7 +99,7 @@ import { spawn } from 'node:child_process';
 import { connect, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { mkdtempSync, writeFileSync, statSync, readFileSync, chmodSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, statSync, readFileSync, chmodSync, realpathSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -144,7 +144,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const GRACE_MS = 3000;
 /** THE PAIRING SECRET, written by this test (#3204). The token and the proofs below are computed from it here with
  *  `node:crypto` and literal labels, independently of `server.ts` and of the plugin's `bridge-auth.ts`. */
-const TMP = mkdtempSync(join(tmpdir(), 'p3-bridge-'));
+const TMP = mkdtempSync(join(realpathSync(tmpdir()), 'p3-bridge-'));
 const SECRET = randomBytes(32);
 const CONFIG = join(TMP, 'figma-bridge.json');
 writeFileSync(CONFIG, JSON.stringify({ v: 1, secret: SECRET.toString('hex') }), { mode: 0o600 });

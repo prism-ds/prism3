@@ -3,7 +3,7 @@
 > An interactive token a user toggles or removes. A static label is a badge.
 
 - **ID:** `tag`
-- **Category:** foundations
+- **Category:** form
 - **Status:** draft
 - **Also known as:** chip, filter-tag, filter-chip, input-tag, input-chip, removable-tag, dismissible-tag, selectable-tag, choice-chip, interaction-tag, checkable-tag, facet
 
@@ -50,7 +50,6 @@ Use a tag for something a user acts on in place. Use a select tag for a lightwei
 ### Do
 
 - Name the remove control "Remove" followed by the label
-- Move focus to the next tag after a removal, else the previous one, else the group
 - Keep the check mark on a selected tag unless the tint and outline already read clearly in context
 - Keep at least 8px between tags in a group
 - Let a long label wrap, so the full text stays visible
@@ -100,14 +99,16 @@ Keep the label to one word where possible. Use the words the data or the user su
 ## Related components
 
 - **Built from:** `focus-ring`
-- **Instead, consider:** `badge`, `button`, `checkbox-group`, `radio-group`
-- **Often used with:** `tag-group`, `icon`, `popover`
+- **Instead, consider:** `badge`, `button`, `checkbox-group`, `radio-group`, `toggle-button`
+- **Often used with:** `tag-group`, `icon`, `avatar`, `popover`
 - **Replaces:**
   - a removable token list built as a listbox
   - a clickable div styled as a pill
   - a bare × glyph with no accessible name
 
 ## Building it in code
+
+- Move focus to the next tag after a removal, else the previous one, else the group
 
 ### Props
 
