@@ -1,0 +1,9 @@
+## (2026-11-26) — Theme inference spike: what a file with no Prism3 can tell us, per lever (#2853)
+
+The research spike for #2853, `docs/superpowers/theme-inference-spike.md`. It is a working note, with no product code and no engine change. It answers the issue's five asks: inference and confidence per lever, what to build on, the output shape, scope input, and a read-only extraction job spec for the owner's private five-file corpus (files A–E, named by letter only). It ends with a plugin flow in words and ten owner questions.
+
+**The diagnosis that shaped it.** #2075 already built most of the scanning: `file-facts.ts` (the read-only evidence report) and `file-seed.ts` (six picks with confidence and evidence). So the spike extends them instead of proposing a second reader. `read-figma.ts` reads only Prism3's own collections, positionally. It is the pattern for the API calls, not the reader for this file state. What #2853 adds is the levers beyond the six picks, the conflict list as a first-class output, provenance on #3022's ledger (observed → authored, snapped → adjusted, inferred → derived, defaulted), scope, and light and dark pairing.
+
+**Two traps for whoever builds it.** The issue says "type scale ratio and base" and "spacing base", but the engine has neither. Type sizes are a fixed ladder with an enum shift, and body `md` is fixed at 16px. Spacing is a fixed 8px ladder that `density` steps along. So a file's ratio is reported, never set, and an off-ladder rhythm or a 14px body is a conflict with no lever to land on (owner questions Q2 and Q3). Also, the facts report has no scope, frame inventory, effects, stroke sides or per-run decoration yet. Each is listed as a `0.x` addition.
+
+**Not done here.** The prior-art brand-skills Figma adapter was outside this lane's repository access (Q8). The confidence columns for style-only and raw files are judgments from the rules, unmeasured until files C and D are scored.
