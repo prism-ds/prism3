@@ -32,20 +32,21 @@
  * Exit codes: 0 = clean; 1 = schema violation, a broken alias, or a failed mode
  * contrast contract (so it fails CI). Errors print a readable diagnosis.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { Theme, brandTheme } from './theme';
 import { parseDesignMd } from './design-md';
 import { parseStandardDesignMd, standardToBrandInput, isStandardDesignMd } from './standard-design-md';
 import { buildFidelityReport } from './fidelity';
-import { emitTheme, fileInDir, validateBrandInput } from './emit-dtcg';
+import { buildTree, emitTheme, fileInDir, validateBrandInput } from './emit-dtcg';
 import type { BrandInput } from './theme';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
 import { BUILD_IDENTITY } from './build-identity';
 import { overlayModes } from './emit-dtcg-overlay';
 import { contrast, hexToRgb } from './color';
+import { webThemeHandoff, shadcnFiles, tailwindFiles } from './web-themes';
 import type { ModeResult } from './modes';
 
 // #3698 R1: the build identity a live run stamps beside the engine version (`build-identity.ts`). `--committed` drops it:
@@ -68,6 +69,23 @@ const writeComponentSpecs = (input: BrandInput, resolvedOut: string) => {
   console.log(`  [written] ${at.contracts}  (${Object.keys(doc.components).length} components)`);
   console.log(`  [written] ${at.defs}  (the same file under its old name, for one release)`);
   console.log(`  [written] ${at.specs}`);
+};
+
+/** `--shadcn` and `--tailwind` (the lane after #2997): the brand's shadcn/ui theme (`shadcn/<id>.css`, and the registry
+ *  item `shadcn/<id>.registry-item.json`) and its Tailwind v4 theme (`tailwind/<id>.theme.css`), at the paths regen
+ *  commits them, from `web-themes.ts`, the projector regen runs. Every path is checked before the first is written. */
+const writeWebThemes = (theme: Theme, resolvedOut: string, which: { shadcn: boolean; tailwind: boolean }) => {
+  const h = webThemeHandoff(buildTree(theme).tree, theme.id);
+  const files = [...(which.shadcn ? shadcnFiles(h) : []), ...(which.tailwind ? tailwindFiles(h) : [])];
+  const planned = files.map((f) => ({ dir: resolve(resolvedOut, dirname(f.path)), name: f.path.slice(f.path.lastIndexOf('/') + 1), text: f.text }));
+  try { for (const p of planned) fileInDir(p.dir, p.name); }
+  catch (e) { return fail(`could not write the web themes for '${theme.id}' to ${resolvedOut}: ${(e as Error).message}`); }
+  for (const p of planned) {
+    mkdirSync(p.dir, { recursive: true });
+    const target = fileInDir(p.dir, p.name);
+    writeFileSync(target, p.text);
+    console.log(`  [written] ${target}`);
+  }
 };
 
 const fail = (msg: string): never => {
@@ -142,6 +160,7 @@ const main = () => {
   let outDir: string | undefined;
   let fidelity = false;
   let componentSpecs = false;
+  const webThemes = { shadcn: false, tailwind: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out' || a === '-o') {
@@ -154,9 +173,11 @@ const main = () => {
     }
     else if (a === '--fidelity') fidelity = true;
     else if (a === '--component-specs') componentSpecs = true;
+    else if (a === '--shadcn') webThemes.shadcn = true;
+    else if (a === '--tailwind') webThemes.tailwind = true;
     else if (a === '--committed') build = undefined;
     else if (a === '--help' || a === '-h') {
-      console.log('Usage: tsx cli.ts <design.md> [--out <dir>] [--fidelity] [--component-specs] [--committed]\n\n  <design.md>   a brand brief with YAML frontmatter — engine-native (examples/*.design.md)\n                OR a standard brand-skills / google-labs design.md (flat colors + x-prism3)\n  --out <dir>   output directory (default: engine/out) for <id>.tokens.json + <id>.ai.json, and the same tokens as\n                <id>.base.tokens.json + one <id>.<mode>.overlay.tokens.json per mode beyond the base, and\n                <id>.css-only.json, each spring as a CSS linear() curve for the shippable token CSS\n  --fidelity    (standard dialect) also write <id>-fidelity-report.md — the observed-vs-generated diff\n  --component-specs  also write <id>.component-contracts.json + <id>.component-defs.specs.json — every component\n                contract with this brand\'s component settings resolved, and the same as a Specs components set\n                (and <id>.component-defs.json, the same contracts under their old name, for one release)\n  --committed   stamp the engine version only, never the build identity: for an artifact the repo commits (regen)');
+      console.log('Usage: tsx cli.ts <design.md> [--out <dir>] [--fidelity] [--component-specs] [--shadcn] [--tailwind] [--committed]\n\n  <design.md>   a brand brief with YAML frontmatter — engine-native (examples/*.design.md)\n                OR a standard brand-skills / google-labs design.md (flat colors + x-prism3)\n  --out <dir>   output directory (default: engine/out) for <id>.tokens.json + <id>.ai.json, and the same tokens as\n                <id>.base.tokens.json + one <id>.<mode>.overlay.tokens.json per mode beyond the base, and\n                <id>.css-only.json, each spring as a CSS linear() curve for the shippable token CSS\n  --fidelity    (standard dialect) also write <id>-fidelity-report.md — the observed-vs-generated diff\n  --component-specs  also write <id>.component-contracts.json + <id>.component-defs.specs.json — every component\n                contract with this brand\'s component settings resolved, and the same as a Specs components set\n                (and <id>.component-defs.json, the same contracts under their old name, for one release)\n  --shadcn      also write shadcn/<id>.css (the shadcn/ui theme\'s light and dark variables) and\n                shadcn/<id>.registry-item.json (the registry item a shadcn/ui project installs)\n  --tailwind    also write tailwind/<id>.theme.css, the brand as a Tailwind v4 theme\n  --committed   stamp the engine version only, never the build identity: for an artifact the repo commits (regen)');
       process.exit(0);
     }
     else if (a.startsWith('-')) fail(`unknown flag: ${a}`);
@@ -210,6 +231,7 @@ const main = () => {
       console.log(`  [written] ${reportPath}  (anchor ΔE00 ${anchorDe.toFixed(2)})`);
     }
     if (componentSpecs) writeComponentSpecs(input, resolvedOut);
+    if (webThemes.shadcn || webThemes.tailwind) writeWebThemes(theme, resolvedOut, webThemes);
     return;
   }
 
@@ -225,6 +247,7 @@ const main = () => {
   catch (e) { return fail(`the engine refused '${(input as any).id}': ${(e as Error).message}`); }   // #4200 B (DRAFT)
   emitAndGate(theme, resolvedOut, designPath!, 'engine-native');
   if (componentSpecs) writeComponentSpecs(input as BrandInput, resolvedOut);
+  if (webThemes.shadcn || webThemes.tailwind) writeWebThemes(theme, resolvedOut, webThemes);
 };
 
 main();

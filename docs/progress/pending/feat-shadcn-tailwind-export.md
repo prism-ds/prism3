@@ -1,0 +1,30 @@
+## (2026-11-26) — The shadcn/ui and Tailwind themes export for any brand, on every surface (#2997)
+
+**What was missing.** The audit posted on #2997 (2026-11-26) found the engine projected a brand's shadcn/ui theme and Tailwind v4 `@theme` block only as regen artifacts, for the five committed brands, and as a hosted registry item for three. No export surface offered them for a brand of the user's own: not Studio's or the plugin's Export, not the MCP's `export_theme`, not the CLI. The projectors were pure functions over a handoff, but they lived in `emit-shadcn.ts` and `emit-tailwind.ts` beside `node:fs`, so no bundle could import them, and nothing built a handoff from a brand in memory.
+
+**The change.**
+- **One projector, pure:** `packages/engine/web-themes.ts` holds the projectors, moved verbatim. It adds:
+  - `handoffOf`, the handoff from the consumer set's files as objects;
+  - `webThemeHandoff`, a brand's handoff from its tree, with the `buildOverlaySet` the token export writes;
+  - `shadcnFiles` and `tailwindFiles`, each file's path, download name and bytes.
+
+  `emit-shadcn.ts` and `emit-tailwind.ts` are now disk shells over it, and `regen --check` is in sync, so the move is output-preserving.
+- **Studio and the plugin:** Export's Design tokens gains a **Format** option: "Token files" (the default, the files as before), "shadcn/ui theme" (`<id>.shadcn.css`, `<id>.shadcn.registry-item.json`) or "Tailwind theme" (`<id>.tailwind.theme.css`). It works for the brand on screen, off the last-good theme, and is off after a failed restore, as the tokens are. With a theme chosen, the token files' shape settings and the metadata option don't apply, and aren't shown. The plugin's iframe is Studio's UI, so both hosts gain it together.
+  - **Why an option, not two more tabs:** the first build added two artifact tabs. `test:chrome` showed they don't fit: the switcher is one row of underline tabs (#3553 Q-UI11 A), and at the plugin's 380 three already fill it. The fourth and fifth ran to x=564 in a column ending at 368. The placement is an owner question on the PR.
+- **The MCP and the CLI:** `export_theme` gains the `shadcn` and `tailwind` sections, and `cli.ts` the `--shadcn` and `--tailwind` flags. Both write the committed relative paths, `shadcn/<id>.css`, `shadcn/<id>.registry-item.json` and `tailwind/<id>.theme.css`. The CLI's writes go through `fileInDir`.
+- **The focus-ring rule and the `docs` pointer:** they ride in the registry item exactly as the hosted one carries them. The plain CSS carries neither, as built; that's an owner question on the PR.
+- **Follow-ups:**
+  - **#4588:** `check:shadcn` compiles all six shadow utilities;
+  - **#4592:** `lint-us-english` and `lint-voice` read `apps/studio/README.md`, which had one `artefacts`, now fixed;
+  - **#4587** stays open: whether the gate should hold floors that tightly is the maintainer call the issue names.
+
+**Held by.** Each surface writes the committed files byte for byte:
+- `test:export-parity`, both built hosts in Chromium, both themes, every gated brand;
+- `test.ts`: in memory for all six committed brands, `export_theme`, and `cli.ts` on an engine-native and a standard-dialect brief;
+- `regen --check`, for regen.
+
+The expected side is always the committed `out/shadcn/**` and `out/tailwind/**`. A change to the projector without a regen fails every surface by name.
+
+**After review.** The review (CHANGES at `1c8cd770`) found a brand whose id isn't already a slug named two ways. Studio wrote `Acme-Brand` (its `slug()`), while `export_theme` and the CLI wrote the raw id: `Acme Brand`, or `  acme  `, in the file names, the CSS header and the registry item's `name` and `title`.
+- **The fix:** `brandSlug` in `web-themes.ts` is now the one rule, Studio's slug exactly. `handoffOf` applies it, so every surface names the brand the same way, and Studio's `slug()` is defined through it. A committed brand's id is already a slug, so `regen --check` stays in sync.
+- **Held by:** for `"  Acme Brand "`, `test.ts` holds Studio's projector call, `export_theme` and the CLI to the same three files under the same names, byte for byte. `test:export-parity` holds both hosts' downloads to the CLI's bytes. Giving one surface the raw id back fails it by name.

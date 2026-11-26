@@ -19,7 +19,7 @@
  * volatile region (ramps or preview), so knob focus is never lost; a failed brand
  * combination is caught and surfaced with the last-good render preserved.
  */
-import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION } from '@prism3/engine';
+import { EXAMPLE_DESCRIPTIONS, brandTheme, type BrandInput, formatRatio, hex, oklchToRgb, resolveAllModes, toDesignMd, buildTree, deref, subNode, numOf, remPxOf, familyOf, type TreeNode, ENGINE_VERSION, webThemeHandoff, shadcnFiles, tailwindFiles, brandSlug, type WebThemeFile } from '@prism3/engine';
 import { componentSpecsFileNames, loadComponentSpecsExporter } from './state/component-specs-export';
 import { hostCommit, type CheckedSetView, type HostCommit } from './write-adapter';
 import { AGENT_OP, initialHostSession, reduce, topicsFor, brandEffectFor, type HostSession, type OpKey } from './state/host-session';
@@ -78,8 +78,8 @@ import {
   type Origin,
 } from './provenance';
 import {
-  ARTIFACTS, METADATA_OPTION, defaultSettings, visibleSettings, exportDtcg, exportFileNames, exportPreview,
-  type ArtifactId, type SettingsState, type ExportSource,
+  ARTIFACTS, METADATA_OPTION, FORMAT_OPTION, FORMAT_DESC, defaultSettings, visibleSettings, exportDtcg, exportFileNames, exportPreview,
+  type ArtifactId, type SettingsState, type ExportSource, type ExportFormat,
 } from './export-settings';
 // The BrandInput session — the working input, the resolved theme, the last-good rule, the viewed mode
 // and page — lives in a DOM-free module so a Node test can import it (#896). Its `let`s are live
@@ -1266,6 +1266,8 @@ let exportMenuOpen = false;
 let exportArtifact: ArtifactId = 'dtcg';
 let exportSettings: SettingsState = defaultSettings();
 // #2552: "Include build metadata", internal use, OFF by default — and not persisted, for the reason above.
+let exportFormat: ExportFormat = FORMAT_OPTION.def;   // the lane after #2997: design tokens, or a web theme
+const themeOn = (): 'shadcn' | 'tailwind' | null => (exportArtifact === FORMAT_OPTION.artifact && exportFormat !== 'dtcg' ? exportFormat : null);
 let exportMetadata = false;   // METADATA_OPTION.def is 'off' by type; test-export-settings holds the two together
 // The only source that exists (#584 unbuilt). Not derived from PRISM3_HOST — see `export-settings.ts`.
 const exportSource: ExportSource = 'generated';
@@ -1401,7 +1403,8 @@ const download = (filename: string, text: string, mime: string): void => {
 /** The brand a post to the host carries: `lastGoodInput`, its words added to the session's first (#3883). A rename
  *  skips `rebuild()` (`syncIdentity`), so a post is the one moment the brand an Activity line will name is known. */
 const posted = postedInput;   // the note is the store's (`postedInput`), where `test-report.ts` runs it
-const slug = (): string => String(lastGoodInput.id || 'brand').trim().replace(/\s+/g, '-') || 'brand';
+// The brand's file name: the engine's one rule (`brandSlug`, `web-themes.ts`), which every export surface names a brand by.
+const slug = (): string => brandSlug(lastGoodInput.id);
 
 // Both exports run off the LAST-GOOD state, never the live one (M-15). Previously tokens.json
 // re-ran `brandTheme(brandState)` uncaught — a failing edit threw in the click handler (no
@@ -1441,6 +1444,20 @@ const exportTokens = (): void => {
  *  input and the slug are read at the click, so an edit made while the chunk loads does not change what downloads.
  *  One download per file, as the token set (three since #1325). A chunk that fails to load downloads nothing and is
  *  logged; the dialog has no words for it yet (#3429, held for the owner). */
+/** The shadcn/ui or Tailwind theme for the brand on screen (the lane after #2997): `web-themes.ts`, the projector regen
+ *  writes `out/shadcn/**` and `out/tailwind/**` with, over the same consumer set the token download writes
+ *  (`buildOverlaySet`, no metadata). So a committed brand downloads exactly its committed files, which
+ *  `test:export-parity` holds in both hosts. Off the last-good theme, like the tokens. */
+const webThemeFilesOf = (which: 'shadcn' | 'tailwind'): WebThemeFile[] => {
+  ensureThemeFresh();
+  const h = webThemeHandoff(buildTree(theme).tree, slug());
+  return which === 'shadcn' ? shadcnFiles(h) : tailwindFiles(h);
+};
+const exportWebTheme = (which: 'shadcn' | 'tailwind'): void => {
+  if (restoreFailure) return;
+  for (const f of webThemeFilesOf(which)) download(f.name, f.text, f.name.endsWith('.json') ? 'application/json' : 'text/css');
+};
+
 const exportComponentSpecs = async (): Promise<void> => {
   const input = lastGoodInput, name = slug();
   let exporter;
@@ -1566,7 +1583,13 @@ const exportView = (): ExportView => {
   // `visibleSettings` filters the ONE list by artifact and source (#720). Never a per-source list.
   const settings = visibleSettings(exportArtifact, exportSource);
   const right: ExportBlock[] = [];
-  if (exportArtifact === 'dtcg') {
+  const themeFmt = themeOn();
+  if (themeFmt) {
+    const names = webThemeFilesOf(themeFmt).map((f) => f.name);
+    right.push({ kind: 'cap', text: names.length === 1 ? '1 file' : `${names.length} files` });
+    right.push({ kind: 'files', text: names.join('\n') });
+    if (restoreFailure) right.push({ kind: 'note', text: THEME_NONE, hook: 'export-restore-note' });
+  } else if (exportArtifact === 'dtcg') {
     ensureThemeFresh();                   // #1196 — the preview must show the current namespace, same as the download
     const tree = buildTree(theme).tree;   // `theme` is the last-good — always valid, never throws
     const files = exportFileNames(tree, slug(), exportSettings, exportMetadata);
@@ -1595,24 +1618,27 @@ const exportView = (): ExportView => {
     if (restoreFailure) right.push({ kind: 'note', text: restoreFailure.brand ? BRIEF_IS_FAILED : BRIEF_NONE, hook: 'export-restore-note' });
   }
   // Owner (#2007): after a failed restore the tokens on hand are the DEMO's, so that download is off too.
-  const off = exportArtifact === 'design-md' && !briefInput() ? BRIEF_NONE : exportArtifact === 'dtcg' && restoreFailure ? TOKENS_NONE
+  const off = exportArtifact === 'design-md' && !briefInput() ? BRIEF_NONE : themeFmt && restoreFailure ? THEME_NONE : exportArtifact === 'dtcg' && restoreFailure ? TOKENS_NONE
     : exportArtifact === 'component-specs' && !componentSpecsFileNames(slug()) ? SPECS_WEB_OFF
     : exportArtifact === 'component-specs' && restoreFailure ? SPECS_NONE : null;
   return {
     artifacts: ARTIFACTS.map((a) => ({ id: a.id, label: a.label, on: a.id === exportArtifact })),
-    desc: artifact.desc,
+    desc: themeFmt ? FORMAT_DESC[themeFmt] : artifact.desc,
     settings: [
-      ...settings.map((s) => ({ key: s.key, label: s.label, desc: s.desc,
+      // The format first (the lane after #2997): with a theme chosen, the token files' shape settings do not apply.
+      ...(exportArtifact === FORMAT_OPTION.artifact ? [{ key: FORMAT_OPTION.key, label: FORMAT_OPTION.label, desc: FORMAT_OPTION.desc,
+        options: FORMAT_OPTION.options.map((o) => ({ value: o.value, label: o.label, on: o.value === exportFormat })) }] : []),
+      ...(themeFmt ? [] : settings).map((s) => ({ key: s.key, label: s.label, desc: s.desc,
         options: s.options.map((o) => ({ value: o.value, label: o.label, on: exportSettings[s.key] === o.value })) })),
       // #2552: the metadata option rides the settings list's controls, but it is not a shape setting (see its def).
-      ...(exportArtifact === METADATA_OPTION.artifact ? [{ key: METADATA_OPTION.key, label: METADATA_OPTION.label, desc: METADATA_OPTION.desc,
+      ...(exportArtifact === METADATA_OPTION.artifact && !themeFmt ? [{ key: METADATA_OPTION.key, label: METADATA_OPTION.label, desc: METADATA_OPTION.desc,
         options: METADATA_OPTION.options.map((o) => ({ value: o.value, label: o.label, on: (o.value === 'on') === exportMetadata })) }] : []),
     ],
     // Said out loud rather than left as an empty area: silence reads as a loading state or a bug.
     none: settings.length ? null : exportArtifact === 'component-specs' ? SPECS_NO_SETTINGS : 'Nothing to set — the brief is written one way.',
     right,
     // #3553 Q-UI8 A: the word alone; the bar draws the vendored download icon before it.
-    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component specs' : 'Download tokens', off },
+    go: { text: exportArtifact === 'design-md' ? 'Download brief' : exportArtifact === 'component-specs' ? 'Download component specs' : (themeFmt && WEB_THEME_GO[themeFmt]) || 'Download tokens', off },
   };
 };
 
@@ -1658,14 +1684,16 @@ const barActions: BarActions = {
   closeExport: () => { exportMenuOpen = false; barChanged(); },
   artifact: (id) => { exportArtifact = id as ArtifactId; barChanged(); },
   setting: (key, value) => {
-    if (key === METADATA_OPTION.key) exportMetadata = value === 'on';
+    if (key === FORMAT_OPTION.key) exportFormat = value as ExportFormat;
+    else if (key === METADATA_OPTION.key) exportMetadata = value === 'on';
     else exportSettings = { ...exportSettings, [key]: value };
     barChanged();
   },
   download: () => {
     // The Export area stays drawn (`exportOpen` in `barRead`, #2909).
     exportMenuOpen = false; barChanged();
-    if (exportArtifact === 'design-md') exportDesignMd(); else if (exportArtifact === 'component-specs') void exportComponentSpecs(); else exportTokens();
+    if (exportArtifact === 'design-md') exportDesignMd(); else if (exportArtifact === 'component-specs') void exportComponentSpecs();
+    else if (themeOn()) exportWebTheme(themeOn()!); else exportTokens();
   },
 };
 
@@ -1961,6 +1989,10 @@ const TOKENS_NONE = "Off after a failed restore: these tokens would be the demo 
 /** #3425 (DRAFT wording for the owner, Q3425.1); "component contracts" since #1325 (Q-CC1 A, DRAFT). */
 const SPECS_NONE = "Off after a failed restore: these component specs would be the demo brand's, not this file's.";
 const SPECS_NO_SETTINGS = "Nothing to set — the component specs follow this brand's component settings.";
+// The web themes' two notes (DRAFT wording for the owner), in the specs' pattern.
+/** The web themes' download buttons (DRAFT wording for the owner). */
+const WEB_THEME_GO: Readonly<Record<'shadcn' | 'tailwind', string>> = { shadcn: 'Download shadcn/ui theme', tailwind: 'Download Tailwind theme' };
+const THEME_NONE = "Off after a failed restore: this theme would be the demo brand's, not this file's.";
 const SPECS_WEB_OFF = 'In the Figma plugin: the component specs are built from the component definitions, which the web Studio leaves out.';   // a fallback no host reaches since #3429: the plugin provides the exporter, the web a loader
 /** The error bar after a failed restore, by kind (owner, 2026-10-02). Every kind says "until a brand loads": the
  *  owner's words (#4222, 2026-11-19), though a rebuild that resolves also ends `unresolved`. */

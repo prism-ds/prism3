@@ -10,6 +10,9 @@
  * role `projections/shadcn.ts` names for it. That file holds no values, so nothing here can drift from the tokens a
  * brand ships.
  *
+ * THE DISK SHELL. The projector itself is `web-themes.ts`, pure, which every other surface runs too (the MCP, the CLI,
+ * Studio's and the plugin's Export). This file reads the handoff from `out/` and writes what `shadcnFiles` returns.
+ *
  * Literal values, not `var(--pds3-…)` aliases: shadcn switches modes with `.dark`, `@prism3/tokens` with
  * `[data-theme="dark"]`, so an alias would not flip.
  *
@@ -24,22 +27,20 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hexToRgb, rgbToOklch } from './color.ts';
-import { ENGINE_VERSION } from './version.ts';
-import {
-  SHADCN_COLOR_VARS, SHADCN_DIMENSION_VARS, SHADCN_FONT_FALLBACK, SHADCN_MAP_VERSION, SHADCN_THEME_VARS,
-} from './projections/shadcn.ts';
+import { handoffOf, SHADCN_MODES, shadcnFiles, type Handoff } from './web-themes.ts';
 import { isEntry } from './entry-point';
+
+// The projector's names, where the gates and `emit-tailwind.ts` have always imported them from.
+export {
+  SHADCN_MODES, resolveRole, parseEmittedColor, dimensionCss, toOklchCss, dimensionValue, fontValue, shadcnModeVars,
+  shadcnThemeVars, shadcnCss, SHADCN_RING_FORMS, SHADCN_RING_SELECTOR, SHADCN_BASE_CSS, SHADCN_DOCS, shadcnRegistryItem,
+  type ShadcnMode, type Handoff,
+} from './web-themes.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const OUT_DIR = resolve(here, 'out');
 
-/** shadcn's two modes, and the emitted overlay that supplies each (light is the base itself). */
-export const SHADCN_MODES = { light: null, dark: 'dark' } as const;
-export type ShadcnMode = keyof typeof SHADCN_MODES;
-
 type Tree = Record<string, unknown>;
-type Token = { $type?: string; $value?: unknown };
 
 /**
  * The brands the handoff carries: every `<brand>.base.tokens.json` in `dir`, sorted by code point. A brand's web base,
@@ -50,217 +51,27 @@ export const handoffBrands = (dir = OUT_DIR): string[] =>
     .map((f) => f.slice(0, -'.base.tokens.json'.length))
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-export type Handoff = { brand: string; root: string; base: Tree; overlays: Partial<Record<string, Tree>> };
-
+/** A committed brand's handoff, read from `dir`: its base file and the overlay of each mode shadcn needs. */
 export const readHandoff = (brand: string, dir = OUT_DIR): Handoff => {
   const read = (f: string): Tree => JSON.parse(readFileSync(join(dir, f), 'utf8')) as Tree;
-  const baseFile = read(`${brand}.base.tokens.json`);
-  const roots = Object.keys(baseFile);
-  if (roots.length !== 1) throw new Error(`${brand}.base.tokens.json: expected one root, found ${roots.length}`);
-  const root = roots[0]!;
-  const overlays: Partial<Record<string, Tree>> = {};
+  const overlays: Array<{ mode: string; tree: unknown }> = [];
   for (const m of Object.values(SHADCN_MODES)) {
     if (!m) continue;
     const f = `${brand}.${m}.overlay.tokens.json`;
     if (!existsSync(join(dir, f))) throw new Error(`${brand}: no ${f} in the handoff`);
-    overlays[m] = (read(f)[root] ?? {}) as Tree;
+    overlays.push({ mode: m, tree: read(f) });
   }
-  return { brand, root, base: baseFile[root] as Tree, overlays };
+  return handoffOf(brand, read(`${brand}.base.tokens.json`), overlays);
 };
-
-const at = (tree: Tree | undefined, path: string): Token | undefined => {
-  let node: unknown = tree;
-  for (const k of path.split('.')) {
-    if (!node || typeof node !== 'object') return undefined;
-    node = (node as Tree)[k];
-  }
-  return node && typeof node === 'object' && '$value' in (node as Tree) ? (node as Token) : undefined;
-};
-
-/** A role's resolved `$value` in one mode: the overlay's token first, then the base's, following brace aliases the same
- *  way at every hop. Throws naming the role when it does not resolve. */
-export const resolveRole = (h: Handoff, role: string, mode: ShadcnMode): { type: string; value: unknown } => {
-  const overlay = SHADCN_MODES[mode] ? h.overlays[SHADCN_MODES[mode]!] : undefined;
-  let path = role;
-  for (let hop = 0; hop < 16; hop++) {
-    const tok = at(overlay, path) ?? at(h.base, path);
-    if (!tok) throw new Error(`${h.brand} ${mode}: ${path} is not in the handoff${path === role ? '' : ` (aliased from ${role})`}`);
-    const v = tok.$value;
-    const alias = typeof v === 'string' ? /^\{([^}]+)\}$/.exec(v) : null;
-    if (!alias) return { type: tok.$type ?? '', value: v };
-    if (!alias[1]!.startsWith(`${h.root}.`)) throw new Error(`${h.brand} ${mode}: ${path} aliases outside ${h.root}: ${v}`);
-    path = alias[1]!.slice(h.root.length + 1);
-  }
-  throw new Error(`${h.brand} ${mode}: ${role} — alias chain deeper than 16`);
-};
-
-const trim = (v: number, places: number): string => {
-  const s = v.toFixed(places).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
-  return s === '-0' ? '0' : s;
-};
-
-/** An emitted color as its 8-bit channels and an alpha in [0, 1]. Two spellings reach it: the handoff's DTCG 2025.10
- *  Color-module object (#4123) — `{ colorSpace: "srgb", components: [r, g, b] (0–1), alpha?, hex? }`, read from its
- *  `components`, as stock Style Dictionary reads it — and a string, `#rrggbb`, `#rrggbbaa`, or `rgb()`/`rgba()` for a
- *  brand whose `colorFormat` is rgb (the canonical tree's spelling). Throws on anything else, a color space other than
- *  srgb included, so a new emitted format fails here by name. Its own reading of the spec: it shares no code with the
- *  engine's `conformColor`. */
-export const parseEmittedColor = (value: unknown): { r: number; g: number; b: number; alpha: number } => {
-  if (value && typeof value === 'object') {
-    const o = value as { colorSpace?: unknown; components?: unknown; alpha?: unknown };
-    const cs = Array.isArray(o.components) ? o.components : [];
-    if (o.colorSpace !== 'srgb') throw new Error(`not an srgb color object (colorSpace ${JSON.stringify(o.colorSpace)}): ${JSON.stringify(value)}`);
-    if (cs.length !== 3 || !cs.every((c) => typeof c === 'number' && c >= 0 && c <= 1)) throw new Error(`not a color object's three 0–1 components: ${JSON.stringify(value)}`);
-    const alpha = o.alpha === undefined ? 1 : o.alpha;
-    if (typeof alpha !== 'number' || alpha < 0 || alpha > 1) throw new Error(`not a color object's 0–1 alpha: ${JSON.stringify(value)}`);
-    const [r, g, b] = (cs as number[]).map((c) => Math.round(c * 255));
-    return { r: r!, g: g!, b: b!, alpha };
-  }
-  if (typeof value !== 'string') throw new Error(`not an emitted color: ${JSON.stringify(value)}`);
-  const v = value.trim();
-  const hx = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/.exec(v);
-  if (hx) return { ...hexToRgb(hx[1]!), alpha: hx[2] ? parseInt(hx[2], 16) / 255 : 1 };
-  const fn = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([0-9.]+)\s*)?\)$/.exec(v);
-  if (fn) return { r: Number(fn[1]), g: Number(fn[2]), b: Number(fn[3]), alpha: fn[4] === undefined ? 1 : Number(fn[4]) };
-  throw new Error(`not an emitted color: ${value}`);
-};
-
-/** An emitted dimension as a CSS length: the handoff's DTCG 2025.10 `{ value, unit }` (#4123), or the canonical
- *  tree's string (`"16px"`, `"0.5rem"`), passed through. Throws on anything else. */
-export const dimensionCss = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  const o = (value && typeof value === 'object' ? value : {}) as { value?: unknown; unit?: unknown };
-  if (typeof o.value !== 'number' || !Number.isFinite(o.value) || (o.unit !== 'px' && o.unit !== 'rem')) {
-    throw new Error(`not an emitted dimension: ${JSON.stringify(value)}`);
-  }
-  return `${o.value}${o.unit}`;
-};
-
-/** An emitted color as CSS `oklch()`. L as a fraction, four places; C four places; H two places, and 0 for a color
- *  with no hue (CSS Color 4's convention, which shadcn's grays use). Alpha below 1 is written as a percentage. */
-export const toOklchCss = (value: unknown): string => {
-  const { r, g, b, alpha } = parseEmittedColor(value);
-  const { l, c, h: hue } = rgbToOklch({ r, g, b });
-  const cs = trim(c, 4);
-  const hs = hue === null || cs === '0' ? '0' : trim(hue, 2);
-  const body = `${trim(l, 4)} ${cs} ${hs}`;
-  return alpha >= 1 ? `oklch(${body})` : `oklch(${body} / ${trim(alpha * 100, 2)}%)`;
-};
-
-const colorValue = (h: Handoff, role: string, mode: ShadcnMode): string => {
-  const { type, value } = resolveRole(h, role, mode);
-  if (type !== 'color') throw new Error(`${h.brand} ${mode}: ${role} is not a color (${type})`);
-  return toOklchCss(value);
-};
-
-export const dimensionValue = (h: Handoff, role: string): string => {
-  const { type, value } = resolveRole(h, role, 'light');
-  if (type !== 'dimension') throw new Error(`${h.brand}: ${role} is not a dimension (${type})`);
-  return dimensionCss(value);
-};
-
-export const fontValue = (h: Handoff, key: string, role: string): string => {
-  const { type, value } = resolveRole(h, role, 'light');
-  const families = (Array.isArray(value) ? value : [value]).map(String);
-  if (type !== 'fontFamily' || !families.length) throw new Error(`${h.brand}: ${role} is not a font family (${type})`);
-  const quote = (f: string): string => (/^[A-Za-z-]+$/.test(f) ? f : `"${f.replace(/"/g, '\\"')}"`);
-  const fallback = SHADCN_FONT_FALLBACK[key];
-  return [...families.map(quote), ...(fallback ? [fallback] : [])].join(', ');
-};
-
-/** One mode's shadcn variables, in map order: every color row, and `radius` in light only, as shadcn writes it. */
-export const shadcnModeVars = (h: Handoff, mode: ShadcnMode): Array<[string, string]> => [
-  ...Object.entries(SHADCN_COLOR_VARS).map(([k, role]): [string, string] => [k, colorValue(h, role, mode)]),
-  ...(mode === 'light' ? Object.entries(SHADCN_DIMENSION_VARS).map(([k, role]): [string, string] => [k, dimensionValue(h, role)]) : []),
-];
-
-export const shadcnThemeVars = (h: Handoff): Array<[string, string]> =>
-  Object.entries(SHADCN_THEME_VARS).map(([k, role]): [string, string] =>
-    [k, k.startsWith('font-') ? fontValue(h, k, role) : dimensionValue(h, role)]);
-
-const stamp = (brand: string): string =>
-  `${brand} — a shadcn/ui theme generated by the Prism3 engine ${ENGINE_VERSION}, shadcn map ${SHADCN_MAP_VERSION}.`;
-
-/** The plain CSS file: `:root` and `.dark`, the way shadcn's own `globals.css` carries a theme. */
-export const shadcnCss = (h: Handoff): string => {
-  const block = (sel: string, vars: Array<[string, string]>): string =>
-    `${sel} {\n${vars.map(([k, v]) => `  --${k}: ${v};`).join('\n')}\n}\n`;
-  return [
-    `/* ${stamp(h.brand)} Do not edit: regenerate. */\n`,
-    block(':root', shadcnModeVars(h, 'light')),
-    block('.dark', shadcnModeVars(h, 'dark')),
-  ].join('\n');
-};
-
-/** The stock selectors that fade the box-shadow focus ring to 50%, as stock Tailwind 4.3.3 compiles each `ring-ring/50`
- *  form shadcn/ui uses: `focus-visible:` (Button, Input, Select, Checkbox, Switch, Badge, Tabs, Textarea and more),
- *  the Slider thumb's unconditional class, the Calendar's `has-focus:` and its focused day, the Input OTP's active slot,
- *  `focus-within:` (Combobox, Attachment), the Input Group's control and Bubble's `[button,a]:` (#4386, owner decision
- *  2026-11-24 A on #4575: every shadcn focus ring at full strength). Each mirrors the stock rule's own selector, so the
- *  override applies exactly where stock fades the ring. */
-export const SHADCN_RING_FORMS: readonly string[] = [
-  '.focus-visible\\:ring-ring\\/50:focus-visible',
-  '.ring-ring\\/50',
-  '.has-focus\\:ring-ring\\/50:has(:focus)',
-  '.group-data-\\[focused\\=true\\]\\/day\\:ring-ring\\/50:is(:where(.group\\/day)[data-focused="true"] *)',
-  '.data-\\[active\\=true\\]\\:ring-ring\\/50[data-active="true"]',
-  '.focus-within\\:ring-ring\\/50:focus-within',
-  '.has-\\[\\[data-slot\\=input-group-control\\]\\:focus-visible\\]\\:ring-ring\\/50:has(:is([data-slot=input-group-control]:focus-visible))',
-  '.\\[button\\,a\\]\\:focus-visible\\:ring-ring\\/50:is(button, a):focus-visible',
-];
-/** The one selector the ring rule carries: every form, minus an invalid field. Stock shadcn draws that ring in
- *  `destructive`, flagged on the element itself (`aria-invalid:ring-destructive/20`) or on a field inside it
- *  (`has-aria-invalid:`, the Combobox), and the rule leaves both alone. */
-export const SHADCN_RING_SELECTOR = `:is(${SHADCN_RING_FORMS.join(', ')}):not([aria-invalid="true"], :has([aria-invalid="true"]))`;
-
-/** Q2997.17 B: stock shadcn's scaffold fades the focus outline to 50% (`outline-ring/50`), below 3:1 on the page. The
- *  registry item restores the full-strength outline the theme's own `ring` was measured at.
- *
- *  #4386 (owner decision 2026-11-24, A for the ring): shadcn's components focus with a box-shadow ring instead, drawn
- *  in `ring-ring/50` through one of the forms in `SHADCN_RING_FORMS`, which the outline rule never reaches. The second
- *  rule sets that ring's color back to the full `--ring`. It is the one non-stock rule here: `!important` because the
- *  stock classes live in the later `utilities` layer, and an important declaration in an earlier layer outranks them.
- *  It is tied to shadcn's class names, so a renamed class orphans it; `lint-shadcn-contrast` measures every form at 50%
- *  with this rule applied, and fails by name if it stops reaching one. The plain `<brand>.css` carries neither rule. */
-export const SHADCN_BASE_CSS = {
-  '@layer base': {
-    '*': { '@apply outline-ring': {} },
-    [SHADCN_RING_SELECTOR]: { '--tw-ring-color': 'var(--ring) !important' },
-  },
-} as const;
-
-/** The registry item's `docs` line (owner decision 2026-11-24 A on #4575, wording approved): a pointer to the full
- *  consumer note, the `### The shadcn/ui theme` section of `apps/studio/README.md`. */
-export const SHADCN_DOCS = 'Focus rings draw at full strength. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme';
-
-/** The `registry:theme` item `npx shadcn add <url>` installs. */
-export const shadcnRegistryItem = (h: Handoff): Record<string, unknown> => ({
-  $schema: 'https://ui.shadcn.com/schema/registry-item.json',
-  name: h.brand,
-  type: 'registry:theme',
-  title: h.brand,
-  // DRAFT copy (#2997): the owner settles the wording.
-  description: `Generated by the Prism3 engine ${ENGINE_VERSION}, shadcn map ${SHADCN_MAP_VERSION}.`,
-  cssVars: {
-    theme: Object.fromEntries(shadcnThemeVars(h)),
-    light: Object.fromEntries(shadcnModeVars(h, 'light')),
-    dark: Object.fromEntries(shadcnModeVars(h, 'dark')),
-  },
-  css: SHADCN_BASE_CSS,
-  docs: SHADCN_DOCS,
-});
 
 /** Writes `<out>/shadcn/<brand>.css` and `<brand>.registry-item.json` for every brand in `handoffDir`. */
 export const emitShadcn = (out = OUT_DIR, handoffDir = OUT_DIR): string[] => {
-  const dir = join(out, 'shadcn');
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(join(out, 'shadcn'), { recursive: true });
   const written: string[] = [];
-  for (const brand of handoffBrands(handoffDir)) {
-    const h = readHandoff(brand, handoffDir);
-    const css = join(dir, `${brand}.css`), item = join(dir, `${brand}.registry-item.json`);
-    writeFileSync(css, shadcnCss(h));
-    writeFileSync(item, `${JSON.stringify(shadcnRegistryItem(h), null, 2)}\n`);
-    written.push(css, item);
+  for (const brand of handoffBrands(handoffDir)) for (const f of shadcnFiles(readHandoff(brand, handoffDir))) {
+    const p = join(out, f.path);
+    writeFileSync(p, f.text);
+    written.push(p);
   }
   return written;
 };

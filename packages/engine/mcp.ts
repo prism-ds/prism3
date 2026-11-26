@@ -57,6 +57,7 @@ import { parseStandardDesignMd, isStandardDesignMd, standardToBrandInput } from 
 import { ENGINE_VERSION } from './version';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
+import { webThemeHandoff, shadcnFiles, tailwindFiles } from './web-themes';
 import { listComponents, getComponent } from './mcp-components';
 import { BUILD_IDENTITY } from './build-identity';
 import { isEntry } from './entry-point';
@@ -430,7 +431,7 @@ export const toolDefs = (brandSchema: unknown) => [
   {
     name: 'export_theme',
     title: 'Write the token system to disk',
-    description: 'Generate a brand and WRITE its artifacts to a directory, returning a manifest of what was written — never the content. Use this instead of theme_brand include:["tokens"] whenever you want the actual files: the DTCG tree alone is roughly ' + PAYLOAD_CHARS.tokens.toLocaleString('en-US') + ' characters for a four-mode brand, which no tool result should carry. Files carry the names the CLI writes. "tokens" writes <id>.tokens.json (the full DTCG tree), <id>.base.tokens.json and one <id>.<mode>.overlay.tokens.json per other mode (the set a multi-mode code build reads); "aiMetadata" writes <id>.ai.json; "figma" writes a figma/ directory of Figma collection files; "componentSpecs" writes <id>.component-contracts.json (every component contract, with the brand\'s settings resolved), <id>.component-defs.json (the same file under its old name) and <id>.component-defs.specs.json (the same in the Specs format). `include` replaces the default ["tokens", "aiMetadata", "figma"]; for everything, pass all four. For one release each file is also written under its old unprefixed name (tokens.json, ai-metadata.json, component-contracts.json, component-defs.json, component-defs.specs.json). Arguments: { brand, outDir, include }. `outDir` must be a RELATIVE path. Requires a host that granted filesystem access; returns an error if not.',
+    description: 'Generate a brand and WRITE its artifacts to a directory, returning a manifest of what was written — never the content. Use this instead of theme_brand include:["tokens"] whenever you want the actual files: the DTCG tree alone is roughly ' + PAYLOAD_CHARS.tokens.toLocaleString('en-US') + ' characters for a four-mode brand, which no tool result should carry. Files carry the names the CLI writes. "tokens" writes <id>.tokens.json (the full DTCG tree), <id>.base.tokens.json and one <id>.<mode>.overlay.tokens.json per other mode (the set a multi-mode code build reads); "aiMetadata" writes <id>.ai.json; "figma" writes a figma/ directory of Figma collection files; "componentSpecs" writes <id>.component-contracts.json (every component contract, with the brand\'s settings resolved), <id>.component-defs.json (the same file under its old name) and <id>.component-defs.specs.json (the same in the Specs format). "shadcn" writes shadcn/<id>.css (the shadcn/ui theme\'s light and dark variables) and shadcn/<id>.registry-item.json (the registry item a shadcn/ui project installs, with the full-strength focus ring); "tailwind" writes tailwind/<id>.theme.css (a Tailwind v4 theme). `include` replaces the default ["tokens", "aiMetadata", "figma"]; for everything, pass all six. For one release each file is also written under its old unprefixed name (tokens.json, ai-metadata.json, component-contracts.json, component-defs.json, component-defs.specs.json). Arguments: { brand, outDir, include }. `outDir` must be a RELATIVE path. Requires a host that granted filesystem access; returns an error if not.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -439,7 +440,7 @@ export const toolDefs = (brandSchema: unknown) => [
         brand: { type: 'object', description: 'The same BrandInput you would pass to theme_brand — see that tool for the full input schema.' },
         outDir: { type: 'string', description: 'Relative directory to write into (e.g. "./tokens"). Absolute paths and ".." segments are refused.' },
         include: {
-          type: 'array', description: 'Artifact families to write, replacing the default ["tokens", "aiMetadata", "figma"]. componentSpecs is written only when named, so pass all four for everything.',
+          type: 'array', description: 'Artifact families to write, replacing the default ["tokens", "aiMetadata", "figma"]. componentSpecs, shadcn and tailwind are written only when named, so pass all six for everything.',
           items: { type: 'string', enum: [...EXPORT_SECTIONS] },
         },
       },
@@ -724,7 +725,7 @@ export interface ExportIo {
 /** Artifact families `export_theme` can write. Distinct from `THEME_SECTIONS` (what `theme_brand`
  *  can INLINE) because the sets genuinely differ: `figma` is a whole directory of collection files
  *  that has never been inlineable at any size, and would be meaningless as a single blob. */
-export const EXPORT_SECTIONS = ['tokens', 'aiMetadata', 'figma', 'componentSpecs'] as const;
+export const EXPORT_SECTIONS = ['tokens', 'aiMetadata', 'figma', 'componentSpecs', 'shadcn', 'tailwind'] as const;
 /** What `export_theme` writes when the caller does not say: the token families, as before #3425. `componentSpecs` (the
  *  brand's component-defs export and its Specs projection, about 3.7 MB) is opt-in, so an existing call writes what
  *  it always wrote. */
@@ -841,6 +842,13 @@ export const callTool = (name: string, args: any, brandSchema?: unknown, io?: Ex
         files.push({ path: names.defs, content: text });
         files.push({ path: names.specs, content: specs });
       }
+    }
+
+    // The web themes (the lane after #2997): `web-themes.ts`, the projector regen writes `out/shadcn/**` and
+    // `out/tailwind/**` with, over the brand's consumer set, at the same relative paths.
+    if (want.includes('shadcn') || want.includes('tailwind')) {
+      const h = webThemeHandoff(tree, id);
+      for (const f of [...(want.includes('shadcn') ? shadcnFiles(h) : []), ...(want.includes('tailwind') ? tailwindFiles(h) : [])]) files.push({ path: f.path, content: f.text });
     }
 
     // #4214 (owner decision, 2026-11-20): a brand id that names no file Windows can write is refused here, where the

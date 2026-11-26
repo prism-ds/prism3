@@ -45,7 +45,14 @@ const FIXTURE = [
   ['bg-primary', 'background-color', { var: 'primary' }],
   ['text-muted-foreground', 'color', { var: 'muted-foreground' }],
   ['outline-ring', 'outline-color', { var: 'ring' }],
+  // Every shadow rung's utility reads its own per-mode variable (#4588): a swapped `@theme inline` indirection
+  // (`--shadow-lg: var(--shadow-md-value)`) draws the wrong rung, and the browser-side arm reads only the variables.
+  ['shadow-xs', '--tw-shadow', { var: 'shadow-xs-value' }],
+  ['shadow-sm', '--tw-shadow', { var: 'shadow-sm-value' }],
   ['shadow-md', '--tw-shadow', { var: 'shadow-md-value' }],
+  ['shadow-lg', '--tw-shadow', { var: 'shadow-lg-value' }],
+  ['shadow-xl', '--tw-shadow', { var: 'shadow-xl-value' }],
+  ['shadow-2xl', '--tw-shadow', { var: 'shadow-2xl-value' }],
   ['rounded-lg', 'border-radius', { role: 'radius.lg' }],
   ['p-2', 'padding', { role: 'space.100' }],
   ['font-sans', 'font-family', { font: 'core.font.family.body' }],

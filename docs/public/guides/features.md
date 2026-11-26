@@ -7,7 +7,7 @@ What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows ho
 - Web Studio: Studio in a browser. <!-- src: apps/studio/build-site.mjs@"/**\n * Site build (#104). Produces the directory Vercel publishes.".."* plus the repo's `docs"#b1876ee9 -->
 - Figma plugin: the same studio inside Figma <!-- src: apps/plugin/src/ui/entry.ts@"import './component-catalog".."mountAgentLink();"#6258203d -->, plus **Update file**, which writes to the file. <!-- src: apps/studio/src/state/update-file.ts@"button: 'Update file" -->
 - Agent, through the agent link: an AI agent driving the open plugin. See [Use the agent link](agent-link.md). <!-- src: apps/plugin/src/agent-protocol.ts@"export const AGENT_COMMANDS"#6bb39596 -->
-- Agent, through the Prism3 MCP server: an AI agent using the engine directly, with no Figma file. <!-- src: packages/engine/mcp.ts@"*\n *  `validate_brand` does NOT re-inline the 52KB brand schema. Two copies made `tools/list` 91,528".."// this annotation to"#ad039113 -->
+- Agent, through the Prism3 MCP server: an AI agent using the engine directly, with no Figma file. <!-- src: packages/engine/mcp.ts@"*\n *  `validate_brand` does NOT re-inline the 52KB brand schema. Two copies made `tools/list` 91,528".."// this annotation to"#5ae0ed66 -->
 
 ✓ means the surface can do it. – means it can't.
 
@@ -45,9 +45,10 @@ What each Prism3 surface can do. The [ecosystem diagram](../ecosystem/) shows ho
 |---|---|---|---|---|
 | [Download DTCG token files](export-tokens.md): a base file and one overlay per mode | ✓ <!-- src: apps/studio/src/export-settings.ts@"export const ARTIFACTS".."},"#531be286 --> | ✓ | – | ✓ `export_theme` writes them to a folder |
 | Write the token files, the agent metadata and the Figma variable files to a folder | – | – | – | ✓ `export_theme` <!-- src: packages/engine/README.md@"\u007c `export_theme` \u007c Writes" --> |
+| Download the shadcn/ui theme and the Tailwind theme (Design tokens › Format) | ✓ <!-- src: apps/studio/src/export-settings.ts@"export const FORMAT_OPTION".."def: 'dtcg',"#91f3ff25 --> | ✓ | – | ✓ `export_theme`, the `shadcn` and `tailwind` sections |
 | Score how generated UI used the tokens | – | – | – | ✓ `score_consumption` |
 
-<!-- src: packages/engine/mcp.ts@"name: 'export_theme'".."annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },\n  },"#2d429c3c --> <!-- src: packages/engine/mcp.ts@"name: 'score_consumption".."annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },\n  }," -->
+<!-- src: packages/engine/mcp.ts@"name: 'export_theme'".."annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },\n  }," --> <!-- src: packages/engine/mcp.ts@"name: 'score_consumption".."annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },\n  }," -->
 
 TokenPress, a separate Figma plugin, exports any Figma file's variables and styles as DTCG token files. See [Export tokens](export-tokens.md#export-any-figma-file-with-tokenpress). <!-- src: apps/tokenpress/README.md@"A Figma plugin that "#9efac648 -->
 
