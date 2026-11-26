@@ -12,6 +12,8 @@ export type {
   WritePlan,
 } from './write-plan';
 export { CORE_COLLECTION, UNSCOPED_TYPES, buildFigmaColor } from './emit-figma-color';
+export { ANIMATION_STYLE_SWITCHES, STATE_PATTERNS, animationStyleName, buildAnimationStylesPlan, presetVariable } from './figma-animation-styles';
+export type { AnimationEntryKind, AnimationEntryRow, AnimationStyleRow, AnimationStylesPlan } from './figma-animation-styles';
 export type { FigmaEasing } from './emit-figma-color';
 export { buildFigmaTextStyles } from './emit-figma-font';
 export type { FigmaEffect } from './emit-figma-styles';

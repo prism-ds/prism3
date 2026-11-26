@@ -575,8 +575,13 @@ const msFromValue = (tree: any, v: unknown): number => {
   }
   throw new Error(`emit-figma motion: not a millisecond duration: ${JSON.stringify(v)}`);
 };
-/** Seconds, the unit a TIMING variable holds, from milliseconds. Rounded so 260ms is 0.26, not float noise. */
-const secondsOf = (ms: number): number => Math.round(ms * 1000) / 1e6;
+/** THE TIMING UNIT (#2857 phase 3), the one place it is set. A TIMING variable is written in seconds: the plugin typings
+ *  give an animation entry's `duration` in seconds, and the 2026-11-24 app check stored 240 without confirming the
+ *  unit. JOB 102 confirms it on the Mac; were it milliseconds, this constant moves, and every TIMING value with it. */
+export const FIGMA_TIMING_UNIT = 's' as 's' | 'ms';
+/** A TIMING variable's value, from milliseconds, in `FIGMA_TIMING_UNIT`. Seconds are rounded so 260ms is 0.26, not
+ *  float noise. */
+const secondsOf = (ms: number): number => (FIGMA_TIMING_UNIT === 'ms' ? ms : Math.round(ms * 1000) / 1e6);
 /** The curve key a role or curve `$value` names — `{<root>.motion.easing.<curve>}` → `<curve>`. */
 const curveOf = (v: unknown): string => {
   const m = typeof v === 'string' ? /\.motion\.easing\.([^.}]+)\}$/.exec(v) : null;

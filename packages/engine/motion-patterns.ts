@@ -223,13 +223,14 @@ export const resolvePatterns = (overrides: Record<string, Record<string, MotionT
 const pct = (s: number): string => `${Math.round(s * 100)}%`;
 const presetToken = (path: string): string => `motion.preset.${path}`;
 /** What a track does, in plain words, for the half it plays in, without its subject ("fades in"). */
-const verbOf = (tr: MotionTrack, half: PatternHalf): string => {
+const verbOf = (tr: MotionTrack, half: PatternHalf, plain = false): string => {
   if (tr.property === 'opacity') return half === 'enter' ? 'fades in' : half === 'exit' ? 'fades out' : 'cross-fades';
   if (tr.property === 'color') return 'changes color';
   if (tr.property === 'size') return half === 'exit' ? 'eases closed' : 'eases open to its content height';
   if (tr.transform === 'scale') return half === 'enter' ? `scales up from ${pct(tr.scale ?? 1)}` : half === 'exit' ? `scales down to ${pct(tr.scale ?? 1)}` : `scales to ${pct(tr.scale ?? 1)} and back`;
   if (tr.transform === 'slide') {
-    const by = tr.distance && 'token' in tr.distance ? ` by motion.${tr.distance.token}` : '';
+    // `plain` (a Figma style's description, Q-PT21 A) names no token: what moves, not what it binds.
+    const by = !plain && tr.distance && 'token' in tr.distance ? ` by motion.${tr.distance.token}` : plain && tr.distance && 'token' in tr.distance ? ' a short way' : '';
     if (tr.from === 'bottom') return half === 'exit' ? 'slides back down' : 'slides up from the bottom edge';
     if (tr.from === 'end') return half === 'exit' ? 'slides back out' : 'slides in from the end edge';
     return half === 'exit' ? `slides back down${by}` : `slides up${by}`;
@@ -263,14 +264,15 @@ const patternSays = (p: MotionPattern, named: boolean): string => {
 /** What one element does under reduced motion, its tracks together: what still plays, on which reduced duration, and
  *  what doesn't ("the panel fades in on motion.preset.surface.duration-reduced, with no scale"). */
 const OFF_SAYS: Record<TransformKind, string> = { scale: 'scale', slide: 'slide', turn: 'turn', travel: 'travel' };
-const reducedOfElement = (element: string, tracks: readonly MotionTrack[], p: MotionPattern): string => {
+const reducedOfElement = (element: string, tracks: readonly MotionTrack[], p: MotionPattern, plain = false): string => {
   const plays: string[] = [];
   const stills: string[] = [];
   let sized = false, travels = false;
   for (const tr of tracks) {
     const kind = reducedKindOf(tr, p);
-    const on = `on ${presetToken(tr.preset)}.duration-reduced`;
-    if (kind === 'keep') plays.push(tr.property === 'color' ? `fades to its new color ${on}` : `${verbOf(tr, p.half)} ${on}`);
+    // `plain` (a Figma style's description, Q-PT21 A): "quickly" stands for the reduced duration it binds.
+    const on = plain ? 'quickly' : `on ${presetToken(tr.preset)}.duration-reduced`;
+    if (kind === 'keep') plays.push(tr.property === 'color' ? `fades to its new color ${on}` : `${verbOf(tr, p.half, plain)} ${on}`);
     else if (kind === 'fade') plays.push(`fades ${p.half === 'exit' ? 'out' : 'in'} ${on}, instead of ${tr.transform === 'slide' ? 'sliding' : tr.transform === 'scale' ? 'scaling' : 'moving'}`);
     else if (tr.property === 'size') sized = true;
     else if (tr.transform === 'travel') travels = true;
@@ -293,6 +295,15 @@ const reducedSays = (p: MotionPattern): string => {
     by.get(tr.element)!.push(tr);
   }
   return order.map((el) => reducedOfElement(el, by.get(el)!, p)).join('; ');
+};
+
+/** What one element of a pattern does, in plain words (#2857 phase 3, Q-PT21 A): a Figma animation style's
+ *  description. It names what moves and never a token, since the style itself binds the preset's variables. `reduced`
+ *  says what the element does under reduced motion instead. Drafted for the owner's review. */
+export const motionPlainWords = (p: MotionPattern, element: string, reduced = false): string => {
+  const tracks = p.tracks.filter((tr) => tr.element === element);
+  if (!tracks.length) throw new Error(`motionPlainWords: pattern '${p.name}' has no element '${element}'`);
+  return sentence(reduced ? reducedOfElement(element, tracks, p, true) : list(clausesOf(tracks, (tr) => verbOf(tr, p.half, true))));
 };
 
 /** A component's `motion` field, generated from the patterns it names (Q-PT2 A), so its prose and its data cannot
