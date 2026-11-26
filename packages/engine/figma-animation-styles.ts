@@ -9,18 +9,23 @@
  * revised). So re-pointing a preset, which is one alias move on its variables, re-times every style that plays on it,
  * live, with no style rewritten.
  *
- * THE REDUCED SIBLING (Q-PT20 A, Q-PT11 A). Each track plays as its reduced kind says: `keep` plays the same entry on the
- * preset's `duration-reduced`; `fade` swaps the movement for an opacity entry on `duration-reduced`; `off` adds nothing
- * (the element takes its end state at once). A reduced style with no entry is not written: the element does not move.
+ * THE REDUCED SIBLING (Q-PT20, as revised 2026-11-26; Q-PT11 A). Each track plays as its reduced kind says: `keep` plays
+ * the same entry on the preset's `duration-reduced`; `fade` swaps the movement for an opacity entry on `duration-reduced`;
+ * `off` adds nothing (the element takes its end state at once). A reduced style with no entry is not written: the element
+ * does not move.
  *
- * WHAT IS STILL OPEN, each behind one switch below so it lands in one place:
- *   - JOB 102 (the Mac check, results on #2857): whether a style can carry a fill color (`colorEntries`; Q-PT18 A: hover
- *     and press are styles only if it can); whether "X/enter" and "X/enter/reduced" coexist in the picker
- *     (`reducedName`; Q-PT20 A, else B's "X/enter · reduced"). The entry kinds' Figma names and the TIMING unit are the
- *     host's, in `write-animation-styles.ts` and `emit-figma-dims.ts` (`FIGMA_TIMING_UNIT`).
- *   - OWNER DECISION (posted on #2857 by this build): `grain`. A Figma animation style plays on the one layer it is
- *     applied to, and a pattern can move several (a dialog's scrim, panel and content). As built, a pattern that moves
- *     more than one element is a style per element (`dialog/enter/panel`); one that moves one element is one style.
+ * NAMES (Q-PT17, Q-PT19 A; Q-PT20 as revised 2026-11-26). Every pattern is a folder holding its `default` and `reduced`
+ * styles, with nothing loose beside it: "Dialog / enter / default", "Dialog / enter / reduced". The component is capitalized
+ * and the rest of the pattern path follows as written; a state change sits under "State /". Where a pattern moves several
+ * elements, each element is a folder of its own inside the pattern's ("Dialog / enter / panel / default").
+ *
+ * DECIDED BY THE 2026-11-26 CHECKS ON #2857: no animation entry carries a fill color, so a color track has no entry, and
+ * hover and press (whose cue is color) are style-guide rows only (Q-PT18 A's condition, not met). The entry kinds' names
+ * are the host's (`write-animation-styles.ts`), and TIMING is in seconds (`emit-figma-dims.ts`).
+ *
+ * STILL THE OWNER'S (posted on #2857 by this build): the GRAIN. A Figma animation style plays on the one layer it is
+ * applied to, and a pattern can move several (a dialog's scrim, panel and content). As built, a pattern that moves more
+ * than one element is a style per element; one that moves one element is one style. `ANIMATION_STYLE_SWITCHES.grain`.
  */
 import type { Theme } from './theme';
 import { at, buildTree, deref } from './tree';
@@ -28,22 +33,19 @@ import { nsName } from './emit-figma-color';
 import { MOTION_PATTERNS, motionPlainWords, reducedKindOf, type MotionPattern, type MotionTrack, type SlideFrom } from './motion-patterns';
 
 export const ANIMATION_STYLE_SWITCHES: {
-  /** JOB 102: can a Figma animation style carry a fill color? Until it says yes, a color track has no entry, and hover
-   *  and press (whose cue is color) are style-guide rows only (Q-PT18 A). */
+  /** Can a Figma animation style carry a fill color? No: the 2026-11-26 check found no entry kind that animates a fill. So
+   *  a color track has no entry, and hover and press are style-guide rows only (Q-PT18 A). */
   colorEntries: boolean;
-  /** JOB 102: Q-PT20 A's "dialog/enter/reduced" (a style and a folder of the same name, side by side) if the picker shows
-   *  it cleanly, else Q-PT20 B's "dialog/enter · reduced". */
-  reducedName: 'folder' | 'suffix';
   /** OWNER DECISION (this build): one style per moving element of a pattern that moves several (`element`), or one style
    *  per pattern holding every element's entries (`pattern`). */
   grain: 'element' | 'pattern';
-} = { colorEntries: false, reducedName: 'folder', grain: 'element' };
+} = { colorEntries: false, grain: 'element' };
 
 /** The patterns under "State /" in the picker (Q-PT19 A): changes of a control's state, not a component arriving. Typed:
  *  a new state pattern is named here on purpose. */
 export const STATE_PATTERNS: readonly string[] = ['hover', 'pressed', 'pressed/release'];
-/** Why a state pattern has no style yet (Q-PT18 A). */
-const GUIDE_ONLY_WHY = "a state change, which is a style only if an animation style can carry a fill color (JOB 102, Q-PT18 A)";
+/** Why a state pattern has no style (Q-PT18 A; the 2026-11-26 check on #2857). */
+const GUIDE_ONLY_WHY = 'a state change, and no Figma animation entry carries a fill color (the 2026-11-26 check on #2857, Q-PT18 A)';
 
 /** What an entry animates. The host maps each to one of its own animation kinds (`write-animation-styles.ts`). */
 export type AnimationEntryKind = 'opacity' | 'scale' | 'slide' | 'travel' | 'turn' | 'size' | 'color';
@@ -89,12 +91,16 @@ const entryKind = (tr: MotionTrack): AnimationEntryKind =>
 export const presetVariable = (root: string, preset: string, slot: 'duration' | 'easing' | 'delay' | 'duration-reduced'): string =>
   nsName(root, `motion/preset/${preset.split('.').join('/')}/${slot}`);
 
-/** A style's name: the pattern's own path (Q-PT17 A, Q-PT19 A), under `state/` for a state change, then the element where
- *  the pattern moves several, then the reduced sibling's form (Q-PT20). */
-export const animationStyleName = (pattern: string, element: string | null, reduced: boolean, sw = ANIMATION_STYLE_SWITCHES): string => {
-  const base = `${STATE_PATTERNS.includes(pattern) ? 'state/' : ''}${pattern}${element ? `/${element}` : ''}`;
-  return !reduced ? base : sw.reducedName === 'folder' ? `${base}/reduced` : `${base} · reduced`;
+/** A pattern's folder (Q-PT17, Q-PT19 A): its component capitalized and the rest of its path as written, under "State /"
+ *  for a state change, then the element where the pattern moves several. "Dialog / enter", "State / hover",
+ *  "Dialog / enter / panel". */
+export const animationStyleFolder = (pattern: string, element: string | null): string => {
+  const path = [...(STATE_PATTERNS.includes(pattern) ? ['state'] : []), ...pattern.split('/'), ...(element ? [element] : [])];
+  return path.map((seg, i) => (i === 0 ? `${seg.charAt(0).toUpperCase()}${seg.slice(1)}` : seg)).join(' / ');
 };
+/** A style's name: its folder, then `default` or `reduced` (Q-PT20 as revised 2026-11-26). */
+export const animationStyleName = (pattern: string, element: string | null, reduced: boolean): string =>
+  `${animationStyleFolder(pattern, element)} / ${reduced ? 'reduced' : 'default'}`;
 
 const pxOf = (v: unknown): number | undefined => {
   const m = typeof v === 'string' ? /^(-?\d+(?:\.\d+)?)px$/.exec(v) : null;
@@ -147,17 +153,17 @@ export const buildAnimationStylesPlan = (theme: Theme, sw = ANIMATION_STYLE_SWIT
       const usable = g.tracks.filter((tr) => sw.colorEntries || tr.property !== 'color');
       const full = usable.map((tr) => entryOf(tr, entryKind(tr), 'duration'));
       if (!full.length) continue;
-      styles.push({ name: animationStyleName(p.name, g.element, false, sw), description: say(g.element, false), pattern: p.name, element: g.element, reduced: false, entries: full });
+      styles.push({ name: animationStyleName(p.name, g.element, false), description: say(g.element, false), pattern: p.name, element: g.element, reduced: false, entries: full });
       wrote++;
       const reduced = usable.flatMap((tr): AnimationEntryRow[] => {
         const k = reducedKindOf(tr, p);
         return k === 'off' ? [] : [entryOf(tr, k === 'fade' ? 'opacity' : entryKind(tr), 'duration-reduced')];
       });
-      if (reduced.length) { styles.push({ name: animationStyleName(p.name, g.element, true, sw), description: say(g.element, true), pattern: p.name, element: g.element, reduced: true, entries: reduced }); wroteReduced++; }
+      if (reduced.length) { styles.push({ name: animationStyleName(p.name, g.element, true), description: say(g.element, true), pattern: p.name, element: g.element, reduced: true, entries: reduced }); wroteReduced++; }
     }
-    const why = 'its cue is a color change, and an animation style carries no fill color (JOB 102, Q-PT18 A)';
+    const why = 'its cue is a color change, and no Figma animation entry carries a fill color (the 2026-11-26 check on #2857, Q-PT18 A)';
     if (!wrote) guideOnly.push({ pattern: p.name, reduced: false, why });
-    if (!wroteReduced) guideOnly.push({ pattern: p.name, reduced: true, why: wrote ? "under reduced motion its cue is a color change, and an animation style carries no fill color (JOB 102, Q-PT18 A)" : why });
+    if (!wroteReduced) guideOnly.push({ pattern: p.name, reduced: true, why: wrote ? "under reduced motion its cue is a color change, and no Figma animation entry carries a fill color (the 2026-11-26 check on #2857, Q-PT18 A)" : why });
   }
   return { styles, guideOnly };
 };
@@ -170,7 +176,7 @@ export const animationGuideOnlyRows = (sw = ANIMATION_STYLE_SWITCHES): { pattern
     const els = [...new Set(p.tracks.map((tr) => tr.element))];
     return {
       pattern: p.name,
-      name: animationStyleName(p.name, null, false, sw),
+      name: animationStyleFolder(p.name, null),
       description: els.map((e) => motionPlainWords(p, e)).join(" "),
       reduced: els.map((e) => motionPlainWords(p, e, true)).join(" "),
       why: GUIDE_ONLY_WHY,

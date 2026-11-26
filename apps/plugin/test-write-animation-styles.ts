@@ -17,7 +17,7 @@
  */
 import { buildAnimationStylesPlan, buildMotionVarPlan } from '@prism3/engine/figma';
 import { brandTheme, type BrandInput } from '@prism3/engine';
-import { applyAnimationStylesPlan, FIGMA_ENTRY_KINDS } from './src/write-animation-styles';
+import { applyAnimationStylesPlan } from './src/write-animation-styles';
 import { planStyleGuide } from './src/style-guide';
 
 let failed = 0;
@@ -56,14 +56,14 @@ class ShimAnimationStyle {
   setSharedPluginData(ns: string, k: string, v: string): void { this.#plugin.set(`${ns}:${k}`, v); }
 }
 type ShimVar = { id: string; name: string; hidden: boolean; variableCollectionId: string };
-const shimOf = (vars: ShimVar[], kindNames: readonly string[]) => {
+const shimOf = (vars: ShimVar[], kindNames: readonly string[], propsOf: Record<string, string[]> = {}) => {
   const kinds = new Map(kindNames.map((n, i) => [`A:${i}`, n] as const));
   const styles: ShimAnimationStyle[] = [];
   return {
     styles,
     getLocalCustomAnimationStylesAsync: async () => [...styles],
     createCustomAnimationStyle: () => { const s = new ShimAnimationStyle(kinds); styles.push(s); return s; },
-    motion: { figmaAnimationStyles: () => [...kinds].map(([styleId, name]) => ({ styleId, name })) },
+    motion: { figmaAnimationStyles: () => [...kinds].map(([styleId, name]) => ({ styleId, name, ...(propsOf[name] ? { props: Object.fromEntries(propsOf[name].map((k) => [k, 'number'])) } : {}) })) },
     variables: {
       getLocalVariablesAsync: async () => vars,
       getLocalVariableCollectionsAsync: async () => [{ id: 'C:motion', name: 'motion' }],
@@ -78,23 +78,27 @@ const varsOf = (theme: ReturnType<typeof brandTheme>): ShimVar[] =>
 // A brand with no `root` emits under the engine's default token root, `prism`.
 const ROOT = 'prism';
 const input: BrandInput = { id: 'probe', primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.008 } } as BrandInput;
-/** Every style, by name, as the decisions name them (Q-PT17, Q-PT19, Q-PT20 A), with this build's switches: a style per
- *  moving element of a pattern that moves several, the reduced sibling a folder, no color entries until JOB 102. */
+/** Every style, by name, as the decisions name them: the pattern a folder, its component capitalized, "State /" for a
+ *  state change (Q-PT17, Q-PT19 A), each folder holding `default` and `reduced` (Q-PT20 as revised 2026-11-26); a style per
+ *  moving element of a pattern that moves several (this build's grain); and no color entries (the 2026-11-26 check). */
+const pair = (folder: string) => [`${folder} / default`, `${folder} / reduced`];
 const EXPECTED_STYLES = [
-  ...['dialog/enter', 'dialog/exit', 'dialog/bottom/enter', 'dialog/bottom/exit'].flatMap((p) => ['scrim', 'panel', 'content'].flatMap((e) => [`${p}/${e}`, `${p}/${e}/reduced`])),
-  ...['dialog/end/enter', 'dialog/end/exit'].flatMap((p) => ['scrim', 'panel'].flatMap((e) => [`${p}/${e}`, `${p}/${e}/reduced`])),
-  ...['toast/enter', 'toast/exit', 'tooltip/show', 'tooltip/hide', 'popover/open', 'popover/close', 'fade/in', 'fade/out'].flatMap((p) => [p, `${p}/reduced`]),
-  'accordion/expand/panel', 'accordion/expand/panel/reduced', 'accordion/expand/indicator',
-  'accordion/collapse/panel', 'accordion/collapse/panel/reduced', 'accordion/collapse/indicator',
-  'tabs/select/underline', 'tabs/select/panel', 'tabs/select/panel/reduced',
-  'switch/toggle/thumb', 'segmented/select/pill',
+  ...['Dialog / enter', 'Dialog / exit', 'Dialog / bottom / enter', 'Dialog / bottom / exit'].flatMap((p) => ['scrim', 'panel', 'content'].flatMap((e) => pair(`${p} / ${e}`))),
+  ...['Dialog / end / enter', 'Dialog / end / exit'].flatMap((p) => ['scrim', 'panel'].flatMap((e) => pair(`${p} / ${e}`))),
+  ...['Toast / enter', 'Toast / exit', 'Tooltip / show', 'Tooltip / hide', 'Popover / open', 'Popover / close', 'Fade / in', 'Fade / out'].flatMap(pair),
+  ...pair('Accordion / expand / panel'), 'Accordion / expand / indicator / default',
+  ...pair('Accordion / collapse / panel'), 'Accordion / collapse / indicator / default',
+  'Tabs / select / underline / default', ...pair('Tabs / select / panel'),
+  'Switch / toggle / thumb / default', 'Segmented / select / pill / default',
 ];
+/** The seven animations Figma offers an entry (the 2026-11-26 check on #2857), typed: the shim's host. */
+const HOST_KINDS = ['Position', 'Scale', 'Rotation', 'Size', 'Opacity', 'Path', 'TextStagger'];
 /** The 22 starter patterns (Q-PT16 A). */
 const PATTERNS = ['dialog/enter', 'dialog/exit', 'dialog/bottom/enter', 'dialog/bottom/exit', 'dialog/end/enter', 'dialog/end/exit', 'toast/enter', 'toast/exit',
   'tooltip/show', 'tooltip/hide', 'popover/open', 'popover/close', 'accordion/expand', 'accordion/collapse', 'fade/in', 'fade/out', 'hover', 'pressed',
   'pressed/release', 'tabs/select', 'switch/toggle', 'segmented/select'];
-/** Style-guide only until JOB 102 says a style carries a fill color (Q-PT18 A): hover and press entirely, and the
- *  switch's and the segmented control's reduced cue, which is their color change. */
+/** Style-guide only, since no animation entry carries a fill color (the 2026-11-26 check, Q-PT18 A): hover and press
+ *  entirely, and the switch's and the segmented control's reduced cue, which is their color change. */
 const GUIDE_ONLY = ['hover', 'pressed', 'pressed/release'];
 const REDUCED_GUIDE_ONLY = ['switch/toggle', 'segmented/select'];
 const PRESET_VAR = new RegExp(`^${ROOT}/motion/preset/[a-z]+(/exit)?/(duration|easing|delay|duration-reduced)$`);
@@ -104,7 +108,7 @@ const theme = brandTheme(input);
 const plan = buildAnimationStylesPlan(theme);
 const vars = varsOf(theme);
 const byId = new Map(vars.map((v) => [v.id, v] as const));
-const host = shimOf(vars, [...new Set(Object.values(FIGMA_ENTRY_KINDS))]);
+const host = shimOf(vars, HOST_KINDS);
 const first = await applyAnimationStylesPlan(plan, host);
 const written = host.styles.map((s) => s.name);
 
@@ -113,9 +117,12 @@ const missing = EXPECTED_STYLES.filter((n) => !written.includes(n));
 const extra = written.filter((n) => !EXPECTED_STYLES.includes(n));
 ok(first.written && missing.length === 0 && extra.length === 0 && written.length === EXPECTED_STYLES.length,
   `every expected animation style is written, and nothing else (${written.length} written, ${EXPECTED_STYLES.length} expected; missing: ${missing.join(', ') || 'none'}; extra: ${extra.join(', ') || 'none'})`);
-const patternOf = (name: string) => PATTERNS.filter((p) => name === p || name.startsWith(`${p}/`) || name.startsWith(`state/${p}`)).sort((a, b) => b.length - a.length)[0];
-const noStyle = PATTERNS.filter((p) => !GUIDE_ONLY.includes(p) && !written.some((n) => patternOf(n) === p && !n.endsWith('/reduced')));
-const noReduced = PATTERNS.filter((p) => !GUIDE_ONLY.includes(p) && !REDUCED_GUIDE_ONLY.includes(p) && !written.some((n) => patternOf(n) === p && n.endsWith('/reduced')));
+// A written name's pattern, read back from its folder: "Dialog / bottom / enter / panel / default" → dialog/bottom/enter.
+const pathOf = (name: string) => name.split(' / ').map((seg) => seg.toLowerCase()).join('/');
+const patternOf = (name: string) => PATTERNS.filter((p) => pathOf(name).startsWith(`${p}/`) || pathOf(name).startsWith(`state/${p}/`)).sort((a, b) => b.length - a.length)[0];
+const noStyle = PATTERNS.filter((p) => !GUIDE_ONLY.includes(p) && !written.some((n) => patternOf(n) === p && n.endsWith(' / default')));
+const noReduced = PATTERNS.filter((p) => !GUIDE_ONLY.includes(p) && !REDUCED_GUIDE_ONLY.includes(p) && !written.some((n) => patternOf(n) === p && n.endsWith(' / reduced')));
+ok(written.every((n) => / \/ (default|reduced)$/.test(n)), `every style sits in its pattern's folder as default or reduced, with nothing loose beside it (loose: ${written.filter((n) => !/ \/ (default|reduced)$/.test(n)).join(', ') || 'none'})`);
 ok(noStyle.length === 0 && noReduced.length === 0,
   `every pattern has a style and a reduced style, but the style-guide-only ones (no style: ${noStyle.join(', ') || 'none'}; no reduced style: ${noReduced.join(', ') || 'none'})`);
 const guide = new Set(plan.guideOnly.map((g) => `${g.pattern}${g.reduced ? ' (reduced)' : ''}`));
@@ -133,20 +140,20 @@ const offPreset = entries.flatMap(({ style, e }) => aliasesOf(e.props).filter(([
 ok(offPreset.length === 0, `every bound variable is a preset slot, motion/preset/<name>[/exit]/<slot> (off: ${offPreset.slice(0, 4).join('; ') || 'none'})`);
 const primitives = entries.flatMap(({ style, e }) => aliasesOf(e.props).filter(([, v]) => v?.hidden).map(([k, v]) => `${style} ${k} → ${v!.name}`));
 ok(primitives.length === 0, `no entry binds a hidden primitive (bound: ${primitives.slice(0, 4).join('; ') || 'none'})`);
-const reducedOff = host.styles.filter((s) => s.name.endsWith('/reduced')).flatMap((s) => s.animationEntries.filter((e) => !String(byId.get((e.props.duration as { id: string })?.id)?.name).endsWith('/duration-reduced')).map(() => s.name));
-const fullOff = host.styles.filter((s) => !s.name.endsWith('/reduced')).flatMap((s) => s.animationEntries.filter((e) => !String(byId.get((e.props.duration as { id: string })?.id)?.name).endsWith('/duration')).map(() => s.name));
+const reducedOff = host.styles.filter((s) => s.name.endsWith(' / reduced')).flatMap((s) => s.animationEntries.filter((e) => !String(byId.get((e.props.duration as { id: string })?.id)?.name).endsWith('/duration-reduced')).map(() => s.name));
+const fullOff = host.styles.filter((s) => s.name.endsWith(' / default')).flatMap((s) => s.animationEntries.filter((e) => !String(byId.get((e.props.duration as { id: string })?.id)?.name).endsWith('/duration')).map(() => s.name));
 ok(reducedOff.length === 0 && fullOff.length === 0,
   `a reduced style plays on each preset's duration-reduced, and a full one on its duration (wrong: ${[...new Set([...reducedOff, ...fullOff])].join(', ') || 'none'})`);
-const panel = host.styles.find((s) => s.name === 'dialog/enter/panel');
+const panel = host.styles.find((s) => s.name === 'Dialog / enter / panel / default');
 ok(JSON.stringify(panel?.animationEntries.map((e) => [e.name, byId.get((e.props.duration as { id: string }).id)?.name, e.props.scale ?? null])) === JSON.stringify([
-  ['Fade', `${ROOT}/motion/preset/surface/duration`, null], ['Scale', `${ROOT}/motion/preset/surface/duration`, 0.96]]),
-`dialog/enter/panel fades and scales up from 0.96, both on the surface preset (got ${JSON.stringify(panel?.animationEntries.map((e) => e.name))})`);
-const toast = host.styles.find((s) => s.name === 'toast/enter');
+  ['Opacity', `${ROOT}/motion/preset/surface/duration`, null], ['Scale', `${ROOT}/motion/preset/surface/duration`, 0.96]]),
+`Dialog / enter / panel / default fades (Opacity) and scales up from 0.96, both on the surface preset (got ${JSON.stringify(panel?.animationEntries.map((e) => e.name))})`);
+const toast = host.styles.find((s) => s.name === 'Toast / enter / default');
 ok(toast?.animationEntries.find((e) => e.name === 'Position')?.props.distance === 8,
-  `toast/enter slides by distance.nudge's 8px (got ${JSON.stringify(toast?.animationEntries.map((e) => e.props.distance ?? null))})`);
-const exitPanel = host.styles.find((s) => s.name === 'dialog/exit/panel');
+  `Toast / enter / default slides (Position) by distance.nudge's 8px (got ${JSON.stringify(toast?.animationEntries.map((e) => e.props.distance ?? null))})`);
+const exitPanel = host.styles.find((s) => s.name === 'Dialog / exit / panel / default');
 ok(byId.get((exitPanel?.animationEntries[0]?.props.easing as { id: string })?.id)?.name === `${ROOT}/motion/preset/surface/exit/easing`,
-  'an exit pattern binds its preset\'s exit half (dialog/exit/panel on surface/exit/easing)');
+  'an exit pattern binds its preset\'s exit half (Dialog / exit / panel on surface/exit/easing)');
 ok(host.styles.every((s) => s.description.length > 0 && !/motion\.|preset/.test(s.description)),
   'every style has a plain-words description that names no token (Q-PT21 A)');
 
@@ -164,19 +171,23 @@ console.log('\nre-pointing a preset re-times the styles without touching them');
 // A brand whose surface preset is re-pointed to a longer step: the styles bind the same preset variables, so nothing in
 // them changes. Only the variables' values would, and they are the motion stage's.
 const slower = brandTheme({ ...input, motionPersonality: { presets: { surface: { duration: 'duration.slow' } } } } as BrandInput);
-const host2 = shimOf(varsOf(slower), [...new Set(Object.values(FIGMA_ENTRY_KINDS))]);
+const host2 = shimOf(varsOf(slower), HOST_KINDS);
 await applyAnimationStylesPlan(buildAnimationStylesPlan(slower), host2);
 const bindings = (h: typeof host, vs: ShimVar[]) => { const m = new Map(vs.map((v) => [v.id, v.name])); return JSON.stringify(h.styles.map((s) => [s.name, s.animationEntries.map((e) => [e.name, ...aliasesOf(e.props).map(([k, v]) => `${k}=${v && m.get(v.id)}`)])])); };
 ok(bindings(host, vars) === bindings(host2, varsOf(slower)),
   'a brand that re-points the surface preset writes the same styles, bound to the same preset variables');
 
 console.log('\nwhat is reported');
-const noKinds = await applyAnimationStylesPlan(plan, shimOf(vars, ['Fade']));
-ok(noKinds.misses.some((m) => /this Figma has no 'Scale' animation for its scale entry/.test(m)) && noKinds.misses.every((m) => !/Fade/.test(m)),
+const noKinds = await applyAnimationStylesPlan(plan, shimOf(vars, ['Opacity']));
+ok(noKinds.misses.some((m) => /this Figma has no 'Scale' animation for its scale entry/.test(m)) && noKinds.misses.every((m) => !/'Opacity'/.test(m)),
   `an entry kind this Figma does not list is a miss, named, and the rest are written (${noKinds.misses.length} misses, e.g. ${JSON.stringify(noKinds.misses[0])})`);
-const noVars = await applyAnimationStylesPlan(plan, shimOf([], [...new Set(Object.values(FIGMA_ENTRY_KINDS))]));
+const noVars = await applyAnimationStylesPlan(plan, shimOf([], HOST_KINDS));
 ok(noVars.bound === 0 && noVars.misses.some((m) => m.endsWith(`${ROOT}/motion/preset/surface/duration`)),
   `a file without the preset variables reports each binding it could not make (${noVars.misses.length} misses)`);
+// An animation that lists the properties it takes is held to them: Scale without a `scale` property is a named miss.
+const noScaleProp = await applyAnimationStylesPlan(plan, shimOf(vars, HOST_KINDS, { Scale: ['duration', 'easing'] }));
+ok(noScaleProp.misses.some((m) => m === "Dialog / enter / panel / default: the 'Scale' animation has no 'scale' property"),
+  `a property an animation does not list is a miss, named, not written blind (${JSON.stringify(noScaleProp.misses[0])})`);
 const skipped = await applyAnimationStylesPlan(plan, { variables: host.variables });
 ok(!skipped.written && /no animation styles/.test(skipped.skipped ?? ''),
   `a Figma with no animation styles skips them and says so (${JSON.stringify(skipped.skipped)})`);
@@ -191,19 +202,19 @@ const catalog = {
 const sg = planStyleGuide(catalog, null, { types: ['animation'] });
 const table = sg.tables.find((t) => t.type === 'animation');
 const rowOf = (name: string) => table?.rows.find((r) => r.name === name);
-const fullNames = EXPECTED_STYLES.filter((n) => !n.endsWith('/reduced'));
+const folders = EXPECTED_STYLES.filter((n) => n.endsWith(' / default')).map((n) => n.replace(/ \/ default$/, ''));
 const rowNames = table?.rows.map((r) => r.name) ?? [];
-const wantRows = [...fullNames, ...GUIDE_ONLY.map((p) => `state/${p}`)];
+const wantRows = [...folders, 'State / hover', 'State / pressed', 'State / pressed / release'];
 ok(sg.tables.length === 1 && rowNames.length === wantRows.length && wantRows.every((n) => rowNames.includes(n)),
-  `one animation table, a row per style that is not a reduced sibling and one per style-guide-only pattern (${rowNames.length} rows, ${wantRows.length} expected; missing: ${wantRows.filter((n) => !rowNames.includes(n)).join(', ') || 'none'})`);
-const toastRow = rowOf('toast/enter');
-ok(toastRow?.extra?.[0]?.value === 'Fade · Position' && toastRow?.extra?.[1]?.value === 'The toast fades in quickly, with no slide.' && toastRow?.specimen?.kind === 'animation',
-  `a row names what its style plays and carries its reduced sibling's words in the same row (toast/enter: ${JSON.stringify(toastRow?.extra?.map((x) => x.value))})`);
-const hoverRow = rowOf('state/hover');
+  `one animation table, a row per pattern folder, its default style the specimen, and one per style-guide-only pattern (${rowNames.length} rows, ${wantRows.length} expected; missing: ${wantRows.filter((n) => !rowNames.includes(n)).join(', ') || 'none'})`);
+const toastRow = rowOf('Toast / enter');
+ok(toastRow?.extra?.[0]?.value === 'Opacity · Position' && toastRow?.extra?.[1]?.value === 'The toast fades in quickly, with no slide.' && toastRow?.specimen?.kind === 'animation',
+  `a row names what its style plays and carries its reduced sibling's words in the same row (Toast / enter: ${JSON.stringify(toastRow?.extra?.map((x) => x.value))})`);
+const hoverRow = rowOf('State / hover');
 ok(hoverRow?.variableId === '' && hoverRow?.extra?.[0]?.value === 'Style guide only' && hoverRow?.description === 'The control changes color.',
-  `a style-guide-only pattern is a row with no style, saying what it does (state/hover: ${JSON.stringify([hoverRow?.extra?.[0]?.value, hoverRow?.description])})`);
-const noReducedRow = rowOf('accordion/expand/indicator');
-ok(noReducedRow?.extra?.[1]?.value === '—', `a style with no reduced sibling says so in its row (accordion/expand/indicator: ${JSON.stringify(noReducedRow?.extra?.[1]?.value)})`);
+  `a style-guide-only pattern is a row with no style, saying what it does (State / hover: ${JSON.stringify([hoverRow?.extra?.[0]?.value, hoverRow?.description])})`);
+const noReducedRow = rowOf('Accordion / expand / indicator');
+ok(noReducedRow?.extra?.[1]?.value === '—', `a style with no reduced sibling says so in its row (Accordion / expand / indicator: ${JSON.stringify(noReducedRow?.extra?.[1]?.value)})`);
 
 console.log(`\nplugin ANIMATION STYLES write-adapter: ${failed === 0 ? 'ALL PASS' : failed + ' FAILED'} — ${executed} assertions executed`);
 if (failed) process.exit(1);

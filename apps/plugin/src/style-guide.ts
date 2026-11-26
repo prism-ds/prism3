@@ -1142,9 +1142,8 @@ const planGradientStyles = (catalog: SgCatalog, ix: Index, options: StyleGuideOp
 
 /** The pseudo-collection the animation table's key names (#2857 motion phase 3): styles belong to no collection. */
 export const ANIMATION_STYLES_ID = 'animation-styles';
-/** A reduced sibling's names, in either form the engine's switch writes (Q-PT20). */
-const reducedNamesOf = (name: string): string[] => [`${name}/reduced`, `${name} · reduced`];
-const isReducedName = (name: string): boolean => /\/reduced$| · reduced$/.test(name);
+/** Every pattern is a folder holding its `default` and `reduced` styles (Q-PT20 as revised 2026-11-26). */
+const DEFAULT_LEAF = / \/ default$/;
 
 /**
  * THE ANIMATION-STYLE TABLE (#2857 motion phase 3, Q-PT22 A): one row per animation style the file holds, its reduced
@@ -1156,28 +1155,26 @@ const planAnimationStyles = (catalog: SgCatalog, options: StyleGuideOptions): Sg
   const all = catalog.animationStyles ?? [];
   if (!all.length) return [];
   const byName = new Map(all.map((s) => [s.name, s] as const));
-  const styles = all.filter((s) => !isReducedName(s.name));
-  const guide = animationGuideOnlyRows().filter((g) => !byName.has(g.name));
-  const prefix = commonPrefix([...styles.map((s) => s.name), ...guide.map((g) => g.name)].map((n) => n.split('/').slice(0, -1)));
+  // A row is a folder: its default style is the specimen, and its reduced sibling's words sit in the same row.
+  const styles = all.filter((s) => DEFAULT_LEAF.test(s.name)).map((s) => ({ ...s, folder: s.name.replace(DEFAULT_LEAF, '') }));
+  const guide = animationGuideOnlyRows().filter((g) => !byName.has(`${g.name} / default`));
+  const prefix = commonPrefix([...styles.map((s) => s.folder), ...guide.map((g) => g.name)].map((n) => n.split(' / ').slice(0, -1)));
   const row = (id: string, name: string, plays: string, reduced: string, description: string): SgRow => {
-    const token = name.split('/').slice(prefix.length).join('/');
+    const token = name.split(' / ').slice(prefix.length).join(' / ');
     return {
-      variableId: id, name, token, tokenCell: tokenCellOf(options, name, token), label: humanizeName(name.split('/').slice(prefix.length), prefix[prefix.length - 1]),
+      variableId: id, name, token, tokenCell: tokenCellOf(options, name, token), label: humanizeName(name.split(' / ').slice(prefix.length), prefix[prefix.length - 1]),
       description, display: 'default', specimen: { kind: 'animation' },
       cells: [{ modeId: STYLE_SPECIMEN.modeId, modeName: STYLE_SPECIMEN.name, value: plays, alias: null, raw: JSON.stringify([id, plays]), groundId: null, contrast: null }],
       extra: [{ value: plays, alias: null, always: true }, { value: reduced, alias: null, always: true }],
     };
   };
   const rows: SgRow[] = [
-    ...styles.map((s) => {
-      const sib = reducedNamesOf(s.name).map((n) => byName.get(n)).find(Boolean);
-      return row(s.id, s.name, s.entries.join(' · ') || '—', sib?.description || '—', s.description ?? '');
-    }),
+    ...styles.map((s) => row(s.id, s.folder, s.entries.join(' · ') || '—', byName.get(`${s.folder} / reduced`)?.description || '—', s.description ?? '')),
     ...guide.map((g) => row('', g.name, 'Style guide only', g.reduced, g.description)),
   ];
   const n = styles.length;
   return [{
-    key: `animation|${ANIMATION_STYLES_ID}|${prefix.join('/')}`,
+    key: `animation|${ANIMATION_STYLES_ID}|${prefix.join(' / ')}`,
     type: 'animation',
     kind: 'semantic',
     page: SEMANTIC_PAGE,

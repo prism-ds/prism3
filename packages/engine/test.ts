@@ -46444,9 +46444,32 @@ arm: {
   ok(unstyled.length === 0, `#2857 phase 3: every pattern but hover and press has an animation style in every example brand (unstyled: ${unstyled.slice(0, 4).join('; ') || 'none'})`);
   const plan = buildAnimationStylesPlan(brandTheme({ id: 'styles2857', primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.008 } } as BrandInput));
   const said = (n: string) => plan.styles.find((s) => s.name === n)?.description;
-  ok(said('dialog/enter/panel') === 'The panel fades in and scales up from 96%.' && said('toast/enter/reduced') === 'The toast fades in quickly, with no slide.'
-    && said('dialog/bottom/exit/panel/reduced') === 'The panel fades out quickly, instead of sliding.',
-    `#2857 phase 3 (Q-PT21 A): a style's description says what moves, in plain words, as typed (${JSON.stringify([said('dialog/enter/panel'), said('toast/enter/reduced')])})`);
+  ok(said('Dialog / enter / panel / default') === 'The panel fades in and scales up from 96%.' && said('Toast / enter / reduced') === 'The toast fades in quickly, with no slide.'
+    && said('Dialog / bottom / exit / panel / reduced') === 'The panel fades out quickly, instead of sliding.',
+    `#2857 phase 3 (Q-PT21 A): a style's description says what moves, in plain words, as typed (${JSON.stringify([said('Dialog / enter / panel / default'), said('Toast / enter / reduced')])})`);
+  // Every pattern is a folder holding its default and reduced styles (Q-PT20 as revised 2026-11-26), named as typed here.
+  ok(plan.styles.every((s) => / \/ (default|reduced)$/.test(s.name)) && !!said('State / hover / default') === false
+    && plan.styles.some((s) => s.name === 'Tooltip / show / default') && plan.styles.some((s) => s.name === 'Tooltip / show / reduced'),
+    `#2857 phase 3: every style sits in its pattern's folder as default or reduced ("Tooltip / show / default"), and hover has no style (${plan.styles.slice(0, 2).map((s) => s.name).join(', ')})`);
+
+  // TIMING IS IN SECONDS (the 2026-11-26 checks on #2857: a TIMING variable of 0.24 plays in about a quarter of a second).
+  // Every TIMING variable in every example brand's Figma motion collection is its DTCG duration's milliseconds ÷ 1000:
+  // the emitted DTCG and the emitted Figma file, set side by side, neither read from the other's emitter.
+  const notSeconds: string[] = [];
+  let timings = 0;
+  for (const id of EXAMPLE_IDS) {
+    const theme = brandTheme(exampleBrands()[id] as BrandInput);
+    const tree = buildTree(theme).tree as any;
+    const file = JSON.parse(figmaArtifacts(theme).artifacts.find((a) => a.path === 'motion.json')!.content) as FigmaCollectionFile;
+    for (const v of file.variables.filter((x) => x.resolvedType === 'TIMING')) {
+      timings++;
+      const node = at(tree, v.name.split('/').join('.'));
+      const ms = /^(\d+(?:\.\d+)?)ms$/.exec(String(node ? deref(tree, node)?.$value : ''))?.[1];
+      if (ms === undefined || typeof v.value !== 'number' || Math.abs(v.value - Number(ms) / 1000) > 1e-9) notSeconds.push(`${id} ${v.name}: ${v.value} (DTCG ${ms ?? 'none'}ms)`);
+    }
+  }
+  ok(timings > 100 && notSeconds.length === 0,
+    `#2857 phase 3: every TIMING variable, in every example brand, is its duration in seconds, ms ÷ 1000 (${timings} read; off: ${notSeconds.slice(0, 3).join('; ') || 'none'})`);
 }
 
 // ------------------------------------------------------------------- #4161 / #4163: the tree says which leaves are which

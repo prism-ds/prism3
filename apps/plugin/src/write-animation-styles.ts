@@ -14,11 +14,12 @@
  * NOT EVERY FIGMA HAS IT. `supportsAnimationStyles` reads the host for the API; a host without it (an older Figma, the
  * paste harness) skips the stage and says so, and every other stage of the apply is unaffected.
  *
- * WHAT JOB 102 PINS, here and nowhere else (the Mac check, results on #2857): the name of each of Figma's own
- * animations an entry is added from (`FIGMA_ENTRY_KINDS`), and the property each value is written under
- * (`FIGMA_ENTRY_PROPS`). The 2026-11-24 check confirmed `Position` as the move, and that an entry's distance, duration
- * and easing bind FLOAT, TIMING and EASING variables; the rest are the names the typings and that check suggest. A kind
- * this Figma does not list is a miss, named, never a guess.
+ * THE HOST'S NAMES. Figma offers exactly seven animations an entry can be added from: `Position`, `Scale`, `Rotation`,
+ * `Size`, `Opacity`, `Path` and `TextStagger` (the 2026-11-26 check on #2857). None animates a fill, so a color track has
+ * no entry (`FIGMA_ENTRY_KINDS.color` is null, and the engine's plan writes none). Each value is written under the
+ * property `FIGMA_ENTRY_PROPS` names; the 2026-11-24 check bound an entry's distance, duration and easing. The executor
+ * reads each animation's own property list from `figma.motion.figmaAnimationStyles()` and names a property the
+ * animation does not have as a miss, rather than write it blind. A kind this Figma does not list is a miss too.
  *
  * Compiled under `tsconfig.main.json`. The `AnimationStylesApi` port is the slice of `figma` this touches, so it runs
  * against the in-memory shim in `test-write-animation-styles.ts`; the real `figma` satisfies it structurally.
@@ -27,13 +28,14 @@ import type { AnimationEntryKind, AnimationStylesPlan } from '@prism3/engine/fig
 import { bindingTargets } from './binding-targets';
 import { markOwned, type Markable } from './provenance';
 
-/** JOB 102: the Figma animation each entry kind is added from, by its name in `figma.motion.figmaAnimationStyles()`. */
-export const FIGMA_ENTRY_KINDS: Record<AnimationEntryKind, string> = {
-  opacity: 'Fade', scale: 'Scale', slide: 'Position', travel: 'Position', turn: 'Rotate', size: 'Size', color: 'Color',
+/** The Figma animation each entry kind is added from, by its name in `figma.motion.figmaAnimationStyles()` (the seven the
+ *  2026-11-26 check found). `null`: no animation does it, so the kind has no entry. */
+export const FIGMA_ENTRY_KINDS: Record<AnimationEntryKind, string | null> = {
+  opacity: 'Opacity', scale: 'Scale', slide: 'Position', travel: 'Position', turn: 'Rotation', size: 'Size', color: null,
 };
-/** JOB 102: the property each value is written under on an entry. `null` is a value this build does not write until the
- *  check names its property: a preset's delay (0 for every default preset), and the direction a self-sized slide comes
- *  from (`dialog/bottom`, `dialog/end`). */
+/** The property each value is written under on an entry. `null` is a value this build does not write: a preset's delay
+ *  (0 for every default preset; a delayed preset plays at once in Figma until its property is named), and the edge a
+ *  self-sized slide comes from (`Dialog / bottom`, `Dialog / end`). */
 export const FIGMA_ENTRY_PROPS: { duration: string; easing: string; delay: string | null; distance: string; scale: string; from: string | null } = {
   duration: 'duration', easing: 'easing', delay: null, distance: 'distance', scale: 'scale', from: null,
 };
@@ -52,7 +54,7 @@ export interface AnimationStyleNode extends Markable {
 export interface AnimationStylesApi {
   getLocalCustomAnimationStylesAsync(): Promise<AnimationStyleNode[]>;
   createCustomAnimationStyle(): AnimationStyleNode;
-  motion: { figmaAnimationStyles(): readonly { styleId: string; name: string }[] };
+  motion: { figmaAnimationStyles(): readonly { styleId: string; name: string; props?: Readonly<Record<string, unknown>> }[] };
   variables: {
     getLocalVariablesAsync(type?: string): Promise<{ id: string; name: string; variableCollectionId?: string }[]>;
     getLocalVariableCollectionsAsync(): Promise<readonly { id: string; name: string }[]>;
@@ -87,7 +89,8 @@ export const applyAnimationStylesPlan = async (plan: AnimationStylesPlan, host: 
   }
   const api = host;
   const varByName = await bindingTargets(api.variables, bindIn);
-  const kinds = new Map(api.motion.figmaAnimationStyles().map((s) => [s.name, s.styleId] as const));
+  // Each animation's id, and the properties it takes where the host lists them (a host that lists none is not second-guessed).
+  const kinds = new Map(api.motion.figmaAnimationStyles().map((s) => [s.name, { styleId: s.styleId, props: s.props ? new Set(Object.keys(s.props)) : null }] as const));
   const byName = new Map((await api.getLocalCustomAnimationStylesAsync()).map((s) => [s.name, s] as const));
   const misses: string[] = [];
   let created = 0, entries = 0, bound = 0;
@@ -99,11 +102,16 @@ export const applyAnimationStylesPlan = async (plan: AnimationStylesPlan, host: 
     for (const e of [...s.animationEntries]) s.removeAnimationEntry(e.id);
     for (const entry of row.entries) {
       const kindName = FIGMA_ENTRY_KINDS[entry.kind];
-      const styleId = kinds.get(kindName);
-      if (!styleId) { misses.push(`${row.name}: this Figma has no '${kindName}' animation for its ${entry.kind} entry`); continue; }
+      const kind = kindName ? kinds.get(kindName) : undefined;
+      if (!kindName || !kind) { misses.push(`${row.name}: this Figma has no ${kindName ? `'${kindName}' animation` : 'animation'} for its ${entry.kind} entry`); continue; }
       const props: Record<string, unknown> = {};
+      const takes = (key: string): boolean => {
+        if (!kind.props || kind.props.has(key)) return true;
+        misses.push(`${row.name}: the '${kindName}' animation has no '${key}' property`);
+        return false;
+      };
       const bind = (key: string | null, name: string): void => {
-        if (!key) return;
+        if (!key || !takes(key)) return;
         const v = varByName.get(name);
         if (!v) { misses.push(`${row.name}: ${name}`); return; }
         props[key] = api.variables.createVariableAlias(v);
@@ -113,11 +121,11 @@ export const applyAnimationStylesPlan = async (plan: AnimationStylesPlan, host: 
       bind(FIGMA_ENTRY_PROPS.easing, entry.easing);
       bind(FIGMA_ENTRY_PROPS.delay, entry.delay);
       // A distance is written as its px (no motion distance variable exists in Figma yet, #4589); a self-sized slide
-      // writes none, and plays the host's own default distance until JOB 102 names how a slide takes its own size.
-      if (entry.distance && 'px' in entry.distance) props[FIGMA_ENTRY_PROPS.distance] = entry.distance.px;
-      if (entry.from && FIGMA_ENTRY_PROPS.from) props[FIGMA_ENTRY_PROPS.from] = entry.from;
-      if (entry.scale !== undefined) props[FIGMA_ENTRY_PROPS.scale] = entry.scale;
-      await s.addAnimationEntryAsync(styleId, props);
+      // writes none, and plays the host's own default distance until a property for a slide's own size is named.
+      if (entry.distance && 'px' in entry.distance && takes(FIGMA_ENTRY_PROPS.distance)) props[FIGMA_ENTRY_PROPS.distance] = entry.distance.px;
+      if (entry.from && FIGMA_ENTRY_PROPS.from && takes(FIGMA_ENTRY_PROPS.from)) props[FIGMA_ENTRY_PROPS.from] = entry.from;
+      if (entry.scale !== undefined && takes(FIGMA_ENTRY_PROPS.scale)) props[FIGMA_ENTRY_PROPS.scale] = entry.scale;
+      await s.addAnimationEntryAsync(kind.styleId, props);
       entries++;
     }
     await tick?.();
