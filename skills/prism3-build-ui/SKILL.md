@@ -291,9 +291,9 @@ and a radius." Then the ledger closes it:
 > **Used:** `text-field`, `password-field`, `button` (`appearance="filled"`), `link`; `background.primary`,
 > `space.400`.
 >
-> **Composed:** the sign-in form: a column of the email field, the password field, the Sign in button and the
-> link, `space.400` apart, on the page's `background.primary`. Every piece in it is a Prism3 component, and the
-> column adds only the spacing between them.
+> **Composed:** the sign-in layout: a column of the `text-field`, the `password-field`, the `button` and the `link`,
+> `space.400` apart, on the page's `background.primary`. Every piece in it is a Prism3 component, and the column adds
+> only the spacing between them.
 >
 > **Invented:** none.
 >

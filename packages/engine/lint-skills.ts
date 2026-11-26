@@ -1005,7 +1005,9 @@ const COMMAND = '.claude/commands/review-pr.md';
 //
 // WHAT IT CANNOT SEE: whether the advice is right. It checks the rule is stated, not that it is true.
 let ownerSelfRuns = 0;
-type OwnerRule = { id: string; skills: string[]; roles: RegExp[]; must: RegExp[]; resolve: string[] };
+/** `section`, when set, is the heading the rule must sit under (`## 7.`): its patterns are matched only between that
+ *  heading and the next `## `, so a rule moved to another section fails by its id (#4603 review, M5). */
+type OwnerRule = { id: string; skills: string[]; roles: RegExp[]; must: RegExp[]; resolve: string[]; section?: string };
 const OWNER_RULES: OwnerRule[] = [
   {
     // Q690 A: no on-media link role. Over a photograph a link is `inverse.text.primary`, underlined, on
@@ -1080,6 +1082,7 @@ const OWNER_RULES: OwnerRule[] = [
   {
     id: '#4469 name a hand-built layer GAP / (section 1)',
     skills: ['prism3-rebind'],
+    section: '## 1.',
     roles: [],
     must: [/by hand because no component fits/i, /`GAP \/ `/, /"GAP \/ [A-Z]/],
     resolve: [],
@@ -1087,6 +1090,7 @@ const OWNER_RULES: OwnerRule[] = [
   {
     id: '#4469 the audit counts GAP layers by name (section 7)',
     skills: ['prism3-rebind'],
+    section: '## 7.',
     roles: [],
     must: [/count the `GAP \/ ` layers by name/i],
     resolve: [],
@@ -1094,6 +1098,7 @@ const OWNER_RULES: OwnerRule[] = [
   {
     id: '#4469 the Outline view check (section 7)',
     skills: ['prism3-rebind'],
+    section: '## 7.',
     roles: [],
     must: [/Cmd\/Ctrl\+Y/, /library instances in purple/i],
     resolve: [],
@@ -1101,6 +1106,7 @@ const OWNER_RULES: OwnerRule[] = [
   {
     id: '#4469 the end-of-job note (section 9)',
     skills: ['prism3-rebind'],
+    section: '## 9.',
     roles: [],
     must: [/end-of-job note/i, /instances you placed/i, /`GAP \/ ` layers/, /worth suggesting/i],
     resolve: [],
@@ -1115,7 +1121,12 @@ export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => 
   for (const s of rule.skills) {
     const text = skillText(s);
     if (text === undefined) { out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: the skill is gone` }); continue; }
-    if (!blocks(text).some((b) => missing(b).length === 0)) out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: no paragraph states it (each must match in one block: ${rule.must.map((r) => r.source).join(', ')})` });
+    const start = rule.section ? text.split('\n').findIndex((l) => l.startsWith(rule.section!)) : -1;
+    if (rule.section && start < 0) { out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: the skill has no section headed "${rule.section}"` }); continue; }
+    const lines = text.split('\n');
+    const end = rule.section ? lines.findIndex((l, i) => i > start && l.startsWith('## ')) : -1;
+    const scope = rule.section ? lines.slice(start, end < 0 ? undefined : end).join('\n') : text;
+    if (!blocks(scope).some((b) => missing(b).length === 0)) out.push({ file: `skills/${s}/SKILL.md`, kind: 'owner rule', detail: `${rule.id}: no paragraph states it (each must match in one block: ${rule.must.map((r) => r.source).join(', ')})` });
   }
   for (const re of rule.roles) if (!Object.keys(color).some((k) => re.test(k))) out.push({ file: 'packages/engine/ai-metadata.ts', kind: 'owner rule', detail: `${rule.id}: no emitted role matches ${re.source}; the rule is held over nothing there` });
   const roles = Object.keys(color).filter((k) => rule.roles.some((re) => re.test(k)));
@@ -1154,42 +1165,62 @@ export const ownerRuleFindings = (rule: OwnerRule, skillText: (name: string) => 
   for (const rule of OWNER_RULES) findings.push(...ownerRuleFindings(rule, read, color, TOKEN_PATHS));
 }
 
-// ---- 8b. THE WORKED LEDGER'S COMPONENTS (#4468 review, M3) --------------------------------------------------------
-// The worked ledger in `prism3-build-ui` teaches an agent to list each component it placed under **Used**. A component
-// id there that no def registers teaches the agent to name one that doesn't exist, and checks 1-3 read only token paths,
-// so `password-input` for `password-field` passed. Each code span on the **Used:** line that is not a token path (no
-// dot) and not a prop value (no `=`) must be a registered component id. The oracle is the registry, `componentDefs`;
-// the subject is the skill text.
-export const ledgerComponentFindings = (text: string, ids: ReadonlySet<string>): Finding[] => {
-  const used = text.split('\n').filter((l) => /^> \*\*Used:\*\*/.test(l));
-  if (!used.length) return [{ file: 'skills/prism3-build-ui/SKILL.md', kind: 'ledger component', detail: 'the worked ledger has no **Used:** line to check' }];
-  // the Used entry runs on until the next blank quote line
+// ---- 8b. THE WORKED LEDGER'S COMPONENTS (#4468 review, M3; delta review, B2) ---------------------------------------
+// The worked ledger in `prism3-build-ui` teaches an agent what goes under each heading, so its names are held:
+//   · **Used:** each code span that is not a token path (no dot) and not a prop value (no `=`) is a registered
+//     component id. Checks 1-3 read only token paths, so `password-input` for `password-field` passed.
+//   · **Composed:** the same for each code span, and it names at least one registered component, so it says what it
+//     was built from. And no component that exists only in a `planned` list (`card`, `form`, `split-button`) appears in
+//     it, in code or in prose: Composed is built only from Prism3's own parts, never a stand-in for a missing one (owner
+//     decision 7175625635). Before, the card could sit under Composed while the report also called it not built.
+// The oracles are the registry (`componentDefs`) and its `planned` lists; the subject is the skill text.
+export const ledgerComponentFindings = (text: string, ids: ReadonlySet<string>, plannedOnly: ReadonlySet<string> = new Set()): Finding[] => {
+  const file = 'skills/prism3-build-ui/SKILL.md';
   const lines = text.split('\n');
+  /** The entry that starts at `> **<heading>:**`, up to the next blank quote line. */
+  const entry = (heading: string): string | undefined => {
+    const i = lines.findIndex((l) => l.startsWith(`> **${heading}:**`));
+    if (i < 0) return undefined;
+    const out: string[] = [];
+    for (let j = i; j < lines.length && lines[j].startsWith('>') && lines[j].trim() !== '>'; j++) out.push(lines[j].replace(/^>\s?/, ''));
+    return out.join(' ');
+  };
   const out: Finding[] = [];
-  for (const start of used) {
-    const i = lines.indexOf(start);
-    const entry: string[] = [];
-    for (let j = i; j < lines.length && lines[j].startsWith('>') && lines[j].trim() !== '>'; j++) entry.push(lines[j]);
-    for (const m of entry.join(' ').matchAll(/`([^`]+)`/g)) {
-      const name = m[1];
-      if (name.includes('.') || name.includes('=')) continue;
-      if (!ids.has(name)) out.push({ file: 'skills/prism3-build-ui/SKILL.md', kind: 'ledger component', detail: `the worked ledger's **Used** names \`${name}\`, which no component definition registers` });
+  for (const heading of ['Used', 'Composed']) {
+    const body = entry(heading);
+    if (body === undefined) { out.push({ file, kind: 'ledger component', detail: `the worked ledger has no **${heading}:** entry to check` }); continue; }
+    const spans = [...body.matchAll(/`([^`]+)`/g)].map((m) => m[1]).filter((n) => !n.includes('.') && !n.includes('='));
+    for (const name of spans) if (!ids.has(name)) out.push({ file, kind: 'ledger component', detail: `the worked ledger's **${heading}** names \`${name}\`, which no component definition registers` });
+    if (heading !== 'Composed') continue;
+    if (!spans.some((n) => ids.has(n))) out.push({ file, kind: 'ledger component', detail: 'the worked ledger\'s **Composed** names no registered component, so it does not say what it was built from' });
+    const words = body.toLowerCase();
+    for (const p of plannedOnly) {
+      const re = new RegExp(`(^|[^a-z0-9-])(${p.replace(/-/g, '[- ]')})(?![a-z0-9-])`, 'i');
+      if (re.test(words)) out.push({ file, kind: 'ledger component', detail: `the worked ledger's **Composed** names \`${p}\`, which exists only in a \`planned\` list: a stand-in for a missing component, not a composition (leave it out and name it)` });
     }
   }
   return out;
 };
 {
   const ids = new Set(componentDefs.map((d) => d.id));
-  // Self-check, both directions: a real id passes, a made-up one fails by name, and a ledger with no Used line fails.
-  const self: [string, number][] = [
-    [ledgerComponentFindings('> **Used:** `button` (`appearance="filled"`); `text.primary`.\n>\n', ids).length === 0 ? 'ok' : 'real id refused', 0],
-    [ledgerComponentFindings('> **Used:** `button`, `password-input`; `text.primary`.\n>\n', ids).length === 1 ? 'ok' : 'made-up id passed', 0],
-    [ledgerComponentFindings('no ledger here\n', ids).length === 1 ? 'ok' : 'missing Used line passed', 0],
+  const plannedOnly = new Set(componentDefs.flatMap((d) => (d.composition as { planned?: string[] } | undefined)?.planned ?? []).filter((p) => !ids.has(p)));
+  // Self-check, both directions: a ledger of real ids passes; a made-up id under Used, a planned-only name in Composed's
+  // prose, and a Composed that names no component each fail once; a ledger with neither entry fails twice.
+  const good = '> **Used:** `button` (`appearance="filled"`); `text.primary`.\n>\n> **Composed:** a row of the `button` and the `link`.\n>\n';
+  const self: [string, number, number][] = [
+    ['a real ledger', ledgerComponentFindings(good, ids, plannedOnly).length, 0],
+    ['a made-up id under Used', ledgerComponentFindings(good.replace('`button` (', '`password-input`, `button` ('), ids, plannedOnly).length, 1],
+    ['a planned-only name in Composed', ledgerComponentFindings(good.replace('a row of', 'the card itself, a row of'), ids, plannedOnly).length, plannedOnly.has('card') ? 1 : 0],
+    ['a Composed that names no component', ledgerComponentFindings(good.replace('a row of the `button` and the `link`', 'a row of controls'), ids, plannedOnly).length, 1],
+    ['no ledger', ledgerComponentFindings('no ledger here\n', ids, plannedOnly).length, 2],
   ];
-  const brokenSelf = self.filter(([r]) => r !== 'ok');
-  if (brokenSelf.length) { console.error(`\n❌ the ledger-component check is broken: ${brokenSelf.map(([r]) => r).join('; ')}`); process.exit(1); }
+  const brokenSelf = self.filter(([, got, want]) => got !== want);
+  if (brokenSelf.length || !plannedOnly.has('card')) {
+    console.error(`\n❌ the ledger-component check is broken: ${brokenSelf.map(([w, g, n]) => `${w} gave ${g} finding(s), expected ${n}`).join('; ') || `no planned-only \`card\` to hold it against (planned-only: ${[...plannedOnly].join(', ') || 'none'})`}`);
+    process.exit(1);
+  }
   const ui = join(skillsDir, 'prism3-build-ui', 'SKILL.md');
-  if (existsSync(ui)) findings.push(...ledgerComponentFindings(readFileSync(ui, 'utf8'), ids));
+  if (existsSync(ui)) findings.push(...ledgerComponentFindings(readFileSync(ui, 'utf8'), ids, plannedOnly));
 }
 
 // ---- 9. RETIRED SKILL NAMES (#3412) --------------------------------------------------------------

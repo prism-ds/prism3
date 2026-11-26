@@ -20,3 +20,8 @@
   - a new `lint-skills` check holds every component id on the worked ledger's **Used** line to the registry; the review's `password-field` → `password-input` mutation had passed;
   - a new owner rule holds the not-built card;
   - the worked-ledger rule now requires `link` under **Used**.
+
+**After the delta review.** The delta review (CHANGES at `575197e4`) found the card could sit under **Composed** again, as long as the "Not built" sentence stayed: nothing read the Composed entry.
+- **Check 8b now reads it too:** each of its code spans is a registered component or a token path; it names at least one registered component; and no component that exists only in a `planned` list (`card`, `form`, `split-button` …) appears in it, in code or prose.
+- **The wording:** the example's Composed entry is now "the sign-in layout", naming its parts as `text-field`, `password-field`, `button` and `link`. A planned `form` component would carry behavior a plain column doesn't.
+- **The M5 nit:** an owner rule can now name the section it must sit in, and the four #4469 rules are held to sections 1, 7, 7 and 9.
