@@ -36,6 +36,7 @@ import { exportComponentDefs } from './component-defs-export';
 import { buildIdentity } from './build-identity';
 import { buildFigmaColor, buildFigmaFont, buildFigmaFontFluid, buildFigmaTextStyles, buildFigmaDims, buildFigmaLayout, buildFigmaShadow, buildFigmaGradient, buildFigmaGridStyles, fontStyleName, figName, parseColor, figmaArtifacts, COLOR_MODES, FONT_FLUID_MODES, LAYOUT_MODES } from './emit-figma';
 import type { FigmaCollectionFile } from './emit-figma';
+import { buildAnimationStylesPlan } from './figma-animation-styles';
 import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
 import { judgeBelowFloor, KNOWN_PENDING } from './lint-shadcn-contrast';
 import { handoffBrands, readHandoff } from './emit-shadcn';
@@ -46414,6 +46415,38 @@ arm: {
     ok(['motion.delay.show', 'motion.delay.hide', 'motion.delay.skip'].every((t) => JSON.stringify(tt).includes(t)),
       '#2857 Q-PT13/Q-PT14 A: the tooltip names motion.delay.show, motion.delay.hide and motion.delay.skip');
   }
+}
+
+// #2857 — MOTION PHASE 3: Figma animation styles. Every example brand's plan binds only variables its own emitted Figma
+// motion collection holds AS PUBLISHED (the emitter, `emit-figma-dims.ts`, is not the plan's module), so a style can never
+// bind a hidden primitive or a name the file lacks. The patterns, the style-guide-only ones and the descriptions'
+// sentences are typed here (docs/34). The plugin's shim test (`test-write-animation-styles.ts`) holds what lands.
+{
+  const PATTERNS = ['dialog/enter', 'dialog/exit', 'dialog/bottom/enter', 'dialog/bottom/exit', 'dialog/end/enter', 'dialog/end/exit', 'toast/enter', 'toast/exit',
+    'tooltip/show', 'tooltip/hide', 'popover/open', 'popover/close', 'accordion/expand', 'accordion/collapse', 'fade/in', 'fade/out', 'hover', 'pressed',
+    'pressed/release', 'tabs/select', 'switch/toggle', 'segmented/select'];
+  const GUIDE_ONLY = ['hover', 'pressed', 'pressed/release'];
+  const off: string[] = [], unstyled: string[] = [];
+  let entries = 0;
+  for (const id of EXAMPLE_IDS) {
+    const theme = brandTheme(exampleBrands()[id] as BrandInput);
+    const plan = buildAnimationStylesPlan(theme);
+    const file = JSON.parse(figmaArtifacts(theme).artifacts.find((a) => a.path === 'motion.json')!.content) as FigmaCollectionFile;
+    const published = new Set(file.variables.filter((v) => !v.hiddenFromPublishing).map((v) => v.name));
+    for (const s of plan.styles) for (const e of s.entries) {
+      entries++;
+      for (const name of [e.duration, e.easing, e.delay]) if (!published.has(name)) off.push(`${id} ${s.name}: ${name}`);
+    }
+    for (const p of PATTERNS) if (!GUIDE_ONLY.includes(p) && !plan.styles.some((s) => s.pattern === p && !s.reduced)) unstyled.push(`${id} ${p}`);
+  }
+  ok(entries > 0 && off.length === 0,
+    `#2857 phase 3: every animation style entry, in every example brand, binds a preset variable its Figma motion collection publishes (${entries} entries; off: ${off.slice(0, 4).join('; ') || 'none'})`);
+  ok(unstyled.length === 0, `#2857 phase 3: every pattern but hover and press has an animation style in every example brand (unstyled: ${unstyled.slice(0, 4).join('; ') || 'none'})`);
+  const plan = buildAnimationStylesPlan(brandTheme({ id: 'styles2857', primary: { l: 0.55, c: 0.15, h: 262 }, neutral: { hue: 262, chroma: 0.008 } } as BrandInput));
+  const said = (n: string) => plan.styles.find((s) => s.name === n)?.description;
+  ok(said('dialog/enter/panel') === 'The panel fades in and scales up from 96%.' && said('toast/enter/reduced') === 'The toast fades in quickly, with no slide.'
+    && said('dialog/bottom/exit/panel/reduced') === 'The panel fades out quickly, instead of sliding.',
+    `#2857 phase 3 (Q-PT21 A): a style's description says what moves, in plain words, as typed (${JSON.stringify([said('dialog/enter/panel'), said('toast/enter/reduced')])})`);
 }
 
 // ------------------------------------------------------------------- #4161 / #4163: the tree says which leaves are which
