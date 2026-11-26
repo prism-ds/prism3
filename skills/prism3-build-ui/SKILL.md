@@ -333,6 +333,14 @@ rule 3 builds from, its metadata sidecar (`<brand>.ai.json`) and its Figma files
 directory (the host must grant file access), then apply everything above. The names are the
 ones `packages/engine/cli.ts --out <dir>` writes. `theme_brand` returns only the contract results and notes unless you
 ask for the tree with `include`, and the tree is too large to read through a tool result.
+**List, then get, before you compose.** Call `list_components` for every component's id, name, summary and
+status, then `get_component` with the `id` of each one you place. It returns the component's props with their
+allowed values and defaults, its parts with the tokens each may bind, when to use it and when not (`whenToUse`,
+`avoidWhen`) and its partners. Pass the same `brand` you gave `theme_brand`, and the token names and values come back
+resolved for that brand. Build from that answer, not from what a component of the same name usually does elsewhere.
+A component `list_components` does not return does not exist yet: leave it out and name it ("Say what you can't
+build", above).
+
 When you finish, `score_consumption` runs the self-check above for you: it flags invented
 names and raw primitives, and scores each `{fg, bg, kind}` pair in every mode. The skill and
 the MCP compose: the MCP gives you the *data*, this skill is the *discipline* for using it.

@@ -18,6 +18,9 @@ One minimal call per tool. Each line is the `params` of a `tools/call` request, 
 {"name": "theme_from_brief", "arguments": {"brief": "---\nid: acme\nprimary: { l: 0.55, c: 0.18, h: 265 }\nneutral: { hue: cool, chroma: 0.01 }\n---\nA calm, precise brand."}}
 {"name": "score_consumption", "arguments": {"brand": {"id": "acme", "primary": {"l": 0.55, "c": 0.18, "h": 265}, "neutral": {"hue": "cool", "chroma": 0.01}}, "refs": ["color.text.primary", "color.background.primary"], "pairs": [{"fg": "color.text.primary", "bg": "color.background.primary"}]}}
 {"name": "export_theme", "arguments": {"brand": {"id": "acme", "primary": {"l": 0.55, "c": 0.18, "h": 265}, "neutral": {"hue": "cool", "chroma": 0.01}}, "outDir": "./tokens"}}
+{"name": "list_components", "arguments": {}}
+{"name": "get_component", "arguments": {"id": "button"}}
+{"name": "get_component", "arguments": {"id": "button", "brand": {"id": "acme", "primary": {"l": 0.55, "c": 0.18, "h": 265}, "neutral": {"hue": "cool", "chroma": 0.01}}}}
 ```
 
 `theme_brand` returns the contrast results and the decisions log; pass `"include": ["notes", "tokens"]` for the token tree as well (`include` replaces the default, so name `notes` to keep the log), or use `export_theme` to write the files instead.
@@ -56,7 +59,7 @@ Task guides for designers, in task order. Every write to a Figma file goes throu
 
 - [DTCG token files](https://github.com/prism-ds/prism3/tree/main/packages/engine/out): one set per example brand, such as `prism3.tokens.json` (the full tree), `prism3.base.tokens.json` (the base mode) and one overlay file for each other mode.
 - [Agent metadata](https://github.com/prism-ds/prism3/blob/main/packages/engine/out/prism3.ai.json): `<brand>.ai.json` sits beside each token set and says what each token means, when to use it and when not to. Its shape is [ai-metadata.schema.json](https://github.com/prism-ds/prism3/blob/main/packages/engine/schema/ai-metadata.schema.json).
-- [Component catalog](https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/components.ai.json): every built component, with its props, states, accessibility and when to use it. A component exists only when it has an entry here. Each also has a page beside it, `<id>.md`, with the same content for a person to read.
+- [Component catalog](https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/components.ai.json): every built component, with its props, states, accessibility and when to use it. A component exists only when it has an entry here. Each also has a page beside it, `<id>.md`, with the same content for a person to read. Through the MCP, `list_components` lists them and `get_component` returns one, brand-neutral or resolved for a brand.
 - [Brand input schema](https://github.com/prism-ds/prism3/blob/main/packages/engine/schema/theme-schema.json): the BrandInput shape every theming tool and command accepts.
 
 ## Skills

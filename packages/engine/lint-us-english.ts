@@ -676,7 +676,7 @@ const gatedHits = gated.flatMap(scan);
 // merely present: every tool named below must be in the reply. The list is this gate's, written out
 // rather than read from `toolDefs`, so a tool that disappears from the server fails here by name; a
 // tool ADDED to the server is scanned without being listed (the scan walks the reply, not this list).
-const MCP_TOOLS = ['list_levers', 'theme_brand', 'score_consumption', 'theme_from_brief', 'export_theme', 'validate_brand'];
+const MCP_TOOLS = ['list_levers', 'theme_brand', 'score_consumption', 'theme_from_brief', 'export_theme', 'validate_brand', 'list_components', 'get_component'];
 const served = servedToolsList(repo);
 let mcpToolsScanned = 0;
 if ('error' in served) blind.push(`the MCP tools/list surface — ${served.error}`);

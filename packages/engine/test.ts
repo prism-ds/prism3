@@ -17101,10 +17101,10 @@ arm: {
   // Version negotiation arrives per-REQUEST now. A version we speak passes; one we do not is rejected
   // with the renumbered code, and an ABSENT version is allowed (older clients never send one).
   const verOk = handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': LATEST_PROTOCOL_VERSION } } }, brandSchema);
-  ok((verOk?.result as any)?.tools?.length === 6, 'MCP: a request carrying a supported protocolVersion in _meta is served');
+  ok((verOk?.result as any)?.tools?.length === 8, 'MCP: a request carrying a supported protocolVersion in _meta is served');
   const verBad = handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: { 'io.modelcontextprotocol/protocolVersion': '1999-01-01' } } }, brandSchema);
   ok((verBad as any)?.error?.code === -32022 && Array.isArray((verBad as any)?.error?.data?.supported), 'MCP: an unsupported protocolVersion → -32022 (the reserved range) with the supported list attached');
-  ok((rpc('tools/list')?.result as any)?.tools?.length === 6, 'MCP: a request with NO protocolVersion is still served (older clients never send one)');
+  ok((rpc('tools/list')?.result as any)?.tools?.length === 8, 'MCP: a request with NO protocolVersion is still served (older clients never send one)');
 
   // ---- 2024-11-05 dual support: the old handshake still answers ------------------------------
   const init = rpc('initialize')?.result as any;
@@ -17121,9 +17121,9 @@ arm: {
 
   // tool catalogue
   const tools = (rpc('tools/list')?.result as any)?.tools as any[];
-  ok(Array.isArray(tools) && tools.map((t) => t.name).sort().join(',') === 'export_theme,list_levers,score_consumption,theme_brand,theme_from_brief,validate_brand', 'MCP: tools/list advertises all six tools');
+  ok(Array.isArray(tools) && tools.map((t) => t.name).sort().join(',') === 'export_theme,get_component,list_components,list_levers,score_consumption,theme_brand,theme_from_brief,validate_brand', 'MCP: tools/list advertises all eight tools');
   ok(tools.find((t) => t.name === 'theme_brand')?.inputSchema?.properties?.brand?.$id === (brandSchema as any).$id, 'MCP: theme_brand takes { brand, include } with the BrandInput schema (its own $id) under `brand`');
-  ok(toolDefs(brandSchema).length === 6, 'MCP: toolDefs is a pure function of the brand schema');
+  ok(toolDefs(brandSchema).length === 8, 'MCP: toolDefs is a pure function of the brand schema');
   // Current MCP tool UX: a display title and behaviour annotations on every tool. Every tool is
   // idempotent + closed-world; all but one are pure reads.
   ok(tools.every((t) => typeof t.title === 'string' && t.annotations?.idempotentHint === true && t.annotations?.openWorldHint === false),
