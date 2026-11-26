@@ -2,7 +2,7 @@
 
 <!-- DRAFT for owner review (#2637, lane 4; corrected to Documentation and Update file for #3264). -->
 
-Style guides are tables, one for each group of tokens in the file, drawn from the file's own variables, text styles, effect styles, gradient styles and grid styles. A rerun updates each table in place. <!-- src: apps/studio/src/shell/style-guides.ts@"const DOCS_INTRO = '"#46a11854 --> <!-- src: apps/studio/src/shell/style-guides.ts@"const KIND_LABEL: Record"#3d2941b6 -->
+Style guides are tables, one for each group of tokens in the file, drawn from the file's own variables, text styles, effect styles, gradient styles, grid styles and animation styles. A rerun updates each table in place. <!-- src: apps/studio/src/shell/style-guides.ts@"const DOCS_INTRO = '"#46a11854 --> <!-- src: apps/studio/src/shell/style-guides.ts@"const KIND_LABEL: Record"#1c1d3984 -->
 They are in the Figma plugin only. You choose what to draw in the **Docs** area, and **Update file** draws it. <!-- src: apps/studio/src/state/update-file.ts@"guides: 'Style guides".."go: 'Update file'," --> <!-- src: apps/studio/src/shell/pages.ts@"{ id: 'documentation" -->
 
 Because the tables read the file rather than Studio, they show what the file holds right now, including anything you changed by hand. <!-- src: apps/plugin/src/style-guide.ts@"/**\n * THE STYLE-GUIDE GENERATOR (#259, phases 1–2: COLOR; DIMENSION, FONT VARIABLES, TEXT STYLES) — a table per token".."import { contrast, composite"#0c86094b -->
