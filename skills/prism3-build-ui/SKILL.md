@@ -260,6 +260,14 @@ Then reread the brief against what you built. Each thing it asks for is either b
 component and its tokens, or named in your report as not built ("Say what you can't build", above).
 Nothing is in between.
 
+**Render it and look before you write the ledger.** The checks above read names and ratios; they
+don't see the page. Render the build and look at it in light and dark, at a phone width (about
+390px) and at a desktop width. Look for what only a render shows: elements that overlap or clip,
+text that runs off the screen, a border or icon that disappears in dark mode, and a component that
+draws differently from its spec. Fix what is visibly wrong, then write the ledger. If you can't
+render the build (no browser, or no host to run it in), list each view you didn't see under
+**Unsure** in the ledger.
+
 ## End every build with a ledger
 
 End every build with a short ledger under four headings: **Used**, **Composed**, **Invented** and
