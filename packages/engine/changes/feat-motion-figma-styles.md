@@ -1,0 +1,4 @@
+---
+engine: minor
+---
+Motion reaches Figma as animation styles (#2857, motion phase 3). Apply Theme writes one Figma animation style for each motion pattern, or for each element of a pattern that moves several (a dialog's scrim, panel and content), and a reduced sibling where the element still moves under reduced motion. Every entry binds the published preset variables the pattern names, such as `motion/preset/surface/duration` and `…/easing`, and never a hidden primitive, so re-pointing a preset re-times every style that plays on it. An update keeps each style, so the layers that use it keep it too, and replaces its entries, because an entry cannot be edited once added. Hover and press stay style-guide rows until a style can carry a fill color. The style guide gains an animation table, with one row per style and its reduced sibling in the same row. A Figma without animation styles skips them and says so.
