@@ -146,7 +146,9 @@ export const applyAnimationStylesPlan = async (plan: AnimationStylesPlan, host: 
       await s.addAnimationEntryAsync(kind.styleId, props);
       entries++;
     }
-    try { s.setSharedPluginData?.(NOT_CARRIED_NS, NOT_CARRIED_KEY, notCarried.size ? JSON.stringify([...notCarried]) : ''); } catch { /* best-effort, as the ownership mark is */ }
+    // In one stated order, delay, edge, distance, whatever order the entries met them in.
+    const said = Object.values(NOT_CARRIED).filter((w) => notCarried.has(w));
+    try { s.setSharedPluginData?.(NOT_CARRIED_NS, NOT_CARRIED_KEY, said.length ? JSON.stringify(said) : ''); } catch { /* best-effort, as the ownership mark is */ }
     await tick?.();
   }
   return { written: true, total: plan.styles.length, created, entries, bound, misses };

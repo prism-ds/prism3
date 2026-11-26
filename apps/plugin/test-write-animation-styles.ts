@@ -192,12 +192,56 @@ const skipped = await applyAnimationStylesPlan(plan, { variables: host.variables
 ok(!skipped.written && /no animation styles/.test(skipped.skipped ?? ''),
   `a Figma with no animation styles skips them and says so (${JSON.stringify(skipped.skipped)})`);
 
+console.log('\nAS-1 (owner, 2026-11-26): an element level only where a pattern moves more than one element');
+/** The patterns that move several elements, typed from the starter set (Q-PT16 A). */
+const MULTI = ['dialog/enter', 'dialog/exit', 'dialog/bottom/enter', 'dialog/bottom/exit', 'dialog/end/enter', 'dialog/end/exit', 'accordion/expand', 'accordion/collapse', 'tabs/select', 'switch/toggle', 'segmented/select'];
+const depthOff = written.filter((n) => {
+  const p = patternOf(n);
+  const levels = n.split(' / ').length - 1;   // the folder's segments, less the default or reduced leaf
+  const want = p.split('/').length + (MULTI.includes(p) ? 1 : 0);
+  return levels !== want;
+});
+ok(depthOff.length === 0, `a single-element pattern is <Pattern> / <half> / default|reduced, and a multi-element one adds its element (off: ${depthOff.join(', ') || 'none'})`);
+
+console.log('\nnothing the plan carries is dropped silently (#4608 review, finding 3)');
+// What the host has no property for yet (#2857): a slide's edge, a self-sized slide's distance, a non-zero delay. Each one
+// the executor drops must be a named miss, and must ride on the style. Typed for the default brand: the four self-sized
+// panel slides carry an edge and their own-size distance; the toast's slide carries its edge.
+const NOT_CARRIED_WANT: Record<string, string[]> = {
+  'Dialog / bottom / enter / panel / default': ['the edge it slides from', 'its own-size distance'],
+  'Dialog / bottom / exit / panel / default': ['the edge it slides from', 'its own-size distance'],
+  'Dialog / end / enter / panel / default': ['the edge it slides from', 'its own-size distance'],
+  'Dialog / end / exit / panel / default': ['the edge it slides from', 'its own-size distance'],
+  'Toast / enter / default': ['the edge it slides from'],
+};
+const stamped = (h: typeof host, name: string): string[] => { const raw = h.styles.find((s) => s.name === name)?.getSharedPluginData('prism3', 'animation-not-carried'); return raw ? JSON.parse(raw) : []; };
+const stampOff = host.styles.filter((s) => JSON.stringify(stamped(host, s.name).sort()) !== JSON.stringify([...(NOT_CARRIED_WANT[s.name] ?? [])].sort())).map((s) => `${s.name}: ${JSON.stringify(stamped(host, s.name))}`);
+ok(stampOff.length === 0, `each style carries the list of what it doesn't carry yet, and only those five do (off: ${stampOff.slice(0, 3).join('; ') || 'none'})`);
+const missFor = (r: { misses: string[] }, style: string, what: RegExp) => r.misses.some((m) => m.startsWith(`${style}: `) && what.test(m) && /not written yet, because Figma's property for it is not named \(#2857\)/.test(m));
+const missOff = Object.entries(NOT_CARRIED_WANT).flatMap(([style, whats]) => whats.filter((w) => !missFor(first, style, w.startsWith('the edge') ? /the edge it slides from \((bottom|end|below)\)/ : /its own-size distance/)).map((w) => `${style}: ${w}`));
+ok(missOff.length === 0 && first.misses.length === 9, `every edge and own-size distance the executor can't write is a named miss in its report, 9 in all (missing: ${missOff.join('; ') || 'none'}; ${first.misses.length} misses)`);
+// No silent drop, read off the plan the executor was given: every entry with an edge, a self-sized distance or a non-zero
+// delay has a miss naming its style.
+const silent = plan.styles.flatMap((st) => st.entries.filter((e) => e.from || (e.distance && 'self' in e.distance) || e.delayMs > 0)
+  .filter(() => !first.misses.some((m) => m.startsWith(`${st.name}: `))).map(() => st.name));
+ok(silent.length === 0, `no entry's edge, own-size distance or delay is dropped without a miss (silent: ${[...new Set(silent)].join(', ') || 'none'})`);
+// A brand that re-points a preset's delay: every style playing on that preset names the delay it can't carry.
+const delayed = brandTheme({ ...input, motionPersonality: { presets: { surface: { delay: 'delay.show' } } } } as BrandInput);
+const host3 = shimOf(varsOf(delayed), HOST_KINDS);
+const r3 = await applyAnimationStylesPlan(buildAnimationStylesPlan(delayed), host3);
+const byId3 = new Map(varsOf(delayed).map((v) => [v.id, v.name] as const));
+const onSurface = host3.styles.filter((st) => st.animationEntries.some((e) => /\/motion\/preset\/surface\/duration(-reduced)?$/.test(byId3.get((e.props.duration as { id: string })?.id) ?? ''))).map((st) => st.name);
+const delayOff = onSurface.filter((n) => !missFor(r3, n, /its 400ms delay \(prism\/motion\/preset\/surface\/delay\)/) || !stamped(host3, n).includes('its delay'));
+ok(onSurface.length >= 10 && delayOff.length === 0,
+  `a brand that delays the surface preset by delay.show gets a named delay miss on every style that plays on surface, and each says so (${onSurface.length} styles; off: ${delayOff.slice(0, 3).join(', ') || 'none'})`);
+ok(stamped(host3, 'Toast / exit / default').length === 0, 'a style on a preset with no delay carries no delay note');
+
 console.log('\nthe style guide: one row per pattern, its reduced sibling in the same row (Q-PT22 A)');
 // The catalog is built from what landed in the shim, as `readCatalog` reads a file: each style's name, description and
 // its entries by the name of the Figma animation each was added from.
 const catalog = {
   collections: [], variables: [],
-  animationStyles: host.styles.map((s) => ({ id: s.id, name: s.name, description: s.description, entries: s.animationEntries.map((e) => e.name) })),
+  animationStyles: host.styles.map((s) => { const raw = s.getSharedPluginData('prism3', 'animation-not-carried'); return { id: s.id, name: s.name, description: s.description, entries: s.animationEntries.map((e) => e.name), ...(raw ? { notCarried: JSON.parse(raw) as string[] } : {}) }; }),
 };
 const sg = planStyleGuide(catalog, null, { types: ['animation'] });
 const table = sg.tables.find((t) => t.type === 'animation');
@@ -208,13 +252,23 @@ const wantRows = [...folders, 'State / hover', 'State / pressed', 'State / press
 ok(sg.tables.length === 1 && rowNames.length === wantRows.length && wantRows.every((n) => rowNames.includes(n)),
   `one animation table, a row per pattern folder, its default style the specimen, and one per style-guide-only pattern (${rowNames.length} rows, ${wantRows.length} expected; missing: ${wantRows.filter((n) => !rowNames.includes(n)).join(', ') || 'none'})`);
 const toastRow = rowOf('Toast / enter');
-ok(toastRow?.extra?.[0]?.value === 'Opacity · Position' && toastRow?.extra?.[1]?.value === 'The toast fades in quickly, with no slide.' && toastRow?.specimen?.kind === 'animation',
+ok(toastRow?.extra?.[0]?.value === 'Opacity · Position (not carried yet: the edge it slides from)' && toastRow?.extra?.[1]?.value === 'The toast fades in quickly, with no slide.' && toastRow?.specimen?.kind === 'animation',
   `a row names what its style plays and carries its reduced sibling's words in the same row (Toast / enter: ${JSON.stringify(toastRow?.extra?.map((x) => x.value))})`);
 const hoverRow = rowOf('State / hover');
 ok(hoverRow?.variableId === '' && hoverRow?.extra?.[0]?.value === 'Style guide only' && hoverRow?.description === 'The control changes color.',
   `a style-guide-only pattern is a row with no style, saying what it does (State / hover: ${JSON.stringify([hoverRow?.extra?.[0]?.value, hoverRow?.description])})`);
-const noReducedRow = rowOf('Accordion / expand / indicator');
-ok(noReducedRow?.extra?.[1]?.value === '—', `a style with no reduced sibling says so in its row (Accordion / expand / indicator: ${JSON.stringify(noReducedRow?.extra?.[1]?.value)})`);
+// The owner's decision of 2026-11-26 on #4608: an element reduced motion turns off has no reduced style, and its row
+// still says what reduced motion does to it. Typed for the five.
+const REDUCED_WORDS: Record<string, string> = {
+  'Accordion / expand / indicator': "The indicator doesn't turn.", 'Accordion / collapse / indicator': "The indicator doesn't turn.",
+  'Tabs / select / underline': 'The underline takes its new place at once.', 'Switch / toggle / thumb': 'The thumb takes its new place at once.',
+  'Segmented / select / pill': 'The pill takes its new place at once.',
+};
+const reducedWordsOff = Object.entries(REDUCED_WORDS).filter(([f, w]) => rowOf(f)?.extra?.[1]?.value !== w).map(([f]) => `${f}: ${JSON.stringify(rowOf(f)?.extra?.[1]?.value)}`);
+ok(reducedWordsOff.length === 0, `a folder with no reduced style says in its row what reduced motion does to its element (off: ${reducedWordsOff.join('; ') || 'none'})`);
+const sheetRow = rowOf('Dialog / bottom / enter / panel');
+ok(sheetRow?.extra?.[0]?.value === 'Position (not carried yet: the edge it slides from and its own-size distance)',
+  `a row says what its style doesn't carry yet (Dialog / bottom / enter / panel: ${JSON.stringify(sheetRow?.extra?.[0]?.value)})`);
 
 console.log(`\nplugin ANIMATION STYLES write-adapter: ${failed === 0 ? 'ALL PASS' : failed + ' FAILED'} — ${executed} assertions executed`);
 if (failed) process.exit(1);
