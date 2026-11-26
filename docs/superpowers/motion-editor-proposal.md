@@ -27,7 +27,7 @@ In Studio, **Theme › Depth & motion**, under **Motion**:
 
 - **Tempo**: three chips (Snappy, Standard, Relaxed), per mode. Light writes `motionPersonality.tempo`; another mode
   writes `modeLevers.<mode>.tempo`.
-- **Easing per motion role**: one picker per role (default, enter, exit, emphasized), each listing the six curves,
+- **Easing per motion role**: one picker per role (default, enter, exit, emphasized), each listing the brand's curves (the six built-in plus any imported),
   drawn. Per mode through `modeLevers.<mode>.easings`.
 - **The preview**: the curves with the roles that use each, the duration ramp with each step's reduced value, the
   springs (read-only), and the "Presets" traces (Q-P5 A): each preset traced over its duration along its curve, with
@@ -84,7 +84,7 @@ An edit at each tier reaches everything below it. The editor's job is to make th
 
 | Tier | One edit reaches | Example |
 |---|---|---|
-| Tempo | every duration, so every preset and pattern | Relaxed: every step ×1.3 |
+| Tempo | every duration step, so every preset and pattern (not loop periods, delays or spring settle times) | Relaxed: every step ×1.3 |
 | Easing role | every preset (and exit half) whose easing slot is that role | `enter` → `calm`: fade, reveal, surface, settle and pop all change |
 | Preset slot | every track that names that preset, in every pattern | `surface` → `duration.slow`: all six dialog patterns, scrim and panel |
 | Track | one element of one pattern | `toast/enter` toast·transform distance → 6px |
@@ -161,8 +161,8 @@ order:
 
 1. **The patterns that name it.** `surface` plays the centered dialog; `pop` plays the popover; `move` plays the tab
    underline; `expand` plays the accordion; `press` and `state` play a button pressed and released; `crossfade`
-   plays the tabs panel. A preset named by several patterns shows a small "used by" list (Studio already has
-   `preview/used-by.ts`), and a click picks which one plays.
+   plays the tabs panel. A preset named by several patterns shows a small "used by" list (a new map: Studio's
+   `preview/used-by.ts` covers radius and control heights, not motion), and a click picks which one plays.
 2. **A plain specimen**, for the four presets no pattern names yet: `reveal`, `draw`, `step` and `settle`. A square
    that fades and rises for reveal and settle, a line drawn on for draw, a row of cards that advances for step. What
    each specimen does is visual design, so it's the owner's (wireframe A shows a draft).
@@ -229,7 +229,7 @@ come back in unchanged.
 | Agent file (`.ai.json`) | `motion_presets` and `motion_patterns` name the new targets | Yes |
 | Component docs | The generated Enter, Exit and Reduced lines follow the patterns (PT-B1 A) | Yes |
 | Figma variables (plugin, Apply Theme) | A preset edit is an alias move on the published preset variable; the `motion` collection gains modes for per-mode tempo and roles | Yes |
-| Figma animation styles (plugin) | Styles bind the preset variables (Q-MS1 A), so a preset edit needs no style rewrite. A track edit (distance, scale, reduced kind) rewrites the style's entries and keeps its key (#4608) | Yes. Whether a bound style's playback re-times live in Figma is **not verified** (#2857's opening list) |
+| Figma animation styles (plugin) | Styles bind the preset variables (Q-MS1 A), so a preset edit needs no style rewrite. A track edit (distance, scale, reduced kind) rewrites the style's entries and keeps its key (#4608) | Yes. A bound style re-times live when the variable it binds is re-pointed: verified by the owner on 2026-11-02 for duration and easing role aliases, in the same file and in a consuming file after publish-and-accept (#2857 comments 6587108570, 6587403049, 6588069098). Those checks bound role variables, while the styles now bind preset variables, which is the same alias mechanism. |
 | shadcn/ui and Tailwind themes (#2997) | Nothing: they carry no motion today | **No** (Q-ME8) |
 | Contrast and every color contract | Nothing. `buildMotion` reads only `motionPersonality`, and no color rule reads motion | Yes, and PR 1 adds a gate that says so |
 
@@ -263,7 +263,7 @@ bundled UI is checked by the plugin's gates too, because the plugin runs Studio 
 | **4. Reduced motion and Compare** | §3.3 and §3.4. | The plays-the-data gate gains its reduced arm (each track's kind and `duration-reduced`). A chrome arm that the reduced toggle writes nothing to the brand. |
 | **5. Track editor** | §4.3: a track's preset, distance, start scale and reduced kind, from the timeline, with the "this element or everywhere" choice. | `test-store.ts` arms. A round-trip arm: a track edit exported as design.md and imported back is the same brand. |
 | **6. Brand curves** (if Q-ME6 A) | A curve editor that holds the engine's guardrails as the handle moves. | Arms that every guardrail the engine refuses is refused in the UI first, with the engine's own message. |
-| **7. Plugin parity** (if Q-ME4 A) | The editor in the plugin panel. Apply Theme already writes the variables and styles. | `test:verdict` and `test:start` arms for the panel; `test:roundtrip` and `test:readback-parity` already cover what Apply Theme writes. The live re-time check in the Figma app, run once by the owner. |
+| **7. Plugin parity** (if Q-ME4 A) | The editor in the plugin panel. Apply Theme already writes the variables and styles. | `test:verdict` and `test:start` arms for the panel; `test:roundtrip` and `test:readback-parity` already cover what Apply Theme writes. |
 
 ---
 
@@ -367,7 +367,5 @@ can't express that brand.
 
 ## 8. Not verified
 
-- Whether a Figma animation style re-times live when the preset variable it binds is re-pointed (#2857's opening list;
-  the Q-MS10 and phase 3 checks covered binding and units, not live playback after a change).
 - Whether Studio can play the dialog and end-panel patterns at a readable scale inside the preview pane at the
   plugin's panel width. PR 3 measures it.
