@@ -1,0 +1,3 @@
+## (2026-11-26) — PoC KPI 2: Figma geometry re-recorded after #4598, four border findings left
+
+The PoC scratch file was rebuilt from the `poc/arm-1` plugin, then re-recorded read-only through the Desktop Bridge. The recorder now reads each layer's stroke as well: all 4,212 parts carry `border`, and all 264 stroked parts carry `stroke`. No stroke is in layout. The comparison reads 122 of 809 comparisons differing, in **4 findings, all borders** (the button root, each field's control, and the Show/Hide toggle), exactly as #4598 projected. That's the 1px CSS-border-vs-Figma-inside-stroke difference the owner chose to count (G1 A, #3408); #4599 is filed to close it at the source. Only `apps/storybook/figma-geometry.json` changes.
