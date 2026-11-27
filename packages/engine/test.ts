@@ -48016,6 +48016,25 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(k.verdict === 'failing' && k.note.includes('BELOW ACCEPTED 4.24'), `#2997 a KNOWN pair below its accepted floor fails by name (got ${k.verdict}${k.note})`);
 }
 
+// #4587: an accepted floor is held from below as well. Lowered under the ratio it records, it widens what the owner
+// accepted, and the pair could then fall that far with nothing failing. The entries are typed here, not read from
+// KNOWN, and the ratios are the ones the gate measured for `prism3 light: destructive/90 on card` (3.97...).
+// BY-NAME MUTATION: drop the SLACK return from `judgeBelowFloor` → the first two arms fail.
+{
+  const key = 'prism3 light: destructive/90 on card';
+  const at = (floor: number) => ({ [key]: { floor, why: 'fixture' } });
+  const lowered = judgeBelowFloor(key, 3.975, at(3.0), {});
+  ok(lowered.verdict === 'failing' && lowered.note.includes('SLACK KNOWN: measured 3.97, floor 3'),
+    `#4587 a KNOWN floor lowered from 3.97 to 3.00 fails as SLACK by name (got ${lowered.verdict}${lowered.note})`);
+  const pend = judgeBelowFloor(key, 3.975, {}, at(3.95));
+  ok(pend.verdict === 'failing' && pend.note.includes('SLACK PENDING: measured 3.97, floor 3.95'),
+    `#4587 a KNOWN_PENDING floor two hundredths under its ratio fails as SLACK by name (got ${pend.verdict}${pend.note})`);
+  for (const floor of [3.97, 3.96]) {
+    const v = judgeBelowFloor(key, 3.975, at(floor), {});
+    ok(v.verdict === 'known' && v.note === '', `#4587 a floor at, or one hundredth under, its measured 3.97 holds (floor ${floor}, got ${v.verdict}${v.note})`);
+  }
+}
+
 // #4428: a regression arm for #4155's filter in the shadcn projector's brand walk (`handoffBrands`). Since #4282 the
 // handoff also carries a web-only `<brand>.web.base.tokens.json` with no overlays; read as a brand, it crashed both
 // Chromium gates. A planted web base is skipped, and every brand the walk returns over the committed handoff reads.
