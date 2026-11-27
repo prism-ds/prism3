@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "prism3-file-facts/0.1",
+  "$id": "prism3-file-facts/0.2",
   "$comment": "AUTHORED, NOT GENERATED, and deliberately not a `regen.ts` artifact: a schema regenerated from the scanner would agree with whatever the scanner wrote (`docs/34`). Validated in `apps/plugin/test-file-facts.ts`, which scans every fixture file and checks the report against this schema with `json-schema-lite.ts`. Every object closes `additionalProperties`, so a field the scanner adds, drops or renames fails until this schema and its `$id` move with it. #2075 part 1.",
   "title": "Prism3 file facts report",
   "description": "A deterministic scan of one Figma file: its variables, its styles, the values its layers use and how each is applied (bound to a variable, applied through a style, or raw), and the components it places. Evidence only: it proposes nothing. No file name, no file key and no timestamp, so the same file scans to the same report. Unstable while `format` reads 0.x: fields may still be added, renamed or removed.",
@@ -10,7 +10,9 @@
     "format",
     "engineVersion",
     "roleRule",
+    "scope",
     "coverage",
+    "inventory",
     "variables",
     "styles",
     "usage",
@@ -20,7 +22,7 @@
   ],
   "properties": {
     "format": {
-      "const": "prism3-file-facts/0.1",
+      "const": "prism3-file-facts/0.2",
       "description": "The shape this report follows. Equal to this schema's `$id`. Unstable while it reads 0.x: any field may be added, renamed or removed, and each such change raises the number after the dot. Check the exact id, and refuse one you do not know."
     },
     "engineVersion": {
@@ -31,6 +33,69 @@
     "roleRule": {
       "const": "name-and-type/1",
       "description": "The revision of the rule that sorts each paint into a role. 1: icon (a vector shape, or a layer or ancestor named as an icon), then text (a fill on a text layer), then border (any stroke), then button-like (a fill on a layer, or a child of a layer, named as a button, btn or cta), then background."
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "from",
+        "ids",
+        "pages"
+      ],
+      "description": "What the scan read. Variable and style definitions are file-wide whatever the scope; the usage, components, coverage and inventory sections cover only the scope.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "file",
+            "pages",
+            "nodes"
+          ],
+          "description": "The whole file, a set of pages, or a set of layers (frames or sections) anywhere."
+        },
+        "from": {
+          "enum": [
+            "whole-file",
+            "selection",
+            "current-page",
+            "ids"
+          ],
+          "description": "How the scope was given: the whole file, the canvas selection, the current page (a selection that was empty), or an explicit list of ids."
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The roots: page ids for `pages`, layer ids for `nodes`, in file order; empty for `file`. A layer inside another named layer is covered by it and is not listed."
+        },
+        "pages": {
+          "type": "array",
+          "description": "The pages that hold the scope, in file order.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "index"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The page's position in the file."
+              }
+            }
+          }
+        }
+      }
     },
     "coverage": {
       "type": "object",
@@ -47,12 +112,12 @@
         "pages": {
           "type": "integer",
           "minimum": 0,
-          "description": "Pages scanned: every page in the file."
+          "description": "Pages in scope: every page in the file for a whole-file scan, else the pages that hold the scope."
         },
         "layers": {
           "type": "integer",
           "minimum": 0,
-          "description": "Visible layers read."
+          "description": "Visible layers read, inside the scope."
         },
         "hiddenLayers": {
           "type": "integer",
@@ -76,6 +141,196 @@
         }
       },
       "description": "What the scan read."
+    },
+    "inventory": {
+      "type": "array",
+      "description": "One row per visible frame, section or component set at the top of the scope, and per child of a section in turn. Evidence for pairing light and dark screens and for grouping concepts; it pairs nothing.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "page",
+          "pageIndex",
+          "id",
+          "type",
+          "name",
+          "section",
+          "x",
+          "y",
+          "width",
+          "height",
+          "background",
+          "explicitModes",
+          "layoutMode",
+          "layoutGrids",
+          "fingerprint",
+          "descendants",
+          "textLayers",
+          "instances",
+          "hiddenLayers",
+          "unreadableLayers",
+          "families",
+          "fills"
+        ],
+        "properties": {
+          "page": {
+            "type": "string"
+          },
+          "pageIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "FRAME",
+              "SECTION",
+              "COMPONENT_SET"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "section": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The id of the section this row sits in; null at the top of the scope."
+          },
+          "x": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "y": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "width": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "height": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "background": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The topmost visible solid fill, as `#rrggbb` or `#rrggbbaa`; null when there is none."
+          },
+          "explicitModes": {
+            "type": "array",
+            "description": "The variable modes set explicitly on this node, by collection, sorted by collection name. A name is null when the file cannot reach the collection.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "collectionId",
+                "collection",
+                "modeId",
+                "mode"
+              ],
+              "properties": {
+                "collectionId": {
+                  "type": "string"
+                },
+                "collection": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "modeId": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "layoutMode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "layoutGrids": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}$",
+            "description": "FNV-1a over each visible layer's depth and type, in order. Names, text and colors are left out, so two copies of one screen in different colors share it."
+          },
+          "descendants": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Visible layers under this node."
+          },
+          "textLayers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "instances": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hiddenLayers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unreadableLayers": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "families": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The font families of the visible text under this node, sorted."
+          },
+          "fills": {
+            "type": "array",
+            "description": "The five most-used visible solid fills under this node (itself included), by layers, a tie by color; fewer when there are fewer.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "color",
+                "layers"
+              ],
+              "properties": {
+                "color": {
+                  "type": "string"
+                },
+                "layers": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "variables": {
       "type": "object",

@@ -39,7 +39,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDesignMd } from '../../packages/engine/design-md';
-import { FILE_FACTS_FORMAT, scanFileFacts, sourceFromSnapshot, type FileFactsReport } from '../../packages/engine/file-facts';
+import { FACTS_FORMATS_READ, scanFileFacts, sourceFromSnapshot, type FileFactsReport } from '../../packages/engine/file-facts';
 import { seedFromFacts } from '../../packages/engine/file-seed';
 import { resolveVocabulary, SLIDER_STOPS } from '../../packages/engine/vocabulary';
 import { snapshotFromExport } from './snapshots';
@@ -135,7 +135,7 @@ const main = async (): Promise<void> => {
     let report: FileFactsReport | null = null;
     if (REPO_ROWS[row]) report = await scanFileFacts(sourceFromSnapshot(snapshotFromExport(join(repo, REPO_ROWS[row]))));
     else if (externalDir && existsSync(join(externalDir, `${row}.report.json`))) report = JSON.parse(readFileSync(join(externalDir, `${row}.report.json`), 'utf8'));
-    if (report && report.format !== FILE_FACTS_FORMAT) { lines.push(`\n${row}\n  REFUSED: report format ${report.format}, this harness reads ${FILE_FACTS_FORMAT}`); out.push({ row, refused: report.format }); continue; }
+    if (report && !(FACTS_FORMATS_READ as readonly string[]).includes(report.format)) { lines.push(`\n${row}\n  REFUSED: report format ${report.format}, this harness reads ${FACTS_FORMATS_READ.join(', ')}`); out.push({ row, refused: report.format }); continue; }
     if (!report) { lines.push(`\n${row} — ${k.kind}\n  PENDING: no report (README.md, "The external rows")`); out.push({ row, pending: true }); continue; }
     if (k.pending) { lines.push(`\n${row} — ${k.kind}\n  snapshot found, but the answer key for this row is not written yet`); out.push({ row, keyMissing: true }); continue; }
     if (reportsDir) writeFileSync(join(reportsDir, `${row}.json`), `${JSON.stringify(report, null, 2)}\n`);
