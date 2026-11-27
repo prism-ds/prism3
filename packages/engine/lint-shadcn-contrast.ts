@@ -20,7 +20,8 @@
  * with the decision and the ratio accepted, and reported, not failed, while they hold that ratio; the engine question
  * is #4279. `KNOWN_PENDING` holds the regression fixture's pair the owner accepted on #4289 (owner decision 2026-11-19
  * A: a legacy fixture, not engine-derived). It is held the same way: to the ratio accepted, printed on every run, STALE
- * once it passes.
+ * once it passes. Each floor is held from both sides: a pair below it fails as BELOW ACCEPTED, and a floor more than 0.01
+ * below the measured ratio fails as SLACK, so a floor edited down cannot widen what the owner accepted (#4587).
  *
  * MUTATION: map `muted-foreground` → `color.text.tertiary` and this fails `prism3 light: muted-foreground on muted 3.17 <
  * 4.5` by name. Emit prism3's dark `primary` as `oklch(0.25 0.1 266.7)` and it fails `prism3 dark: primary on background
@@ -30,7 +31,9 @@
  * background … < 3` by name, for every form in every brand; drop one form from `SHADCN_RING_FORMS` and it fails that
  * form's rows alone (`prism3 light: ring/50 slider on background 2.81 < 3`). Drop the rule's invalid exclusion and it
  * fails `<brand> <mode>: an invalid field lost its destructive/20 ring with the rule …` by name. Raise a `FADED` entry's floor in `KNOWN` above its measured ratio (or lower the ratio
- * under it) and it fails `… destructive/90 on card … — BELOW ACCEPTED …` by name.
+ * under it) and it fails `… destructive/90 on card … — BELOW ACCEPTED …` by name. Lower a floor below its measured ratio
+ * (`prism3 light: destructive/90 on card` 3.97 → 3.00) and it fails `prism3 light: destructive/90 on card 3.97 < 4.5 —
+ * SLACK KNOWN: measured 3.97, floor 3 …` by name (#4587).
  */
 import { mkdtempSync, readFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -197,12 +200,24 @@ export const KNOWN_PENDING: Readonly<Record<string, Accepted>> = {
  * How a pair under its floor is reported. `known` (a `KNOWN` entry) and `accepted` (a `KNOWN_PENDING` entry) print and
  * pass while the ratio holds its entry's floor; below that floor, or with no entry, the pair is `failing`. `listed` says
  * the key has an entry, which is what the STALE arms read.
+ *
+ * SLACK (#4587). An entry's floor is the ratio the owner accepted, so it must also not sit BELOW the measured ratio
+ * (floored to two places) by more than `SLACK_MAX`. Without this, an edit that lowered a floor (3.97 to 3.00) passed on
+ * every run, and the pair could then fall to 3.00 with nothing failing. A pair that improves also fails here, the way
+ * STALE fails a pair that passes: raising the floor to the new measurement tightens what was accepted and needs no
+ * decision. The 0.01 allows the last digit of a floored ratio to move with the renderer.
  */
+export const SLACK_MAX = 0.01;
 export const judgeBelowFloor = (key: string, r: number, known: Readonly<Record<string, Accepted>> = KNOWN,
   pending: Readonly<Record<string, Accepted>> = KNOWN_PENDING): { verdict: 'known' | 'accepted' | 'failing'; note: string; listed: boolean } => {
   const k = known[key], entry = k ?? pending[key];
   if (!entry) return { verdict: 'failing', note: '', listed: false };
   if (r < entry.floor) return { verdict: 'failing', note: ` — BELOW ACCEPTED ${entry.floor} (${entry.why})`, listed: true };
+  // Compared in hundredths, so 3.97 - 3.96 is one step and not 0.010000000000000231.
+  const held = floor2(r);
+  if (Math.round(held * 100) - Math.round(entry.floor * 100) > Math.round(SLACK_MAX * 100)) {
+    return { verdict: 'failing', note: ` — SLACK ${k ? 'KNOWN' : 'PENDING'}: measured ${held}, floor ${entry.floor}, so the pair could fall to ${entry.floor} unseen. Write ${held} as its floor`, listed: true };
+  }
   return { verdict: k ? 'known' : 'accepted', note: k ? '' : ` — ${entry.why}`, listed: true };
 };
 
