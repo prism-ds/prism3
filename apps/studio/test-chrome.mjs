@@ -1170,25 +1170,34 @@ const goPlace = async (page, place) => {
  *  every resize of the header (`preview.ts` `fit`), so straight after a page opens it can still be on radios that are about
  *  to give way to the select. Choosing from that first frame clicked a radio that was hidden a moment later, which timed
  *  out on CI (section 24, #3083's merge with #3094). Settled: its choice and row are the same across two frames and one of
- *  the two is drawn. Bounded; on a timeout the caller's own wait names the hook. */
-async function settleModes(page) {
-  // #3668: the header's resize is delivered in the frame after a page opens, and the fit it asks for runs in the frame
-  // after that, so two frames here could both read the old answer and call it settled. Wait until a frame has drawn
-  // since the call (any resize it carried is delivered by then), then for that fit to run (`data-fit-pending` clears).
-  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
-  await page.waitForFunction(() => !document.querySelector('[data-p3="mode-control"]')?.parentElement?.hasAttribute('data-fit-pending'),
-    null, { polling: 'raf', timeout: 5000 }).catch(() => {});
-  for (let i = 0; i < 25; i++) {
-    const still = await page.evaluate(() => new Promise((done) => {
-      const w = document.querySelector('[data-p3="mode-control"]')?.parentElement;
-      if (!w) { requestAnimationFrame(() => done(false)); return; }
-      const at = () => `${w.dataset.fit}|${w.dataset.row ?? ''}`;
-      const was = at();
-      requestAnimationFrame(() => requestAnimationFrame(() => done(at() === was
-        && [...w.querySelectorAll('[data-p3="mode-select"], [data-p3="mode-option"]')].some((n) => n.getClientRects().length > 0))));
-    }));
-    if (still) return;
-  }
+ *  the two is drawn. Bounded; on a timeout the caller's own wait names the hook.
+ *
+ *  Every read here waits on `requestAnimationFrame` inside a `page.evaluate`, which has no timeout of its own, so the whole
+ *  settle runs in one `within` (#4612). Section 20 stalled 600s on CI right after "setting body back to Inter", in
+ *  `chooseMode(page, 'dark')`: past the last check, before `modeLook`'s, so in here, on a page that drew no frame (the
+ *  #4342 family). Bounded, a page that draws no frame fails in `STEP_MS` naming this step and saying whether the page
+ *  renders, where it stopped on a watched page, rather than at the watchdog naming the check before. `ms` is for the
+ *  self-check alone. */
+async function settleModes(page, ms = STEP_MS) {
+  await within(page, "the mode control (settleModes)", (async () => {
+    // #3668: the header's resize is delivered in the frame after a page opens, and the fit it asks for runs in the frame
+    // after that, so two frames here could both read the old answer and call it settled. Wait until a frame has drawn
+    // since the call (any resize it carried is delivered by then), then for that fit to run (`data-fit-pending` clears).
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    await page.waitForFunction(() => !document.querySelector('[data-p3="mode-control"]')?.parentElement?.hasAttribute('data-fit-pending'),
+      null, { polling: 'raf', timeout: 5000 }).catch(() => {});
+    for (let i = 0; i < 25; i++) {
+      const still = await page.evaluate(() => new Promise((done) => {
+        const w = document.querySelector('[data-p3="mode-control"]')?.parentElement;
+        if (!w) { requestAnimationFrame(() => done(false)); return; }
+        const at = () => `${w.dataset.fit}|${w.dataset.row ?? ''}`;
+        const was = at();
+        requestAnimationFrame(() => requestAnimationFrame(() => done(at() === was
+          && [...w.querySelectorAll('[data-p3="mode-select"], [data-p3="mode-option"]')].some((n) => n.getClientRects().length > 0))));
+      }));
+      if (still) return;
+    }
+  })(), ms);
 }
 /** #3700: the guard for a step that acts on the mode control. Such a step picks a radio or the select by what is on
  *  screen, so it must look only after the header's fit has run: `settleModes` first, then this, then the look. With
@@ -1196,9 +1205,11 @@ async function settleModes(page) {
  *  from Brand, on the select, to Shape, where the radios fit, and `selectOption` then waited 30 s on a hidden select).
  *  So it fails here by name, with the mode and the page. Read off the page, independent of the settle it guards.
  *  Its mutation, and the case that holds the fit back so the mutation fails every run, are section 24's (#3700). */
-async function modeLook(page, mode) {
-  const s = await page.evaluate(() => ({ pending: !!document.querySelector('[data-p3="mode-control"]')?.parentElement?.hasAttribute('data-fit-pending'),
-    place: document.querySelector('[data-p3="frame"]')?.dataset.place ?? null }));
+async function modeLook(page, mode, ms = STEP_MS) {
+  // #4612: a plain `page.evaluate` waits forever on a busy page (the main thread runs no script), so the read is bounded
+  // too, and a busy page fails here by name. `ms` is for the self-check alone.
+  const s = await within(page, `modeLook: the mode control's fit (choosing ${mode})`, page.evaluate(() => ({ pending: !!document.querySelector('[data-p3="mode-control"]')?.parentElement?.hasAttribute('data-fit-pending'),
+    place: document.querySelector('[data-p3="frame"]')?.dataset.place ?? null })), ms);
   ok(!s.pending, `#3700: choosing ${mode} on ${s.place}, the mode control is read only once the preview header's fit has run${s.pending ? ' — data-fit-pending was still set' : ''}`);
 }
 /** Choose a mode in the preview header by whichever control represents it: its radio, or, where the modes do not all
@@ -7019,10 +7030,13 @@ const groundsIn = (page, hostHook) => page.evaluate((hk) => {
   const grounds = [...(host?.querySelectorAll('.sg-ground') ?? [])];
   return { card: host ? hex(groundOf(host)) : null, roots: grounds.map((g) => ({ name: g.closest('.psec')?.querySelector('.psec-t')?.textContent ?? '?', root: g.getAttribute('data-p3') === 'specimen', ground: hex(groundOf(g)) })) };
 }, hostHook);
-const chooseMode = async (page, mode) => {
+const chooseMode = async (page, mode, ms = STEP_MS) => {
   // #3129 R4: Components shows no mode control, and it always previews Light (Q3129.14 B): from Components, the mode
   // is chosen on Brand and the page visited again (its open blocks and focus are the session's, so they hold).
-  const onComponents = await page.evaluate(() => document.querySelector('[data-p3="frame"]')?.dataset.place === 'components');
+  // #4612: the place read is the first wait of every mode pick and a plain `page.evaluate`, which waits forever on a busy
+  // page, so it is bounded like the settle after it. `ms` is for the self-check alone.
+  const onComponents = await within(page, `chooseMode: the place (choosing ${mode})`,
+    page.evaluate(() => document.querySelector('[data-p3="frame"]')?.dataset.place === 'components'), ms);
   if (onComponents) await goPlace(page, 'brand');
   await pickMode(page, mode);
   if (onComponents) await goPlace(page, 'components');
@@ -8300,12 +8314,63 @@ for (const host of ['web', 'figma']) {
     ok(false, `S6.2 represented ${host}: the case stopped at a step that threw — ${stopped(e)}`);
   } finally { await ctx.close(); }
 }
+// #4612: the mode control's settle is bounded. A page whose frames are held (`requestAnimationFrame` keeps its callbacks,
+// held, not dropped, as #4127's self-check explains) is asked to settle on a 3s bound: it fails naming the settle and
+// saying the page renders no frame, well inside this arm's own 15s guard. The guard is what lets the mutation fail
+// here by name: with `within` dropped from `settleModes`, the settle never returns, and the guard's words are read
+// instead of the bound's. A page of its own, so the held frames touch no case. The expected words are typed here.
+{
+  const sctx = await browser.newContext();
+  try {
+    const sp = await sctx.newPage();
+    await sp.setContent('<p>settle</p>');
+    await sp.evaluate(() => { window.__p3Held = []; window.requestAnimationFrame = (cb) => window.__p3Held.push(cb); });
+    const t0 = Date.now();
+    const said = await Promise.race([
+      settleModes(sp, 3000).then(() => 'returned', (e) => String(e?.message ?? e)),
+      new Promise((r) => setTimeout(() => r('still waiting at the 15s guard: the settle has no bound'), 15000)),
+    ]);
+    const took = Date.now() - t0;
+    ok(said.startsWith("the mode control (settleModes) did not settle within 3s; the page renders no frame") && took < 15000,
+      `#4612: a mode-control settle on a page that draws no frame fails by name within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 160)})`);
+  } finally { await sctx.close(); }
+}
+// #4612, busy: the other stall state `stallWhere` names, a main thread that runs no script (#4342's CI captures read
+// busy). A plain `page.evaluate` waits forever on such a page, so each read on a mode pick's way runs in a `within`:
+// `chooseMode`'s place read, the first thing it does, and `modeLook`'s read, which the settle does not cover. A bare
+// page is made busy by a timer that loops, and each read is asked on a 3s bound inside this arm's own 15s guard; with
+// either bound dropped, that read never returns and the guard's words are read instead. The expected words are typed here.
+{
+  const bctx = await browser.newContext();
+  try {
+    const bp = await bctx.newPage();
+    await bp.setContent('<p>busy</p>');
+    await bp.evaluate(() => { setTimeout(() => { const end = Date.now() + 60000; while (Date.now() < end) { /* busy */ } }, 0); });
+    await new Promise((r) => setTimeout(r, 300));
+    for (const [step, words, read] of [
+      ['chooseMode', 'chooseMode: the place (choosing dark) did not settle within 3s; the page renders no frame', () => chooseMode(bp, 'dark', 3000)],
+      ['modeLook', "modeLook: the mode control's fit (choosing dark) did not settle within 3s; the page renders no frame", () => modeLook(bp, 'dark', 3000)],
+    ]) {
+      const t0 = Date.now();
+      const said = await Promise.race([
+        read().then(() => 'returned', (e) => String(e?.message ?? e)),
+        new Promise((r) => setTimeout(() => r('still waiting at the 15s guard: the read has no bound'), 15000)),
+      ]);
+      const took = Date.now() - t0;
+      ok(said.startsWith(words) && took < 15000,
+        `#4612: on a busy page, ${step}'s read fails by name within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 160)})`);
+    }
+  } finally { await bctx.close(); }
+}
 // Edits (Q22, Q62 option A): Light writes the brand value; previewing Dark, the same select writes
 // modeLevers.dark.families and leaves the brand value alone, shown as Auto: follows Light until set, with Return to
 // Auto; the library takes a face and refuses a duplicate; Show advanced removes an unused face. Each write read back
 // from the PERSISTED brand.
 {
   const { ctx, page, errors } = await open({ host: 'web', theme: 'light', w: 1280, h: 900 });
+  // #4612: watched from the start, so a page that stops drawing on this path (CI stalled in `chooseMode(page, 'dark')`
+  // below) is located by the settle's bound: the JavaScript it stopped in, or that it ran none.
+  await watchStalls(page);
   try {
     await goPlace(page, 'type');
     const view0 = (await previewView(page)).view;
