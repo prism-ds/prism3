@@ -1164,11 +1164,22 @@ const OWNER_RULES: OwnerRule[] = [
   },
   {
     // A planned or absent component has no spec to restyle to, so it gets no stand-in (owner decision 7175625635).
+    // Scoped to code (owner Q1 A, 2026-11-27); the Figma half is the next rule.
     id: '#4617 no stand-in without a Prism3 component (section 3)',
     skills: ['prism3-build-screens'],
     section: '## 3.',
     roles: [],
-    must: [/A stand-in always names the Prism3\s+component it stands in for/, /`planned` list/, /leave it out and name it/],
+    must: [/In code, a piece Prism3 has no component for is still left out/, /A stand-in always names the Prism3\s+component it stands in for/, /`planned` list/, /leave it out and name it/],
+    resolve: [],
+  },
+  {
+    // A planned component, such as a card (owner Q1 A, 2026-11-27): in code it is left out (the rule above); on the
+    // Figma canvas it is a hand-built `GAP / <Component>` frame, counted in the ledger, as `prism3-rebind` names it.
+    id: '#4617 Figma: a planned component is a GAP frame (section 3)',
+    skills: ['prism3-build-screens'],
+    section: '## 3.',
+    roles: [],
+    must: [/component Prism3 only plans/, /"GAP \/ [A-Z]/, /counted in the ledger/],
     resolve: [],
   },
   {
