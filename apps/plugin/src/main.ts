@@ -84,6 +84,7 @@ import type { HandBack } from './pace';
 import { searchComponents } from './component-search';
 import { materializeForBrand, materializerFor } from './brand-def';
 import { dueOf, entryFor, formerEntry, needsPrint, printOf, printSteps, quietOf, readLedger, recordSets, type DueReason, type Ledger, type LedgerEntry, type PlanPrint } from './as-built-ledger';
+import { liveKeyOf, manifestSetOf, mergeManifest, readManifest, writeManifest, type KeyedNode, type ManifestEntry } from './component-manifest';
 import { clearQueued, readQueue, setQueued, staleOf, visibleOf, type QueueRoot } from './add-queue';
 import { presentNames, prebuildDependencies, alsoBuiltItem, DependencyBuildError, SWAP_TARGET, labelAfterBuilds } from './build-deps';
 import type { DepHost } from './build-deps';
@@ -1009,6 +1010,8 @@ const buildComponents = async (defId: string | undefined, sink: ActionSink, opti
       // #3129 Q833 A: and its add-queue key is cleared in the same place, so a set that fails, or is stopped before it
       // runs, stays queued. A set made first as a nested set (#1633), or by the agent's build, clears here too.
       if (built.id && built.stale === 0) { try { clearQueued(queueRoot(), [target.id]); } catch { /* cleared by the next queue write */ } }
+      // #4469: the set, listed in the file's component manifest from the plans it was just built from.
+      if (built.id && !target.figmaProperties?.emitAsComponents) await noteManifest(() => [manifestSetOf(target.id, project(target), built.id)]);
       // AFTER the set lands and BEFORE the run's headers, so a first build's header measures the labels too.
       const drawn = await furnishSet(target.id, built.id, project(target));
       if (drawn) furniture.push(drawn);
@@ -1956,6 +1959,12 @@ const updateComponents = async (defId: string | readonly string[] | undefined, p
       return e && plans ? { ...e, print: printOf(plans) } : null;
     }, was);
     try { recordSets(figma.root, acted); } catch { /* read as due again; the next update records it */ }
+    // #4469: every set the apply read and did not refuse, stop or leave off, listed in the file's component manifest from
+    // the plans the apply laid. A set left alone is listed too, so a set built before the manifest is listed by its first update.
+    await noteManifest(() => r.outcomes.filter((o) => !o.refused && !o.off && !o.stopped && r.ids?.[o.set]).flatMap((o) => {
+      const t = targets.find((x) => x.def === o.def && !x.single);
+      return t ? [manifestSetOf(o.def, t.plans, r.ids![o.set])] : [];
+    }));
     // Q811 A: the apply is a write, so the sets that are current by their print are recorded now too. Not the check above.
     restampQuiet();
     sink.data({ update: { mode: 'apply', ...r, furniture } });
@@ -2063,6 +2072,33 @@ const drawSpecs = async (defId: string | undefined, scope: 'file' | 'page', sink
  * Its own action, not part of `apply-theme` or `build-components`, for the #652 reason every canvas write
  * on this bridge is its own action: a distinct designer choice with its own trigger and its own verdict.
  */
+/**
+ * THE COMPONENT MANIFEST (#4469, owner decision A; `component-manifest.ts`): the sets `sets` lists replace their
+ * entries in the file's record, every entry whose set is no longer in the file is dropped, every entry takes the set's
+ * component key as the host has it now (owner decision Q2 A: `null` while unpublished), and the record is written
+ * back. `sets` is a thunk so its projection's throw is caught here too. CAUGHT, as the ledger is: the sets are built, and
+ * the record is bookkeeping; a record that could not be written is logged, and the next build or update writes it.
+ */
+const noteManifest = async (sets: () => readonly ManifestEntry[]): Promise<void> => {
+  try {
+    const add = sets();
+    const was = readManifest(figma.root);
+    const keys = new Map<string, string | null>();
+    for (const id of new Set([...(was?.sets ?? []), ...add].map((s) => s.id))) {
+      try { const k = await liveKeyOf(await figma.getNodeByIdAsync(id) as KeyedNode | null); if (k !== undefined) keys.set(id, k); } catch { /* gone */ }
+    }
+    writeManifest(figma.root, mergeManifest(was, add, ENGINE_VERSION, (id) => keys.get(id)));
+  } catch (e) { console.warn('[prism3 #4469] the component manifest was not written', e); }
+};
+
+/** #4469: Export manifest's answer: the file's record, laid out to read, or `null` when the file holds none. */
+const exportManifest = (): void => {
+  try {
+    const m = readManifest(figma.root);
+    postToUi({ type: 'component-manifest', text: m ? JSON.stringify(m, null, 2) : null });
+  } catch { postToUi({ type: 'component-manifest', text: null, error: 'the file\'s plugin data could not be read' }); }
+};
+
 const fileSetup = async (sink: ActionSink): Promise<void> => {
   try {
     await loadPagesYielding();
@@ -2127,6 +2163,8 @@ const fileSetup = async (sink: ActionSink): Promise<void> => {
     else try { cover = await drawCover(figma as unknown as CoverApi, figma.root as unknown as CoverRoot); }
     catch (e) { cover = { did: 'none', skipped: `not drawn, Figma refused the write (${failureDetail(e)})`, fontMisses: [] }; }
     const coverNote = coverLine(cover);
+    // #4469: the component manifest, written so a set-up file holds one, its sets that are gone dropped.
+    await noteManifest(() => []);
     const summary = `pages: ${scaffold.created.length} created${scaffold.created.length ? ` (${scaffold.created.slice(0, 4).join(', ')}${scaffold.created.length > 4 ? '…' : ''})` : ' (all present)'}${assetNote}${movesNote}${coverNote ? `\n${coverNote}` : ''}`;
     sink.data({ fileSetup: { pagesCreated: scaffold.created, fileComponentsPage: page ? true : false, assets, cover, ...(relocated ? { relocated } : {}) } });
     sink.post({ type: 'file-setup-result', ok: true, headline: '✓ file set up', summary: appendBuildNote(summary, PRISM3_BUILD) });
@@ -2728,6 +2766,10 @@ onUiMessage((msg: UiToMain) => {
     case 'update-stop':
       // #3170 Q3170.4 A: read by the panel's running update at its next set boundary; nothing running, nothing to stop.
       if (guard.holding('build-components')) updateStopAsked = true;
+      return;
+    case 'manifest-export':
+      // #4469: a read of the file's component manifest, to download. Never guarded.
+      exportManifest();
       return;
     case 'draw-specs':
       // #2830 Q2830.3 A: Documentation › Specs, the panel's Draw specs, for the sets on the current page. The agent's

@@ -131,6 +131,9 @@ export interface HostSession {
    *  The panel posts no other components write while it is pending (`componentBusy`), so the next one is its own.
    *  An agent's `draw-specs` verdict lands here too, as an agent's style guide lands in `styleGuideState`. */
   readonly specsState: ActionState;
+  /** #4469: Docs › Spec drawings' Export manifest: `pending` from its request to its answer; then whether the file held a
+   *  manifest (`done`, downloaded by `main.ts`), held none (`empty`), or could not be read (`error`). */
+  readonly manifestExport: 'pending' | 'done' | 'empty' | 'error' | null;
   /** #3394: the agent link's last `set-override` write this session: its verdict. A preview leaves it. Never `pending`: the
    *  panel sends none, and an agent's running row is `agentRun`'s. */
   readonly overrideState: ActionState;
@@ -300,6 +303,7 @@ export const initialHostSession = (): HostSession => ({
   componentUpdate: null,
   componentLatest: null,
   specsState: null,
+  manifestExport: null,
   overrideState: null,
   fileSetupState: null,
   styleGuideState: null,
@@ -494,6 +498,8 @@ export const reduce = (prev: HostSession, m: HostMessage): HostSession => {
       if (m.count > 0 && m.pillOnly) return { ...s, pruneBusy: false, prunePreview: null, pruneVerdict: { ok: m.ok, applied: false, count: m.count, summary: `Agent preview: ${m.summary}` } };
       if (m.count > 0) return { ...s, pruneBusy: false, prunePreview: { count: m.count, summary: m.summary, previewHash: m.previewHash ?? '' }, pruneVerdict: null };
       return { ...s, pruneBusy: false, prunePreview: null, pruneVerdict: { ok: m.ok, applied: false, count: 0, summary: m.summary } };
+    case 'component-manifest':
+      return { ...s, manifestExport: m.text ? 'done' : m.error ? 'error' : 'empty' };
     case 'doc-settings':
       return { ...s, docSettings: { panels: m.panels, cover: m.cover, styleGuide: m.styleGuide, error: m.error } };
     case 'file-sets':
@@ -597,6 +603,7 @@ export const topicsFor = (m: HostMessage, prev: HostSession, next: HostSession):
     case 'prune-result': return ['host'];
     case 'seed-info': return ['host'];
     case 'doc-settings': return ['host:docs'];
+    case 'component-manifest': return ['host'];   // the Spec drawings tab's painter, which also repaints Export manifest
     case 'file-sets': return ['host:update', 'host:components'];
     case 'file-due': return next === prev ? [] : JSON.stringify(next.addQueue) === JSON.stringify(prev.addQueue) ? ['host:update'] : ['host:update', 'host:components'];
     case 'add-queue': return ['host:update', 'host:components'];

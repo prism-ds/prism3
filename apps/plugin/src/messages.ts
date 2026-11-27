@@ -159,6 +159,9 @@ export type UiToMain =
   /** #2830 Q2830.3 A: Documentation › Specs' Draw specs: the spec panels for the sets on the current page. A write under
    *  the build's guard, as the agent's `draw-specs`; answered with one `component-update-result`. */
   | { type: 'draw-specs' }
+  /** #4469 (owner decision A): Docs › Spec drawings' Export manifest. A read of the file's component manifest, never
+   *  refused by the run guard; answered with one `component-manifest`. */
+  | { type: 'manifest-export' }
   /** Update file's checklist opening (#2909): which sets the file holds, whether it is set up, and which are due by the
    *  as-built ledger (Q2909.8 A). Answered with one `file-sets`. A read; never refused by the run guard. Sent after load
    *  too, so the panel knows what is due at rest. `input` is the brand the panel holds, which the due read measures
@@ -632,6 +635,9 @@ export type MainToUi =
   /** The file's Documentation settings (#2909, `doc-settings.ts`): on `ui-ready`, and as the answer to each
    *  `doc-settings-save`, with `error` when the save was refused (the settings are then the file's, unchanged). */
   | { type: 'doc-settings'; settings: DocSettings; error?: string }
+  /** #4469: the answer to `manifest-export`: the file's component manifest as JSON to download, or `null` when the file
+   *  holds none (no set built or updated since the manifest existed), with `error` when it could not be read. */
+  | { type: 'component-manifest'; text: string | null; error?: string }
   /** The answer to `file-sets-request` (#2909): the def ids whose set the file holds, and whether Set up file has run.
    *  `error` when the file could not be read; then `present` is empty and `setUp` false. */
   | { type: 'file-sets'; present: string[]; setUp: boolean; error?: string;
