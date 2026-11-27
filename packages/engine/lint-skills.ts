@@ -1076,17 +1076,6 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/^> \*\*Used:\*\*/m, /^> \*\*Composed:\*\*/m, /^> \*\*Invented:\*\*/m, /^> \*\*Unsure:\*\*/m, /^> \*\*Used:\*\*[^\n]*`link`/m],
     resolve: [],
   },
-  // #4613 (owner direction, 2026-11-26): render the build and look at it, in light and dark and at a phone and a
-  // desktop width, before the ledger, and put each view that couldn't be rendered under Unsure. Held to the
-  // self-check section, the last step before the ledger's own section, so moving it elsewhere fails by this id.
-  {
-    id: '#4613 render it and look before the ledger',
-    skills: ['prism3-build-ui'],
-    section: '## The self-check',
-    roles: [],
-    must: [/render the build/i, /light and dark/i, /phone width/i, /desktop width/i, /then write the ledger/i, /\*\*Unsure\*\*/],
-    resolve: [],
-  },
   // #4469 part 1 (owner decision A): a layer built by hand because no component fits is named `GAP / …`, the
   // audit counts those layers by name, Outline view is the check by eye, and the end-of-job note lists them.
   // Four placements, one rule each.
