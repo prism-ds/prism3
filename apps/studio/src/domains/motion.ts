@@ -291,8 +291,9 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
     for (const p of theme.motion.presets) {
       const row = hook(h('div', 'p3-preset'), 'preset-row');
       row.dataset.preset = p.preset;
+      // The preset's name is the group's heading (L2, as Surfaces & fills' subgroups are), its source and reset under it.
+      row.append(h('h3', p.preset === theme.motion.presets[0]?.preset ? 'p3-rows-sub p3-rows-sub-first' : 'p3-rows-sub', p.preset));
       const head = h('div', 'p3-preset-head');
-      head.append(h('span', 'p3-preset-name', p.preset));
       const src = easingSourceOf(p);
       const tag = hook(h('span', 'p3-preset-tag', 'follows' in src ? P.follows(src.follows) : P.fixed), 'preset-source');
       tag.dataset.source = 'follows' in src ? 'follows' : 'fixed';

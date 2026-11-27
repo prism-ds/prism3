@@ -16832,7 +16832,9 @@ const checkOutline = (o, where, h1) => {
   const skips = [];
   for (let i = 1; i < o.length; i++) if (o[i][0] > o[i - 1][0] + 1) skips.push(`h${o[i - 1][0]} "${o[i - 1][1]}" then h${o[i][0]} "${o[i][1]}"`);
   const show = o.slice(0, 8).map(([l, n]) => `h${l} ${n}`).join(' | ');
-  ok(o.length >= OUTLINE_FLOOR, `#2212 ${where}: the accessibility tree holds ${o.length} headings (floor ${OUTLINE_FLOOR})`);
+  // #4571: Depth, split from Depth & motion (Q-ME3 A), has one section, Elevation: the h1 and it.
+  const floor = / \/ depth \(/.test(where) ? 2 : OUTLINE_FLOOR;
+  ok(o.length >= floor, `#2212 ${where}: the accessibility tree holds ${o.length} headings (floor ${floor})`);
   ok(o[0]?.[0] === 1 && ones.length === 1 && ones[0][1] === h1, `#2212 ${where}: the outline opens on one h1, "${h1}", and holds no other — read ${show}`);
   ok(skips.length === 0, `#2212 ${where}: no heading skips a level after the one before it${skips.length ? ` — ${skips.slice(0, 4).join(' | ')}` : ''}`);
 };

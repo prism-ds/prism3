@@ -1599,10 +1599,11 @@ h1.p3-sr { margin: 0; font-family: var(--p3-font-ui); font-size: var(--p3-fs-14)
    slot rows on the type rows' two columns; an arriving preset's Exit disclosure under them. */
 .p3-presets { display: grid; gap: var(--p3-space-300); }
 .p3-fillrows.p3-preset-slots { gap: var(--p3-space-150); }
-.p3-preset { display: grid; gap: var(--p3-space-150); padding-block-start: var(--p3-space-200); border-top: var(--p3-bw-hairline) solid var(--p3-line-1); }
-.p3-preset-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--p3-space-200); row-gap: var(--p3-space-050); }
-/* A preset's name is an L2 heading, as a Type card's name is (TY2 A). */
-.p3-preset-name { font-size: var(--p3-fs-14); font-weight: var(--p3-fw-strong); letter-spacing: var(--p3-ls-snugger); line-height: var(--p3-lh-compact); }
+.p3-preset { display: grid; gap: var(--p3-space-150); }
+/* The preset's name is its group's heading (`.p3-rows-sub`, L2, with its own rule above it); the row's gap stands in
+   for the heading's own top margin. */
+.p3-preset > .p3-rows-sub { margin-top: 0; }
+.p3-preset-head { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--p3-space-200); row-gap: var(--p3-space-050); }
 .p3-preset-tag { color: var(--p3-text-2); font-size: var(--p3-fs-12); }
 .p3-preset-head > .p3-btn { margin-inline-start: auto; }
 .p3-preset-exit { display: grid; gap: var(--p3-space-150); padding-inline-start: var(--p3-space-300); }
