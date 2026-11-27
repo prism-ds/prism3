@@ -48300,6 +48300,14 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
     '#4571 an exit one step shorter than its entrance is not advised');
   ok(adv({ presets: { fade: { delay: 'delay.show' }, pop: { exit: { delay: 'delay.hide' } } } }).join() === 'fade/own/delay,pop/exit/delay',
     `#4571 a delay on either half is advised (${adv({ presets: { fade: { delay: 'delay.show' }, pop: { exit: { delay: 'delay.hide' } } } }).join()})`);
+  // The owner's 2026-11-27 fix (review finding 1): an entrance already on the shortest step leaves no shorter step for
+  // its exit, so the advisory stays quiet, on the default exit and on one set to that same step. The step one above
+  // the shortest still advises an exit as long as it, so the quiet is the floor's alone.
+  ok(adv({ presets: { surface: { duration: 'duration.instant' } } }).length === 0
+    && adv({ presets: { surface: { duration: 'duration.instant', exit: { duration: 'duration.instant' } } } }).length === 0,
+    `#4571 an entrance on the shortest step raises no exit advisory, since no shorter step exists (${adv({ presets: { surface: { duration: 'duration.instant' } } }).join() || 'none'})`);
+  ok(adv({ presets: { surface: { duration: 'duration.fast', exit: { duration: 'duration.fast' } } } }).join() === 'surface/exit/exit-not-shorter',
+    `#4571 an entrance one step above the shortest still advises an exit as long as it (${adv({ presets: { surface: { duration: 'duration.fast', exit: { duration: 'duration.fast' } } } }).join() || 'none'})`);
   // A spring's settle time is the length compared: gentle settles past moderate, so an exit on it is advised.
   ok(adv({ presets: { surface: { exit: { easing: 'spring.gentle' } } } }).includes('surface/exit/exit-not-shorter'),
     '#4571 an exit eased by a spring is compared by its settle time');

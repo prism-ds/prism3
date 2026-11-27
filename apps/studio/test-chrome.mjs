@@ -10170,7 +10170,9 @@ if (runs('4571')) for (const host of ['web', 'figma']) {
     await page.keyboard.press('Escape');
     // Q-ME1 A: an exit as long as its entrance is advised, not refused.
     const adv = await page.evaluate(() => [...document.querySelectorAll('[data-p3="preset-row"][data-preset="surface"] [data-p3="preset-advisory"]')].map((n) => n.textContent));
-    ok(adv.length === 1 && /as long as its entrance/.test(adv[0]), `#4571 Q-ME1 A ${host}: an exit as long as its entrance is advised and kept (${JSON.stringify(adv)})`);
+    // The owner's approved words (2026-11-27), exactly: the half's name once, then the advisory.
+    ok(adv.length === 1 && adv[0] === 'Exit: plays as long as its entrance or longer. Leaving usually runs one step shorter.',
+      `#4571 Q-ME1 A ${host}: an exit as long as its entrance is advised and kept, in the approved words (${JSON.stringify(adv)})`);
     // The spring rule: a spring easing clears the duration, and the duration picker then offers only its settle time.
     await hooks.click(page.locator(presetPick('surface', 'own', 'easing')));
     await hooks.need(page, '[data-p3="value-picker"]');
@@ -14206,7 +14208,8 @@ const EXPECT_HEADINGS = {
   motion: {
     L1: ['Motion', 'Presets'],
     // Each preset's name heads its row at L2, as a Type card's name does; its slot rows are name-and-token rows.
-    L2: ['Motion tempo', 'Easing per motion role', 'Motion presets', 'state', 'fade', 'crossfade', 'move', 'reveal', 'draw', 'surface', 'expand', 'step', 'settle', 'pop', 'press'],
+    // The owner's 2026-11-27 fix: the presets' lever is promoted into the Presets title (BG1 A), so "Motion presets" is no L2 here.
+    L2: ['Motion tempo', 'Easing per motion role', 'state', 'fade', 'crossfade', 'move', 'reveal', 'draw', 'surface', 'expand', 'step', 'settle', 'pop', 'press'],
   },
   layout: {
     L1: ['Breakpoints', 'Grid', 'Containers'],
@@ -14310,6 +14313,8 @@ const PROMOTED = {
     // #3553 Q-UI14 A: Base radius is no section of its own any more; it is a lever in Radius, under its own name and ⓘ.
   },
   layout: { Breakpoints: ((l) => l?.tip ?? l?.description)(manifest.levers.find((l) => l.key === 'layout.breakpoints')) },
+  // #4571, the owner's 2026-11-27 fix: "Motion presets" is not drawn under the Presets title; its ⓘ moves beside it.
+  motion: { Presets: ((l) => l?.tip ?? l?.description)(manifest.levers.find((l) => l.key === 'motionPersonality.presets')) },
 };
 if (runs('30')) ok(Object.values(PROMOTED).every((p) => Object.values(p).every((t) => typeof t === 'string' && t.length > 20)), `BG1 A: every promoted lever's help text is typed or read from the manifest (${JSON.stringify(PROMOTED)})`);
 /** BG1 A's subgroup labels, the owner's approved words, exactly (not by their start). */

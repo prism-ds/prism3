@@ -34,7 +34,7 @@ import { DOMAINS, pageOfTab, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import { glyph, h, hook } from '../shell/dom';
 import { valuePicker, type PickerValue } from '../ui/value-picker';
-import { choice, leverBlock, leverOf, stateLine, subLine, tokenLabel, type LeverBlock, keepFocus, pageEdit, filterLevers } from '../ui/lever-kit';
+import { choice, leverBlock, leverOf, promoteLever, stateLine, subLine, tokenLabel, type LeverBlock, keepFocus, pageEdit, filterLevers } from '../ui/lever-kit';
 
 const PAGE = DOMAINS.find((d) => d.id === 'motion') as PageData;
 const section = (title: string) => PAGE.sections.find((s) => s.title === title)!;
@@ -72,7 +72,8 @@ export const MOTION_COPY = {
     reset: 'Reset',
     brandWide: 'Presets are brand-wide. Preview Light to edit them.',
     advisory: {
-      'exit-not-shorter': 'The exit plays as long as its entrance or longer. Leaving usually runs one step shorter.',
+      // Rendered after the half's name ("Exit: plays as long as…"), so it does not name the exit again (owner, 2026-11-27).
+      'exit-not-shorter': 'plays as long as its entrance or longer. Leaving usually runs one step shorter.',
       delay: 'Every motion on this preset waits before it starts.',
     } as Record<string, string>,
   },
@@ -377,6 +378,9 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
     const ps = sectionShell(pre.title, pre.desc, 1);
     const pr = presets();
     ps.append(pr.el);
+    // The Presets title says it once (owner, 2026-11-27): the lever's own label, "Motion presets", stays in the
+    // manifest for wherever settings list on their own, and its info button moves up beside the title.
+    promoteLever(ps, pr.block);
     items.push(t, ez, pr);
     parts.push(m, ps);
     const next = hook(h('button', 'p3-btn p3-btn-page p3-next'), 'motion-continue');

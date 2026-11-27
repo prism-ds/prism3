@@ -104,7 +104,8 @@ export const trackTargets = (presets?: readonly string[]): { preset: string[]; d
 export type PresetAdvisory = { preset: string; half: 'own' | 'exit'; code: 'exit-not-shorter' | 'delay' };
 /** Where a preset's slots would draw an objection (#4571, Q-ME1 A: warn, never block), in the mode in view, since a
  *  mode's tempo moves the milliseconds. The two the owner named:
- *  - `exit-not-shorter` (the motion skill's R3): an exit half that plays as long as its entrance, or longer;
+ *  - `exit-not-shorter` (the motion skill's R3): an exit half that plays as long as its entrance, or longer, unless
+ *    no duration step is shorter than the entrance (an `instant` entrance): there is nothing shorter to point it at;
  *  - `delay` (G6 B, the proposal's section 2.1 behavior 3): a delay step on a half, so every pattern on it waits.
  *  The engine's defaults raise none. */
 export const presetAdvisories = (m: MotionAxis, mode?: string): PresetAdvisory[] => {
@@ -114,7 +115,8 @@ export const presetAdvisories = (m: MotionAxis, mode?: string): PresetAdvisory[]
   for (const p of m.presets) {
     if (p.delay !== null) out.push({ preset: p.preset, half: 'own', code: 'delay' });
     if (!p.exit) continue;
-    if (ms(p.exit) >= ms(p)) out.push({ preset: p.preset, half: 'exit', code: 'exit-not-shorter' });
+    const shorterStep = Object.values(dur).some((v) => v < ms(p));
+    if (shorterStep && ms(p.exit) >= ms(p)) out.push({ preset: p.preset, half: 'exit', code: 'exit-not-shorter' });
     if (p.exit.delay !== null) out.push({ preset: p.preset, half: 'exit', code: 'delay' });
   }
   return out;
