@@ -39,14 +39,15 @@
  *   SCOPE AND INVENTORY (0.2, #2853 Q5 A), each applied to the file named:
  *   · a write slipped into the selection path (`file-facts-figma.ts`: `current.selection = [...current.selection]`) →
  *     `selection/the scan wrote nothing to a layer`;
- *   · a write slipped into the ids path (`file-facts-figma.ts`: `await host.setCurrentPageAsync(all[0])`) →
- *     `ids nested/the scan wrote nothing to the file` (and every other ids scan);
+ *   · a write slipped into the ids path (`file-facts-figma.ts`: `await host.setCurrentPageAsync(all[0])`, the branch
+ *     that also serves the whole file) → `vars/the scan wrote nothing to the file` and every whole-file or ids scan;
  *   · a write slipped into the scope search (`file-facts.ts` `scopePages`: `n.setPluginData('p3', 'scope')` on a root) →
  *     `selection/the scan wrote nothing to a layer` and every scoped scan;
  *   · the selection loading every page (`figmaFactsSource` loads `all` on every branch) →
  *     `selection/only the current page was loaded`;
  *   · ids kept in selection order, not file order → `selection/scope: …, ids in file order whatever the selection order`;
- *   · a named layer inside another not covered by it (`cover` a no-op) → `ids nested/…` refused, not scanned;
+ *   · a named layer inside another not covered by it (`cover` a no-op) →
+ *     `ids nested/a screen named inside a named section is covered, not refused`;
  *   · the empty-selection fallback dropped (an empty selection scans nothing) → `empty selection/…current page`;
  *   · the background read from the bottom paint → `whole/inventory: f:concept's background is its topmost solid fill`;
  *   · names or colors in the fingerprint → `whole/inventory: a light and a dark copy of one screen share a fingerprint`.
@@ -576,8 +577,14 @@ section('scope and inventory — a handoff page, an exploration page and a cover
     ok(eq(ids(r), ['f:concept']) && eq([...loads.entries()], [['p:b', 1]]), 'empty selection/inventory: the concept alone, one page loaded', [ids(r), [...loads.entries()]]);
   }
 
+  const refusal = async (choice: ScopeChoice): Promise<string> => {
+    const nodes = fresh();
+    try { await scanOpenFile(hostOf(file, nodes), choice); return 'scanned'; } catch (e) { return `${e instanceof ScopeError ? 'ScopeError' : 'other'}: ${(e as Error).message}${nodes.writes.length ? ' (wrote)' : ''}`; }
+  };
   // ── explicit ids ──
-  {
+  const nested = await refusal({ from: 'ids', ids: ['f:light', 's:modes'] });
+  ok(nested === 'scanned', 'ids nested/a screen named inside a named section is covered, not refused', nested);
+  if (nested === 'scanned') {
     const r = await scan('ids nested', file, fresh(), undefined, { from: 'ids', ids: ['f:light', 's:modes'] });
     ok(eq(r.scope, { kind: 'nodes', from: 'ids', ids: ['s:modes'], pages: [page('p:a', 'Handoff', 0)] }), 'ids nested/scope: a screen inside the named section is covered by it', r.scope);
     ok(eq(r.inventory.map((x) => [x.id, x.section]), [['s:modes', null], ['f:light', 's:modes'], ['f:dark', 's:modes']]), 'ids nested/inventory: the section, then its screens', r.inventory.map((x) => [x.id, x.section]));
@@ -593,10 +600,6 @@ section('scope and inventory — a handoff page, an exploration page and a cover
       'ids across pages/scope: two frames on two pages, in file order', r.scope);
     ok(r.coverage.pages === 2 && r.coverage.layers === 4, 'ids across pages/coverage: two pages, the four layers of the two frames', r.coverage);
   }
-  const refusal = async (choice: ScopeChoice): Promise<string> => {
-    const nodes = fresh();
-    try { await scanOpenFile(hostOf(file, nodes), choice); return 'scanned'; } catch (e) { return `${e instanceof ScopeError ? 'ScopeError' : 'other'}: ${(e as Error).message}${nodes.writes.length ? ' (wrote)' : ''}`; }
-  };
   const missing = await refusal({ from: 'ids', ids: ['f:light', 'nope'] });
   ok(missing === 'ScopeError: scope: no page or layer with id nope', 'ids refused/an id the file does not hold refuses the scan by name', missing);
   const mixed = await refusal({ from: 'ids', ids: ['p:c', 'f:light'] });
