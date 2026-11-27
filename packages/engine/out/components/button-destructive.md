@@ -84,7 +84,7 @@ Use for an immediate action in the current context — submit/save/reset a form,
 
 - **Enter:** none (present on mount)
 - **Exit:** none
-- **Reduced motion:** State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.
+- **Reduced motion:** State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) and its color change run on the motion.preset.press preset and give tactile feedback; the release runs on motion.preset.state. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.press.duration-reduced into the press and motion.preset.state.duration-reduced otherwise, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.
 
 ## Content guidelines
 

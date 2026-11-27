@@ -28,9 +28,15 @@
  * `prefers-reduced-motion` set to reduce. A binding the map doesn't name fails as a gap, by name. The sentinel
  * durations are long, so a forced state is finished (`Animation.finish()`), never read mid-transition.
  *
- * SELF-TEST. After the real run, seven mutants must each FAIL BY NAME, or this check fails: a swapped token, a dropped
+ * PRESS AND RELEASE (#4629). The motion pattern file plays `pressed` on one preset and `pressed/release` on another.
+ * CSS takes a transition from the rule a property moves TO, so each pattern is read in the state it plays into: the
+ * press with the button forced `:active`, the release at rest. Its presets come from the emitted sidecar's
+ * `motion_patterns`, not from the def, so a def and a CSS that agree on the wrong preset still fail.
+ *
+ * SELF-TEST. After the real run, ten mutants must each FAIL BY NAME, or this check fails: a swapped token, a dropped
  * state, a dropped prop value in the CSS, a dropped prop value in the markup contract, dropped tracking, the press
- * rebound to the reduced duration, and the reduced-motion transition dropped.
+ * rebound to the reduced duration, the reduced-motion transition dropped, the press on the release's preset, the
+ * release on the press's, and the reduced press's colors on the release's reduced duration.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -150,13 +156,28 @@ const COLOR_PROP: Record<string, string> = { fill: 'background-color', stroke: '
  * state change on the fill, the border and the label's ink; the press on the container's transform. Written here.
  */
 const STATE_PROPS: [string, string][] = [['container', 'background-color'], ['container', 'border-color'], ['container/label', 'color']];
-const MOTION: Record<string, { read: 'transition-duration' | 'transition-timing-function'; reduce: boolean[]; on: [string, string][] }> = {
-  'motion.state': { read: 'transition-duration', reduce: [false], on: STATE_PROPS },
-  'motion.state-easing': { read: 'transition-timing-function', reduce: [false, true], on: STATE_PROPS },
-  'motion.state-reduced': { read: 'transition-duration', reduce: [true], on: STATE_PROPS },
-  'motion.press': { read: 'transition-duration', reduce: [false], on: [['container', 'transform']] },
-  'motion.press-easing': { read: 'transition-timing-function', reduce: [false], on: [['container', 'transform']] },
+const SCALE: [string, string] = ['container', 'transform'];
+/** Where a binding is read: the state the button is in (the rule a property moves TO picks its transition), whether
+ *  reduced motion is on, and the part properties. #4629: the press (scale and colors) is read pressed, the release at
+ *  rest; under reduced motion the scale has no transition and each color keeps its own preset's reduced duration. */
+type At = { state: 'rest' | 'pressed'; reduce: boolean; on: [string, string][] };
+const MOTION: Record<string, { read: 'transition-duration' | 'transition-timing-function'; at: At[] }> = {
+  'motion.state': { read: 'transition-duration', at: [{ state: 'rest', reduce: false, on: [...STATE_PROPS, SCALE] }] },
+  'motion.state-easing': { read: 'transition-timing-function', at: [{ state: 'rest', reduce: false, on: [...STATE_PROPS, SCALE] }, { state: 'rest', reduce: true, on: STATE_PROPS }] },
+  'motion.state-reduced': { read: 'transition-duration', at: [{ state: 'rest', reduce: true, on: STATE_PROPS }] },
+  'motion.press': { read: 'transition-duration', at: [{ state: 'pressed', reduce: false, on: [...STATE_PROPS, SCALE] }] },
+  'motion.press-easing': { read: 'transition-timing-function', at: [{ state: 'pressed', reduce: false, on: [...STATE_PROPS, SCALE] }, { state: 'pressed', reduce: true, on: STATE_PROPS }] },
+  'motion.press-reduced': { read: 'transition-duration', at: [{ state: 'pressed', reduce: true, on: STATE_PROPS }] },
 };
+/**
+ * #4629: the motion pattern file's two press patterns, as the states they play INTO. The presets themselves are read
+ * from the emitted sidecar's `motion_patterns` (`prism3.ai.json`), never from the def's bindings or the generator, so a
+ * def that binds the wrong preset fails here even when the CSS follows the def. A track's element is `control`; its
+ * property maps to the part properties below, written here.
+ */
+const PATTERN_STATE: Record<string, 'rest' | 'pressed'> = { pressed: 'pressed', 'pressed/release': 'rest' };
+const TRACK_PROPS: Record<string, [string, string][]> = { transform: [SCALE], color: STATE_PROPS };
+const PATTERNS = JSON.parse(readFileSync(resolve(OUT, 'prism3.ai.json'), 'utf8')).motion_patterns ?? {};
 const SIZE_PROP: Record<string, string> = {
   paddingTop: 'padding-top', paddingBottom: 'padding-bottom', paddingLeft: 'padding-left', paddingRight: 'padding-right',
   gap: 'column-gap', width: 'width', minWidth: 'min-width',
@@ -222,17 +243,37 @@ export const buildProbes = (markup: Markup): { probes: Probe[]; gaps: string[] }
       { part: p.part, prop: 'letter-spacing', want: ls, what: `${p.part} letterSpacing` },
     ] });
   }
-  // 6. Motion: every binding, on each appearance at rest.
-  const motionChecks: Probe['checks'] = [];
+  // 6. Motion: every binding, on each appearance, in the state it plays into (#4629).
+  const motionChecks: Record<string, Probe['checks']> = { rest: [], pressed: [] };
+  const label = (part: string, prop: string, read: string, reduce: boolean) => `${part} ${prop} ${read.replace('transition-', '')}${reduce ? ', reduced motion' : ''}`;
   for (const [key, token] of Object.entries<string>(SPEC.motion ?? {})) {
     const m = MOTION[key];
     if (!m) { gaps.push(`motion binding ${key} has no CSS property in this check`); continue; }
-    for (const reduce of m.reduce) for (const [part, prop] of m.on) {
-      motionChecks.push({ part, prop: `${m.read}:${prop}`, want: token, what: `${key} (${part} ${prop} ${m.read.replace('transition-', '')}${reduce ? ', reduced motion' : ''})`, reduce });
+    for (const { state, reduce, on } of m.at) for (const [part, prop] of on) {
+      motionChecks[state].push({ part, prop: `${m.read}:${prop}`, want: token, what: `${key} (${label(part, prop, m.read, reduce)})`, reduce });
     }
   }
-  if (motionChecks.length) for (const appearance of SPEC.axes.find((a: any) => a.name === 'appearance').values) {
-    probes.push({ coord: { appearance, surface: 'default', inset: 'default', size: 'medium' }, state: 'rest', leading: false, trailing: false, checks: motionChecks });
+  // 7. The press patterns (#4629): each track of `pressed` and `pressed/release` on the preset the pattern names, its
+  // duration and easing; under reduced motion an `off` track has no transition and a `keep` track takes the preset's
+  // `.duration-reduced` (R7). A pattern or track this check can't place is a gap, by name.
+  for (const [pattern, state] of Object.entries(PATTERN_STATE)) {
+    const pat = PATTERNS[pattern];
+    if (!pat) { gaps.push(`motion pattern ${pattern} is not in prism3.ai.json`); continue; }
+    for (const tr of pat.tracks) {
+      const on = TRACK_PROPS[tr.property];
+      if (tr.element !== 'control' || !on) { gaps.push(`motion pattern ${pattern} track ${tr.element}.${tr.property} has no CSS property in this check`); continue; }
+      const what = (read: string, reduce: boolean, part: string, prop: string) => `pattern ${pattern} ${tr.element}.${tr.property} on ${tr.preset} (${label(part, prop, read, reduce)})`;
+      for (const [part, prop] of on) {
+        motionChecks[state].push({ part, prop: `transition-duration:${prop}`, want: `${tr.preset}.duration`, what: what('transition-duration', false, part, prop) });
+        motionChecks[state].push({ part, prop: `transition-timing-function:${prop}`, want: `${tr.preset}.easing`, what: what('transition-timing-function', false, part, prop) });
+        if (tr.reduced === 'off') motionChecks[state].push({ part, prop: `transition-duration:${prop}`, want: `(no transition on ${prop})`, what: what('transition-duration', true, part, prop), reduce: true });
+        else if (tr.reduced === 'keep') motionChecks[state].push({ part, prop: `transition-duration:${prop}`, want: `${tr.preset}.duration-reduced`, what: what('transition-duration', true, part, prop), reduce: true });
+        else gaps.push(`motion pattern ${pattern} track ${tr.element}.${tr.property} reduces as "${tr.reduced}", which this check can't place`);
+      }
+    }
+  }
+  for (const state of ['rest', 'pressed'] as const) if (motionChecks[state].length) for (const appearance of SPEC.axes.find((a: any) => a.name === 'appearance').values) {
+    probes.push({ coord: { appearance, surface: 'default', inset: 'default', size: 'medium' }, state, leading: false, trailing: false, checks: motionChecks[state] });
   }
   return { probes, gaps };
 };
@@ -374,6 +415,16 @@ const MUTANTS: { name: string; css: string; markup: Markup; mustName: RegExp }[]
   { name: 'the reduced-motion transition dropped (the container keeps motion.state)',
     css: CSS.replace(/\n +\.p3-button \{\n +transition: [^;]*preset-state-duration-reduced[^;]*;\n +\}/, ''),
     markup: MARKUP, mustName: /motion\.state-reduced \(container background-color duration, reduced motion\) binds motion\.preset\.state\.duration, the spec names motion\.preset\.state\.duration-reduced/ },
+  // #4629: the pre-split shape, one transition per property, so the press plays on the release's preset.
+  { name: 'the press plays on the release preset (no transition on the pressed rule)',
+    css: CSS.replace(/(:active:not\([^)]*\)[^{\n]*\{\n)\s*transition: [^;]*;\n/g, '$1'),
+    markup: MARKUP, mustName: /state=pressed .*pattern pressed control\.transform on motion\.preset\.press \(container transform duration\) binds motion\.preset\.state\.duration, the spec names motion\.preset\.press\.duration/ },
+  { name: 'the release plays on the press preset (the resting scale on motion.press)',
+    css: CSS.replace(/(\n +\.p3-button \{\n +transition: [^;]*)transform var\(--pds3-motion-preset-state-duration\) var\(--pds3-motion-preset-state-easing\)/, '$1transform var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing)'),
+    markup: MARKUP, mustName: /state=rest .*pattern pressed\/release control\.transform on motion\.preset\.state \(container transform duration\) binds motion\.preset\.press\.duration, the spec names motion\.preset\.state\.duration/ },
+  { name: 'the reduced press keeps its colors on the release preset',
+    css: CSS.replace(/(\.p3-button:active:not\([^)]*\) > \.p3-button__label \{\n +transition: color var\(--pds3-motion-preset-)press-duration-reduced\) var\(--pds3-motion-preset-press-easing\)/, '$1state-duration-reduced) var(--pds3-motion-preset-state-easing)'),
+    markup: MARKUP, mustName: /state=pressed .*pattern pressed control\.color on motion\.preset\.press \(container\/label color duration, reduced motion\) binds motion\.preset\.state\.duration-reduced, the spec names motion\.preset\.press\.duration-reduced/ },
   { name: 'drop the tracking (every letter-spacing declaration)',
     css: CSS.replace(/\n\s*letter-spacing: [^;]+;/g, ''), markup: MARKUP, mustName: /container\/label letterSpacing binds \(no token: ls:NaN\), the spec names core\.font\.letter-spacing-role\.normal/ },
 ];
