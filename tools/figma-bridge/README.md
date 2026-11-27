@@ -9,11 +9,17 @@ The plugin does the writing. This server only carries commands in and results ou
 
 ## Set up (once, on the owner's machine)
 
-Register the server with Claude Code as a stdio MCP server:
+Install the repository's dependencies once, then register the server with Claude Code as a stdio MCP
+server:
 
 ```bash
+cd /path/to/prism3 && npm ci
 claude mcp add prism3-figma -- npx tsx /path/to/prism3/tools/figma-bridge/server.ts
 ```
+
+Since #4646 the bridge runs on the official MCP SDK, `@modelcontextprotocol/server`, pinned exactly in
+the root `package.json`. In a checkout without `npm ci` the server stops at start with a "Cannot find
+package" error, before it opens the socket. Run `npm ci` again after a pull that moves the pin.
 
 It listens on `ws://localhost:17331`, bound to loopback only. That is the origin the plugin manifest
 lists in `networkAccess.allowedDomains` (since #3147 the relay ships in the network build, "Prism3
@@ -168,10 +174,20 @@ from `BRIDGE_INSTRUCTIONS`.
 
 ## How it is built
 
-- `server.ts` — the stdio JSON-RPC loop (hand-rolled like `packages/engine/mcp.ts`, reusing its
-  protocol constants and its `initialize` rule, `negotiateHandshakeVersion`: a handshake client gets
-  `2024-11-05` back, never `2026-07-28`, which Claude Code refuses, #3109) and an RFC 6455 WebSocket server on `node:http` + `node:crypto`, with no `ws`
-  package. It binds loopback only (127.0.0.1, and ::1 where available).
+- `server.ts` — the MCP server on the official SDK (#4646; `createMcpServer`), and an RFC 6455
+  WebSocket server on `node:http` + `node:crypto`, with no `ws` package. The socket binds loopback only
+  (127.0.0.1, and ::1 where available). The engine's MCP server (`packages/engine/mcp.ts`) stays
+  hand-written; the bridge is the one exception to `docs/08` §7's "no MCP SDK", because Tasks,
+  Elicitation and Skills need server-to-client requests and per-run state. The SDK is loaded only when
+  the server runs, so the engine gates that import the bridge's `TOOLS` need no install.
+  It reuses the engine's protocol constants and its `initialize` rule, `negotiateHandshakeVersion`: a
+  handshake client gets `2024-11-05` back, never `2026-07-28`, which Claude Code refuses (#3109).
+  `compatAnswer` keeps three answers the SDK would give differently, so nothing a client read moved
+  with the SDK: `server/discover` is answered beside `initialize` on one connection, an `initialize`
+  without `capabilities` or `clientInfo` is served rather than refused, and an unknown resource fails
+  with -32002, not the SDK's -32602. Two things did move: `initialize` now declares `logging`, since the
+  bridge sends console lines as `notifications/message`, and a stdin line that is not JSON is skipped
+  rather than answered -32700.
 - `apps/plugin/src/agent-bridge-relay.ts` — the plugin side. It runs in the UI iframe, since the main
   thread has no network, and relays commands to the main thread's dispatcher.
 - `apps/plugin/test-agent-bridge.ts` — the gate, an arm of the plugin's `test` step. It spawns this

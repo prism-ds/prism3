@@ -183,6 +183,15 @@ honoured from the start rather than retrofitted:
    input *shape* is `theme-schema.json` (OKLCH-aware). Pure `handleRpc`/`callTool` behind an
    `isMain` stdio loop; gated in `test.ts` (handshake, catalogue, manifest-drift, a full
    round-trip, error paths) + live stdio smoke-test. Run `npx tsx packages/engine/mcp.ts`.
+   - **The one exception: the Figma bridge runs on the official MCP SDK (#4646, owner decision A,
+     2026-11-27).** `tools/figma-bridge/server.ts` moved onto `@modelcontextprotocol/server` (v2 of what
+     was `@modelcontextprotocol/sdk`), pinned exactly in the root `package.json`. Why: Tasks, Elicitation
+     and Skills over MCP need server-to-client requests, per-run state, progress, cancellation and resume
+     after a reconnect, in a spec area that is still moving, and hand-writing that is where bugs live (the
+     bridge's handshake already broke once, #3109). The bridge is local developer tooling, not the shipped
+     engine, so the no-install rule (`07` §3) weighs less there. **The engine's rule is unchanged:**
+     `packages/engine/mcp.ts` stays dependency-free and hand-written, and the bridge loads the SDK only
+     when it runs, so the engine gates that import the bridge's tool list still need no install.
 
 **Packaging:** the engine, web dashboard, and Figma plugin are one monorepo grown from
 `prism3`; the core stays buildless (tsx), the adapters get a bundler. Full repo
