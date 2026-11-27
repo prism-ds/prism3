@@ -302,6 +302,12 @@ export const leverManifest: Lever[] = [
     options: enumOpts(['snappy', 'Snappy'], ['standard', 'Standard'], ['relaxed', 'Relaxed']),
     tip: 'How fast every duration runs: Snappy 0.8×, Standard 1×, Relaxed 1.3×.',
     description: 'How fast every duration runs: Snappy is 0.8×, Standard 1×, Relaxed 1.3×. Reduced motion is set for you.' },
+  // #4571 (the motion editor's PR 2) — label, tip and description are DRAFT for the owner. Its home in the Studio is
+  // Theme › Motion › Presets (Q-ME3 A). An object lever: one row per preset, three slots each, and an exit half under
+  // the arriving presets. Brand-wide only (no per-mode form, the proposal's §4.1).
+  { key: 'motionPersonality.presets', group: 'motion', kind: 'value', label: 'Motion presets', control: 'object',
+    tip: 'Each preset\'s duration, easing and delay, as a step, role, curve or spring.',
+    description: 'Each motion preset\'s duration, easing and delay, set brand-wide. A slot names a step of the duration scale, an easing role, a curve or a spring, never a number, so one edit re-times every component motion that plays on that preset.' },
   // ---- ELEVATION ----
   { key: 'shadow.softness', group: 'elevation', kind: 'value', label: 'Shadow softness', control: 'slider', default: 1, min: 0, max: 2, step: 0.1,
     tip: 'How soft every shadow is: low keeps edges crisp, high blurs them past their offset.',

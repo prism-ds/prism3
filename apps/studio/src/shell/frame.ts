@@ -79,6 +79,8 @@ import { mountTypeLevers } from '../domains/type';
 import { mountTypePreview } from '../preview/type';
 import { mountDepthLevers } from '../domains/depth';
 import { mountDepthPreview } from '../preview/depth';
+import { mountMotionLevers } from '../domains/motion';
+import { mountMotionPreview } from '../preview/motion';
 import { mountShapeLevers } from '../domains/shape';
 import { mountShapePreview } from '../preview/shape';
 import { mountLayoutLevers } from '../domains/layout';
@@ -111,6 +113,7 @@ const NEW_PAGES: Record<NewPageKey, {
   interactive: { levers: mountInteractiveLevers, preview: mountInteractivePreview, derivedReadOnly: true },
   type: { levers: mountTypeLevers, preview: mountTypePreview, derivedReadOnly: true },
   depth: { levers: mountDepthLevers, preview: mountDepthPreview, derivedReadOnly: true },
+  motion: { levers: mountMotionLevers, preview: mountMotionPreview, derivedReadOnly: true },
   shape: { levers: mountShapeLevers, preview: mountShapePreview, derivedReadOnly: true },
   layout: { levers: mountLayoutLevers, preview: mountLayoutPreview, derivedReadOnly: true },
   // #2700: not held in a derived mode. Its levers pane is the list of sets and the action bar, which edit no brand

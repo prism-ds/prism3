@@ -25,6 +25,7 @@
     { "file": "test-type-input.ts", "floor": 172 },
     { "file": "test-layout-input.ts", "floor": 48 },
     { "file": "test-depth-motion-input.ts", "floor": 46 },
+    { "file": "test-motion-input.ts", "floor": 8 },
     { "file": "test-shape-input.ts", "floor": 20 },
     { "file": "test-used-by.ts", "floor": 19 },
     { "file": "test-button-input.ts", "floor": 39 },

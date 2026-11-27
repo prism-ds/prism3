@@ -63,7 +63,7 @@ const tokens = JSON.parse(readFileSync(join(REPO, 'packages/engine/out/prism3.to
 
 // ── the decisions, as literals ─────────────────────────────────────────────────────────────────────
 /** IA-1's tabs and Color's sub-pages, in order. */
-const IA_TABS = ['brand', 'color', 'type', 'shape', 'depth', 'layout', 'components'];
+const IA_TABS = ['brand', 'color', 'type', 'shape', 'depth', 'motion', 'layout', 'components'];   // #4571 Q-ME3 A: Motion split from Depth
 const IA_COLOR = ['palettes', 'fills', 'interactive'];
 /** Pages where the manifest flag does not decide the tier: every lever is shown (Q4, V10, v6 review #2). */
 const FIRST_CLASS = ['layout', 'color/fills', 'color/interactive'];
@@ -225,7 +225,7 @@ console.log(`  ${Object.entries(perSub).map(([s, n]) => `${s} ${n}`).join(', ')}
 // ── 4. moved pages (S2 on) ─────────────────────────────────────────────────────────────────────────
 console.log('\n4. Moved pages (every tab since S8.2; the legacy lists went in H12, #2289)');
 /** The pages the slices moved, literally: every page, so a page added without moving fails here. */
-const MOVED = ['brand', 'color/palettes', 'color/fills', 'color/interactive', 'type', 'shape', 'depth', 'layout', 'components'];
+const MOVED = ['brand', 'color/palettes', 'color/fills', 'color/interactive', 'type', 'shape', 'depth', 'motion', 'layout', 'components'];
 for (const p of PAGES) {
   ok(MOVED.includes(p.key) && p.status === 'new', `${p.name} is a moved page (status "${p.status}")`);
   ok(!('legacy' in (p as object)), `${p.name} carries no legacy page list (H12): ${JSON.stringify((p as { legacy?: unknown }).legacy)}`);

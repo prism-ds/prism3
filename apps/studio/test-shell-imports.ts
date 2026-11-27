@@ -154,6 +154,8 @@ const MUST_SCAN = ['src/shell/frame.ts', 'src/shell/pages.ts', 'src/shell/theme.
   'src/preview/sections/shape-building-blocks.ts', 'src/preview/sections/radius-sample.ts',
   // S9.2: Depth & motion (its levers and its preview).
   'src/domains/depth.ts', 'src/preview/depth.ts',
+  // #4571 (Q-ME3 A): Motion, split from Depth & motion (its levers, its preview and its preset writes).
+  'src/domains/motion.ts', 'src/preview/motion.ts', 'src/state/motion-input.ts',
   // S8.1: the Button option writes, the button specimen, and the component catalog with the web's generated copy.
   'src/state/button-input.ts', 'src/preview/sections/button-layout.ts', 'src/state/component-catalog.ts',
   'src/state/component-catalog-data.ts',
@@ -842,6 +844,10 @@ ok(arm.offenders.length === 0, `no file under ${NEW_DIRS.join(', ')} imports src
     const DEPTH_LEVERS = join(SRC, 'domains/depth.ts');
     const dl = scan(DEPTH_LEVERS, readFileSync(DEPTH_LEVERS, 'utf8'));
     ok(dl.depthDirect.length === 0, `src/domains/depth.ts writes nothing into brandState.shadow or brandState.motionPersonality itself${dl.depthDirect.length ? ` — ${dl.depthDirect.slice(0, 3).join(' | ')}: the write belongs in state/depth-motion-input.ts` : ''}`);
+    // #4571: `domains/motion.ts`, split from Depth & motion, under the same visitor.
+    const MOTION_LEVERS = join(SRC, 'domains/motion.ts');
+    const ml = scan(MOTION_LEVERS, readFileSync(MOTION_LEVERS, 'utf8'));
+    ok(ml.depthDirect.length === 0, `#4571 src/domains/motion.ts writes nothing into brandState.motionPersonality itself${ml.depthDirect.length ? ` — ${ml.depthDirect.slice(0, 3).join(' | ')}: the write belongs in state/depth-motion-input.ts or state/motion-input.ts` : ''}`);
     // `domains/button-options.ts` (S8.2's Button options, moved there by #2700) and `domains/components.ts` under the same
     // visitor: no Button option written onto `brandState` directly, by any operator or alias; their keyed writes are
     // refused outright in the S8.1/S8.2 arm below (neither names a `setPath`).
@@ -932,18 +938,22 @@ ok(arm.offenders.length === 0, `no file under ${NEW_DIRS.join(', ')} imports src
   const mainSrc = readFileSync(MAIN, 'utf8');
   const mainCode = strip(mainSrc);
   const depthCode = strip(readFileSync(join(SRC, 'preview/depth.ts'), 'utf8'));
+  // #4571 (Q-ME3 A): the motion pieces moved to the Motion tab's preview and levers.
+  const motionCode = strip(readFileSync(join(SRC, 'preview/motion.ts'), 'utf8'));
   const leversSrc = readFileSync(join(SRC, 'domains/depth.ts'), 'utf8');
   const leversCode = strip(leversSrc);
+  const motionLeversSrc = readFileSync(join(SRC, 'domains/motion.ts'), 'utf8');
+  const motionLeversCode = strip(motionLeversSrc);
   const idx = readFileSync(join(SRC, 'preview/sections/index.ts'), 'utf8');
-  for (const [fn, file, what] of [
-    ['shadowRampSection', 'shadow-ramp', 'the shadow steps'],
-    ['shadowTintSection', 'shadow-tint', 'the shadow color'],
-    ['durationRampSection', 'duration-ramp', 'the durations'],
-    ['motionCurvesSection', 'motion-curves', 'the curves'],
-    ['springsSection', 'springs', 'the Springs section'],
-    ['motionTransitionsSection', 'motion-transitions', 'the traced transitions'],
+  for (const [fn, file, what, preview] of [
+    ['shadowRampSection', 'shadow-ramp', 'the shadow steps', 'depth'],
+    ['shadowTintSection', 'shadow-tint', 'the shadow color', 'depth'],
+    ['durationRampSection', 'duration-ramp', 'the durations', 'motion'],
+    ['motionCurvesSection', 'motion-curves', 'the curves', 'motion'],
+    ['springsSection', 'springs', 'the Springs section', 'motion'],
+    ['motionTransitionsSection', 'motion-transitions', 'the traced transitions', 'motion'],
   ] as const) {
-    ok(new RegExp(`\\b${fn}\\(`).test(depthCode), `src/preview/depth.ts draws ${what} through the shared ${fn}()`);
+    ok(new RegExp(`\\b${fn}\\(`).test(preview === 'depth' ? depthCode : motionCode), `src/preview/${preview}.ts draws ${what} through the shared ${fn}()`);
     ok(!new RegExp(`\\b${fn}\\b`).test(mainCode), `src/main.ts no longer draws ${what} (${fn}): the legacy Elevation and Motion pages are gone`);
     ok(idx.includes(`from './${file}'`), `preview/sections/index.ts exports ${what} from ./${file}`);
   }
@@ -956,7 +966,7 @@ ok(arm.offenders.length === 0, `no file under ${NEW_DIRS.join(', ')} imports src
     [/palSection\(\s*'Motion'|'mo-grid'|'mo-stage'|createElementNS\(/, "its own traced transitions (palSection('Motion', …), the mo-grid markup, or an SVG stage)"],
   ];
   for (const [re, what] of OWN) {
-    for (const [file, code] of [['src/main.ts', mainCode], ['src/preview/depth.ts', depthCode]] as const) {
+    for (const [file, code] of [['src/main.ts', mainCode], ['src/preview/depth.ts', depthCode], ['src/preview/motion.ts', motionCode]] as const) {
       const m = re.exec(code);
       ok(!m, `${file} draws no Depth & motion preview piece of its own: ${what.split(' (')[0].replace(/^its own /, '')}${m ? ` — it carries ${what}, found "${m[0]}": the piece belongs in preview/sections/` : ''}`);
     }
@@ -968,8 +978,13 @@ ok(arm.offenders.length === 0, `no file under ${NEW_DIRS.join(', ')} imports src
   ok(imports(leversSrc, 'depth.ts').some((i) => i.spec === '../state/depth-motion-input'), 'src/domains/depth.ts imports its writes from ../state/depth-motion-input');
   const generic = /\b(setPath|setModeLever)\s*\(/.exec(leversCode);
   ok(!generic, `src/domains/depth.ts writes only through state/depth-motion-input.ts${generic ? ` — it calls ${generic[1]}() itself` : ''}`);
-  for (const w of ['setShadow', 'setTempo', 'setEasingRole'])
-    ok(new RegExp(`\\b${w}\\(`).test(leversCode), `src/domains/depth.ts writes through ${w}()`);
+  ok(new RegExp(`\\bsetShadow\\(`).test(leversCode), 'src/domains/depth.ts writes through setShadow()');
+  ok(imports(motionLeversSrc, 'motion.ts').some((i) => i.spec === '../state/depth-motion-input') && imports(motionLeversSrc, 'motion.ts').some((i) => i.spec === '../state/motion-input'),
+    '#4571 src/domains/motion.ts imports its writes from ../state/depth-motion-input and ../state/motion-input');
+  const motionGeneric = /\b(setPath|setModeLever)\s*\(/.exec(motionLeversCode);
+  ok(!motionGeneric, `#4571 src/domains/motion.ts writes only through its state modules${motionGeneric ? ` — it calls ${motionGeneric[1]}() itself` : ''}`);
+  for (const w of ['setTempo', 'setEasingRole', 'setPresetSlot', 'resetPreset'])
+    ok(new RegExp(`\\b${w}\\(`).test(motionLeversCode), `#4571 src/domains/motion.ts writes through ${w}()`);
 }
 
 // ── the Button options and the component catalog, out of `main.ts` (UI redesign S8.1, S8.2) ─────────────────

@@ -41,7 +41,7 @@ import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
 import { judgeBelowFloor, KNOWN_PENDING, parseFloors } from './lint-shadcn-contrast';
 import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly, buildWebBase } from './emit-dtcg-overlay';
-import { presetSlotTargets, durationTargetsFor, slotPathsOf, easingSourceOf, presetSlotsSet, presetUsedBy, patternsReachedBy, trackTargets } from './motion-editor';
+import { presetSlotTargets, durationTargetsFor, slotPathsOf, easingSourceOf, presetSlotsSet, presetUsedBy, patternsReachedBy, trackTargets, presetAdvisories } from './motion-editor';
 import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme, windowsInvalidName } from './emit-dtcg';
@@ -48276,6 +48276,26 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const ss = slotPathsOf(springTh.motion.presets.find((p) => p.preset === 'surface')!);
   ok(sr.bad.length === 0 && sr.halves > 0 && ss.easing === 'spring.gentle' && ss.duration === 'spring-duration.gentle',
     `#4571 slotPathsOf reads a spring-eased preset back as the spring and its settle time the fresh emission aliases (${JSON.stringify(ss)}; mismatches: ${sr.bad.slice(0, 4).join(' | ') || 'none'})`);
+}
+
+// #4571 (PR 2) — THE PRESET ADVISORIES (Q-ME1 A: warn, never block). SUBJECT = `presetAdvisories`. ORACLE = brands
+// typed here whose objection is known by construction: an exit pointed at a step no shorter than its entrance, and a
+// delay. The defaults raise none, in every example brand, so an advisory never shows on an untouched brand.
+{
+  const adv = (mp: Record<string, unknown>, mode?: string): string[] =>
+    presetAdvisories(brandTheme({ ...MINIMAL_BRAND, motionPersonality: mp } as BrandInput).motion, mode).map((a) => `${a.preset}/${a.half}/${a.code}`);
+  const quiet = (Object.entries(exampleBrands()) as Array<[string, BrandInput]>).map(([id, i]) => [id, presetAdvisories(brandTheme(i).motion)] as const)
+    .filter(([, a]) => a.length).map(([id, a]) => `${id}: ${a.map((x) => `${x.preset}/${x.code}`).join(', ')}`);
+  ok(quiet.length === 0 && adv({}).length === 0, `#4571 the defaults raise no preset advisory, in any example brand (${quiet.join('; ') || 'none'})`);
+  ok(adv({ presets: { surface: { exit: { duration: 'duration.moderate' } } } }).join() === 'surface/exit/exit-not-shorter',
+    `#4571 an exit as long as its entrance is advised (R3) (${adv({ presets: { surface: { exit: { duration: 'duration.moderate' } } } }).join()})`);
+  ok(adv({ presets: { surface: { exit: { duration: 'duration.normal' } } } }).length === 0,
+    '#4571 an exit one step shorter than its entrance is not advised');
+  ok(adv({ presets: { fade: { delay: 'delay.show' }, pop: { exit: { delay: 'delay.hide' } } } }).join() === 'fade/own/delay,pop/exit/delay',
+    `#4571 a delay on either half is advised (${adv({ presets: { fade: { delay: 'delay.show' }, pop: { exit: { delay: 'delay.hide' } } } }).join()})`);
+  // A spring's settle time is the length compared: gentle settles past moderate, so an exit on it is advised.
+  ok(adv({ presets: { surface: { exit: { easing: 'spring.gentle' } } } }).includes('surface/exit/exit-not-shorter'),
+    '#4571 an exit eased by a spring is compared by its settle time');
 }
 
 // #4571 — THE MOTION-ISOLATION GATE (proposal §4.2's last row, §5 PR 1). A motion-only edit leaves every non-motion

@@ -58,6 +58,9 @@ export type {
 } from './scale';
 export { CONTRACT_VERSION, ENGINE_VERSION } from './version';
 export { leverManifest } from './levers';
+// The motion editor's read model (#4571): the Studio Motion page's pickers, "used by" lists and advisories.
+export { durationTargetsFor, easingSourceOf, patternsReachedBy, presetAdvisories, presetSlotTargets, slotPathsOf } from './motion-editor';
+export type { EasingSource, PresetAdvisory, SlotTarget } from './motion-editor';
 export type { Lever } from './levers';
 export { parseDesignMd, toDesignMd } from './design-md';
 export { isStandardDesignMd, parseStandardDesignMd, standardToBrandInput } from './standard-design-md';

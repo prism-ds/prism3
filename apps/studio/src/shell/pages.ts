@@ -68,6 +68,8 @@ export const SPACING_DESC = 'The step each line height and letter spacing name u
 export const ELEVATION_DESC = 'How soft the shadows are. Dark modes get lighter shadows automatically.';
 export const MOTION_DESC = 'How fast things move, and the curve each kind of motion follows.';
 export const SHADOW_TINT_DESC = 'Shifts the shadow color off pure black, toward a hue.';
+/** #4571 (the motion editor's PR 2): the Presets section's line, shared by the levers and the preview. DRAFT. */
+export const PRESETS_DESC = 'The duration, easing and delay of each preset. One edit re-times every component motion that plays on it.';
 /** The Shape sections' copy (S7), each shared by the levers section and the preview section that pairs with it
  *  (Q23; Base radius pairs with the preview's Radius, `PREVIEW_HEADING`). Density's and Radius' are APPROVED (owner,
  *  2026-10-04); Base radius' is DRAFT, pending the owner (the approved draft named "an optional 1px corner", which
@@ -115,7 +117,7 @@ export type Host = 'web' | 'figma';
 /** The views a page can call home, with their titles (the preview header shows the title). */
 export const VIEWS = [
   ['guide', 'Brand overview'], ['palettes', 'Palettes'], ['surfaces', 'Surfaces & fills'], ['interactive', 'Interactive'],  // #4184 decision 8 A: "Brand overview" (DRAFT), so "Style guide" names only the token tables Docs draws into Figma.
-  ['type', 'Type'], ['shape', 'Shape'], ['depth', 'Depth & motion'], ['layout', 'Layout'], ['comps', 'Components'],
+  ['type', 'Type'], ['shape', 'Shape'], ['depth', 'Depth'], ['motion', 'Motion'], ['layout', 'Layout'], ['comps', 'Components'],  // #4571 Q-ME3 A: Depth and Motion split (both DRAFT)
 ] as const;
 /** The views behind Inspect (F1). They open over any page's preview and are never a page's home. The Decisions log, the
  *  third, was cut (#2909 Q2909.7 A). */
@@ -347,18 +349,28 @@ export const DOMAINS = [
     status: 'new',
   },
   {
-    // S9.2: moved. One page and one preview for both topics (V4, owner decision v5 Q3): Elevation then Motion. The
-    // intro and the two section descriptions are APPROVED (owner, 2026-10-04); each lever section and the preview
-    // section it pairs with share their heading and description (Q23). Shadow tint stays its own advanced section
-    // here, the manifest's tier, but the levers draw it INSIDE Elevation behind its own Show advanced (owner decision
-    // D8 A), so its edits reveal the preview's Elevation, the lever section they are made in (QA-B9).
-    id: 'depth', label: 'Depth & motion', home: 'depth', intro: 'Shadow character, then motion tempo. One preview holds both.',
+    // S9.2: moved. #4571 (owner decision Q-ME3 A): Depth & motion split in two, Depth and Motion, so the motion editor
+    // has a preview of its own. The Elevation and Shadow tint copy is APPROVED (owner, 2026-10-04); the tab names and
+    // this intro are DRAFT. Shadow tint stays its own advanced section here, the manifest's tier, but the levers draw
+    // it INSIDE Elevation behind its own Show advanced (owner decision D8 A), so its edits reveal the preview's
+    // Elevation, the lever section they are made in (QA-B9).
+    id: 'depth', label: 'Depth', home: 'depth', intro: 'Shadow character: how soft the shadows are, and their color.',
     sections: [
       { title: 'Elevation', desc: ELEVATION_DESC, rows: [{ ctl: 'slider', keys: ['shadow.softness'], drive: 'elev' }] },
-      { title: 'Motion', desc: MOTION_DESC, rows: [{ ctl: 'enum', keys: ['motionPersonality.tempo'], drive: 'motion' }, { ctl: 'easing', schemaOnly: ['motionPersonality.easingRoles'] }] },
       { title: 'Shadow tint', desc: SHADOW_TINT_DESC, advanced: true, rows: [{ ctl: 'tint', keys: ['shadow.tint'], drive: 'elev' }] },
     ],
     // Its levers are `domains/depth.ts`, its preview `preview/depth.ts`.
+    status: 'new',
+  },
+  {
+    // #4571 (Q-ME3 A): the motion editor's tab. Motion's copy is APPROVED (owner, 2026-10-04); the tab name, this intro
+    // and Presets' are DRAFT. Presets is brand-wide only: in another mode its rows are drawn read-only (§4.1).
+    id: 'motion', label: 'Motion', home: 'motion', intro: 'Motion tempo, the curve each role follows, and what each preset points at.',
+    sections: [
+      { title: 'Motion', desc: MOTION_DESC, rows: [{ ctl: 'enum', keys: ['motionPersonality.tempo'], drive: 'motion' }, { ctl: 'easing', schemaOnly: ['motionPersonality.easingRoles'] }] },
+      { title: 'Presets', desc: PRESETS_DESC, rows: [{ ctl: 'presets', keys: ['motionPersonality.presets'], drive: 'motion' }] },
+    ],
+    // Its levers are `domains/motion.ts`, its preview `preview/motion.ts`.
     status: 'new',
   },
   {

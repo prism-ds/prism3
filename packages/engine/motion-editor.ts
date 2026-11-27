@@ -17,6 +17,7 @@
  *   - `presetUsedBy`, `patternsReachedBy`: each preset path's tracks, in pattern order, read from the patterns the engine resolved, so a
  *     brand's track override that moves a track to another preset moves it here too.
  *   - `trackTargets`: what a track override may set: a preset path, a distance and a reduced kind.
+ *   - `presetAdvisories`: where a preset's slots would draw an objection, as codes (Q-ME1 A: warn, never block).
  *
  * Copy is not here: a label or a sentence the editor shows is the surface's, and the owner's (#4571).
  *
@@ -98,3 +99,23 @@ export const trackTargets = (presets?: readonly string[]): { preset: string[]; d
   reduced: REDUCED_KINDS,
 });
 
+
+/** One advisory: a preset half whose slots a motion rule objects to. A code, never copy (the surface words it). */
+export type PresetAdvisory = { preset: string; half: 'own' | 'exit'; code: 'exit-not-shorter' | 'delay' };
+/** Where a preset's slots would draw an objection (#4571, Q-ME1 A: warn, never block), in the mode in view, since a
+ *  mode's tempo moves the milliseconds. The two the owner named:
+ *  - `exit-not-shorter` (the motion skill's R3): an exit half that plays as long as its entrance, or longer;
+ *  - `delay` (G6 B, the proposal's section 2.1 behavior 3): a delay step on a half, so every pattern on it waits.
+ *  The engine's defaults raise none. */
+export const presetAdvisories = (m: MotionAxis, mode?: string): PresetAdvisory[] => {
+  const dur = (mode !== undefined ? m.motionByMode?.[mode]?.duration : undefined) ?? m.duration;
+  const ms = (h: MotionPresetHalf): number => ('step' in h.duration ? dur[h.duration.step] ?? 0 : m.springSettle[h.duration.spring] ?? 0);
+  const out: PresetAdvisory[] = [];
+  for (const p of m.presets) {
+    if (p.delay !== null) out.push({ preset: p.preset, half: 'own', code: 'delay' });
+    if (!p.exit) continue;
+    if (ms(p.exit) >= ms(p)) out.push({ preset: p.preset, half: 'exit', code: 'exit-not-shorter' });
+    if (p.exit.delay !== null) out.push({ preset: p.preset, half: 'exit', code: 'delay' });
+  }
+  return out;
+};
