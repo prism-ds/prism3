@@ -246,9 +246,9 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
     const id = `p3-preset-${preset}-${half}-${slot}`;
     const set = presetSlotSet(preset, half, slot) !== undefined;
     const shown = now === null ? P.noDelay : `${now} · ${resolved(now)}`;
-    const cell = hook(h('div', 'p3-preset-slot'), 'preset-slot');
+    const cell = hook(h('div', 'p3-tweight p3-preset-slot'), 'preset-slot');
     cell.dataset.slot = slot;
-    const name = h('label', 'p3-preset-slot-name', P.slot[slot]);
+    const name = h('label', 'p3-field-label', P.slot[slot]);
     name.htmlFor = id;
     const btn = pickButton(key, 'preset-pick', id, shown, `${P.title(preset, half, P.slot[slot].toLowerCase() as PresetSlot)}: ${shown}. Pick a value`, set, readOnly);
     btn.dataset.preset = preset;
@@ -307,7 +307,7 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
         head.append(reset);
       }
       row.append(head);
-      const slots = h('div', 'p3-preset-slots');
+      const slots = h('div', 'p3-fillrows p3-preset-slots');
       const paths = slotPathsOf(p);
       for (const slot of ['duration', 'easing', 'delay'] as const) slotControl(p.preset, 'own', slot, paths[slot], paths.easing, readOnly, slots);
       row.append(slots);
@@ -327,7 +327,7 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
           const xp = slotPathsOf(p.exit);
           const exitSet = getPath(brandState, `motionPersonality.presets.${p.preset}.exit`) !== undefined;
           if (!exitSet) body.append(subLine(P.followsEntrance));
-          const xs = h('div', 'p3-preset-slots');
+          const xs = h('div', 'p3-fillrows p3-preset-slots');
           for (const slot of ['duration', 'easing', 'delay'] as const) slotControl(p.preset, 'exit', slot, xp[slot], xp.easing, readOnly, xs);
           body.append(xs);
           row.append(body);
