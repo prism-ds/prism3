@@ -453,7 +453,9 @@ carries none of it.
 
 - ✅ **`src/component-manifest.ts`** — after Build, Update file and Set up file, the plugin keeps a list of the
   component sets it built in the file's root **shared** plugin data (`prism3` / `componentManifest`, draft names):
-  each set's def, name and node id, and each property with its allowed values and its default (owner decision A).
+  each set's def, name and node id, its component key once published (`null` until then; owner decision Q2 A,
+  read off the host at each write, never committed here), and each property with its allowed values and its
+  default (owner decision A).
   Shared, so an agent's own plugin run can read it; nothing is drawn on the canvas. Generated from the plans the
   executor builds from, never written by hand; a variant's default is the set's first member, its `defaultVariant`.
 - ✅ **Parity** — `test-component-manifest.ts` lays the whole catalog's manifest against the committed component

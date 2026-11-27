@@ -84,7 +84,7 @@ import type { HandBack } from './pace';
 import { searchComponents } from './component-search';
 import { materializeForBrand, materializerFor } from './brand-def';
 import { dueOf, entryFor, formerEntry, needsPrint, printOf, printSteps, quietOf, readLedger, recordSets, type DueReason, type Ledger, type LedgerEntry, type PlanPrint } from './as-built-ledger';
-import { manifestSetOf, mergeManifest, readManifest, writeManifest, type ManifestSet } from './component-manifest';
+import { liveKeyOf, manifestSetOf, mergeManifest, readManifest, writeManifest, type KeyedNode, type ManifestEntry } from './component-manifest';
 import { clearQueued, readQueue, setQueued, staleOf, visibleOf, type QueueRoot } from './add-queue';
 import { presentNames, prebuildDependencies, alsoBuiltItem, DependencyBuildError, SWAP_TARGET, labelAfterBuilds } from './build-deps';
 import type { DepHost } from './build-deps';
@@ -2074,19 +2074,20 @@ const drawSpecs = async (defId: string | undefined, scope: 'file' | 'page', sink
  */
 /**
  * THE COMPONENT MANIFEST (#4469, owner decision A; `component-manifest.ts`): the sets `sets` lists replace their
- * entries in the file's record, every entry whose set is no longer in the file is dropped, and the record is written
+ * entries in the file's record, every entry whose set is no longer in the file is dropped, every entry takes the set's
+ * component key as the host has it now (owner decision Q2 A: `null` while unpublished), and the record is written
  * back. `sets` is a thunk so its projection's throw is caught here too. CAUGHT, as the ledger is: the sets are built, and
  * the record is bookkeeping; a record that could not be written is logged, and the next build or update writes it.
  */
-const noteManifest = async (sets: () => readonly ManifestSet[]): Promise<void> => {
+const noteManifest = async (sets: () => readonly ManifestEntry[]): Promise<void> => {
   try {
     const add = sets();
     const was = readManifest(figma.root);
-    const live = new Set<string>();
+    const keys = new Map<string, string | null>();
     for (const id of new Set([...(was?.sets ?? []), ...add].map((s) => s.id))) {
-      try { const n = await figma.getNodeByIdAsync(id); if (n && n.type === 'COMPONENT_SET') live.add(id); } catch { /* gone */ }
+      try { const k = await liveKeyOf(await figma.getNodeByIdAsync(id) as KeyedNode | null); if (k !== undefined) keys.set(id, k); } catch { /* gone */ }
     }
-    writeManifest(figma.root, mergeManifest(was, add, ENGINE_VERSION, (id) => live.has(id)));
+    writeManifest(figma.root, mergeManifest(was, add, ENGINE_VERSION, (id) => keys.get(id)));
   } catch (e) { console.warn('[prism3 #4469] the component manifest was not written', e); }
 };
 

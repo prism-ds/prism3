@@ -84,7 +84,8 @@
  * given whatever the panels switch → `format due/panels off`; the update's record (`acted`) giving `panel: undefined` →
  * `format due/recorded by main` (#3349 review). #4469: the build's `noteManifest` after `applyComponentPlan` dropped →
  * `manifest/build`; the Update's after `applyUpdate` dropped, or `ids` never filled (`update-apply.ts`) → `manifest/update`;
- * the `manifest-export` case posting nothing → `manifest/export`.
+ * the `manifest-export` case posting nothing → `manifest/export`; `noteManifest` reading no key off the host (`keyOf`
+ * answering `null` for a live set) → `manifest/key published` (owner decision Q2 A).
  */
 import { EXECUTOR_REACH } from './src/executor-reach';
 import { makeShim } from './component-shim';
@@ -280,9 +281,12 @@ const ledger = (): Record<string, { def: string; rev: number; engine: string; pr
 ok(typeof ledger().badge?.def === 'string', `ledger/build: the build records the set it landed (${JSON.stringify(ledger().badge)})`);
 // #4469 (owner decision A): THE COMPONENT MANIFEST, through the real `main.ts`. The build lists the set it landed in the
 // file's root shared plugin data, by the id of the set it drew; Export manifest posts that record back to download.
-const manifest = (): { sets?: { def: string; id: string; properties: { type: string }[] }[] } | null => { try { return JSON.parse(sharedData.get('prism3:componentManifest') ?? 'null'); } catch { return null; } };
+const manifest = (): { sets?: { def: string; id: string; key?: string | null; properties: { type: string }[] }[] } | null => { try { return JSON.parse(sharedData.get('prism3:componentManifest') ?? 'null'); } catch { return null; } };
 const mBuilt = manifest()?.sets?.find((s) => s.def === 'badge');
 ok(!!mBuilt && mBuilt.id === set?.id && mBuilt.properties.some((p) => p.type === 'VARIANT'), `#4469 manifest/build: the build lists Badge in the file's manifest, by the id of the set it drew (${JSON.stringify(mBuilt && { id: mBuilt.id, set: set?.id })})`);
+// Owner decision Q2 A: each entry carries the set's component key, read off the host. Badge is not published, so the
+// entry says so with `key: null`, the field present: never left out, never a key the host did not give.
+ok(!!mBuilt && Object.prototype.hasOwnProperty.call(mBuilt, 'key') && mBuilt.key === null, `#4469 manifest/key unpublished: the build lists unpublished Badge with key null (${JSON.stringify(mBuilt && { key: mBuilt.key })})`);
 const exported = (await ask({ type: 'manifest-export' }, 'component-manifest'))[0];
 ok(typeof exported?.text === 'string' && JSON.parse(exported.text).sets?.some((s: { def: string }) => s.def === 'badge'), `#4469 manifest/export: Export manifest posts the file's record back (${String(exported?.text).slice(0, 60)})`);
 ok(sharedData.get('prism3:addQueue.badge') === '', `queue/build: the build that lands Badge whole clears its add-queue key, where the ledger records it (${JSON.stringify(sharedData.get('prism3:addQueue.badge'))})`);
@@ -415,7 +419,17 @@ const fsM = (await ask({ type: 'file-sets-request' }, 'file-sets'))[0];
 ok(JSON.stringify(fsM?.due?.badge) === JSON.stringify({ state: 'due', reason: 'engine', moved: { parts: [{ part, facets: ['size'] }], added: [], dropped: [], set: false } }),
   `q811/load: a changed plan reads due for the engine, naming the part and facet that moved (${JSON.stringify(fsM?.due?.badge)})`);
 pluginData.set('prism3:asBuilt', JSON.stringify({ v: 1, sets: { badge: { ...asRecorded, engine: OLD } } }));
+// #4469 Q2 A, through the real `main.ts`: Badge published after it was built gets its key at the next write, a build of
+// another set, read off the host then. The key is a placeholder in the shim's own `K:` form, never a real one; it is
+// taken off again after the read.
+(shim.publish as (n: unknown, s: string) => void)(set, 'CURRENT');
+Object.defineProperty(set, 'key', { configurable: true, enumerable: false, get: () => 'K:placeholder-badge' });
 await runAction((sink) => ACTIONS.buildComponents('divider', sink as never));
+const mPub = manifest()?.sets;
+ok(mPub?.find((s) => s.def === 'badge')?.key === 'K:placeholder-badge' && mPub?.find((s) => s.def === 'divider')?.key === null,
+  `#4469 manifest/key published: the next write lists published Badge by the key the host gives, and unpublished Divider with null (${JSON.stringify(mPub?.map((s) => [s.def, s.key]))})`);
+(shim.publish as (n: unknown, s: string) => void)(set, 'UNPUBLISHED');
+delete (set as { key?: string }).key;
 ok(ledger().badge?.engine !== OLD && ledger().badge?.print?.plan === asRecorded.print!.plan,
   `q811/restamp: the next write records the quiet set under today's engine, its print kept (${JSON.stringify({ engine: ledger().badge?.engine, plan: ledger().badge?.print?.plan })})`);
 // An entry from before Q811 A (no print) under TODAY's engine reads current, and the next write gives it its print.

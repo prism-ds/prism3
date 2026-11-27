@@ -128,30 +128,43 @@ decision for the owner (section 6), and most become component work.
 ### Read the component manifest before searching the library
 
 In a file whose Prism3 components the Prism3 plugin built, the plugin keeps a list of them in the file: each
-component set, its properties with their allowed values and defaults, and the id to place it by. Build and
-Update file write it; nothing is drawn on the canvas. Read it with
-`figma.root.getSharedPluginData('prism3', 'componentManifest')` before you search the file's whole library
-listing: one call answers what a search of every component would.
+component set, its properties with their allowed values and defaults, the id to place it by and, once the
+set is published, its component key. Set up file, Build and Update file write it; nothing is drawn on
+the canvas. Read it with `figma.root.getSharedPluginData('prism3', 'componentManifest')`
+before you search the file's whole library listing: one call answers what a search of every component would.
 
-- **The shape.** JSON: `{ v: 1, engine, sets: [{ def, name, id, properties }] }`. `def` is the Prism3
-  component id, `name` the set's name, `id` the set's node id. Each property has a `name` (as the properties
-  panel shows it) and a `type`. A `"VARIANT"` lists its `values` and its `default`, which is the set's first
+- **The shape.** JSON: `{ v: 1, engine, sets: [{ def, name, id, key, properties }] }`. `def` is the Prism3
+  component id, `name` the set's name, `id` the set's node id. `key` is the published component set's key,
+  read from Figma when the plugin last wrote the record, or `null` while the set is not published; a set
+  published since then gets its key at the next Set up file, Build or Update file. Each property has a
+  `name` (as the properties panel shows it) and a `type`. A `"VARIANT"` lists its `values` and its `default`, which is the set's first
   member, the one its `defaultVariant` gives; `axis` is the code name where the panel's name differs, and
   `slot: true` marks a slot's on/off coordinate (`leading icon`). A `"TEXT"` or `"BOOLEAN"` property has a
   `default`; an `"INSTANCE_SWAP"` has the name of the component it starts on; a `"SLOT"` has none.
 - **Placing a set.** `figma.getNodeByIdAsync(id)` gives the set: place its `defaultVariant`, or the member
   whose name is the coordinate you need (`size=small, state=rest`). A non-variant property's key in
   `componentPropertyDefinitions` is its `name` followed by `#` and an id, so match on the name before the `#`.
-- **When it is empty or wrong.** An empty string means the file holds no manifest: no set was built or updated
-  since the plugin began writing one. Ask the owner to run Update file, or read the sets as section 8, step 2
-  describes. A set missing from it was not built or updated since then. An `id` that is no longer a
-  `"COMPONENT_SET"` was deleted or replaced by hand: find the set by its name, and report it.
+- **No manifest, or an empty one.** These are different answers. An empty string means the file holds no
+  manifest: the plugin has not set up, built or updated anything here since it began writing one. Ask the
+  owner to run Update file, or read the sets as section 8, step 2 describes. A record whose `sets` is an
+  empty list means the plugin did write one and found no Prism3 component set in the file: none was built
+  here, or every one was deleted. Don't wait for a manifest to fill; read the file's components directly,
+  and if Prism3 should be local here, tell the owner its sets are missing.
+- **When it is wrong.** A set missing from it was not built or updated since the plugin began writing
+  one. An `id` that is no longer a `"COMPONENT_SET"` was deleted or replaced by hand: find the set by its name, and report it.
 - **What it leaves out.** Component sets only: the icons and the spinner are built as standalone components,
-  so they are not in it. In a file that uses Prism3 as a published library (section 8), the manifest is the
-  library file's: read it there, read-only, and import by key in the consuming file.
-- **Keys and file names stay private.** The manifest holds the file's own node ids. Never copy it, its ids, a
-  component key, a file key or a file's name into the shared repository, an issue or an example. A copy
-  downloaded with the plugin's Export manifest stays in the brand's private material.
+  so they are not in it.
+- **In a file that consumes Prism3 as a published library** (section 8), the manifest is the library
+  file's, not the consuming file's: `getSharedPluginData` reads only the file you are in. Read it in the
+  library file, read-only, or take the owner's Export manifest copy. Each entry's `key` is what section 8
+  imports by: `figma.importComponentSetByKeyAsync(key)`, then place its `defaultVariant` or the member
+  the coordinate names. Its node `id` means nothing in another file. A `null` key is a set that was not
+  published when the record was written, so it can't be imported (section 8, step 7): ask the owner to
+  publish it, then to run Update file in the library file so the record picks up its key.
+- **Keys and file names stay private.** The manifest holds the file's own node ids and its sets' component
+  keys. Never copy it, its ids, a component key, a file key or a file's name into the shared repository, an
+  issue or an example. A copy downloaded with the plugin's
+  Export manifest stays in the brand's private material.
 
 ## 3. Running a screen
 
@@ -405,7 +418,8 @@ skill says "remote" to mean legacy, read "remote, and not one of Prism3's keys".
    `resolvedType` in the row to catch a color row mapped to a number. The plugin API has no listing of
    a library's components or styles from the consuming file: read each component set's, component's and
    style's `key` in the library file itself (read-only), take them from the owner, or find them with
-   a design-system search the bridge offers. Treat a key found by search as unconfirmed until its
+   a design-system search the bridge offers. A component manifest in the library file (section 2) lists
+   each published set's `key`. Treat a key found by search as unconfirmed until its
    import succeeds (step 3). Judge what a set offers (ratios, sizes, states) from its variant
    properties (`componentPropertyDefinitions`, or its `children`), never from its description, which
    can be stale, before calling anything a gap (section 6).

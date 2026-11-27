@@ -10,15 +10,20 @@
  * WHY SHARED PLUGIN DATA. Private plugin data (`setPluginData`) is readable only by the plugin that wrote it. An agent
  * reaches the file through its own plugin run (a desktop bridge, an MCP that runs plugin code), which has another
  * plugin id, so it could never read it. Shared plugin data is "readable by any plugin" (docs/18 §8a), which is the
- * point. It holds node ids and the names a designer already sees in the file: never a file key or a file name, so a
- * copy is safe to keep beside the file. Those still never go into this repo, which `skills/prism3-rebind` states.
+ * point. It holds node ids, the names a designer already sees in the file and each published set's component key
+ * (owner decision Q2 A, 2026-11-27: so an agent in a file that consumes the library imports the set by key). Never a
+ * file key or a file name. The record lives in the owner's own file, so the keys are the owner's; they still never go
+ * into this repo, which `skills/prism3-rebind` states, and no test or fixture here holds a real one: the shim mints
+ * obviously fake ones (`K:<n>`).
  *
  * GENERATED, NEVER WRITTEN BY HAND. Every field below is read off the plans the executor builds the set from
  * (`figmaAnatomySet` of the def materialized for the file's brand), the same plans a build and an update hand
  * `applyComponentPlan`. The variant properties are the member names' coordinates (`planComponentName`), which is what
  * Figma derives a set's variant properties from when it combines the members; the others are `planSetProperties`,
- * the list the executor creates with `addComponentProperty`. The one live fact is the node id, taken from the set the
- * executor just built or updated.
+ * the list the executor creates with `addComponentProperty`. The live facts are the node id, taken from the set the
+ * executor just built or updated, and the set's component KEY, read off the live node at every write (`liveKeyOf`):
+ * the published set's `key`, or `null` while `getPublishStatusAsync` says it is not published. A set published after
+ * it was built gets its key at the next write (Build, Update file or Set up file), never a made-up one before.
  *
  * A VARIANT'S DEFAULT is the coordinate of the set's first member, the first plan: Figma's `defaultVariant` is the
  * set's first child, which is the first member the executor creates (`write-components.ts`, `CompSetRef`). So the
@@ -59,7 +64,11 @@ export type ManifestProperty =
   | { readonly name: string; readonly type: 'BOOLEAN'; readonly default: boolean }
   | { readonly name: string; readonly type: 'INSTANCE_SWAP'; readonly default: string }
   | { readonly name: string; readonly type: 'SLOT' };
-export type ManifestSet = { readonly def: string; readonly name: string; readonly id: string; readonly properties: readonly ManifestProperty[] };
+/** A set's entry as its plans give it: everything but the key, which only the live node knows. */
+export type ManifestEntry = { readonly def: string; readonly name: string; readonly id: string; readonly properties: readonly ManifestProperty[] };
+/** A set as the record holds it. `key`: the published component set's key (Figma's `ComponentSetNode.key`), or `null`
+ *  while the set is not published to a team library (owner decision Q2 A). */
+export type ManifestSet = { readonly def: string; readonly name: string; readonly id: string; readonly key: string | null; readonly properties: readonly ManifestProperty[] };
 /** `engine`: the `ENGINE_VERSION` of the plugin that last wrote the record. `sets` in the order they were first recorded. */
 export type Manifest = { readonly v: typeof MANIFEST_V; readonly engine: string; readonly sets: readonly ManifestSet[] };
 
@@ -76,7 +85,7 @@ const coordOf = (plan: AnatomyPlan): [string, string][] =>
  * A set's manifest entry, from the plans it is built from and the node the executor built. Throws where the plans
  * cannot be a set (no plans, or a coordinate key the first member does not carry), as the executor would refuse them.
  */
-export const manifestSetOf = (def: string, plans: readonly AnatomyPlan[], id: string): ManifestSet => {
+export const manifestSetOf = (def: string, plans: readonly AnatomyPlan[], id: string): ManifestEntry => {
   if (!plans.length) throw new Error(`${def}: no plans, so no set to list`);
   const first = plans[0];
   // The panel name → the def's code name, for an axis or a slot whose panel name differs (#2571, #1309).
@@ -107,7 +116,8 @@ export const manifestSetOf = (def: string, plans: readonly AnatomyPlan[], id: st
 
 const isSet = (x: unknown): x is ManifestSet => {
   const s = x as ManifestSet | null;
-  return !!s && typeof s.def === 'string' && typeof s.name === 'string' && typeof s.id === 'string' && Array.isArray(s.properties);
+  return !!s && typeof s.def === 'string' && typeof s.name === 'string' && typeof s.id === 'string'
+    && (s.key === null || typeof s.key === 'string') && Array.isArray(s.properties);
 };
 
 /** The record in the file, or `null` when there is none or it cannot be read (another format, malformed). */
@@ -139,15 +149,38 @@ export const entryBytes = (text: string): number => {
   return n;
 };
 
+/** The slice of a live node `liveKeyOf` reads: a `ComponentSetNode`'s type, key and publish status. */
+export type KeyedNode = { readonly type?: string; readonly key?: string; getPublishStatusAsync?(): Promise<string> };
+
+/**
+ * A SET'S KEY, AS THE HOST HAS IT NOW (owner decision Q2 A): `undefined` when the node is not a `COMPONENT_SET` (gone,
+ * or replaced by hand, so its entry is dropped); `null` when it is a set that is not published (`getPublishStatusAsync`
+ * answers `UNPUBLISHED`, cannot answer, or the node has no key); else its `key`. Never a key the host did not give.
+ */
+export const liveKeyOf = async (n: KeyedNode | null | undefined): Promise<string | null | undefined> => {
+  if (!n || n.type !== 'COMPONENT_SET') return undefined;
+  try {
+    const status = typeof n.getPublishStatusAsync === 'function' ? await n.getPublishStatusAsync() : 'UNPUBLISHED';
+    return status !== 'UNPUBLISHED' && typeof n.key === 'string' && n.key ? n.key : null;
+  } catch { return null; }
+};
+
 /**
  * The record after a run: `sets` replaces the entry of each def it names (or adds one, at the end), every entry whose
- * id `exists` no longer finds is dropped, and the record is stamped with `engine`.
+ * id `keyOf` answers `undefined` for (no longer a set) is dropped, every other entry takes the key `keyOf` reads now
+ * (a string, or `null` while unpublished), and the record is stamped with `engine`.
  */
-export const mergeManifest = (was: Manifest | null, sets: readonly ManifestSet[], engine: string, exists: (id: string) => boolean): Manifest => {
-  const byDef = new Map<string, ManifestSet>();
+export const mergeManifest = (was: Manifest | null, sets: readonly ManifestEntry[], engine: string, keyOf: (id: string) => string | null | undefined): Manifest => {
+  const byDef = new Map<string, ManifestEntry>();
   for (const s of was?.sets ?? []) byDef.set(s.def, s);
   for (const s of sets) byDef.set(s.def, s);
-  return { v: MANIFEST_V, engine, sets: [...byDef.values()].filter((s) => exists(s.id)) };
+  const out: ManifestSet[] = [];
+  for (const s of byDef.values()) {
+    const key = keyOf(s.id);
+    if (key === undefined) continue;
+    out.push({ def: s.def, name: s.name, id: s.id, key, properties: s.properties });
+  }
+  return { v: MANIFEST_V, engine, sets: out };
 };
 
 /** Write the record. Throws, by name, when it would pass Figma's ceiling, so nothing half-written lands. */

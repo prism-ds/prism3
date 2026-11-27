@@ -1131,7 +1131,7 @@ const OWNER_RULES: OwnerRule[] = [
     skills: ['prism3-rebind'],
     section: '## 2.',
     roles: [],
-    must: [/`\{ v: 1, engine, sets: \[\{ def, name, id, properties \}\] \}`/, /`"VARIANT"`[^.]*`values`[^.]*`default`/, /`defaultVariant`/],
+    must: [/`\{ v: 1, engine, sets: \[\{ def, name, id, key, properties \}\] \}`/, /`key` is the published component set's key[^.]*`null` while the set is not published/, /`"VARIANT"`[^.]*`values`[^.]*`default`/, /`defaultVariant`/],
     resolve: [],
   },
   {
