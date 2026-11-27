@@ -127,8 +127,8 @@ each layout change happens at a `breakpoint.*` step. Don't type a pixel width fo
 
 ## 4. Render and check
 
-**Render every screen and check it before the ledger.** This is the rendered check in
-`prism3-build-ui` ("The self-check"), at fixed sizes and with three more passes:
+**Render every screen and check it before the ledger.** This is the rendered check and the
+companion pass in `prism3-build-ui` ("The self-check"), at fixed sizes and with three more passes:
 
 - **Every view.** Screenshot each screen at 1280px and 390px wide, in light and dark, with each
   dialog, menu or popover both open and closed. At each width, check for horizontal overflow: the
