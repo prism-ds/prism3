@@ -273,7 +273,7 @@ const MUTANTS: { name: string; css: string; mustName: RegExp }[] = [
     mustName: /default\/filled\/default\/medium\/rest background-color is .*color\.interactive\.primary\.fill\.rest/ },
   { name: 'the transitions removed',
     css: '.p3-button, .p3-button > * { transition: none !important; }',
-    mustName: /light filled rest background-color transitions not at all, motion\.duration\.fast/ },
+    mustName: /light filled rest background-color transitions not at all, motion\.preset\.state\.duration and/ },
   { name: 'the press kept under reduced motion',
     css: '@media (prefers-reduced-motion: reduce) { .p3-button:active:not(:disabled, [aria-disabled="true"]) { transform: scale(0.98) !important; } }',
     mustName: /under reduced motion: light filled :active transform is matrix\(0\.98, 0, 0, 0\.98, 0, 0\), the press resolves to none/ },

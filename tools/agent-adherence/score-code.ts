@@ -83,6 +83,15 @@ const toCss = (v: unknown, type: string | undefined, leaves: Map<string, Leaf>, 
   const val = deref(v);
   if (val === undefined || val === null) return null;
   if (typeof val === 'number') return String(val);
+  // DTCG 2025.10 value forms (#4360): the conforming tree writes a color as `{ colorSpace, components, hex, alpha? }` and a
+  // dimension or duration as `{ value, unit }`. Each becomes the CSS string the stock build writes: the hex, with the
+  // alpha as two more hex digits when it is below 1, and the number with its unit.
+  if (type === 'color' && typeof val === 'object' && typeof (val as any).hex === 'string') {
+    const { hex, alpha } = val as { hex: string; alpha?: number };
+    return typeof alpha === 'number' && alpha < 1 ? `${hex}${Math.round(alpha * 255).toString(16).padStart(2, '0')}` : hex;
+  }
+  if (typeof val === 'object' && !Array.isArray(val) && typeof (val as any).value === 'number' && typeof (val as any).unit === 'string')
+    return `${(val as any).value}${(val as any).unit}`;
   if (typeof val === 'string') return type === 'fontFamily' ? val.split(',').map((f) => (/\s/.test(f.trim()) ? `"${f.trim()}"` : f.trim())).join(', ') : val;
   if (Array.isArray(val) && type === 'fontFamily') return val.map((f) => `"${f}"`).join(', ');
   if (type === 'typography' && typeof val === 'object') {
