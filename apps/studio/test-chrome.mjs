@@ -818,7 +818,7 @@ const FIT_SEEN = () => {
 /** The places a slice has moved into the two panes (S2: Color › Palettes; S3: Brand; S4a: Color › Surfaces & fills;
  *  S5.2: Color › Interactive; S6.2: Type; S7: Shape; S9.2: Depth & motion; S10: Layout; S8.2: Components, the last tab).
  *  Every place, since the legacy frame went in H12 (#2289): a place not here fails by name. */
-const NEW_PAGES = ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'layout', 'components'];
+const NEW_PAGES = ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'motion', 'layout', 'components'];
 
 /** How each place is reached in the tab row: its tab's hook, then its sub-page's when it has one. */
 const PLACE_CLICKS = {
@@ -829,6 +829,8 @@ const PLACE_CLICKS = {
   type: ['[data-p3="tab-type"]'],
   shape: ['[data-p3="tab-shape"]'],
   depth: ['[data-p3="tab-depth"]'],
+  // #4571 (owner decision Q-ME3 A): Motion split from Depth & motion.
+  motion: ['[data-p3="tab-motion"]'],
   layout: ['[data-p3="tab-layout"]'],
   // #2909: Components is a rail area on both hosts (`goPlace` clicks its tile); this entry is never clicked.
   components: ['[data-p3="rail-components"]'],
@@ -837,7 +839,7 @@ const PLACE_CLICKS = {
 /** Each column's controls, by hook, on the opening page (Color › Palettes). Wide is 1280 and 640; narrow is
  *  380. Away from Color the sub-pages are not drawn (`expectFor`). (D8's Depth & motion switch went with S9.2.) */
 // #2909: Components left the tab row for the rail, on both hosts since Q2909.9 A.
-const TABS = ['[data-p3="tab-brand"]', '[data-p3="tab-color"]', '[data-p3="tab-type"]', '[data-p3="tab-shape"]', '[data-p3="tab-depth"]', '[data-p3="tab-layout"]'];
+const TABS = ['[data-p3="tab-brand"]', '[data-p3="tab-color"]', '[data-p3="tab-type"]', '[data-p3="tab-shape"]', '[data-p3="tab-depth"]', '[data-p3="tab-motion"]', '[data-p3="tab-layout"]'];
 const COLOR_SUBS = ['[data-p3="color-sub-palettes"]', '[data-p3="color-sub-fills"]', '[data-p3="color-sub-interactive"]'];
 /** The plugin's own top-bar controls (S1.4): the Agent chip (IA-3), the Figma menu, and Apply Theme. (The Pages menu
  *  went with the old Style guide page in H12, #2289, owner PG1 A; section 26 holds its absence on both hosts.) */
@@ -901,8 +903,10 @@ const SHAPE_LEVERS_CONTROLS = ['[data-p3="lever-info"]', '[data-p3="density-choi
   '[data-p3="radius-scale-slider"]', '[data-p3="shape-control-shape-link"]', '[data-p3="shape-advanced"]', '[data-p3="shape-continue"]'];
 /** Depth & motion in the two panes (S9.2), previewing Light: the softness slider, Elevation's Show advanced, the tempo
  *  chips, an easing picker button per role, the way on to Layout. The rest is section 23's. */
-const DEPTH_LEVERS_CONTROLS = ['[data-p3="lever-info"]', '[data-p3="shadow-softness"]', '[data-p3="depth-tint-advanced"]',
-  '[data-p3="tempo-snappy"]', '[data-p3="easing-pick"]', '[data-p3="depth-continue"]'];
+const DEPTH_LEVERS_CONTROLS = ['[data-p3="lever-info"]', '[data-p3="shadow-softness"]', '[data-p3="depth-tint-advanced"]', '[data-p3="depth-continue"]'];
+/** #4571: Motion's controls, split from Depth & motion: tempo, the easing pickers, and the presets' pickers and Exit. */
+const MOTION_LEVERS_CONTROLS = ['[data-p3="lever-info"]', '[data-p3="tempo-snappy"]', '[data-p3="easing-pick"]', '[data-p3="preset-pick"]',
+  '[data-p3="preset-exit-toggle"]', '[data-p3="motion-continue"]'];
 /** Components in the two panes (#2700): the levers pane is the list, so it renders a row's name (which focuses its family)
  *  and a family's fold on both hosts. The Button options moved to the preview pane with the Buttons family; the plugin's
  *  boxes and Build are section 26's and the focus sweep's. */
@@ -911,7 +915,7 @@ const COMPONENTS_LEVERS_CONTROLS = ['[data-p3="cp-name"]', '[data-p3="cp-fold"]'
   '[data-p3="control-shape-choice-rounded"]', '[data-p3="shared-density-link"]'];
 /** Each moved place's levers, by place. */
 const LEVERS_CONTROLS = { 'color-palettes': PALETTES_LEVERS_CONTROLS, brand: BRAND_LEVERS_CONTROLS, 'color-fills': FILLS_LEVERS_CONTROLS,
-  'color-interactive': INTERACTIVE_LEVERS_CONTROLS, type: TYPE_LEVERS_CONTROLS, shape: SHAPE_LEVERS_CONTROLS, depth: DEPTH_LEVERS_CONTROLS,
+  'color-interactive': INTERACTIVE_LEVERS_CONTROLS, type: TYPE_LEVERS_CONTROLS, shape: SHAPE_LEVERS_CONTROLS, depth: DEPTH_LEVERS_CONTROLS, motion: MOTION_LEVERS_CONTROLS,
   components: COMPONENTS_LEVERS_CONTROLS };
 /** The preview header: the mode choice and Inspect. The mode choice is the radios, or, where they do not all fit
  *  (640, or a brand with more modes, S3 review), the select of the same modes: either one represents it (an
@@ -994,8 +998,9 @@ const INSPECT_LEGACY = ['[data-p3="inspect-contrast-table"]', '[data-p3="inspect
   // S7: Shape's preview, the same way (section 24).
   '[data-p3="shape-style-guide"]',
 
-  // S9.2: Depth & motion's preview, the same way (section 23).
+  // S9.2: Depth & motion's preview, the same way (section 23); #4571 split it into Depth's and Motion's.
   '[data-p3="depth-style-guide"]',
+  '[data-p3="motion-style-guide"]',
   // S8.2: Components' preview, the same way (section 26). Its set list's radios and Build button are the preview's own
   // controls, on the brand's page, held there.
   '[data-p3="components-style-guide"]'];
@@ -2557,7 +2562,8 @@ const SEARCH_SAMPLE = [
   { key: 'buttonIcons', label: 'Button icons', place: 'components' },
   { key: 'density', label: 'Density', place: 'shape' },
   { key: 'primary', label: 'Primary brand color', place: 'color-palettes' },
-  { key: 'motionPersonality.tempo', label: 'Motion tempo', place: 'depth' },
+  { key: 'motionPersonality.tempo', label: 'Motion tempo', place: 'motion' },
+  { key: 'motionPersonality.presets', label: 'Motion presets', place: 'motion' },   // #4571
 ];
 /** The hook rule, written here (read by section 12 too) (the `leverHook` contract: dots to dashes, camel case to kebab case). */
 const kebabHook = (k) => `lever-${k.replace(/\./g, '-').replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
@@ -2578,7 +2584,7 @@ const SEARCH_STANDS_IN_HOOK = { interactivePalettes: 'column-add',
   'typography.titleFloor': 'lever-type-title', 'typography.captionFloor': 'lever-type-caption', 'typography.sizeFloor': 'lever-type-caption',
   'typography.weights': 'lever-type-display', 'typography.italics': 'lever-type-display', 'typography.italicDefault': 'lever-type-display' };
 /** Every place a lever can live, in the tab row's order (`PLACE_CLICKS`, typed above). */
-const SEARCH_PLACES = ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'layout', 'components'];
+const SEARCH_PLACES = ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'motion', 'layout', 'components'];
 if (runs('6b')) {
 const levers = manifest.levers.filter((l) => !l.deprecated);
 ok(levers.length >= 50 && SEARCH_SAMPLE.every((s) => levers.some((l) => l.key === s.key)), `#3093: the manifest lists the levers to sweep (${levers.length}) and every sampled key`);
@@ -2728,7 +2734,7 @@ if (runs('7')) console.log(`\nHomes (V1, V12) — one home per page, never moved
 const EXPECT_HOME = {
   brand: ['guide', 'Brand overview'], 'color-palettes': ['palettes', 'Palettes'], 'color-fills': ['surfaces', 'Surfaces & fills'],
   'color-interactive': ['interactive', 'Interactive'], type: ['type', 'Type'], shape: ['shape', 'Shape'],   // #3553 Q-UI9 A: the tab's own word
-  depth: ['depth', 'Depth & motion'], layout: ['layout', 'Layout'], components: ['comps', 'Components'],
+  depth: ['depth', 'Depth'], motion: ['motion', 'Motion'], layout: ['layout', 'Layout'], components: ['comps', 'Components'],   // #4571 Q-ME3 A
 };
 const previewView = (page) => page.evaluate(() => ({
   view: document.querySelector('[data-p3="preview-body"]')?.dataset.view ?? null,
@@ -2763,7 +2769,10 @@ if (runs('7')) for (const host of ['web', 'figma']) {
       ok(now === before, `V1 scroll: ${host} ${place} scrolled to ${at * 100}% and the preview stayed ${before} (now ${now})`);
     }
     const n = await page.evaluate((sc) => document.querySelectorAll(`${sc} :is(button, input, select, textarea, [tabindex="0"])`).length, scope);
-    if (moved) ok(n >= 10, `V1 focus: ${host} ${place} offers ${n} controls to focus in its levers (floor 10)`);
+    // #4571: Depth, split from Depth & motion (Q-ME3 A), holds the shadow alone: its softness slider, Elevation's Show
+    // advanced, an info button and Continue. Its floor is that count; every other page keeps 10.
+    const focusFloor = place === 'depth' ? 4 : 10;
+    if (moved) ok(n >= focusFloor, `V1 focus: ${host} ${place} offers ${n} controls to focus in its levers (floor ${focusFloor})`);
     const step = Math.max(1, Math.floor(n / 12));
     for (let i = 0; i < n; i += step) {
       await page.evaluate(([k, sc]) => document.querySelectorAll(`${sc} :is(button, input, select, textarea, [tabindex="0"])`)[k]?.focus(), [i, scope]);
@@ -9729,13 +9738,15 @@ for (const [host, theme] of [['web', 'light'], ['web', 'dark'], ['figma', 'light
 //     reduced motion → `D9: under reduced motion, a Motion edit plays nothing …`; a section drawn on the chrome card →
 //     `specimen ground: depth … is the chrome card`.
 // =============================================================================================
-if (runs('23')) console.log(`\nDepth & motion (S9.2)\n${'='.repeat(78)}`);
+if (runs('23')) console.log(`\nDepth and Motion (S9.2; split by #4571, Q-ME3 A)\n${'='.repeat(78)}`);
 /** The preview's two sections (V4), each a specimen root on the brand's page; and each lever section with the preview
  *  section it pairs with (Q23; Shadow tint is drawn inside Elevation, D8 A, so it pairs with Elevation too). */
-const EXPECT_DEPTH_SPECIMENS = ['Elevation', 'Motion'];
+const EXPECT_DEPTH_SPECIMENS = ['Elevation'];
+/** #4571 (Q-ME3 A): Motion, split from Depth & motion, its own preview. */
+const EXPECT_MOTION_SPECIMENS = ['Motion'];
 /** The APPROVED copy (owner, 2026-10-04), literal. */
 const DEPTH_COPY = {
-  intro: 'Shadow character, then motion tempo. One preview holds both.',
+  intro: 'Shadow character: how soft the shadows are, and their color.',   // #4571, DRAFT
   Elevation: 'How soft the shadows are. Dark modes get lighter shadows automatically.',
   Motion: 'How fast things move, and the curve each kind of motion follows.',
   tint: 'Shifts the shadow color off pure black, toward a hue.',
@@ -9746,11 +9757,17 @@ const DEPTH_COPY = {
   springs: 'Physics presets for platforms that animate with springs. Read-only.',
   blocks: 'Every millisecond value the durations use.',
   reduced: 'Reduced motion is on: playing once on request.',
-  next: 'Continue to Layout',
+  next: 'Continue to Motion',   // #4571, DRAFT
   slow: ['Off', '1/2', '1/4', '1/8'],
+  /** #4571: Motion's intro and Continue (DRAFT), and its Presets line (DRAFT). */
+  motionIntro: 'Motion tempo, the curve each role follows, and what each preset points at.',
+  motionNext: 'Continue to Layout',
+  Presets: 'The duration, easing and delay of each preset. One edit re-times every component motion that plays on it.',
 };
 /** Each lever, by hook, drawn once (represented, not counted); Shadow tint's only behind Elevation's Show advanced. */
-const DEPTH_LEVERS = ['lever-shadow-softness', 'lever-motion-personality-tempo', 'lever-motion-personality-easing-roles'];
+const DEPTH_LEVERS = ['lever-shadow-softness'];
+/** #4571: Motion's levers, each drawn once. */
+const MOTION_LEVERS = ['lever-motion-personality-tempo', 'lever-motion-personality-easing-roles', 'lever-motion-personality-presets'];
 const EASING_ROLES = ['default', 'enter', 'exit', 'emphasized'];
 const CURVES = ['linear', 'standard', 'decelerate', 'accelerate', 'expressive', 'calm'];
 const openDepth = async (page) => {
@@ -9758,6 +9775,12 @@ const openDepth = async (page) => {
   await hooks.need(page, '[data-p3="depth-levers"]');
   // The preview is drawn at every width; at 380 it sits on the hidden pane, so it is waited for attached.
   await hooks.need(page, '[data-p3="depth-style-guide"] .psec', { state: 'attached' });
+};
+/** #4571: Motion, split from Depth & motion (Q-ME3 A). */
+const openMotion = async (page) => {
+  await goPlace(page, 'motion');
+  await hooks.need(page, '[data-p3="motion-levers"]');
+  await hooks.need(page, '[data-p3="motion-style-guide"] .psec', { state: 'attached' });
 };
 /** Choose a mode in the preview header: its radio, or, where the modes do not all fit, the select of the same modes. */
 const chooseModeAny = async (page, mode) => {
@@ -9780,30 +9803,32 @@ const openTint = async (page) => {
 if (runs('23')) {
 const slide = (page, hk, v) => page.evaluate(([h, x]) => { const n = document.querySelector(`[data-p3="${h}"]`); n.value = String(x); n.dispatchEvent(new Event('input', { bubbles: true })); n.dispatchEvent(new Event('change', { bubbles: true })); }, [hk, v]);
 /** Every dot the traces draw, and the animation each runs now. */
-const dotAnims = (page) => page.evaluate(() => [...document.querySelectorAll('[data-p3="depth-style-guide"] [data-p3="transition-dot"]')].map((d) => d.style.animation || ''));
+const dotAnims = (page) => page.evaluate(() => [...document.querySelectorAll('[data-p3="motion-style-guide"] [data-p3="transition-dot"]')].map((d) => d.style.animation || ''));
 
 // Specimen grounds and Q24's gray containers: both hosts, both themes, every mode.
 for (const host of ['web', 'figma']) {
   for (const theme of ['light', 'dark']) {
     const { ctx, page } = await open({ host, theme, w: 1280, h: 900 });
     try {
-      await openDepth(page);
+      for (const [pg, open1, hookName, SPECS] of [['depth', openDepth, 'depth-style-guide', EXPECT_DEPTH_SPECIMENS], ['motion', openMotion, 'motion-style-guide', EXPECT_MOTION_SPECIMENS]]) {
+      await open1(page);
       for (const [mode] of EXPECT_MODES) {
         if (host === 'figma' && mode.startsWith('hc')) continue;
         await chooseMode(page, mode);
         const where = `${host} ${theme} 1280, previewing ${mode}`;
-        const g = await sectionGrounds(page, 'depth-style-guide');
+        const g = await sectionGrounds(page, hookName);
         const want = EMITTED[mode];
-        for (const name of EXPECT_DEPTH_SPECIMENS) {
+        for (const name of SPECS) {
           const r = g.roots.find((x) => x.name === name);
-          ok(!!r && r.root && r.ground === want, `specimen ground: depth ${where}: ${name} is a specimen root on background.primary ${want}${
+          ok(!!r && r.root && r.ground === want, `specimen ground: ${pg} ${where}: ${name} is a specimen root on background.primary ${want}${
             !r ? ' — not drawn' : !r.root ? ` — not a specimen root, on ${r.ground === g.card ? `the chrome card (${r.ground})` : r.ground}` : r.ground !== want ? ` — ${r.ground === g.card ? `is the chrome card (${r.ground})` : `is ${r.ground}`}` : ''}`);
         }
-        const unlisted = g.roots.filter((x) => !EXPECT_DEPTH_SPECIMENS.includes(x.name)).map((x) => x.name);
-        ok(unlisted.length === 0, `specimen ground: depth ${where}: every section ground drawn is a listed specimen${unlisted.length ? ` — unlisted ${unlisted.join(', ')}` : ''}`);
+        const unlisted = g.roots.filter((x) => !SPECS.includes(x.name)).map((x) => x.name);
+        ok(unlisted.length === 0, `specimen ground: ${pg} ${where}: every section ground drawn is a listed specimen${unlisted.length ? ` — unlisted ${unlisted.join(', ')}` : ''}`);
         const offGray = g.sections.filter((x) => x.bg !== LEVERS_GRAY).map((x) => `${x.name} on ${x.bg}`);
-        ok(g.sections.length === EXPECT_DEPTH_SPECIMENS.length && offGray.length === 0,
-          `Q24 section containers: depth ${where}: every section container is the levers panel's gray ${LEVERS_GRAY} (${g.sections.length} read)${offGray.length ? ` — ${offGray.join(', ')}` : ''}`);
+        ok(g.sections.length === SPECS.length && offGray.length === 0,
+          `Q24 section containers: ${pg} ${where}: every section container is the levers panel's gray ${LEVERS_GRAY} (${g.sections.length} read)${offGray.length ? ` — ${offGray.join(', ')}` : ''}`);
+      }
       }
     } catch (e) {
       ok(false, `S9.2 specimen grounds ${host} ${theme}: the case stopped at a step that threw — ${stopped(e)}`);
@@ -9812,44 +9837,80 @@ for (const host of ['web', 'figma']) {
 }
 
 // Represented, on both hosts: every lever once (Shadow tint only behind Elevation's Show advanced); the Q23 pairs; the
-// approved copy; the easing rows by plain name first, token under (QA-B2); one home, V4's one preview; the Slow motion
-// choice; Continue to Layout lands on the Layout tab; the owner's plain words (D16) everywhere on the page.
+// approved copy; the easing rows by plain name first, token under (QA-B2); one home each; the Slow motion choice;
+// Continue to Motion, then to Layout, each lands on its tab; the owner's plain words (D16) everywhere on both pages.
+// #4571 (Q-ME3 A) split the page: Depth holds Elevation, Motion holds Motion and Presets.
+/** D16: plain words. Never "ramp", "ladder", "band", "rung", "face", "muted" or "column" in a page's visible copy
+ *  (levers and preview, the toggletips included, token pills aside). */
+const PLAIN_WORDS = (page) => page.evaluate((src) => {
+  const re = new RegExp(src, 'i');
+  const out = [];
+  for (const root of [document.querySelector('[data-p3="levers-pane"]'), document.querySelector('[data-p3="preview-body"]')]) {
+    const c = root.cloneNode(true);
+    for (const t of c.querySelectorAll('[data-p3="token-pill"], .p3-fill-tok')) t.remove();
+    const w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (re.test(n.textContent)) out.push(n.textContent.trim().slice(0, 80));
+    for (const e of c.querySelectorAll('[aria-label], [title], [placeholder]')) for (const a of ['aria-label', 'title', 'placeholder']) { const v = e.getAttribute(a); if (v && re.test(v)) out.push(`${a} "${v.slice(0, 80)}"`); }
+  }
+  return out;
+}, /\b(ramps?|ladders?|bands?|rungs?|faces?|muted|columns?)\b/i.source);
+const READ_SPLIT_PAGE = (page, [levers, guide, next]) => page.evaluate(([lv, g, nx]) => {
+  const pane = document.querySelector('[data-p3="levers-pane"]');
+  const prev = document.querySelector(`[data-p3="${g}"]`);
+  const secs = [...pane.querySelectorAll('[data-p3="lever-section"]')].map((x) => [x.querySelector('.p3-lsec-title')?.textContent ?? null, x.querySelector('.p3-lsec-desc')?.textContent ?? null]);
+  const psecs = [...prev.querySelectorAll('.psec')].map((x) => [x.querySelector('.psec-t')?.textContent ?? null, x.querySelector('.psec-d')?.textContent ?? null]);
+  const tint = pane.querySelector('[data-p3="lever-shadow-tint"]');
+  return {
+    counts: lv.map((hk) => pane.querySelectorAll(`[data-p3="${hk}"]`).length), secs, psecs,
+    tintIn: tint?.closest('[data-p3="lever-section"]')?.querySelector('.p3-lsec-title')?.textContent ?? null, tintInFold: !!tint?.closest('.p3-advbody'),
+    tintDesc: tint?.textContent.includes('Shifts the shadow color off pure black, toward a hue.') ?? false,
+    intro: pane.querySelector('.p3-intro')?.textContent ?? null, next: document.querySelector(`[data-p3="${nx}"]`)?.textContent.trim() ?? null,
+    rows: [...pane.querySelectorAll('[data-p3="easing-row"]')].map((row) => ({ role: row.dataset.role, first: row.querySelector('.p3-fill-name')?.firstElementChild?.className ?? null,
+      label: row.querySelector('.p3-fill-label')?.textContent ?? null, tok: row.querySelector('.p3-fill-tok')?.textContent ?? null })),
+    title: document.querySelector('[data-p3="preview-title"]')?.textContent ?? null, view: document.querySelector('[data-p3="preview-body"]')?.dataset.view ?? null,
+    slow: [...(prev.querySelector('[data-p3="motion-slowmo"]')?.options ?? [])].map((o) => o.textContent),
+    notes: prev.textContent,
+  };
+}, [levers, guide, next]);
 for (const host of ['web', 'figma']) {
   const { ctx, page, errors } = await open({ host, theme: 'light', w: 1280, h: 900 });
   try {
+    // ── Depth ──
     await openDepth(page);
     const before = await page.evaluate(() => ({ tint: document.querySelectorAll('[data-p3="levers-pane"] [data-p3="lever-shadow-tint"]').length }));
     ok(before.tint === 0, `D8: ${host}: Shadow tint is behind Elevation's Show advanced until it is opened (${before.tint} drawn)`);
     await openTint(page);
-    const r = await page.evaluate((levers) => {
-      const pane = document.querySelector('[data-p3="levers-pane"]');
-      const prev = document.querySelector('[data-p3="depth-style-guide"]');
-      const secs = [...pane.querySelectorAll('[data-p3="lever-section"]')].map((s) => [s.querySelector('.p3-lsec-title')?.textContent ?? null, s.querySelector('.p3-lsec-desc')?.textContent ?? null]);
-      const psecs = [...prev.querySelectorAll('.psec')].map((s) => [s.querySelector('.psec-t')?.textContent ?? null, s.querySelector('.psec-d')?.textContent ?? null]);
-      const tint = pane.querySelector('[data-p3="lever-shadow-tint"]');
-      return {
-        counts: [...levers, 'lever-shadow-tint'].map((hk) => pane.querySelectorAll(`[data-p3="${hk}"]`).length), secs, psecs,
-        tintIn: tint?.closest('[data-p3="lever-section"]')?.querySelector('.p3-lsec-title')?.textContent ?? null, tintInFold: !!tint?.closest('.p3-advbody'),
-        tintDesc: tint?.textContent.includes('Shifts the shadow color off pure black, toward a hue.') ?? false,
-        intro: pane.querySelector('.p3-intro')?.textContent ?? null, next: document.querySelector('[data-p3="depth-continue"]')?.textContent.trim() ?? null,
-        rows: [...pane.querySelectorAll('[data-p3="easing-row"]')].map((row) => ({ role: row.dataset.role, first: row.querySelector('.p3-fill-name')?.firstElementChild?.className ?? null,
-          label: row.querySelector('.p3-fill-label')?.textContent ?? null, tok: row.querySelector('.p3-fill-tok')?.textContent ?? null })),
-        title: document.querySelector('[data-p3="preview-title"]')?.textContent ?? null, view: document.querySelector('[data-p3="preview-body"]')?.dataset.view ?? null,
-        slow: [...(prev.querySelector('[data-p3="motion-slowmo"]')?.options ?? [])].map((o) => o.textContent),
-        notes: prev.textContent,
-      };
-    }, DEPTH_LEVERS);
-    ok(r.counts.every((n) => n === 1), `${host}: every Depth & motion lever draws its hook once (${[...DEPTH_LEVERS, 'lever-shadow-tint'].map((h, i) => `${h} ${r.counts[i]}`).join(', ')})`);
+    const r = await READ_SPLIT_PAGE(page, [[...DEPTH_LEVERS, 'lever-shadow-tint', ...MOTION_LEVERS], 'depth-style-guide', 'depth-continue']);
+    const dl = [...DEPTH_LEVERS, 'lever-shadow-tint', ...MOTION_LEVERS];
+    ok(r.counts.slice(0, 2).every((n) => n === 1) && r.counts.slice(2).every((n) => n === 0),
+      `#4571 ${host}: every Depth lever draws its hook once, and no Motion lever is on Depth (${dl.map((h, i) => `${h} ${r.counts[i]}`).join(', ')})`);
     ok(r.tintIn === 'Elevation' && r.tintInFold && r.tintDesc, `D8 A: ${host}: Shadow tint sits inside Elevation, behind its own Show advanced, with its approved line (in ${r.tintIn}, fold ${r.tintInFold}, line ${r.tintDesc})`);
-    const wantSecs = [['Elevation', DEPTH_COPY.Elevation], ['Motion', DEPTH_COPY.Motion]];
-    ok(JSON.stringify(r.secs) === JSON.stringify(wantSecs) && JSON.stringify(r.psecs) === JSON.stringify(wantSecs),
-      `Q23: ${host}: the lever sections and the preview sections are Elevation then Motion, one heading and description each — levers ${JSON.stringify(r.secs)}, preview ${JSON.stringify(r.psecs)}`);
-    ok(r.intro === DEPTH_COPY.intro && r.next === DEPTH_COPY.next, `${host}: the approved intro and Continue read "${r.intro}" and "${r.next}"`);
-    ok(JSON.stringify(r.rows.map((x) => x.role)) === JSON.stringify(EASING_ROLES) && r.rows.every((x) => x.first === 'p3-fill-label' && x.label === `Easing for ${x.role}` && x.tok === `motion.easing-role.${x.role}`),
-      `D10, QA-B2: ${host}: an easing row per role, "Easing for ‹role›" first, its motion.easing-role token under it — ${JSON.stringify(r.rows)}`);
-    ok(r.title === 'Depth & motion' && r.view === 'depth', `V4: ${host}: one preview holds both, under the page's one home (title "${r.title}", view ${r.view})`);
-    ok(JSON.stringify(r.slow) === JSON.stringify(DEPTH_COPY.slow), `D9: ${host}: Slow motion offers ${DEPTH_COPY.slow.join(', ')} (offers ${r.slow.join(', ')})`);
-    for (const k of ['note', 'durations', 'spin', 'springs', 'blocks']) ok(r.notes.includes(DEPTH_COPY[k]), `D7: ${host}: the preview says the approved "${DEPTH_COPY[k]}"`);
+    const wantDepth = [['Elevation', DEPTH_COPY.Elevation]];
+    ok(JSON.stringify(r.secs) === JSON.stringify(wantDepth) && JSON.stringify(r.psecs) === JSON.stringify(wantDepth),
+      `Q23: ${host}: Depth's lever section and preview section are Elevation, one heading and description — levers ${JSON.stringify(r.secs)}, preview ${JSON.stringify(r.psecs)}`);
+    ok(r.intro === DEPTH_COPY.intro && r.next === DEPTH_COPY.next, `${host}: Depth's intro and Continue read "${r.intro}" and "${r.next}"`);
+    ok(r.title === 'Depth' && r.view === 'depth', `V4: ${host}: Depth's preview sits under its one home (title "${r.title}", view ${r.view})`);
+    ok(r.notes.includes(DEPTH_COPY.note), `D7: ${host}: Depth's preview says the approved "${DEPTH_COPY.note}"`);
+    const dw = await PLAIN_WORDS(page);
+    ok(dw.length === 0, `D16 plain words: ${host}: no "ramp", "ladder", "band", "rung", "face", "muted" or "column" on Depth${dw.length ? ` — found ${dw.slice(0, 4).map((x) => `"${x}"`).join(', ')}` : ''}`);
+    await hooks.click(page.locator('[data-p3="depth-continue"]'));
+    await page.waitForFunction(() => document.querySelector('[data-p3="frame"]')?.dataset.place === 'motion', null, { timeout: 5000 }).catch(() => {});
+    const at = await page.evaluate(() => document.querySelector('[data-p3="frame"]')?.dataset.place ?? null);
+    ok(at === 'motion', `#4571 ${host}: Continue to Motion opens the Motion tab (on ${at})`);
+    // ── Motion ──
+    await openMotion(page);
+    const m = await READ_SPLIT_PAGE(page, [[...MOTION_LEVERS, ...DEPTH_LEVERS], 'motion-style-guide', 'motion-continue']);
+    const ml = [...MOTION_LEVERS, ...DEPTH_LEVERS];
+    ok(m.counts.slice(0, MOTION_LEVERS.length).every((n) => n === 1) && m.counts.slice(MOTION_LEVERS.length).every((n) => n === 0),
+      `#4571 ${host}: every Motion lever draws its hook once, and no Depth lever is on Motion (${ml.map((h, i) => `${h} ${m.counts[i]}`).join(', ')})`);
+    ok(JSON.stringify(m.secs) === JSON.stringify([['Motion', DEPTH_COPY.Motion], ['Presets', DEPTH_COPY.Presets]]) && JSON.stringify(m.psecs) === JSON.stringify([['Motion', DEPTH_COPY.Motion]]),
+      `Q23, #4571: ${host}: Motion's lever sections are Motion then Presets, and its preview section is Motion, one heading and description each — levers ${JSON.stringify(m.secs)}, preview ${JSON.stringify(m.psecs)}`);
+    ok(m.intro === DEPTH_COPY.motionIntro && m.next === DEPTH_COPY.motionNext, `#4571 ${host}: Motion's intro and Continue read "${m.intro}" and "${m.next}"`);
+    ok(JSON.stringify(m.rows.map((x) => x.role)) === JSON.stringify(EASING_ROLES) && m.rows.every((x) => x.first === 'p3-fill-label' && x.label === `Easing for ${x.role}` && x.tok === `motion.easing-role.${x.role}`),
+      `D10, QA-B2: ${host}: an easing row per role, "Easing for ‹role›" first, its motion.easing-role token under it — ${JSON.stringify(m.rows)}`);
+    ok(m.title === 'Motion' && m.view === 'motion', `V4, #4571: ${host}: Motion's preview sits under its one home (title "${m.title}", view ${m.view})`);
+    ok(JSON.stringify(m.slow) === JSON.stringify(DEPTH_COPY.slow), `D9: ${host}: Slow motion offers ${DEPTH_COPY.slow.join(', ')} (offers ${m.slow.join(', ')})`);
+    for (const k of ['durations', 'spin', 'springs', 'blocks']) ok(m.notes.includes(DEPTH_COPY[k]), `D7: ${host}: the preview says the approved "${DEPTH_COPY[k]}"`);
     // The six curves in the picker (D10), each drawn.
     await hooks.click(page.locator('[data-p3="easing-pick"][data-role="exit"]'));
     await hooks.need(page, '[data-p3="value-picker"]');
@@ -9860,27 +9921,13 @@ for (const host of ['web', 'figma']) {
     ok(pk.hint === DEPTH_COPY.hint && JSON.stringify(pk.curves.map((x) => x.c)) === JSON.stringify(CURVES) && pk.curves.every((x) => x.drawn),
       `D10: ${host}: the easing picker lists the six curves, each drawn, under "${DEPTH_COPY.hint}" — ${JSON.stringify(pk)}`);
     await page.keyboard.press('Escape');
-    // D16: plain words. Never "ramp", "ladder", "band", "rung", "face", "muted" or "column" in the page's visible copy
-    // (levers and preview, the toggletips included, token pills aside); "Blur:offset dial" may stay where it is.
-    const PLAIN = /\b(ramps?|ladders?|bands?|rungs?|faces?|muted|columns?)\b/i;
-    const words = await page.evaluate((src) => {
-      const re = new RegExp(src, 'i');
-      const out = [];
-      for (const root of [document.querySelector('[data-p3="levers-pane"]'), document.querySelector('[data-p3="preview-body"]')]) {
-        const c = root.cloneNode(true);
-        for (const t of c.querySelectorAll('[data-p3="token-pill"], .p3-fill-tok')) t.remove();
-        const w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
-        for (let n = w.nextNode(); n; n = w.nextNode()) if (re.test(n.textContent)) out.push(n.textContent.trim().slice(0, 80));
-        for (const e of c.querySelectorAll('[aria-label], [title], [placeholder]')) for (const a of ['aria-label', 'title', 'placeholder']) { const v = e.getAttribute(a); if (v && re.test(v)) out.push(`${a} "${v.slice(0, 80)}"`); }
-      }
-      return out;
-    }, PLAIN.source);
-    ok(words.length === 0, `D16 plain words: ${host}: no "ramp", "ladder", "band", "rung", "face", "muted" or "column" on Depth & motion${words.length ? ` — found ${words.slice(0, 4).map((x) => `"${x}"`).join(', ')}` : ''}`);
-    await hooks.click(page.locator('[data-p3="depth-continue"]'));
+    const mw = await PLAIN_WORDS(page);
+    ok(mw.length === 0, `D16 plain words: ${host}: no "ramp", "ladder", "band", "rung", "face", "muted" or "column" on Motion${mw.length ? ` — found ${mw.slice(0, 4).map((x) => `"${x}"`).join(', ')}` : ''}`);
+    await hooks.click(page.locator('[data-p3="motion-continue"]'));
     await page.waitForFunction(() => document.querySelector('[data-p3="frame"]')?.dataset.place === 'layout', null, { timeout: 5000 }).catch(() => {});
     const place = await page.evaluate(() => document.querySelector('[data-p3="frame"]')?.dataset.place ?? null);
     ok(place === 'layout', `${host}: Continue to Layout opens the Layout tab (on ${place})`);
-    ok(errors.length === 0, `${host} Depth & motion: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+    ok(errors.length === 0, `${host} Depth and Motion: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
   } catch (e) {
     ok(false, `S9.2 represented ${host}: the case stopped at a step that threw — ${stopped(e)}`);
   } finally { await ctx.close(); }
@@ -9925,6 +9972,8 @@ for (const host of ['web', 'figma']) {
     const b4 = await persisted(page);
     ok(b4?.modeLevers?.dark?.shadow === undefined && JSON.stringify(b4?.shadow) === JSON.stringify(b3?.shadow),
       `Q22: previewing Dark, Return to Auto clears the tint amount and leaves the brand value (dark ${JSON.stringify(b4?.modeLevers?.dark ?? null)})`);
+    // #4571: tempo is on Motion now; the previewed mode carries across the tabs.
+    await openMotion(page);
     await hooks.click(page.locator('[data-p3="tempo-relaxed"]'));
     await page.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('prism3:brandInput')).input.modeLevers?.dark?.tempo === 'relaxed'; } catch { return false; } }, null, { timeout: 5000 }).catch(() => {});
     const b5 = await persisted(page);
@@ -9940,8 +9989,7 @@ for (const host of ['web', 'figma']) {
     await page.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('prism3:brandInput')).input.customModes?.some((c) => c.name === 'custom-2'); } catch { return false; } }, null, { timeout: 5000 }).catch(() => {});
     const b6 = await persisted(page);
     ok(b6?.modeLevers?.['custom-2']?.tempo === 'relaxed', `#1946 O1 B: custom-2, created from Dark, holds a copy of Dark's tempo (custom-2 ${JSON.stringify(b6?.modeLevers?.['custom-2'] ?? null)})`);
-    await openDepth(page);
-    await openTint(page);
+    await openMotion(page);
     await chooseModeAny(page, 'custom-2');
     const t0 = await autoOf('tempo');
     ok(t0.auto === null && t0.reset, `#1946 O1 B: previewing custom-2, its copied tempo is its own setting, with Return to Auto (${JSON.stringify(t0)})`);
@@ -9950,36 +9998,41 @@ for (const host of ['web', 'figma']) {
     const t = await autoOf('tempo');
     const lightTempo = { snappy: 'Snappy', standard: 'Standard', relaxed: 'Relaxed' }[b5?.motionPersonality?.tempo ?? 'standard'];
     ok(t.auto === `Auto · follows Light (${lightTempo})`, `Q22: previewing custom-2 (created from Dark) on Auto, Auto names Light's value, not its source's override — says ${JSON.stringify(t.auto)}, want "Auto · follows Light (${lightTempo})" (Dark is relaxed)`);
-    // Q59: a derived mode draws the preview and disables every control.
+    // Q59: a derived mode draws the preview and disables every control, on each of the two pages (#4571).
     await chooseModeAny(page, 'hc-light');
-    const d = await page.evaluate(() => {
+    const held = (guide) => page.evaluate((g) => {
       const pane = document.querySelector('[data-p3="levers-pane"]');
-      const ctl = [...pane.querySelectorAll('.p3-lsec :is(button, input, select)')].filter((n) => !n.classList.contains('p3-info') && n.dataset.p3 !== 'depth-tint-advanced');
+      const ctl = [...pane.querySelectorAll('.p3-lsec :is(button, input, select)')].filter((n) => !n.classList.contains('p3-info') && n.dataset.p3 !== 'depth-tint-advanced' && n.dataset.p3 !== 'preset-exit-toggle');
       return { n: ctl.length, enabled: ctl.filter((n) => !n.matches(':disabled')).map((n) => n.dataset.p3), line: !!document.querySelector('[data-p3="levers-derived-note"]'),
-        preview: document.querySelectorAll('[data-p3="depth-style-guide"] .psec').length };
-    });
-    ok(d.n >= 10 && d.enabled.length === 0 && d.line && d.preview === 2,
-      `Q59: previewing HC light, every control on Depth & motion is disabled under the derived line, and the preview is drawn — ${d.n} controls, enabled ${JSON.stringify(d.enabled)}, line ${d.line}, ${d.preview} preview sections`);
-    ok(errors.length === 0, `Q22/Q59 Depth & motion: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+        preview: document.querySelectorAll(`[data-p3="${g}"] .psec`).length };
+    }, guide);
+    const dm = await held('motion-style-guide');
+    ok(dm.n >= 10 && dm.enabled.length === 0 && dm.line && dm.preview === 1,
+      `Q59: previewing HC light, every control on Motion is disabled under the derived line, and the preview is drawn — ${dm.n} controls, enabled ${JSON.stringify(dm.enabled)}, line ${dm.line}, ${dm.preview} preview sections`);
+    await openDepth(page);
+    await openTint(page);
+    const d = await held('depth-style-guide');
+    ok(d.n >= 3 && d.enabled.length === 0 && d.line && d.preview === 1,
+      `Q59: previewing HC light, every control on Depth is disabled under the derived line, and the preview is drawn — ${d.n} controls, enabled ${JSON.stringify(d.enabled)}, line ${d.line}, ${d.preview} preview sections`);
+    ok(errors.length === 0, `Q22/Q59 Depth and Motion: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
   } catch (e) {
     ok(false, `S9.2 Q22/Q59: the case stopped at a step that threw — ${stopped(e)}`);
   } finally { await ctx.close(); }
 }
 
-// D9: when the traces play. Nothing plays at mount or after an Elevation edit; a Motion edit plays them once, at real
+// D9: when the traces play. Nothing plays at mount; a Motion edit plays them once, at real
 // speed (Off); Slow motion divides the playback and writes nothing to the brand (#574). Under reduced motion a Motion
 // edit plays nothing, the section says so, and Play plays them once on request. Web.
 for (const reduced of [false, true]) {
   const { ctx, page, errors } = await open({ host: 'web', theme: 'light', w: 1280, h: 900 });
   try {
     if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' });
-    await openDepth(page);
+    // #4571: the traces moved to Motion's preview with the split (an Elevation edit, on Depth, no longer shares a
+    // preview with them, so the arm that held it plays nothing went with the shared page).
+    await openMotion(page);
     const tag = reduced ? 'under reduced motion' : 'without reduced motion';
     const mount = await dotAnims(page);
     ok(mount.length === 12 && mount.every((a) => !a), `D9: ${tag}, the twelve preset traces (#2857; pop and press joined in phase 2) are at rest when the page opens (${JSON.stringify(mount)})`);
-    await slide(page, 'shadow-softness', 0.4);
-    const elev = await dotAnims(page);
-    ok(elev.every((a) => !a), `D9: ${tag}, an Elevation edit plays nothing (${JSON.stringify(elev)})`);
     const line = await page.evaluate(() => document.querySelector('[data-p3="motion-reduced"]')?.textContent ?? null);
     ok(reduced ? line === DEPTH_COPY.reduced : line === null, `D9: ${tag}, the reduced-motion line is ${reduced ? `"${DEPTH_COPY.reduced}"` : 'not drawn'} (${JSON.stringify(line)})`);
     await hooks.click(page.locator('[data-p3="tempo-relaxed"]'));
@@ -10012,12 +10065,16 @@ for (const host of ['web', 'figma']) {
       try {
         await openDepth(page);
         await openTint(page);
+        const where = `${host} ${theme} ${w} / depth (tint open)`;
+        check(await measure(page, where, host, w), where, columnOf(host, w), PLACE_FLOOR);
+        if (SHOTS) await page.screenshot({ path: join(SHOTS, `s92-${host}-${theme}-${w}-depth.png`) });
+        // #4571: Motion, an easing picker open.
+        await openMotion(page);
         await hooks.click(page.locator('[data-p3="easing-pick"][data-role="default"]'));
         await hooks.need(page, '[data-p3="value-picker"]');
-        const where = `${host} ${theme} ${w} / depth (tint and a picker open)`;
-        const m = await measure(page, where, host, w);
-        check(m, where, columnOf(host, w), PLACE_FLOOR);
-        if (SHOTS) await page.screenshot({ path: join(SHOTS, `s92-${host}-${theme}-${w}-depth.png`) });
+        const wm = `${host} ${theme} ${w} / motion (a picker open)`;
+        check(await measure(page, wm, host, w), wm, columnOf(host, w), PLACE_FLOOR);
+        if (SHOTS) await page.screenshot({ path: join(SHOTS, `s92-${host}-${theme}-${w}-motion.png`) });
       } catch (e) {
         ok(false, `S9.2 chrome ${host} ${theme} ${w}: the case stopped at a step that threw — ${stopped(e)}`);
       } finally { await ctx.close(); }
@@ -10025,6 +10082,142 @@ for (const host of ['web', 'figma']) {
   }
 }
 } // 23
+
+// =============================================================================================
+// 4571. The motion editor's presets (#4571 PR 2, owner decisions Q-ME1 A, Q-ME3 A): Motion › Presets
+//
+//     One row per preset, in the engine's order, each with a duration, easing and delay picker showing its token and
+//     the value it resolves to; an Exit disclosure under the five arriving presets; "follows ‹role›" or "fixed"; a
+//     reset once a slot is set; an advisory, never a block, where a motion rule objects. Brand-wide: previewing Dark,
+//     every preset picker is disabled under one line.
+//
+//     Independence (docs/34): the preset order, the arriving set, the target counts, the groups and the expected
+//     writes are literals typed here from the engine's decisions (Q-MP2 A, Q-PT3 A, Q-PT4 A, Q-PT7 A, Q-MS3 A); every
+//     write is read back from the PERSISTED brand (`prism3:brandInput`), never from the page.
+//
+//     Mutations this fails by name: the exit half written at the preset's own path → `#4571 an exit pick writes
+//     motionPersonality.presets.surface.exit.duration`; the spring clear dropped from the write → `#4571 a spring easing
+//     clears the duration …`; the Dark rows left editable → `#4571 previewing Dark, every preset picker is disabled …`.
+// =============================================================================================
+if (runs('4571')) console.log(`\nMotion › Presets (#4571)\n${'='.repeat(78)}`);
+/** The presets, in the engine's order (Q-MP2 A, with pop and press from Q-PT4 A and Q-PT7 A), and the five that arrive. */
+const PRESETS_4571 = ['state', 'fade', 'crossfade', 'move', 'reveal', 'draw', 'surface', 'expand', 'step', 'settle', 'pop', 'press'];
+const ARRIVING_4571 = ['fade', 'reveal', 'surface', 'settle', 'pop'];
+const presetPick = (preset, half, slot) => `[data-p3="preset-pick"][data-preset="${preset}"][data-half="${half}"][data-slot="${slot}"]`;
+/** The values the open picker lists: each value's label (its path) and the group it sits under. */
+const pickerValues = (page) => page.evaluate(() => {
+  const p = document.querySelector('[data-p3="value-picker"]');
+  return [...(p?.querySelectorAll('[data-p3="value-picker-value"]') ?? [])].map((b) => ({ path: b.querySelector('[data-path]')?.dataset.path ?? null, text: b.textContent }));
+});
+/** Choose the value whose sample carries `path` ('' for no delay). */
+const pickPath = async (page, path) => {
+  await hooks.click(page.locator('[data-p3="value-picker"] [data-p3="value-picker-value"]').filter({ has: page.locator(`[data-path="${path}"]`) }).first());
+};
+const waitPersisted = (page, fn, arg) => page.waitForFunction(([src, a]) => { try { return new Function('b', 'a', `return (${src})(b, a)`)(JSON.parse(localStorage.getItem('prism3:brandInput')).input, a); } catch { return false; } },
+  [fn.toString(), arg], { timeout: 5000 }).catch(() => {});
+if (runs('4571')) for (const host of ['web', 'figma']) {
+  const { ctx, page, errors } = await open({ host, theme: 'light', w: 1280, h: 900 });
+  const where = `#4571 ${host}`;
+  try {
+    await openMotion(page);
+    const b0 = await persisted(page);
+    const rows = await page.evaluate(() => [...document.querySelectorAll('[data-p3="preset-row"]')].map((r) => ({
+      preset: r.dataset.preset, slots: [...r.querySelectorAll(':scope > .p3-preset-slots [data-p3="preset-pick"]')].map((b) => b.dataset.slot),
+      exit: !!r.querySelector('[data-p3="preset-exit-toggle"]'), source: r.querySelector('[data-p3="preset-source"]')?.textContent ?? null,
+      reset: !!r.querySelector('[data-p3="preset-reset"]'), advisory: r.querySelectorAll('[data-p3="preset-advisory"]').length,
+      shown: [...r.querySelectorAll(':scope > .p3-preset-slots [data-p3="preset-pick"]')].map((b) => b.textContent.trim()) })));
+    ok(JSON.stringify(rows.map((r) => r.preset)) === JSON.stringify(PRESETS_4571), `${where}: one row per preset, in the engine's order (${rows.map((r) => r.preset).join(', ')})`);
+    ok(rows.every((r) => JSON.stringify(r.slots) === '["duration","easing","delay"]'), `${where}: every row has a duration, an easing and a delay picker`);
+    ok(JSON.stringify(rows.filter((r) => r.exit).map((r) => r.preset)) === JSON.stringify(ARRIVING_4571), `${where}: the five arriving presets, and only they, have an Exit disclosure (${rows.filter((r) => r.exit).map((r) => r.preset).join(', ')})`);
+    const surf = rows.find((r) => r.preset === 'surface');
+    ok(surf?.source === 'follows enter' && surf.shown[0] === 'duration.moderate · 300ms' && surf.shown[2] === 'None',
+      `${where}: surface follows enter, and its duration shows its token and the ms it resolves to (${JSON.stringify(surf)})`);
+    ok(rows.every((r) => !r.reset && r.advisory === 0), `${where}: an untouched brand draws no reset and no advisory`);
+    // The pickers list everything the engine accepts (Q-ME1 A): 4 roles, 6 curves and 4 springs; the nine steps; no
+    // delay and the four delay steps.
+    await hooks.click(page.locator(presetPick('surface', 'own', 'easing')));
+    await hooks.need(page, '[data-p3="value-picker"]');
+    const ez = await pickerValues(page);
+    ok(ez.length === 14 && ez.slice(0, 4).every((v) => v.path.startsWith('easing-role.')) && ez.slice(4, 10).every((v) => v.path.startsWith('easing.')) && ez.slice(10).every((v) => v.path.startsWith('spring.')),
+      `${where}: the easing picker lists 4 roles, then 6 curves, then 4 springs (${ez.map((v) => v.path).join(', ')})`);
+    await page.keyboard.press('Escape');
+    await hooks.click(page.locator(presetPick('surface', 'own', 'duration')));
+    await hooks.need(page, '[data-p3="value-picker"]');
+    const du = await pickerValues(page);
+    ok(du.length === 9 && du.every((v) => v.path.startsWith('duration.')), `${where}: the duration picker lists the nine steps (${du.map((v) => v.path).join(', ')})`);
+    // A pick writes the slot's path.
+    await pickPath(page, 'duration.slow');
+    await waitPersisted(page, (b) => b.motionPersonality?.presets?.surface?.duration === 'duration.slow');
+    const b1 = await persisted(page);
+    ok(b1?.motionPersonality?.presets?.surface?.duration === 'duration.slow', `#4571 ${host}: a duration pick writes motionPersonality.presets.surface.duration (${JSON.stringify(b1?.motionPersonality?.presets ?? null)})`);
+    await page.keyboard.press('Escape');
+    // The exit half: its disclosure, the line that it follows the entrance, then a pick at its own path.
+    await hooks.click(page.locator('[data-p3="preset-exit-toggle"][data-preset="surface"]'));
+    await hooks.need(page, presetPick('surface', 'exit', 'duration'));
+    const exitShown = await page.locator(presetPick('surface', 'exit', 'duration')).textContent();
+    ok(/^duration\.moderate · /.test(exitShown.trim()), `${where}: the exit follows the lengthened entrance, one step shorter (${exitShown.trim()})`);
+    await hooks.click(page.locator(presetPick('surface', 'exit', 'duration')));
+    await hooks.need(page, '[data-p3="value-picker"]');
+    await pickPath(page, 'duration.slow');
+    await waitPersisted(page, (b) => b.motionPersonality?.presets?.surface?.exit?.duration === 'duration.slow');
+    const b2 = await persisted(page);
+    ok(b2?.motionPersonality?.presets?.surface?.exit?.duration === 'duration.slow' && b2?.motionPersonality?.presets?.surface?.duration === 'duration.slow',
+      `#4571 an exit pick writes motionPersonality.presets.surface.exit.duration (${JSON.stringify(b2?.motionPersonality?.presets?.surface ?? null)})`);
+    await page.keyboard.press('Escape');
+    // Q-ME1 A: an exit as long as its entrance is advised, not refused.
+    const adv = await page.evaluate(() => [...document.querySelectorAll('[data-p3="preset-row"][data-preset="surface"] [data-p3="preset-advisory"]')].map((n) => n.textContent));
+    ok(adv.length === 1 && /as long as its entrance/.test(adv[0]), `#4571 Q-ME1 A ${host}: an exit as long as its entrance is advised and kept (${JSON.stringify(adv)})`);
+    // The spring rule: a spring easing clears the duration, and the duration picker then offers only its settle time.
+    await hooks.click(page.locator(presetPick('surface', 'own', 'easing')));
+    await hooks.need(page, '[data-p3="value-picker"]');
+    await pickPath(page, 'spring.gentle');
+    await waitPersisted(page, (b) => b.motionPersonality?.presets?.surface?.easing === 'spring.gentle');
+    const b3 = await persisted(page);
+    ok(b3?.motionPersonality?.presets?.surface?.easing === 'spring.gentle' && b3?.motionPersonality?.presets?.surface?.duration === undefined,
+      `#4571 a spring easing clears the duration, so the engine plays the spring's settle time (${JSON.stringify(b3?.motionPersonality?.presets?.surface ?? null)})`);
+    await page.keyboard.press('Escape');
+    const tag = await page.locator('[data-p3="preset-row"][data-preset="surface"] [data-p3="preset-source"]').textContent();
+    ok(tag === 'fixed', `${where}: surface pointed at a spring is "fixed", not following a role (${tag})`);
+    await hooks.click(page.locator(presetPick('surface', 'own', 'duration')));
+    await hooks.need(page, '[data-p3="value-picker"]');
+    const sd = await pickerValues(page);
+    ok(sd.length === 1 && sd[0].path === 'spring-duration.gentle', `${where}: with a spring easing, the duration picker offers only its settle time (${sd.map((v) => v.path).join(', ')})`);
+    await page.keyboard.press('Escape');
+    // Reset puts the preset back, and the brand is the one loaded.
+    await hooks.click(page.locator('[data-p3="preset-reset"][data-preset="surface"]'));
+    await waitPersisted(page, (b) => b.motionPersonality?.presets?.surface === undefined);
+    const b4 = await persisted(page);
+    ok(JSON.stringify(b4) === JSON.stringify(b0), `#4571 ${host}: Reset returns surface to its default, and the brand to the one loaded`);
+    // Brand-wide: previewing Dark, every preset picker is disabled under one line, and nothing writes.
+    await chooseMode(page, 'dark');
+    await hooks.need(page, '[data-p3="presets-brand-wide"]');
+    const dk = await page.evaluate(() => ({ n: document.querySelectorAll('[data-p3="preset-pick"]').length, enabled: document.querySelectorAll('[data-p3="preset-pick"]:not(:disabled)').length,
+      line: document.querySelector('[data-p3="presets-brand-wide"]')?.textContent ?? null }));
+    ok(dk.n === 36 && dk.enabled === 0 && dk.line === 'Presets are brand-wide. Preview Light to edit them.',
+      `#4571 previewing Dark, every preset picker is disabled under one line (${JSON.stringify(dk)})`);
+    ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+  } catch (e) {
+    ok(false, `${where}: the case stopped at a step that threw — ${stopped(e)}`);
+  } finally { await ctx.close(); }
+}
+// The chrome probe on Motion with a preset picker open: both hosts, both themes, every width.
+if (runs('4571')) for (const host of ['web', 'figma']) {
+  for (const theme of ['light', 'dark']) {
+    for (const { w, h } of WIDTHS) {
+      const { ctx, page } = await open({ host, theme, w, h });
+      try {
+        await openMotion(page);
+        await hooks.click(page.locator(presetPick('fade', 'own', 'easing')));
+        await hooks.need(page, '[data-p3="value-picker"]');
+        const where = `${host} ${theme} ${w} / motion (a preset picker open)`;
+        check(await measure(page, where, host, w), where, columnOf(host, w), PLACE_FLOOR);
+        if (SHOTS) await page.screenshot({ path: join(SHOTS, `s4571-${host}-${theme}-${w}-presets.png`) });
+      } catch (e) {
+        ok(false, `#4571 chrome ${host} ${theme} ${w}: the case stopped at a step that threw — ${stopped(e)}`);
+      } finally { await ctx.close(); }
+    }
+  }
+}
 
 // =============================================================================================
 // 25. S10: Layout — moved to the two panes. Specimens on the page color, its levers represented with no Show
@@ -10463,7 +10656,7 @@ const SHAPE_COPY = {
   blocks: 'Fixed sizes every brand shares: border widths, icon sizes and the 4px grid.',
   usedByNone: 'No component uses this yet.',
   padding: 'Padding is set per component.', paddingLink: 'Set it in Components',
-  next: 'Continue to Depth & motion',
+  next: 'Continue to Depth',   // #4571 (Q-ME3 A), DRAFT
 };
 /** The Button definition's three sizes and the control heights they bind (D6). Literal. */
 const BUTTON_HEIGHTS = [['sm', 'Small'], ['md', 'Medium'], ['lg', 'Large']];
@@ -10836,7 +11029,7 @@ for (const host of ['web', 'figma']) {
     await page.waitForFunction(() => document.querySelector('[data-p3="frame"]')?.dataset.place === 'depth', null, { timeout: 5000 }).catch(() => {});
     // S9.2 moved Depth & motion into the two panes: the tab is its own page now, and no legacy page shows.
     const c = await page.evaluate(() => ({ place: document.querySelector('[data-p3="frame"]')?.dataset.place, levers: !!document.querySelector('[data-p3="depth-levers"]') }));
-    ok(c.place === 'depth' && c.levers, `${host}: "Continue to Depth & motion" opens the Depth & motion tab's levers (${JSON.stringify(c)})`);
+    ok(c.place === 'depth' && c.levers, `${host}: "Continue to Depth" opens the Depth tab's levers (${JSON.stringify(c)})`);
     await goPlace(page, 'shape');
     await hooks.click(page.locator('[data-p3="shape-see-components"]'));
     await page.waitForFunction(() => !!document.querySelector('[data-p3="components-levers"]'), null, { timeout: 5000 }).catch(() => {});
@@ -13449,7 +13642,7 @@ for (const host of ['web', 'figma']) {
       const bad = [], dashed = [];
       // #2366: the held segmented choices, each by its hook, against the .p3-mode mapping (checked: outline; others: text).
       const choices = [], badChoices = [];
-      for (const place of ['color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'layout', 'components']) {
+      for (const place of ['color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'motion', 'layout', 'components']) {
         await goPlace(page, place);
         if (place === 'type') await openTypeAdvanced(page).catch(() => {});
         const n = await page.evaluate(() => {
@@ -13492,7 +13685,7 @@ for (const host of ['web', 'figma']) {
       const missing = NAMED_CHOICES.filter((p) => !choices.some((h) => (h ?? '').startsWith(p)));
       console.log(`  ${where}: ${choices.length} held segmented choices read`);
       ok(choices.length >= DERIVED_CHOICE_FLOOR && missing.length === 0,
-        `#2366 ${where}: HC light holds ${choices.length} segmented choices across the places (floor ${DERIVED_CHOICE_FLOOR}), Type's scale, Shape's density and Depth & motion's tempo among them${missing.length ? ` — not read: ${missing.join(', ')}` : ''}`);
+        `#2366 ${where}: HC light holds ${choices.length} segmented choices across the places (floor ${DERIVED_CHOICE_FLOOR}), Type's scale, Shape's density and Motion's tempo among them${missing.length ? ` — not read: ${missing.join(', ')}` : ''}`);
       ok(badChoices.length === 0,
         `#2366 ${where}: every held segmented choice draws the .p3-mode mapping: checked, Prism3's disabled outline; the others, its text skin (${choices.length} read)${badChoices.length ? ` — ${badChoices.slice(0, 4).join(' | ')}` : ''}`);
       ok(!!fixed && dashed.length === 0, `${where}: no disabled chrome control, and not the fixed Light row (mode-on-light, read ${!!fixed}), draws a dashed edge (${controls} read)${dashed.length ? ` — ${dashed.slice(0, 4).join(' | ')}` : ''}`);
@@ -13999,9 +14192,14 @@ const EXPECT_HEADINGS = {
     L2: ['Radius softness', 'Control shape', 'Base radius'],
   },
   depth: {
-    L1: ['Elevation', 'Motion'],
-    L2: ['Shadow softness', 'Shadow tint', 'Motion tempo', 'Easing per motion role'],
+    L1: ['Elevation'],
+    L2: ['Shadow softness', 'Shadow tint'],
     L3: ['Tint hue', 'Tint amount'],
+  },
+  // #4571 (Q-ME3 A): split from Depth & motion, with the presets' lever.
+  motion: {
+    L1: ['Motion', 'Presets'],
+    L2: ['Motion tempo', 'Easing per motion role', 'Motion presets'],
   },
   layout: {
     L1: ['Breakpoints', 'Grid', 'Containers'],
@@ -15961,7 +16159,7 @@ const RO_DERIVED = [['hc-light', 'HC light'], ['hc-dark', 'HC dark'], ['wirefram
 const RO_EDITABLE = ['light', 'dark'];
 // #2700: Components left this list. Its levers pane is the list of sets and the action bar, which edit no brand setting;
 // the Button options it shapes sit in the preview pane and hold themselves (held in section 26's Q59 arm).
-const RO_PLACES = ['color-fills', 'color-interactive', 'type', 'depth', 'shape', 'layout'];
+const RO_PLACES = ['color-fills', 'color-interactive', 'type', 'depth', 'motion', 'shape', 'layout'];
 const RO_LINE = (name) => `${name} is auto-derived and can't be edited here. Switch the preview to Light or Dark to edit.`;
 /** RX1 A's exceptions, by hook: help, the Show advanced folds, the Jump to links, the "way to" links, Continue. */
 const RO_EXCEPTIONS = [
@@ -15974,7 +16172,7 @@ const RO_EXCEPTIONS = [
   'shape-control-shape-link',
   // #3093: the panel over the scrim's read-only row on Surfaces & fills only opens Dialog surface's home.
   'raised-surface-link',
-  'fills-continue', 'interactive-continue', 'type-continue', 'depth-continue', 'shape-continue', 'layout-continue',
+  'fills-continue', 'interactive-continue', 'type-continue', 'depth-continue', 'motion-continue', 'shape-continue', 'layout-continue',
 ];
 /** The studio's boxed note (RX2 A), by its classes. */
 const RO_NOTE_CLASSES = ['p3-sg-note', 'p3-sg-warn'];
@@ -16442,7 +16640,7 @@ if (runs('36')) {
 const PM_FROM = ['dark', 'hc-light', 'hc-dark'];
 // #3129 R4: Components shows no mode control, so it is not a place the control is live on (section 3129 holds its absence).
 // Q3129.14 B pins it to Light by this same mechanism, with no control or line to read; section 3129 holds that pin.
-const PM_LIVE_PLACES = ['brand', 'color-fills', 'color-interactive', 'type', 'depth', 'shape', 'layout'];
+const PM_LIVE_PLACES = ['brand', 'color-fills', 'color-interactive', 'type', 'depth', 'motion', 'shape', 'layout'];
 const PM_LINE = 'Palettes always show Light. Ramps are the same in every mode.';
 const PM_LABEL = 'Light';
 /** The mode control as drawn, and every element whose own text is the line. Runs in the page. */
@@ -16593,7 +16791,7 @@ for (const host of ['web', 'figma']) {
 // asserted here: the level rule is "no skip", and section 30 holds the levers' visual levels.
 if (runs('37')) {
 const PAGE_H1 = { brand: 'Brand', 'color-palettes': 'Palettes', 'color-fills': 'Surfaces & fills', 'color-interactive': 'Interactive',
-  type: 'Type', shape: 'Shape', depth: 'Depth & motion', layout: 'Layout', components: 'Components' };
+  type: 'Type', shape: 'Shape', depth: 'Depth', motion: 'Motion', layout: 'Layout', components: 'Components' };
 /** #2909: the plugin's Build style guides page became the Documentation area's Style guides tab, under the area's h1. */
 const SG_H1 = 'Docs';   // #3553 Q-UI9 A: the rail's word, "Documentation" does not fit its tile
 /** At least this many headings per outline (Shape, Depth & motion and Components at 380 on their Settings pane, the
@@ -16683,12 +16881,12 @@ for (const host of ['web', 'figma']) {
 // Mutations, each in a `wip:` commit, each failing here by name (the PR records the lines): (a) the tab row's selection
 // left out; (b) the sub-row's selection left out; (c) two tabs marked selected.
 if (runs('40')) {
-const CS_TABS = ['Brand', 'Color', 'Type', 'Shape', 'Depth & motion', 'Layout', 'Components'];
+const CS_TABS = ['Brand', 'Color', 'Type', 'Shape', 'Depth', 'Motion', 'Layout', 'Components'];   // #4571 Q-ME3 A
 const CS_SUBS = ['Palettes', 'Surfaces & fills', 'Interactive'];
 /** Each place: the domain the tab row must report, and the Color page the sub-row must report (null: no sub-row). */
 const CS_PLACES = {
   brand: ['Brand', null], 'color-palettes': ['Color', 'Palettes'], 'color-fills': ['Color', 'Surfaces & fills'],
-  'color-interactive': ['Color', 'Interactive'], type: ['Type', null], shape: ['Shape', null], depth: ['Depth & motion', null],
+  'color-interactive': ['Color', 'Interactive'], type: ['Type', null], shape: ['Shape', null], depth: ['Depth', null], motion: ['Motion', null],
   layout: ['Layout', null], components: ['Components', null],
 };
 /** At 640: the places read there (the select's width), each reached by a control drawn whole at that width. */
@@ -16905,7 +17103,7 @@ for (const host of ['web', 'figma']) {
 // page (9 read) — color-palettes scrollWidth 405 > clientWidth 268 | …`.
 if (runs('38')) {
 const SUB_TABS_1975 = [['color-palettes', 'color-sub-palettes'], ['color-fills', 'color-sub-fills'], ['color-interactive', 'color-sub-interactive']];
-const MOVED_1975 = ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'layout', 'components'];
+const MOVED_1975 = ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'motion', 'layout', 'components'];
 console.log(`\nThe two panes between the tiers (#1975) and the narrow plugin's error line (#2105)\n${'='.repeat(78)}`);
 for (const [host, w] of [['web', 800], ['web', 640], ['web', 380], ['figma', 640], ['figma', 380]]) {
   const where = `#1975 ${host} light ${w}`;
@@ -22312,8 +22510,8 @@ for (const host of ['figma', 'web']) for (const w of [1280, 380]) {
       await settle(page);
       const lever = await box('[data-p3="levers-pane"] .p3-select');
       const mtblHead = await box('.mtbl-tbl thead th');
-      step = 'Depth & motion';
-      await goPlace(page, 'depth');
+      step = 'Motion';
+      await goPlace(page, 'motion');
       await settle(page);
       const play = await box('[data-p3="motion-play"]'), slow = await box('[data-p3="motion-slowmo"]'), ctHead = await box('.ctable tr:first-child > th');
       step = 'Brand';
@@ -23396,7 +23594,7 @@ if (runs('3553-m1')) {
     const { ctx, page, errors } = await open({ host, theme, w, h });
     let step = 'open';
     try {
-      for (const place of ['brand', 'color-fills', 'type', 'shape', 'depth', 'layout', 'components']) {
+      for (const place of ['brand', 'color-fills', 'type', 'shape', 'depth', 'motion', 'layout', 'components']) {
         step = place;
         await goPlace(page, place);
         await hooks.click(page.locator('[data-p3="search-open"]'));
@@ -23598,9 +23796,9 @@ if (runs('3553-mb')) {
   for (const [w, h] of [[1280, 900], [380, 420]]) for (const theme of ['light', 'dark']) {
     const where = `3553-mb figma ${theme} ${w}`;
     const { ctx, page, errors } = await open({ host: 'figma', theme, w, h });
-    let step = 'depth';
+    let step = 'motion';
     try {
-      await goPlace(page, 'depth');
+      await goPlace(page, 'motion');
       await hooks.need(page, '[data-p3="easing-rows"]');
       await settle(page);
       const e = await page.evaluate(() => [...document.querySelectorAll('[data-p3="easing-rows"] [data-p3="easing-row"] .p3-fill-tok')].map((t) => ({
@@ -23821,7 +24019,7 @@ if (runs('3553-q1')) {
       await hooks.click(page.locator('[data-p3="custom-mode-remove"]'));
       await hooks.click(page.locator('[data-p3="custom-mode-confirm-go"]'));
       await page.waitForFunction(() => !document.querySelector('[data-p3="mode-option"][data-mode="brand-b"], [data-p3="mode-select"] option[value="brand-b"]'), null, { timeout: 5000 });
-      for (const place of ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'layout']) {
+      for (const place of ['brand', 'color-palettes', 'color-fills', 'color-interactive', 'type', 'shape', 'depth', 'motion', 'layout']) {
         step = place;
         await goPlace(page, place);
         await settleModes(page);
