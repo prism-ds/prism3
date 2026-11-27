@@ -20,7 +20,11 @@
  * with the decision and the ratio accepted, and reported, not failed, while they hold that ratio; the engine question
  * is #4279. `KNOWN_PENDING` holds the regression fixture's pair the owner accepted on #4289 (owner decision 2026-11-19
  * A: a legacy fixture, not engine-derived). It is held the same way: to the ratio accepted, printed on every run, STALE
- * once it passes.
+ * once it passes. Each floor is held from both sides (#4587; owner decision 2026-11-27): a pair below it fails as BELOW
+ * ACCEPTED, and the floor itself is compared with the same entry's floor in the base's copy of this file, read from git
+ * at the merge base (`baseFloors`, the ladder `shadcn-vars.ts` uses). A floor edited down fails as FLOOR LOWERED; a new
+ * entry more than 0.01 below its measured ratio fails as SLACK; a pair that improved under an unchanged floor passes
+ * with a WARNING line to record the new ratio as its floor. No base, or a base copy it cannot read, CANNOT RUN.
  *
  * MUTATION: map `muted-foreground` → `color.text.tertiary` and this fails `prism3 light: muted-foreground on muted 3.17 <
  * 4.5` by name. Emit prism3's dark `primary` as `oklch(0.25 0.1 266.7)` and it fails `prism3 dark: primary on background
@@ -30,8 +34,12 @@
  * background … < 3` by name, for every form in every brand; drop one form from `SHADCN_RING_FORMS` and it fails that
  * form's rows alone (`prism3 light: ring/50 slider on background 2.81 < 3`). Drop the rule's invalid exclusion and it
  * fails `<brand> <mode>: an invalid field lost its destructive/20 ring with the rule …` by name. Raise a `FADED` entry's floor in `KNOWN` above its measured ratio (or lower the ratio
- * under it) and it fails `… destructive/90 on card … — BELOW ACCEPTED …` by name.
+ * under it) and it fails `… destructive/90 on card … — BELOW ACCEPTED …` by name. Lower a floor in a commit
+ * (`prism3 light: destructive/90 on card` 3.97 → 3.00) and it fails `prism3 light: destructive/90 on card 3.97 < 4.5 —
+ * FLOOR LOWERED KNOWN: floor 3, the base's floor 3.97 …` by name (#4587). Run it with no base ref (`GITHUB_BASE_REF`
+ * naming a branch that does not exist) and it fails `no base ref — the floor-against-base arm CANNOT RUN …`.
  */
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -40,6 +48,7 @@ import { emitShadcn, handoffBrands } from './emit-shadcn.ts';
 import { SHADCN_COLOR_VARS } from './projections/shadcn.ts';
 import { floor2, openShadcnPage, wcagRatio, type RingProbe } from './shadcn-browser.ts';
 import { isEntry } from './entry-point';
+import { comparisonBase, mergeGroupBase } from './comparison-base.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(here, 'out');
@@ -197,16 +206,118 @@ export const KNOWN_PENDING: Readonly<Record<string, Accepted>> = {
  * How a pair under its floor is reported. `known` (a `KNOWN` entry) and `accepted` (a `KNOWN_PENDING` entry) print and
  * pass while the ratio holds its entry's floor; below that floor, or with no entry, the pair is `failing`. `listed` says
  * the key has an entry, which is what the STALE arms read.
+ *
+ * THE FLOOR AGAINST THE BASE (#4587; owner decision 2026-11-27). An entry's floor is the ratio the owner accepted, so an
+ * edit that lowers it widens what was accepted: 3.97 to 3.00 passed on every run, and the pair could then fall to 3.00
+ * with nothing failing. The measured ratio alone cannot tell that edit from a pair that improved under an unchanged
+ * floor, so the floor is compared with the SAME entry's floor in the base's copy of this file (`base`, read from git by
+ * `baseFloors`, a record this gate never writes):
+ *   · lower than the base's floor → `failing`, `FLOOR LOWERED KNOWN|PENDING`, whatever the measured ratio.
+ *   · no entry at the base (a new entry), and more than `SLACK_MAX` below the measured ratio floored to two places →
+ *     `failing`, `SLACK KNOWN|PENDING`: a new floor is written from the measurement, not under it.
+ *   · at or above the base's floor, and more than `SLACK_MAX` below the measured ratio → it passes with a `warning`: the
+ *     pair improved, and the reader should record the new ratio as the floor. Not a failure.
+ * The 0.01 allows the last digit of a floored ratio to move with the renderer. Compared in whole hundredths, so floating
+ * point cannot make 3.97 - 3.96 more than one step. `base` defaults to empty, where every entry is new: the strictest
+ * reading, never a pass for want of a base.
  */
+export const SLACK_MAX = 0.01;
+const cents = (n: number): number => Math.round(n * 100);
 export const judgeBelowFloor = (key: string, r: number, known: Readonly<Record<string, Accepted>> = KNOWN,
-  pending: Readonly<Record<string, Accepted>> = KNOWN_PENDING): { verdict: 'known' | 'accepted' | 'failing'; note: string; listed: boolean } => {
+  pending: Readonly<Record<string, Accepted>> = KNOWN_PENDING, base: Readonly<Record<string, number>> = {}):
+  { verdict: 'known' | 'accepted' | 'failing'; note: string; listed: boolean; warning?: string } => {
   const k = known[key], entry = k ?? pending[key];
   if (!entry) return { verdict: 'failing', note: '', listed: false };
   if (r < entry.floor) return { verdict: 'failing', note: ` — BELOW ACCEPTED ${entry.floor} (${entry.why})`, listed: true };
-  return { verdict: k ? 'known' : 'accepted', note: k ? '' : ` — ${entry.why}`, listed: true };
+  const table = k ? 'KNOWN' : 'PENDING', was = base[key], held = floor2(r);
+  if (was !== undefined && cents(entry.floor) < cents(was)) {
+    return { verdict: 'failing', note: ` — FLOOR LOWERED ${table}: floor ${entry.floor}, the base's floor ${was}, so the pair could fall to ${entry.floor} unseen. Put ${was} back`, listed: true };
+  }
+  const slack = cents(held) - cents(entry.floor) > cents(SLACK_MAX);
+  if (slack && was === undefined) {
+    return { verdict: 'failing', note: ` — SLACK ${table}: a new entry, measured ${held}, floor ${entry.floor}, so the pair could fall to ${entry.floor} unseen. Write ${held} as its floor`, listed: true };
+  }
+  const warning = slack ? `WARNING ${key}: measured ${held}, floor ${entry.floor} — the pair improved; record ${held} as its floor in ${k ? 'KNOWN' : 'KNOWN_PENDING'}` : undefined;
+  return { verdict: k ? 'known' : 'accepted', note: k ? '' : ` — ${entry.why}`, listed: true, ...(warning ? { warning } : {}) };
 };
 
-type Ext = { min?: number; modes?: Record<string, { min?: number }> };
+/**
+ * The floors a copy of this file declares, by key, from both tables: the record `judgeBelowFloor` compares against.
+ * Read from source text, because the base's copy is a blob in git, not a module. Null when either table's literal is
+ * not found, which the gate reports as CANNOT RUN rather than as a base with no entries. The gate also parses its own
+ * source and requires the result to equal `KNOWN` and `KNOWN_PENDING` as evaluated, so a parser that drifted from the
+ * file's shape fails here by name instead of reading every entry as new or as unchanged.
+ */
+export const parseFloors = (src: string): Record<string, number> | null => {
+  const out: Record<string, number> = {};
+  for (const name of ['KNOWN', 'KNOWN_PENDING']) {
+    const m = new RegExp(`export const ${name}: Readonly<Record<string, Accepted>> = \\{\\n([\\s\\S]*?)\\n\\};`).exec(src);
+    if (!m) return null;
+    for (const line of m[1]!.split('\n')) {
+      const e = /^\s*'([^']+)':\s*\{\s*floor:\s*([0-9.]+)\s*,/.exec(line);
+      if (e) out[e[1]!] = Number(e[2]);
+    }
+  }
+  return out;
+};
+
+const REPO = resolve(here, '..', '..');
+const SELF = 'packages/engine/lint-shadcn-contrast.ts';
+const git = (...args: string[]): { ok: boolean; out: string; err: string } => {
+  const r = spawnSync('git', ['-C', REPO, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return { ok: r.status === 0, out: r.stdout ?? '', err: (r.stderr ?? '').trim() };
+};
+const cannotRun = (lines: string[]): never => {
+  console.error(`✗ shadcn contrast: ${lines[0]}`);
+  for (const l of lines.slice(1)) console.error(l);
+  process.exit(1);
+};
+/**
+ * The base's floors, by the ladder `shadcn-vars.ts` and `lint-contract-version.ts` use: in a merge-group run the
+ * group's parent (`MERGE_GROUP_BASE_SHA`, `mergeGroupBase`, #4106), authoritative, with no fallback when it is lost; on
+ * a pull request `origin/<GITHUB_BASE_REF>`, fetched again in CI because the checkout's copy is as old as the run's
+ * start; otherwise `origin/main`, then `main`. Then the merge base with it, or HEAD's first parent on the base branch
+ * itself (`comparisonBase`, #2556). The studio job checks out with `fetch-depth: 0`; under a shallow clone the merge
+ * base does not resolve and this CANNOT RUN. A base whose copy of this file is absent reads as no entries (every entry
+ * new, the strictest reading); a copy whose tables cannot be parsed CANNOT RUN. It never passes over no base.
+ */
+export const baseFloors = (): { floors: Record<string, number>; label: string } => {
+  const tried: string[] = [];
+  let ref: string | null = null;
+  const mg = mergeGroupBase(git);
+  const prRef = process.env.GITHUB_BASE_REF;
+  if (mg) {
+    tried.push(mg.tried);
+    ref = mg.ref;
+  } else if (prRef) {
+    const pr = `origin/${prRef}`;
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      const f = git('fetch', '--no-tags', '--quiet', 'origin', `+refs/heads/${prRef}:refs/remotes/${pr}`);
+      if (!f.ok) return cannotRun([`could not refresh ${pr} from origin — the floor-against-base arm CANNOT RUN against the current base (#4587).`, `    ${f.err || '(git printed nothing)'}`]);
+    }
+    const r = git('rev-parse', '--verify', '--quiet', `${pr}^{commit}`);
+    tried.push(`${pr} (GITHUB_BASE_REF, authoritative) — ${r.ok ? 'resolves' : 'does not resolve'}`);
+    if (r.ok) ref = pr;
+  } else {
+    for (const c of ['origin/main', 'main']) {
+      const r = git('rev-parse', '--verify', '--quiet', `${c}^{commit}`);
+      tried.push(`${c} — ${r.ok ? 'resolves' : 'does not resolve'}`);
+      if (r.ok) { ref = c; break; }
+    }
+  }
+  if (!ref) return cannotRun(['no base ref — the floor-against-base arm CANNOT RUN, which is not the same as no floor lowered (#4587).', `    tried: ${tried.join(' · ')}`, '  Locally, `git fetch origin main`.']);
+  const mb = git('merge-base', 'HEAD', ref);
+  if (!mb.ok || !mb.out.trim()) return cannotRun([`no merge base between HEAD and ${ref} — the floor-against-base arm CANNOT RUN (#4587).`, '  A shallow clone is the usual cause: `git fetch --unshallow`.']);
+  const { base, label } = comparisonBase(git, mb.out.trim(), cannotRun);
+  const where = `${base.slice(0, 8)} (${mg ? 'merge group' : ref}, ${label})`;
+  if (!git('cat-file', '-e', `${base}:${SELF}`).ok) return { floors: {}, label: `${where}: no copy of this gate there, so every entry is new` };
+  const shown = git('show', `${base}:${SELF}`);
+  if (!shown.ok) return cannotRun([`could not read ${SELF} at ${where} — the floor-against-base arm CANNOT RUN (#4587).`, `    ${shown.err || '(git printed nothing)'}`]);
+  const floors = parseFloors(shown.out);
+  if (!floors) return cannotRun([`the base's ${SELF} at ${where} declares no KNOWN or KNOWN_PENDING table this gate can read — the floor-against-base arm CANNOT RUN (#4587).`]);
+  return { floors, label: where };
+};
+
 /** The engine's own floor for `role` in `mode`, from the brand's full tree. */
 const engineMin = (tree: Record<string, unknown>, role: string, mode: 'light' | 'dark'): number => {
   let node: unknown = tree;
@@ -217,10 +328,18 @@ const engineMin = (tree: Record<string, unknown>, role: string, mode: 'light' | 
 };
 
 if (isEntry(import.meta.url)) {
+  // The parser against this file as evaluated: a parser that drifted from the tables' shape would read every base entry
+  // as missing (all new) or misread a floor, so it must reproduce KNOWN and KNOWN_PENDING exactly before it reads the base.
+  const own = parseFloors(readFileSync(fileURLToPath(import.meta.url), 'utf8'));
+  const want = Object.fromEntries([...Object.entries(KNOWN), ...Object.entries(KNOWN_PENDING)].map(([key, a]) => [key, a.floor]));
+  if (!own || JSON.stringify(Object.entries(own).sort()) !== JSON.stringify(Object.entries(want).sort()))
+    cannotRun(['SELF-CHECK: parseFloors does not read this file\'s own KNOWN and KNOWN_PENDING back exactly — the floor-against-base arm CANNOT RUN (#4587).',
+      `    parsed ${own ? Object.keys(own).length : 'nothing'}, evaluated ${Object.keys(want).length}`]);
+  const base = baseFloors();
   const tmp = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-shadcn-'));
   process.on('exit', () => rmSync(tmp, { recursive: true, force: true }));
   emitShadcn(tmp);
-  const failures: string[] = [], known: string[] = [], accepted: string[] = [];
+  const failures: string[] = [], known: string[] = [], accepted: string[] = [], warnings: string[] = [];
   const seenPending = new Set<string>(), seenKnown = new Set<string>();
   let measured = 0;
   const brands = handoffBrands();
@@ -266,8 +385,9 @@ if (isEntry(import.meta.url)) {
           if (r >= floor) return;
           const line = `${brand} ${mode}: ${ink} on ${ground} ${floor2(r)} < ${floor}`;
           const key = `${brand} ${mode}: ${ink} on ${ground}`;
-          const { verdict, note, listed } = judgeBelowFloor(key, r);
+          const { verdict, note, listed, warning } = judgeBelowFloor(key, r, KNOWN, KNOWN_PENDING, base.floors);
           if (listed) (KNOWN[key] ? seenKnown : seenPending).add(key);
+          if (warning) warnings.push(warning);
           (verdict === 'known' ? known : verdict === 'accepted' ? accepted : failures).push(line + note);
         });
       }
@@ -277,6 +397,8 @@ if (isEntry(import.meta.url)) {
   for (const k of Object.keys(KNOWN_PENDING)) if (!seenPending.has(k)) failures.push(`STALE PENDING ${k} — it passes now, or its brand is gone; take it out of KNOWN_PENDING`);
   for (const k of known) console.log(`  known  ${k}`);
   for (const p of accepted) console.log(`  accepted ${p}`);
+  for (const w of warnings) console.log(`  ${w}`);
+  console.log(`  floors held against the base at ${base.label}`);
   if (failures.length) {
     console.error(`✗ shadcn contrast: ${failures.length} failure(s)`);
     for (const f of failures) console.error(`    ${f}`);

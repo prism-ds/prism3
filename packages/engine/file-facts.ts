@@ -56,6 +56,26 @@
  * SCHEMA. `schema/file-facts.schema.json`, authored by hand; `format` equals its `$id`. The plugin suite validates
  * every fixture's report against it, so a field added here without the schema moving fails there.
  *
+ * SCOPE (0.2, #2853 Q5 A). A scan reads the pages its source holds, and the report names that set in `scope`. The
+ * whole file is `{ kind: 'file' }`. `scopePages` narrows it, the one place the rule lives, so the plugin, the capture
+ * script and the CLI scope alike:
+ *   · `selection` (owner decision Q1 A): the layers selected on the current page; with nothing selected, the current page.
+ *   · `ids`: an explicit list of page ids, or of layer ids (a frame or section anywhere). Not both in one list.
+ * A layer inside another named layer is covered by it, and only the outer one is a root. Ids are reported in file
+ * order, so the order of a selection does not move the bytes. An id the file does not hold refuses the scan by name
+ * (`ScopeError`): a scope that silently lost a frame would read as a smaller file. Variable and style definitions stay
+ * file-wide, since a library is. Everything outside the scope is unread by the usage walk; the scope search reads
+ * only ids and child lists to find the roots. LIMIT: the walk starts fresh at each root, so a root nested inside an
+ * icon, a button or an instance does not inherit that ancestor's role or its `inInstances` count. Scope to frames,
+ * sections or pages, which have no such ancestor.
+ *
+ * INVENTORY (0.2, the spike's §5.3 step 2). One row per visible FRAME, SECTION or COMPONENT_SET at the top of the
+ * scope: a page's own children, or the roots themselves, and a section's children in turn (a section groups frames).
+ * Each row reads the node's geometry, its topmost visible solid fill, its explicit variable modes, its layout mode
+ * and grid count, and a walk of its visible subtree: a structural fingerprint (FNV-1a over each layer's depth and
+ * type in order; names, text and colors excluded, so a light and a dark copy of one screen share it), counts, the
+ * font families, and the most-used solid fills. Evidence for mode pairing and concept clusters; it pairs nothing.
+ *
  * UNSTABLE: 0.x (owner decision D3685.1 C). The format id is `prism3-file-facts/0.<n>` until #2075 part 2's findings
  * are in. Under 0.x any field may be added, renamed or removed, and each such change raises `<n>`; nothing here is a
  * promise yet. A reader checks the exact id and refuses one it does not know. Leaving 0.x (`/1.0`) is the owner's
@@ -63,7 +83,17 @@
  */
 import { ENGINE_VERSION } from './version';
 
-export const FILE_FACTS_FORMAT = 'prism3-file-facts/0.1';
+export const FILE_FACTS_FORMAT = 'prism3-file-facts/0.2';
+/**
+ * The ids a reader of this engine accepts, oldest first. 0.2 only adds `scope` and `inventory` and narrows what
+ * `coverage.pages` counts to the pages in scope, so a 0.1 report reads as a whole-file scan with no inventory. Any
+ * other id is refused by name (`requireFactsFormat`), never read on trust.
+ */
+export const FACTS_FORMATS_READ = ['prism3-file-facts/0.1', FILE_FACTS_FORMAT] as const;
+export const requireFactsFormat = (format: unknown): void => {
+  if (!(FACTS_FORMATS_READ as readonly unknown[]).includes(format))
+    throw new Error(`file facts report format ${JSON.stringify(format)} is not one this engine reads (${FACTS_FORMATS_READ.join(', ')})`);
+};
 export const ROLE_RULE = 'name-and-type/1';
 
 /* ── the source: the slice of the plugin API the scan reads ─────────────────────────────────────────────────────────── */
@@ -103,6 +133,8 @@ export type FactsNode = {
   readonly itemSpacing?: unknown; readonly counterAxisSpacing?: unknown;
   readonly paddingTop?: unknown; readonly paddingRight?: unknown; readonly paddingBottom?: unknown; readonly paddingLeft?: unknown;
   readonly fontName?: unknown; readonly fontWeight?: unknown; readonly fontSize?: unknown; readonly lineHeight?: unknown;
+  readonly x?: unknown; readonly y?: unknown; readonly width?: unknown; readonly height?: unknown;
+  readonly explicitVariableModes?: unknown; readonly layoutGrids?: unknown;
 };
 export type FactsPage = { readonly id: string; readonly name: string; readonly children: readonly FactsNode[] };
 
@@ -119,6 +151,15 @@ export type FactsSource = {
   mainComponent(node: FactsNode): Promise<FactsComponent | null>;
   /** A mixed text layer's runs, when the host can give them (Figma's `getStyledTextSegments`). */
   textRuns?(node: FactsNode): readonly TextRun[] | null;
+  /** What `pages` holds, from `scopePages`. Absent: `pages` is the whole file. */
+  scope?: FactsScope;
+};
+/** The scan's scope, as the report states it. `ids` are the roots (pages or layers), in file order; empty for a file. */
+export type FactsScope = {
+  kind: 'file' | 'pages' | 'nodes';
+  from: 'whole-file' | 'selection' | 'current-page' | 'ids';
+  ids: string[];
+  pages: { id: string; name: string; index: number }[];
 };
 export type TextRun = {
   fontName?: unknown; fontWeight?: unknown; fontSize?: unknown; lineHeight?: unknown;
@@ -145,7 +186,9 @@ export type FileFactsReport = {
   format: typeof FILE_FACTS_FORMAT;
   engineVersion: string;
   roleRule: typeof ROLE_RULE;
+  scope: FactsScope;
   coverage: { pages: number; layers: number; hiddenLayers: number; unreadableLayers: number; textLayers: number; instances: number };
+  inventory: InventoryRow[];
   variables: {
     collections: { id: string; name: string; key: string | null; remote: boolean; modes: { modeId: string; name: string }[]; defaultMode: string; variables: number }[];
     variables: {
@@ -180,6 +223,19 @@ export type FileFactsReport = {
   bindingSummary: Record<'paints' | 'typography' | 'radii' | 'spacing', { variable: number; style: number; raw: number }>;
 };
 type StyleBase = { id: string; name: string; key: string | null; remote: boolean; description: string; layers: number };
+export type InventoryRow = {
+  page: string; pageIndex: number; id: string; type: string; name: string;
+  /** The section this row sits in, when it is a section's child; null at the top of the scope. */
+  section: string | null;
+  x: number | null; y: number | null; width: number | null; height: number | null;
+  background: string | null;
+  explicitModes: { collectionId: string; collection: string | null; modeId: string; mode: string | null }[];
+  layoutMode: string | null; layoutGrids: number;
+  fingerprint: string;
+  descendants: number; textLayers: number; instances: number; hiddenLayers: number; unreadableLayers: number;
+  families: string[];
+  fills: { color: string; layers: number }[];
+};
 type TypeRow = { value: string | number; binding: Binding } & Use;
 
 /* ── value helpers ──────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -480,6 +536,73 @@ export async function scanFileFacts(src: FactsSource): Promise<FileFactsReport> 
 
   for (const page of src.pages) for (const n of page.children) await walk(n, page.name, { icon: false, buttonParent: false, inInstance: false });
 
+  // ── inventory: the frame-like nodes at the top of the scope (header, INVENTORY) ──
+  const scope: FactsScope = src.scope ?? { kind: 'file', from: 'whole-file', ids: [], pages: src.pages.map((p, index) => ({ id: p.id, name: p.name, index })) };
+  const pageIndex = new Map(scope.pages.map((p) => [p.id, p.index]));
+  // Its own cache, so a collection reached only through a frame's explicit modes does not join `variables`.
+  const invColls = new Map<string, FactsCollection | null>();
+  const collOf = async (id: string): Promise<FactsCollection | null> => {
+    if (colls.has(id)) return colls.get(id) ?? null;
+    if (!invColls.has(id)) invColls.set(id, await src.collectionById(id).catch(() => null));
+    return invColls.get(id) ?? null;
+  };
+  const solids = (paints: unknown): string[] => (Array.isArray(paints) ? paints : [])
+    .filter((p): p is Record<string, unknown> => isObj(p) && p.visible !== false && p.type === 'SOLID' && isRgb(p.color))
+    .map((p) => colorHex(p.color as Rgb, num(p.opacity) ?? 1));
+  const inventory: InventoryRow[] = [];
+  const inventoryRow = async (node: FactsNode, page: FactsPage, index: number, section: string | null): Promise<void> => {
+    let type: string;
+    try { if (node.visible === false) return; type = node.type; } catch { return; }   // counted in `coverage` already
+    if (!FRAME_LIKE.has(type)) return;
+    let kids: readonly FactsNode[] = [];
+    try {
+      const sub = { descendants: 0, textLayers: 0, instances: 0, hiddenLayers: 0, unreadableLayers: 0 };
+      const families = new Set<string>();
+      const fills = new Map<string, number>();
+      let print = '';
+      const visit = (n: FactsNode, depth: number): void => {
+        let t: string;
+        let children: readonly FactsNode[];
+        try { if (n.visible === false) { sub.hiddenLayers++; return; } t = n.type; } catch { sub.unreadableLayers++; print += `${depth}:?;`; return; }
+        try {
+          const runs = t === 'TEXT' && src.textRuns && (isMixed(n.fontName) || isMixed(n.fills)) ? src.textRuns(n) : null;
+          const fams = runs ? runs.map((r) => r.fontName) : [n.fontName];
+          const paints = runs && isMixed(n.fills) ? runs.flatMap((r) => (Array.isArray(r.fills) ? r.fills : [])) : n.fills;
+          children = n.children ?? [];
+          print += `${depth}:${t};`;
+          if (depth > 0) sub.descendants++;
+          if (t === 'TEXT') {
+            sub.textLayers++;
+            for (const f of fams) { const fam = isObj(f) ? str(f.family) : null; if (fam) families.add(fam); }
+          }
+          if (t === 'INSTANCE') sub.instances++;
+          for (const c of new Set(solids(paints))) fills.set(c, (fills.get(c) ?? 0) + 1);
+        } catch { sub.unreadableLayers++; print += `${depth}:?;`; return; }
+        for (const k of children) visit(k, depth + 1);
+      };
+      visit(node, 0);
+      const explicitModes: InventoryRow['explicitModes'] = [];
+      const evm = node.explicitVariableModes;
+      if (isObj(evm)) for (const [collectionId, modeId] of Object.entries(evm)) {
+        const c = await collOf(collectionId);
+        explicitModes.push({ collectionId, collection: c?.name ?? null, modeId: String(modeId), mode: c?.modes.find((m) => m.modeId === modeId)?.name ?? null });
+      }
+      explicitModes.sort((a, b) => cmp(a.collection ?? '', b.collection ?? '') || cmp(a.collectionId, b.collectionId));
+      const bg = solids(node.fills);
+      inventory.push({
+        page: page.name, pageIndex: index, id: node.id, type, name: String(node.name ?? ''), section,
+        x: num(node.x), y: num(node.y), width: num(node.width), height: num(node.height),
+        background: bg.length ? bg[bg.length - 1] : null,           // the last paint is the topmost
+        explicitModes, layoutMode: str(node.layoutMode), layoutGrids: Array.isArray(node.layoutGrids) ? node.layoutGrids.length : 0,
+        fingerprint: fnv1a(print), ...sub, families: [...families].sort(cmp),
+        fills: [...fills.entries()].sort((a, b) => b[1] - a[1] || cmp(a[0], b[0])).slice(0, INVENTORY_FILLS).map(([color, layers]) => ({ color, layers })),
+      });
+      if (type === 'SECTION') kids = node.children ?? [];
+    } catch { return; }                                                   // an unreadable root: counted in `coverage`
+    for (const k of kids) await inventoryRow(k, page, index, node.id);
+  };
+  for (const [i, page] of src.pages.entries()) for (const n of page.children) await inventoryRow(n, page, pageIndex.get(page.id) ?? i, null);
+
   // ── variables: every collection and variable the file holds, plus the library ones a binding or alias reached ──
   const resolveValue = async (v: FactsVariable, modeId: string): Promise<Omit<ModeValue, 'mode' | 'modeId'>> => {
     const stored = v.valuesByMode[modeId];
@@ -586,7 +709,9 @@ export async function scanFileFacts(src: FactsSource): Promise<FileFactsReport> 
     format: FILE_FACTS_FORMAT,
     engineVersion: ENGINE_VERSION,
     roleRule: ROLE_RULE,
+    scope,
     coverage,
+    inventory,
     variables: { collections: collRows, variables: varRows },
     styles: styleOut,
     usage: { paints, typography, radii, spacing },
@@ -606,6 +731,69 @@ export async function scanFileFacts(src: FactsSource): Promise<FileFactsReport> 
 }
 
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const FRAME_LIKE = new Set(['FRAME', 'SECTION', 'COMPONENT_SET']);
+/** How many of a row's most-used solid fills the inventory lists. */
+const INVENTORY_FILLS = 5;
+/** FNV-1a over UTF-16 code units, as 8 hex digits: the inventory's structural fingerprint. */
+const fnv1a = (s: string): string => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+};
+
+/* ── the scope: which pages and layers a scan reads (header, SCOPE) ────────────────────────────────────────────────── */
+
+export type ScopeRequest =
+  | { from: 'whole-file' }
+  | { from: 'ids'; ids: readonly string[] }
+  /** The current page's id and the ids selected on it (owner decision Q1 A). */
+  | { from: 'selection'; page: string; ids: readonly string[] };
+export class ScopeError extends Error {}
+
+/**
+ * Narrow a file's pages to a scope. Pure over the page trees: it reads ids and child lists, nothing else, and returns
+ * the pages to scan (a page in scope as itself; a page holding named layers as a plain `{ id, name, children }` of
+ * those layers) with the `FactsScope` the report states. Throws `ScopeError`, by name, for an id the file does not
+ * hold, a list naming both pages and layers, an empty explicit list, or a current page that is not in the file.
+ */
+export const scopePages = (all: readonly FactsPage[], req: ScopeRequest): { pages: FactsPage[]; scope: FactsScope } => {
+  const ref = (p: FactsPage) => ({ id: p.id, name: p.name, index: all.indexOf(p) });
+  if (req.from === 'whole-file') return { pages: [...all], scope: { kind: 'file', from: 'whole-file', ids: [], pages: all.map(ref) } };
+  let search: readonly FactsPage[] = all;
+  if (req.from === 'selection') {
+    const current = all.find((p) => p.id === req.page);
+    if (!current) throw new ScopeError(`scope: the current page ${req.page} is not a page of this file`);
+    if (!req.ids.length) return { pages: [current], scope: { kind: 'pages', from: 'current-page', ids: [current.id], pages: [ref(current)] } };
+    search = [current];
+  } else if (!req.ids.length) throw new ScopeError('scope: an explicit scope names no ids');
+  const wanted = new Set(req.ids);
+  const pageHits = req.from === 'ids' ? all.filter((p) => wanted.has(p.id)) : [];
+  const found = new Set(pageHits.map((p) => p.id));
+  const roots = new Map<FactsPage, FactsNode[]>();
+  const childrenOf = (n: FactsNode): readonly FactsNode[] => { try { return n.children ?? []; } catch { return []; } };
+  const idOf = (n: FactsNode): string | null => { try { return n.id; } catch { return null; } };
+  /** Mark every wanted id under a root as covered by it. */
+  const cover = (n: FactsNode): void => { for (const k of childrenOf(n)) { const id = idOf(k); if (id && wanted.has(id)) found.add(id); cover(k); } };
+  const find = (n: FactsNode, page: FactsPage): void => {
+    const id = idOf(n);
+    if (id && wanted.has(id)) { found.add(id); roots.get(page)!.push(n); cover(n); return; }
+    for (const k of childrenOf(n)) find(k, page);
+  };
+  if (pageHits.length < wanted.size) for (const page of search) {
+    roots.set(page, []);
+    for (const n of page.children) find(n, page);
+  }
+  const missing = req.ids.filter((id) => !found.has(id));
+  if (missing.length) throw new ScopeError(`scope: no ${req.from === 'selection' ? 'layer on the current page' : 'page or layer'} with id ${[...new Set(missing)].join(', ')}`);
+  const layerPages = [...roots.entries()].filter(([, r]) => r.length);
+  if (pageHits.length && layerPages.length)
+    throw new ScopeError(`scope: name pages or layers, not both (pages ${pageHits.map((p) => p.id).join(', ')}; layers ${layerPages.flatMap(([, r]) => r.map((n) => n.id)).join(', ')})`);
+  if (pageHits.length) return { pages: pageHits, scope: { kind: 'pages', from: 'ids', ids: pageHits.map((p) => p.id), pages: pageHits.map(ref) } };
+  return {
+    pages: layerPages.map(([p, r]) => ({ id: p.id, name: p.name, children: r })),
+    scope: { kind: 'nodes', from: req.from, ids: layerPages.flatMap(([, r]) => r.map((n) => n.id)), pages: layerPages.map(([p]) => ref(p)) },
+  };
+};
 
 /* ── the snapshot: the same source as plain data, for a CLI ────────────────────────────────────────────────────────── */
 

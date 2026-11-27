@@ -264,6 +264,14 @@ export const checkCurveForRole = (role: string, curve: string, easing: Record<st
   if (role === 'enter' && half < 0.5) throw new Error(`${at}: the brand curve '${curve}' accelerates (it is ${Math.round(half * 100)}% of the way at half its time), and the enter role decelerates`);
   if (role === 'exit' && half > 0.5) throw new Error(`${at}: the brand curve '${curve}' decelerates (it is ${Math.round(half * 100)}% of the way at half its time), and the exit role accelerates`);
 };
+/** Every target each preset slot accepts, as the paths a brand writes (#4571): the lists `resolveHalf` checks a slot
+ *  against and names in its refusal, so the Studio editor's pickers and the engine's messages read one source. The
+ *  spring rule narrows a pair, not a list: `spring-duration.<spring>` goes only with `spring.<spring>`. */
+export const presetTargets = (easing: Record<string, unknown>, springs: Record<string, unknown>, roles: readonly string[]): { duration: string[]; easing: string[]; delay: string[] } => ({
+  duration: [...DURATION_STEPS.map((x) => `duration.${x}`), ...Object.keys(springs).map((n) => `spring-duration.${n}`)],
+  easing: [...roles.map((r) => `easing-role.${r}`), ...Object.keys(easing).map((c) => `easing.${c}`), ...Object.keys(springs).map((n) => `spring.${n}`)],
+  delay: Object.keys(MOTION_DELAYS).map((k) => `delay.${k}`),
+});
 /** One half's slots, resolved: the defaults, then the brand's re-points, each checked by name (Q-MS3 A), and the
  *  spring rule held: a half eased by a spring plays for that spring's settle time, so the two slots go together. */
 const resolveHalf = (at: string, d: { step: string; role: string }, g: Record<string, unknown>, easing: Record<string, Bezier>,
@@ -281,7 +289,7 @@ const resolveHalf = (at: string, d: { step: string; role: string }, g: Record<st
     if (kind === 'easing-role' && roles.includes(name)) ease = { role: name };
     else if (kind === 'easing' && name in easing) ease = { curve: name };
     else if (kind === 'spring' && name in springs) ease = { spring: name };
-    else throw new Error(`${at}.easing: unknown easing '${e}' (have: ${[...roles.map((r) => `easing-role.${r}`), ...Object.keys(easing).map((c) => `easing.${c}`), ...Object.keys(springs).map((n) => `spring.${n}`)].join(', ')})`);
+    else throw new Error(`${at}.easing: unknown easing '${e}' (have: ${presetTargets(easing, springs, roles).easing.join(', ')})`);
   }
   const du = path('duration');
   let duration: PresetDuration = { step: d.step };
@@ -289,7 +297,7 @@ const resolveHalf = (at: string, d: { step: string; role: string }, g: Record<st
     const [kind, name] = [du.slice(0, du.indexOf('.')), du.slice(du.indexOf('.') + 1)];
     if (kind === 'duration' && DURATION_STEPS.includes(name)) duration = { step: name };
     else if (kind === 'spring-duration' && name in springs) duration = { spring: name };
-    else throw new Error(`${at}.duration: unknown duration '${du}' (have: ${[...DURATION_STEPS.map((x) => `duration.${x}`), ...Object.keys(springs).map((n) => `spring-duration.${n}`)].join(', ')})`);
+    else throw new Error(`${at}.duration: unknown duration '${du}' (have: ${presetTargets(easing, springs, roles).duration.join(', ')})`);
   }
   // THE SPRING RULE: a spring has no duration of its own to scale; it lasts as long as it takes to settle.
   if ('spring' in ease) {
@@ -300,7 +308,7 @@ const resolveHalf = (at: string, d: { step: string; role: string }, g: Record<st
     throw new Error(`${at}.duration: 'spring-duration.${duration.spring}' is the settle time of the spring '${duration.spring}', and goes with easing 'spring.${duration.spring}'`);
   const de = path('delay');
   if (de !== undefined && !(de.startsWith('delay.') && de.slice(6) in MOTION_DELAYS))
-    throw new Error(`${at}.delay: unknown delay '${de}' (have: ${Object.keys(MOTION_DELAYS).map((k) => `delay.${k}`).join(', ')}; absent, the preset starts at once)`);
+    throw new Error(`${at}.delay: unknown delay '${de}' (have: ${presetTargets(easing, springs, roles).delay.join(', ')}; absent, the preset starts at once)`);
   // The reduced duration follows the duration slot (Q-MS6 A): a step's own reduced twin, or for a spring the short
   // fade it becomes under reduced motion (G3 B), `min(settle, 100ms)`.
   const reduced: PresetReduced = 'step' in duration ? { step: duration.step } : { ms: Math.min(springSettleMs(springs[duration.spring]!), REDUCED_CAP_MS) };

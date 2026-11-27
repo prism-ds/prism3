@@ -27,6 +27,8 @@ export type TransformKind = 'scale' | 'slide' | 'turn' | 'travel';
 /** What a track does under reduced motion (Q-PT11 A): `keep` plays on its preset's reduced duration, `off` jumps to its
  *  end, and `fade` swaps its movement for a fade of the element, on the reduced duration. */
 export type ReducedKind = 'fade' | 'keep' | 'off';
+/** Every reduced kind, in the order a picker lists them: what a brand's track override may set (#4571). */
+export const REDUCED_KINDS: readonly ReducedKind[] = ['fade', 'keep', 'off'];
 /** A distance: a token path (`distance.nudge`, `space.<step>`), the element's own size (`self`, a surface sliding in by
  *  its own height or width), or, in a brand override only, a number of px (Q-PT9 A). */
 export type TrackDistance = { token: string } | { self: true } | { px: number };
@@ -198,7 +200,7 @@ export const resolvePatterns = (overrides: Record<string, Record<string, MotionT
         next.scale = o.scale;
       }
       if (o.reduced !== undefined) {
-        if (!['fade', 'keep', 'off'].includes(o.reduced)) throw new Error(`${ta}.reduced: a reduced kind is fade, keep or off (got ${JSON.stringify(o.reduced)})`);
+        if (!REDUCED_KINDS.includes(o.reduced)) throw new Error(`${ta}.reduced: a reduced kind is fade, keep or off (got ${JSON.stringify(o.reduced)})`);
         next.reduced = o.reduced;
       }
       return next;

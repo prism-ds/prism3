@@ -78,12 +78,14 @@
  *             is held only as far as its labels are placed; the summary line counts the lists with two or more.
  *   SELF-CHECK  Each gap MARKER, CITE, FINGERPRINT and ORDER once had is planted in a small in-memory tree and run
  *             through the function the guides run through: a citation by line number, a marker gone from its file, one
- *             its file holds twice, an end marker with no match (#4455), a table's citation after a blank line whose
+ *             its file holds twice, an end marker with no match (#4455), a src comment in neither citation form (#4584), a table's citation after a blank line whose
  *             cited lines hold none of its quotes (#3457), a range-only citation whose block a PR changed after it was
  *             stamped (#3417), and a bold list whose cited lines hold every label in another order (#3519). Each must
  *             fail by name, and a CONTROL with the same shapes cited correctly must pass, so a gate that fails
  *             everything cannot satisfy them. The control's fingerprinted block has had lines inserted above it since
- *             it was stamped, so a marker that moved with unrelated lines would fail there. (#3456, a citation one
+ *             it was stamped, so a marker that moved with unrelated lines would fail there. A second clean fixture cites
+             a block whose end marker also closes a block above it, so an end searched from the top of the file, not
+             from the start marker, fails its fingerprint (#4584). (#3456, a citation one
  *             line past a file's end, retired with line numbers: a marker names lines the file has.)
  *   COUNT     "<n> component sets" in a guide equals `componentDefs.length`, read from the engine. At least one guide
  *             makes the claim, so the arm cannot pass by having nothing to check.
@@ -534,7 +536,8 @@ const blockAbove = (lines: readonly string[], k: number): string => {
   return block.join('\n');
 };
 
-type CiteStats = { cites: number; unanchored: number; fingerprinted: number; ordered: number };
+/** `found`: every `src` comment, resolved or not (SCOPE). `cites`: the ones that resolved to lines (the summary). */
+type CiteStats = { found: number; cites: number; unanchored: number; fingerprinted: number; ordered: number };
 type Fail = (arm: string, msg: string) => void;
 
 /** CITE and FINGERPRINT for the citations on one line of a guide. The guides and the SELF-CHECK fixtures run
@@ -545,7 +548,7 @@ const citeLine = (rel: string, lines: readonly string[], k: number, r: Reader, s
   let last = 0;
   let claim = '';
   for (const m of raw.matchAll(CITE)) {
-    stats.cites++;
+    stats.found++;
     const [whole, body] = m;
     const seg = raw.slice(last, m.index).replace(/<!--[\s\S]*?-->/g, ' ');
     last = (m.index ?? 0) + whole.length;
@@ -577,6 +580,8 @@ const citeLine = (rel: string, lines: readonly string[], k: number, r: Reader, s
     const { first, end } = where;
     const src = r.linesOf(path);
     if (end > src.length) { fail('CITE', `${at}: ${cite} ends past the file (${src.length} lines).`); continue; }
+    // #4584: counted here, once the citation has resolved, so "N citations resolve" cannot count one that failed.
+    stats.cites++;
     const anchors = anchorsOf(claim);
     const range = `${cite} (lines ${first}${end > first ? `-${end}` : ''})`;
     if (hash) {
@@ -629,9 +634,16 @@ const FIXTURE_FILES: Record<string, string> = {
   'fixture/status.ts': "const label = {\n  due: 'Due',\n  needed: 'Needed',\n  kept: 'Kept edits',\n};\nconst short = { due: 'Due' };\n",
   // A line a table cell cannot carry raw: its `|` would split the row, so the needle writes it |.
   'fixture/pipe.ts': "type Side = 'start' | 'end';\n",
+  // Two blocks that close the same way (#4584). The end needle `];` closes the first block too, above the cited one,
+  // so a search for it from the top of the file ends the cited block on its own first line (lines 4-4, not 4-6). The
+  // fingerprint is of lines 4-6: `printf '%s' $'const b = [\n  1,\n];' | sha256sum`.
+  'fixture/early.ts': "const a = [\n  0,\n];\nconst b = [\n  1,\n];\n",
 };
 const fixtureReader = readerOf({ tracked: (p) => p in FIXTURE_FILES, read: (p) => FIXTURE_FILES[p] });
-const FIXTURES: readonly { readonly name: string; readonly gap: string; readonly guide: readonly string[]; readonly want: RegExp | null }[] = [
+/** A clean fixture (`want: null`) must pass, and `holds` says what it must count: a citation the arms skipped would
+ *  pass without being checked. */
+type Holds = { readonly cites: number; readonly unanchored: number; readonly ordered: number };
+const FIXTURES: readonly { readonly name: string; readonly gap: string; readonly guide: readonly string[]; readonly want: RegExp | null; readonly holds?: Holds }[] = [
   {
     name: '4455', gap: 'a citation by line number, which moves whenever a PR inserts a line above it',
     guide: ['`const b` is the second line. <!-- src: fixture/end.ts:2 -->'],
@@ -651,6 +663,20 @@ const FIXTURES: readonly { readonly name: string; readonly gap: string; readonly
     name: '4455-end', gap: 'an end marker that no line at or after the start holds',
     guide: ['`tools` lists the tools. <!-- src: fixture/tools.ts@"export const tools".."];\\n}" -->'],
     want: /^MARKER: fixture\/4455-end\.md:1: fixture\/tools\.ts has no "\];\\n}" at or after its start \(line 1\)/,
+  },
+  {
+    // #4584: every `<!-- src: … -->` is read as a citation (#4501), so one in neither form fails rather than being skipped.
+    name: '4455-malformed', gap: 'a src comment in neither citation form: a path and a fingerprint, with no marker',
+    guide: ['`const b` is the second line. <!-- src: fixture/end.ts#4eedf20f -->'],
+    want: /^MARKER: fixture\/4455-malformed\.md:1: "fixture\/end\.ts#4eedf20f" is not a citation\./,
+  },
+  {
+    // #4584: the end needle is searched from the start needle. Searched from the top, it ends the block at line 4 and
+    // the fingerprint of lines 4-6 fails. The real guides would catch that only because their own end needles happen
+    // to occur earlier in their files.
+    name: '4455-end-before-start', gap: 'an end marker that also occurs above the start, cited correctly',
+    guide: ['The second list holds one item. <!-- src: fixture/early.ts@"const b = [".."];"#75b5c4ca -->'],
+    want: null, holds: { cites: 1, unanchored: 1, ordered: 0 },
   },
   {
     name: '3457', gap: 'a citation under a table after a blank line, whose cited lines hold none of the table\'s quotes',
@@ -684,32 +710,33 @@ const FIXTURES: readonly { readonly name: string; readonly gap: string; readonly
       '',
       '| `Side` | Where a part sits. <!-- src: fixture/pipe.ts@"type Side = \'start\' \\u007c \'end\'" --> |',
     ],
-    want: null,
+    want: null, holds: { cites: 6, unanchored: 1, ordered: 1 },
   },
 ];
 for (const f of FIXTURES) {
   const got: string[] = [];
-  const st: CiteStats = { cites: 0, unanchored: 0, fingerprinted: 0, ordered: 0 };
+  const st: CiteStats = { found: 0, cites: 0, unanchored: 0, fingerprinted: 0, ordered: 0 };
   f.guide.forEach((_, k) => citeLine(`fixture/${f.name}.md`, f.guide, k, fixtureReader, st, (arm, msg) => got.push(`${arm}: ${msg}`), false));
   const seen = got.length ? got.join(' | ') : 'no failure';
   if (f.want && !got.some((g) => f.want!.test(g))) fail('SELF-CHECK', `#${f.name} (${f.gap}) was not named. Expected ${f.want}; got ${seen}.`);
   // The control's table citation must count as quoting (`list_levers`): read as quoting nothing, it is #3457 again.
   // Its list must be placed and checked (`ordered`): a list the arm never placed would pass in any order. Its "or"
   // list must not be (#3542 review): checked, it fails ORDER, as its head did when only its last label was dropped.
-  if (!f.want && (got.length || st.cites !== 6 || st.unanchored !== 1 || st.ordered !== 1)) fail('SELF-CHECK', `the control (${f.gap}) must pass with 6 citations, 1 of them quoting nothing and 1 list checked for order; got ${seen}, ${st.cites} citations, ${st.unanchored} quoting nothing, ${st.ordered} lists checked.`);
+  const h = f.holds;
+  if (!f.want && (!h || got.length || st.cites !== h.cites || st.unanchored !== h.unanchored || st.ordered !== h.ordered)) fail('SELF-CHECK', `#${f.name} (${f.gap}) must pass with ${h?.cites} citation(s), ${h?.unanchored} of them quoting nothing and ${h?.ordered} list(s) checked for order; got ${seen}, ${st.cites} citations, ${st.unanchored} quoting nothing, ${st.ordered} lists checked.`);
 }
 
 // ── THE GUIDES, through the same arms ───────────────────────────────────────────────────────────────
 
 const repo = readerOf({ tracked: (p) => tracked.has(p), read: (p) => readFileSync(join(ROOT, p), 'utf8') });
-const stats: CiteStats = { cites: 0, unanchored: 0, fingerprinted: 0, ordered: 0 };
+const stats: CiteStats = { found: 0, cites: 0, unanchored: 0, fingerprinted: 0, ordered: 0 };
 let labels = 0;
 const counts: { file: string; n: number }[] = [];
 
 for (const g of guideFiles) {
   const rel = `${GUIDES}/${g}`;
   const lines = readFileSync(join(guideDir, g), 'utf8').split('\n');
-  const before = stats.cites;
+  const before = stats.found;
   let fence = false;
   lines.forEach((raw, k) => {
     if (raw.startsWith('```')) fence = !fence;
@@ -731,7 +758,7 @@ for (const g of guideFiles) {
     // CITE, FINGERPRINT
     citeLine(rel, lines, k, repo, stats, fail, STAMP, CONVERT);
   });
-  if (listed.includes(g) && stats.cites === before) fail('SCOPE', `${rel} carries no src citation, so nothing in it is checked against the code.`);
+  if (listed.includes(g) && stats.found === before) fail('SCOPE', `${rel} carries no src citation, so nothing in it is checked against the code.`);
 }
 
 // --stamp and --convert: each citation's text replaced on its own line, in order, so two identical citations on one
@@ -859,4 +886,4 @@ if (fails.length) {
   console.error(`❌ ${TAG}: ${fails.length} failure${fails.length === 1 ? '' : 's'}\n${fails.map((f) => `  ✗ ${f}`).join('\n')}`);
   process.exit(1);
 }
-console.log(`✅ ${TAG}: ${guideFiles.length} guides; ${labels} bold labels, each a string in the app source (${SOURCE_TREES.map((t) => `${t} ${perTree.get(t)}`).join(', ')} literals); ${stats.cites} citations resolve, ${stats.cites - stats.unanchored} of them still holding what their claim quotes (${stats.unanchored} quote nothing and are held by their fingerprint; ${stats.fingerprinted} fingerprints match; ${stats.ordered} bold lists in the order their cited lines hold them; ${FIXTURES.length - 1} planted gaps named and the control clean); ${counts.length} component-set counts equal componentDefs (${defs}); ${commands.length} agent-link commands, each a row in the agent-link guide; ${groupKeys.length} Update file groups, each named in its guide, ${orderedGroups} of them in the dialog's order; ${areas.length} rail areas, named as the rail draws them in ${areaMentions} guide line(s) and no retired name (${retired.map((a) => `"${a.word}"`).join(', ')}) in a guide, an app string or the ${READER_DOCS.length} reader docs (READMEs and llms.txt, #4138).`);
+console.log(`✅ ${TAG}: ${guideFiles.length} guides; ${labels} bold labels, each a string in the app source (${SOURCE_TREES.map((t) => `${t} ${perTree.get(t)}`).join(', ')} literals); ${stats.cites} citations resolve, ${stats.cites - stats.unanchored} of them still holding what their claim quotes (${stats.unanchored} quote nothing and are held by their fingerprint; ${stats.fingerprinted} fingerprints match; ${stats.ordered} bold lists in the order their cited lines hold them; ${FIXTURES.filter((f) => f.want).length} planted gaps named and ${FIXTURES.filter((f) => !f.want).length} clean fixtures passing); ${counts.length} component-set counts equal componentDefs (${defs}); ${commands.length} agent-link commands, each a row in the agent-link guide; ${groupKeys.length} Update file groups, each named in its guide, ${orderedGroups} of them in the dialog's order; ${areas.length} rail areas, named as the rail draws them in ${areaMentions} guide line(s) and no retired name (${retired.map((a) => `"${a.word}"`).join(', ')}) in a guide, an app string or the ${READER_DOCS.length} reader docs (READMEs and llms.txt, #4138).`);
