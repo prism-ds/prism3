@@ -509,7 +509,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { launchWithoutWebFonts } from './test-web-fonts-stub.mjs';
 import { hookGuard } from './test-hooks.mjs';
-import { INPUT_MS, makeBounded, rendersFrame, stallWhere, watchStalls } from './test-bounded.mjs';
+import { BOUND_MS, boundEvaluates, DISARM, INPUT_MS, makeBounded, rendersFrame, stallMessage, stallWhere, watchStalls } from './test-bounded.mjs';
 import { P, loadModes, resolve as resolveToken } from './chrome/tokens.mjs';
 import { assertBundleFresh, PLUGIN_UI_SOURCE_ROOTS, STUDIO_SOURCE_ROOTS } from './test-bundle-freshness.mjs';
 import { SHARDS } from './chrome-shards.mjs';
@@ -1072,6 +1072,18 @@ const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 // #3138: Google Fonts answers every request with nothing here (`test-web-fonts-stub.mjs`), so a run never reaches it;
 // §3138 serves its own fixture by `page.route`.
 const browser = MODE === 'run' ? await launchWithoutWebFonts(chromium) : null;
+/** #4342: every evaluate, `waitForFunction` and frame wait on every page this run opens is bounded (`boundEvaluates`,
+ *  test-bounded.mjs), so a busy or frameless page fails the call by name, with its call site, the section and the last
+ *  check reached, in `EVAL_MS` and the page reading after it, not at the 600 s watchdog. Installed before any page
+ *  exists. 60 s is twice `STEP_MS`, so a `within` around an async step (whose calls start before its own timer) always
+ *  speaks first, and 10x the slowest call that settled across the three shards (6.0 s, a frame wait in `settleModes`,
+ *  of 47,405 calls; measured 2026-11-27, printed at the end of every run).
+ *  Section 20's self-checks hold it (#4342). */
+const EVAL_MS = 60000;
+const evalBounds = browser ? await boundEvaluates(browser, {
+  ms: EVAL_MS,
+  where: () => (current ? `section ${current}${lastCheck ? `, after "${lastCheck.slice(0, 80)}"` : ', before its first check'}` : ''),
+}) : null;
 /** #3150, MOTION SETTLED AT ONCE. The chrome's surfaces move on three mapped durations (`--p3-motion-panel`,
  *  `--p3-motion-fast`, `--p3-motion-reduced`; `chrome.css`, chrome motion). Every page this suite opens sets those three
  *  to 0s before the app boots, so each surface lands on its end state in the frame it changes and every measurement
@@ -1137,16 +1149,16 @@ const open = async ({ host, theme, w, h, store, query = '', brand = 'prism3', pr
  *  the arm itself, so a number here would keep the registry line green with the self-check arm deleted (review). */
 const STEP_MS = 30000;
 const within = async (page, label, work, ms = STEP_MS) => {
+  // #4342: a bounded evaluate passed straight in hands its bound over, so this label and `ms` are the ones that speak.
+  work?.[DISARM]?.();
   let timer;
   const out = await Promise.race([work.then((v) => ({ v }), (e) => ({ e })), new Promise((r) => { timer = setTimeout(() => r(null), ms); })]);
   clearTimeout(timer);
   if (out && 'e' in out) throw out.e;
   if (out) return out.v;
-  const live = await rendersFrame(page);
   // On a page `watchStalls` watches, a page that renders no frame is paused and the message says where it stopped
   // (its JavaScript stack, or none): #4342's stall never reproduced off CI, so the CI log is where it gets located.
-  const at = live ? '' : await stallWhere(page, Math.min(ms, STEP_MS));
-  throw new Error(`${label} did not settle within ${ms / 1000}s; the page ${live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}${at ? `; ${at}` : ''}`);
+  throw new Error(await stallMessage(page, label, ms, STEP_MS));
 };
 
 /** Reach a place through the tab row (the select, when narrow), and wait for the frame to show it. */
@@ -6499,6 +6511,38 @@ if (runs('18-s4f')) {
    *  by their path data. Literal. Tabler draws the body and the keyhole first, so the shackle is the glyph's last path. */
   const SHUT = 'M8 11v-4a4 4 0 1 1 8 0v4';
   const OPEN = 'M8 11v-5a4 4 0 0 1 8 0';
+  /** The Gradients lever as drawn: where its switch sits, what the levers paint, the room around each divider. A plain
+   *  `page.evaluate`, bounded by `boundEvaluates` like every other (#4342: CI stalled here 600s once, on a busy page). */
+  const gradientsRead = (page) => page.evaluate(() => {
+    const blk = document.querySelector('[data-p3="levers-pane"] [data-p3="lever-gradients"]');
+    // HP5 (#2218): the switch moved from the lever's head to its section's title row, at the far end.
+    const head = blk?.closest('.p3-lsec')?.querySelector('.p3-lsec-titlerow');
+    const sw = head?.querySelector('[data-p3="gradients-switch"]');
+    const hb = head?.getBoundingClientRect(), sb = sw?.getBoundingClientRect();
+    // A gradient DRAWN is a linear or radial CSS gradient (the engine's two kinds) between two colors or more. The
+    // scrim's swatch sits on the chrome's transparency checkerboard (A6), a conic pattern, and is not one.
+    const colors = (bg) => new Set((bg.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}\b/gi) ?? []).map((x) => x.replace(/\s+/g, '')));
+    const painted = [...document.querySelectorAll('[data-p3="levers-pane"] *')].filter((n) => { const bg = getComputedStyle(n).backgroundImage; return /(linear|radial)-gradient\(/.test(bg) && colors(bg).size >= 2; })
+      .map((n) => n.getAttribute('data-p3') ?? n.className?.baseVal ?? n.className);
+    const eds = [...(blk?.querySelectorAll('[data-p3="gradient-editor"]') ?? [])];
+    const box = (n) => n.getBoundingClientRect();
+    // Room on each side of a divider: from the last control of one gradient to the next's divider, and from that
+    // divider to the next gradient's first control. Then from Add gradient's divider down to the button.
+    const ctl = (e) => [...e.querySelectorAll('input, select, button')].filter((x) => box(x).height > 0);
+    const sides = eds.slice(1).map((e, i) => {
+      const prevCtl = ctl(eds[i]), line = box(e).top, first = ctl(e)[0];
+      return { above: Math.round(line - Math.max(...prevCtl.map((x) => box(x).bottom))), below: Math.round(box(first).top - line) };
+    });
+    const addRow = blk?.querySelector('[data-p3="gradient-add-row"]'), add = blk?.querySelector('[data-p3="gradient-add"]');
+    const last = eds[eds.length - 1];
+    return {
+      inHead: !!sw && sw.closest('.p3-lsec-titlerow') === head, right: hb && sb ? Math.round(hb.right - sb.right) : null, top: hb && sb ? Math.round(sb.top - hb.top) : null,
+      painted, n: eds.length, sides,
+      addLine: addRow ? getComputedStyle(addRow).borderTopStyle : null,
+      addAbove: addRow && add ? Math.round(box(add).top - box(addRow).top) : null,
+      addBelowLast: addRow && last ? Math.round(box(addRow).top - Math.max(...ctl(last).map((x) => box(x).bottom))) : null,
+    };
+  });
   for (const host of ['web', 'figma']) {
     const { ctx, page, errors } = await open({ host, theme: 'light', w: 1280, h: 900 });
     await goPlace(page, 'color-fills');
@@ -6518,36 +6562,7 @@ if (runs('18-s4f')) {
     ok(p1.hook === 'icons-pair' && p1.shackle === OPEN && p1.hidden === 'true' && p1.name === 'Pair icons with text' && p1.label === null && p1.drawn > 0,
       `${host} QA-B12: unpaired, the pairing button draws the open padlock, decorative, beside its words — read ${JSON.stringify(p1)}`);
     // Gradients (QA-B13, QA-B14, QA-B15, QA-B16).
-    const gr = await page.evaluate(() => {
-      const blk = document.querySelector('[data-p3="levers-pane"] [data-p3="lever-gradients"]');
-      // HP5 (#2218): the switch moved from the lever's head to its section's title row, at the far end.
-      const head = blk?.closest('.p3-lsec')?.querySelector('.p3-lsec-titlerow');
-      const sw = head?.querySelector('[data-p3="gradients-switch"]');
-      const hb = head?.getBoundingClientRect(), sb = sw?.getBoundingClientRect();
-      // A gradient DRAWN is a linear or radial CSS gradient (the engine's two kinds) between two colors or more. The
-      // scrim's swatch sits on the chrome's transparency checkerboard (A6), a conic pattern, and is not one.
-      const colors = (bg) => new Set((bg.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}\b/gi) ?? []).map((x) => x.replace(/\s+/g, '')));
-      const painted = [...document.querySelectorAll('[data-p3="levers-pane"] *')].filter((n) => { const bg = getComputedStyle(n).backgroundImage; return /(linear|radial)-gradient\(/.test(bg) && colors(bg).size >= 2; })
-        .map((n) => n.getAttribute('data-p3') ?? n.className?.baseVal ?? n.className);
-      const eds = [...(blk?.querySelectorAll('[data-p3="gradient-editor"]') ?? [])];
-      const box = (n) => n.getBoundingClientRect();
-      // Room on each side of a divider: from the last control of one gradient to the next's divider, and from that
-      // divider to the next gradient's first control. Then from Add gradient's divider down to the button.
-      const ctl = (e) => [...e.querySelectorAll('input, select, button')].filter((x) => box(x).height > 0);
-      const sides = eds.slice(1).map((e, i) => {
-        const prevCtl = ctl(eds[i]), line = box(e).top, first = ctl(e)[0];
-        return { above: Math.round(line - Math.max(...prevCtl.map((x) => box(x).bottom))), below: Math.round(box(first).top - line) };
-      });
-      const addRow = blk?.querySelector('[data-p3="gradient-add-row"]'), add = blk?.querySelector('[data-p3="gradient-add"]');
-      const last = eds[eds.length - 1];
-      return {
-        inHead: !!sw && sw.closest('.p3-lsec-titlerow') === head, right: hb && sb ? Math.round(hb.right - sb.right) : null, top: hb && sb ? Math.round(sb.top - hb.top) : null,
-        painted, n: eds.length, sides,
-        addLine: addRow ? getComputedStyle(addRow).borderTopStyle : null,
-        addAbove: addRow && add ? Math.round(box(add).top - box(addRow).top) : null,
-        addBelowLast: addRow && last ? Math.round(box(addRow).top - Math.max(...ctl(last).map((x) => box(x).bottom))) : null,
-      };
-    });
+    const gr = await gradientsRead(page);
     ok(gr.inHead && gr.right !== null && gr.right <= 1 && gr.top !== null && gr.top <= 12, `${host} QA-B13, HP5: the gradients switch sits at the right of its section's title row — read ${JSON.stringify({ inHead: gr.inHead, right: gr.right, top: gr.top })}`);
     ok(gr.painted.length === 0, `${host} QA-B14: the levers draw no gradient (the preview shows them)${gr.painted.length ? ` — drawn by ${gr.painted.join(', ')}` : ''}`);
     // S4a gave 8px above a divider and 12px under it; QA-B16 asks for more on both sides: 24px (the scale's 300) each.
@@ -6557,6 +6572,30 @@ if (runs('18-s4f')) {
       `${host} QA-B15: Add gradient has its own divider, with more room above the button (${gr.addAbove}px) than the gradients have (24px), and room below the last gradient (${gr.addBelowLast}px) — divider ${gr.addLine}`);
     ok(errors.length === 0, `${host} S4f lock and gradients: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
     await ctx.close();
+  }
+  // #4342: the Gradients read above, forced busy. CI once stalled 600s at this read, after "figma QA-B12: unpaired …",
+  // on a page whose main thread ran no script; the read was a plain `page.evaluate`, which Playwright sends with no
+  // timeout. The same read, unchanged, on a page made busy (a timer that loops) and given a 3s bound of its own, fails by
+  // name: the read's function and line, this section and its last check, and the page reading. Inside this arm's own
+  // 20s guard, so with the bound gone the guard's words are read instead. The expected words are typed here.
+  {
+    const bctx = await browser.newContext();
+    try {
+      const bp = await bctx.newPage();
+      await bp.setContent('<p>busy</p>');
+      bp[BOUND_MS] = 3000;
+      await bp.evaluate(() => { setTimeout(() => { const end = Date.now() + 60000; while (Date.now() < end) { /* busy */ } }, 0); });
+      await new Promise((r) => setTimeout(r, 300));
+      const t0 = Date.now();
+      const said = await Promise.race([
+        gradientsRead(bp).then(() => 'returned', (e) => String(e?.message ?? e)),
+        new Promise((r) => setTimeout(() => r('still waiting at the 20s guard: the read has no bound'), 20000)),
+      ]);
+      const took = Date.now() - t0;
+      ok(said.startsWith('page.evaluate (gradientsRead test-chrome.mjs:') && said.includes('; section 18-s4f, after "figma S4f lock and gradients: 0 console errors")')
+        && said.includes(') did not settle within 3s; the page renders no frame') && took < 20000,
+        `#4342: 18-s4f's Gradients read on a busy page fails by name, with its function, the section and the last check, within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 200)})`);
+    } finally { await bctx.close(); }
   }
 }
 // #2179 (owner QA, 2026-10-05): the Contrast floor row is drawn in the rows' own layout, its step picker on the right
@@ -8361,6 +8400,91 @@ for (const host of ['web', 'figma']) {
         `#4612: on a busy page, ${step}'s read fails by name within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 160)})`);
     }
   } finally { await bctx.close(); }
+}
+// #4342: EVERY EVALUATE IS BOUNDED, held two ways.
+// (1) On a page made busy (a timer that loops, the state #4342's CI captures read), each evaluate-family call the suite
+// makes, written plain with no `within`, fails by name on the page's own short bound (`BOUND_MS`, 3s): its method, its
+// call site in this file, and the section and last check reached, then the page reading. Each runs inside this arm's
+// own 20s guard, so with `boundEvaluates` not installed (or a method left off its list) the call never returns and the
+// guard's words are read instead. Then a `within` (6s) around a bounded call on a 1s page bound: `within`'s label and
+// limit must speak (it takes the bound over), not the call's. The expected words are typed here.
+{
+  const bctx = await browser.newContext();
+  try {
+    const bp = await bctx.newPage();
+    await bp.setContent('<p>busy</p>');
+    bp[BOUND_MS] = 3000;
+    await bp.evaluate(() => { setTimeout(() => { const end = Date.now() + 90000; while (Date.now() < end) { /* busy */ } }, 0); });
+    await new Promise((r) => setTimeout(r, 300));
+    const guard = (work) => Promise.race([
+      work().then(() => 'returned', (e) => String(e?.message ?? e)),
+      new Promise((r) => setTimeout(() => r('still waiting at the 20s guard: the call has no bound'), 20000)),
+    ]);
+    for (const [call, run] of [
+      ['page.evaluate', () => bp.evaluate(() => document.title)],
+      ['page.waitForFunction', () => bp.waitForFunction(() => true, null, { timeout: 0 })],
+      ['locator.evaluate', () => bp.locator('p').evaluate((n) => n.textContent)],
+      ['locator.evaluateAll', () => bp.locator('p').evaluateAll((ns) => ns.length)],
+      ['frame.evaluate', () => bp.mainFrame().evaluate(() => 1)],
+    ]) {
+      const t0 = Date.now();
+      const said = await guard(run);
+      const took = Date.now() - t0;
+      ok(said.startsWith(`${call} (test-chrome.mjs:`) && said.includes('; section 20, after "') && said.includes(') did not settle within 3s; the page renders no frame') && took < 20000,
+        `#4342: on a busy page, a plain ${call} fails by name, with its call site and the last check, within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 200)})`);
+    }
+    bp[BOUND_MS] = 1000;
+    const t0 = Date.now();
+    // 6s: longer than the call's own 1s bound plus its 3s page reading, so a `within` that did not take the bound over
+    // would hear the call's words first.
+    const said = await guard(() => within(bp, 'the within self-check', bp.evaluate(() => 1), 6000));
+    ok(said.startsWith('the within self-check did not settle within 6s; the page renders no frame') && Date.now() - t0 < 20000,
+      `#4342: a within around a bounded evaluate takes the bound over, so its own label and limit speak, not the call's (${said.slice(0, 160)})`);
+  } finally { await bctx.close(); }
+}
+// (2) LINT-CHROME-BOUNDS. What the bound cannot reach, read off this file's code (comments dropped): a CDP Runtime
+// evaluate, a Worker's evaluate (Playwright's Worker class is not on `boundEvaluates`' list), Playwright's internal
+// channel, the unbounded originals, a bound disarmed anywhere but in `within`, and a page or context made before the
+// bound is installed. Each fails by name with its line. The patterns are built from parts, so this check does not
+// match itself. A planted line of each kind, added to the source as read, must be caught too, so a pattern that stopped
+// matching cannot pass as "none found".
+{
+  const RULES = [
+    ['a CDP Runtime evaluate (unbounded: use page.evaluate)', new RegExp(['Runtime', '(evaluate|callFunctionOn|awaitPromise)\\b'].join('\\.'))],
+    ["a Worker's evaluate (Worker is not bounded)", new RegExp(['\\.(service)?[wW]orkers\\(', "on\\(\\s*'worker'"].join('|'))],
+    ["Playwright's internal channel", new RegExp(['\\b_channel\\b', '\\bkNoTimeout\\b', '\\b_parentOfType\\b'].join('|'))],
+    ['the unbounded originals', new RegExp(['\\bRAW\\b', '\\brawEvaluate\\b', "Symbol\\('p3\\.unbounded'\\)"].join('|'))],
+  ];
+  const DISARM_RE = new RegExp(['\\[', 'DISARM', '\\]'].join(''));
+  const codeOf = (src) => src.split('\n').map((l) => l.replace(/^\s*(\/\/|\*|\/\*\*?).*$/, '').replace(/\s\/\/\s.*$/, ''));
+  const lint = (src) => {
+    const lines = codeOf(src);
+    const out = [];
+    lines.forEach((l, i) => { for (const [what, re] of RULES) if (re.test(l)) out.push(`line ${i + 1}: ${what}`); });
+    const withinAt = lines.findIndex((l) => l.startsWith('const within = async ('));
+    const withinEnd = withinAt < 0 ? -1 : lines.findIndex((l, i) => i > withinAt && l === '};');
+    lines.forEach((l, i) => { if (DISARM_RE.test(l) && !(i > withinAt && i < withinEnd)) out.push(`line ${i + 1}: a bound disarmed outside within`); });
+    const installAt = lines.findIndex((l) => /\bawait boundEvaluates\(browser\b/.test(l));
+    const firstPage = lines.findIndex((l) => /\.(newContext|newPage)\(/.test(l) && !/^\s*(const|let) (newContext|newPage) = /.test(l));
+    if (installAt < 0) out.push('boundEvaluates is never installed on the browser');
+    else if (firstPage >= 0 && firstPage < installAt) out.push(`line ${firstPage + 1}: a page or context made before boundEvaluates is installed (line ${installAt + 1})`);
+    return out;
+  };
+  const SRC = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const found = lint(SRC);
+  ok(found.length === 0, `#4342 lint-chrome-bounds: test-chrome.mjs makes no evaluate the bound cannot reach${found.length ? ` — ${found.slice(0, 4).join('; ')}` : ''}`);
+  const PLANTS = [
+    ['a CDP Runtime evaluate', `await cdp.send('${['Runtime', 'evaluate'].join('.')}', { expression: '1' });`],
+    ["a Worker's evaluate", `await page.${'workers'}()[0].evaluate(() => 1);`],
+    ["Playwright's internal channel", `await page.mainFrame().${'_chan' + 'nel'}.evaluateExpression({});`],
+    ['the unbounded originals', `await ${'raw' + 'Evaluate'}(page, () => 1);`],
+    ['a bound disarmed outside within', `page.evaluate(() => 1)${'[DIS' + 'ARM]'}();`],
+  ];
+  for (const [what, line] of PLANTS) {
+    const at = SRC.split('\n').length + 1;
+    const caught = lint(`${SRC}\n${line}`);
+    ok(caught.some((f) => f.startsWith(`line ${at}: `) && f.includes(what)), `#4342 lint-chrome-bounds: a planted line making ${what} fails it by name (${caught.slice(-1)[0] ?? 'nothing found'})`);
+  }
 }
 // Edits (Q22, Q62 option A): Light writes the brand value; previewing Dark, the same select writes
 // modeLevers.dark.families and leaves the brand value alone, shown as Auto: follows Light until set, with Return to
@@ -24886,6 +25010,9 @@ if (!SHARD) {
   console.log(`\nLowest chrome text ${lows.text}:1, lowest edge or indicator ${lows.edge}:1, lowest focus ring ${lows.focus}:1, smallest target ${lows.target.toFixed(1)}px.`);
 }
 enter(null);
+// #4342: the margin `EVAL_MS` keeps, read each run: the slowest evaluate that settled inside its bound.
+if (evalBounds) console.log(`bounded evaluates (#4342): ${evalBounds.calls} settled; the slowest took ${(evalBounds.slowestMs / 1000).toFixed(1)}s of the ${EVAL_MS / 1000}s bound — ${evalBounds.slowestSite}`);
+if (evalBounds && process.env.P3_BOUND_SITES) for (const [k, v] of [...evalBounds.bySite].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`  ${(v / 1000).toFixed(1)}s ${k}`);
 console.log(`${executed - failed}/${executed} chrome assertions passed${SHARD ? ` in shard ${SHARD} (sections ${SHARDS[SHARD].join(', ')})` : ''}.`);
 if (MODE === 'merge') {
   const all = shardRecords.reduce((a, r) => a + r.executed, executed);
