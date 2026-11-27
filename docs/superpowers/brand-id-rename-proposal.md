@@ -35,7 +35,7 @@ for exactly this reason.
 
 ### 1.2 Totals
 
-| Pattern | Occurrences | Files |
+| Pattern | Matching lines | Files |
 |---|---:|---:|
 | Everything the issue's grep matches | 14,853 | 334 |
 | `wendys` | 414 | 65 |
@@ -299,7 +299,10 @@ Each can be answered with one letter.
 
 **Q6. Which names does the lint deny?**
 - **A (rec): the two brands' ids and full names plus `nb-redesign`**, which is the current `CLIENT_NAMES`
-  plus the ids. The owner adds any other client name privately to the list, as one line per name.
+  plus the ids. Any name added to that list is published, because the repo is public. So further client names
+  go in as **SHA-256 hashes** of the lowercased name: the gate hashes each word and phrase it scans and compares,
+  so the list never spells the name out. The owner supplies each name to the orchestrator in chat, and only its
+  hash is committed.
 - B: A, plus a broader heuristic (e.g. any `reference/` directory name). This adds false-positive upkeep.
 
 **Q7. How does the gate land?**
