@@ -38,7 +38,7 @@ import { buildFigmaColor, buildFigmaFont, buildFigmaFontFluid, buildFigmaTextSty
 import type { FigmaCollectionFile } from './emit-figma';
 import { buildAnimationStylesPlan } from './figma-animation-styles';
 import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
-import { judgeBelowFloor, KNOWN_PENDING } from './lint-shadcn-contrast';
+import { judgeBelowFloor, KNOWN_PENDING, parseFloors } from './lint-shadcn-contrast';
 import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly } from './emit-dtcg-overlay';
 import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
@@ -48016,23 +48016,44 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(k.verdict === 'failing' && k.note.includes('BELOW ACCEPTED 4.24'), `#2997 a KNOWN pair below its accepted floor fails by name (got ${k.verdict}${k.note})`);
 }
 
-// #4587: an accepted floor is held from below as well. Lowered under the ratio it records, it widens what the owner
-// accepted, and the pair could then fall that far with nothing failing. The entries are typed here, not read from
-// KNOWN, and the ratios are the ones the gate measured for `prism3 light: destructive/90 on card` (3.97...).
-// BY-NAME MUTATION: drop the SLACK return from `judgeBelowFloor` → the first two arms fail.
+// #4587 (owner decision 2026-11-27): an accepted floor is compared with the same entry's floor at the base. Edited down,
+// it widens what the owner accepted and fails by name, whatever the measured ratio; a pair that improved under an
+// unchanged floor passes with a WARNING to record the new ratio; a new entry is written at its measurement, not under it;
+// a pair below its floor still fails as BELOW ACCEPTED. Entries and base floors are typed here, not read from KNOWN or
+// git, and the ratios are the ones the gate measured for `prism3 light: destructive/90 on card` (3.97...).
+// BY-NAME MUTATIONS: drop the FLOOR LOWERED return from `judgeBelowFloor` → the two `edited down` arms fail; drop the
+// `was === undefined` condition from the SLACK return → the `improved` arm fails (got failing … SLACK).
 {
   const key = 'prism3 light: destructive/90 on card';
   const at = (floor: number) => ({ [key]: { floor, why: 'fixture' } });
-  const lowered = judgeBelowFloor(key, 3.975, at(3.0), {});
-  ok(lowered.verdict === 'failing' && lowered.note.includes('SLACK KNOWN: measured 3.97, floor 3'),
-    `#4587 a KNOWN floor lowered from 3.97 to 3.00 fails as SLACK by name (got ${lowered.verdict}${lowered.note})`);
-  const pend = judgeBelowFloor(key, 3.975, {}, at(3.95));
-  ok(pend.verdict === 'failing' && pend.note.includes('SLACK PENDING: measured 3.97, floor 3.95'),
-    `#4587 a KNOWN_PENDING floor two hundredths under its ratio fails as SLACK by name (got ${pend.verdict}${pend.note})`);
-  for (const floor of [3.97, 3.96]) {
-    const v = judgeBelowFloor(key, 3.975, at(floor), {});
-    ok(v.verdict === 'known' && v.note === '', `#4587 a floor at, or one hundredth under, its measured 3.97 holds (floor ${floor}, got ${v.verdict}${v.note})`);
+  const base = (floor: number) => ({ [key]: floor });
+  const lowered = judgeBelowFloor(key, 3.975, at(3.0), {}, base(3.97));
+  ok(lowered.verdict === 'failing' && lowered.note.includes("FLOOR LOWERED KNOWN: floor 3, the base's floor 3.97"),
+    `#4587 a KNOWN floor edited down from the base's 3.97 to 3.00 fails as FLOOR LOWERED by name (got ${lowered.verdict}${lowered.note})`);
+  const fellWith = judgeBelowFloor(key, 3.505, {}, at(3.5), base(3.77));
+  ok(fellWith.verdict === 'failing' && fellWith.note.includes("FLOOR LOWERED PENDING: floor 3.5, the base's floor 3.77"),
+    `#4587 a KNOWN_PENDING floor edited down to follow its falling ratio fails as FLOOR LOWERED by name, with no slack (got ${fellWith.verdict}${fellWith.note})`);
+  const improved = judgeBelowFloor(key, 4.105, at(3.97), {}, base(3.97));
+  ok(improved.verdict === 'known' && improved.note === '' &&
+    improved.warning === `WARNING ${key}: measured 4.1, floor 3.97 — the pair improved; record 4.1 as its floor in KNOWN`,
+    `#4587 a pair that improved under an unchanged floor passes with a WARNING naming the pair, the ratio and the floor (got ${improved.verdict}${improved.note}, warning ${improved.warning})`);
+  const fresh = judgeBelowFloor(key, 3.975, at(3.0), {}, {});
+  ok(fresh.verdict === 'failing' && fresh.note.includes('SLACK KNOWN: a new entry, measured 3.97, floor 3'),
+    `#4587 a new KNOWN entry more than 0.01 under its measured ratio fails as SLACK by name (got ${fresh.verdict}${fresh.note})`);
+  const below = judgeBelowFloor(key, 3.905, at(3.97), {}, base(3.97));
+  ok(below.verdict === 'failing' && below.note.includes('BELOW ACCEPTED 3.97'),
+    `#4587 a pair below its unchanged floor still fails as BELOW ACCEPTED (got ${below.verdict}${below.note})`);
+  for (const [floor, was] of [[3.97, 3.97], [3.96, 3.96], [3.97, 3.9], [3.96, undefined]] as const) {
+    const v = judgeBelowFloor(key, 3.975, at(floor), {}, was === undefined ? {} : base(was));
+    ok(v.verdict === 'known' && v.note === '' && v.warning === undefined,
+      `#4587 a floor at, or one hundredth under, its measured 3.97, not below the base's, holds quietly (floor ${floor}, base ${was}, got ${v.verdict}${v.note} ${v.warning ?? ''})`);
   }
+  const src = "export const KNOWN: Readonly<Record<string, Accepted>> = {\n  'a light: x on y': { floor: 3.97, why: 'q' },\n};\n" +
+    "export const KNOWN_PENDING: Readonly<Record<string, Accepted>> = {\n  'b dark: x on y': { floor: 4, why: \"q's\" },\n};\n";
+  const parsed = parseFloors(src);
+  ok(JSON.stringify(parsed) === JSON.stringify({ 'a light: x on y': 3.97, 'b dark: x on y': 4 }),
+    `#4587 parseFloors reads both tables' floors out of a copy of the gate's source (got ${JSON.stringify(parsed)})`);
+  ok(parseFloors(src.replace('KNOWN_PENDING', 'RENAMED')) === null, '#4587 parseFloors returns null, not an empty base, when a table is missing');
 }
 
 // #4428: a regression arm for #4155's filter in the shadcn projector's brand walk (`handoffBrands`). Since #4282 the
