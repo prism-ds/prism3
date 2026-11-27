@@ -48178,6 +48178,66 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
     `#4571 every track target compiles as an override (refused distances: ${distRefused.join(', ') || 'none'}; reduced: ${redRefused.join(', ') || 'none'})`);
 }
 
+// #4571 — `slotPathsOf` AGAINST THE EMISSION (review comment 7211749783). SUBJECT = `slotPathsOf` over each brand's
+// resolved presets, both halves. ORACLE = the `aliasOf` each emitted preset slot carries, read from the COMMITTED
+// `out/<brand>.tokens.json` of every committed brand (discovered from the directory), so a preset that follows `enter`
+// but reads back as `easing-role.exit` fails here. The tree aliases two things differently from the paths a brand
+// writes, and the translation is typed here, not taken from either side: a slot with no delay aliases the 0ms
+// primitive (`duration-ms.0` ↔ null), and a spring easing aliases its `spring-easing.<s>` curve (↔ `spring.<s>`).
+// No committed brand eases a preset with a spring, so a second pass emits a fresh tree for a brand that does and
+// reads the same aliases off it, covering the `spring-duration` and `spring` paths.
+{
+  type Leaf = { $extensions?: { prism3?: { aliasOf?: string } } };
+  const asWritten = (alias: string | undefined, mp: string): string | null | undefined => {
+    if (alias === undefined || !alias.startsWith(`${mp}.`)) return undefined;
+    const p = alias.slice(mp.length + 1);
+    return p === 'duration-ms.0' ? null : p.startsWith('spring-easing.') ? `spring.${p.slice('spring-easing.'.length)}` : p;
+  };
+  const compare = (label: string, tree: Record<string, any>, th: Theme): { halves: number; bad: string[] } => {
+    const root = Object.keys(tree).find((k) => !k.startsWith('$'))!;
+    const mp = `${root}.motion`;
+    const bad: string[] = [];
+    let halves = 0;
+    for (const pr of th.motion.presets) for (const [h, half] of (pr.exit ? [['', pr], ['.exit', pr.exit]] : [['', pr]]) as [string, Parameters<typeof slotPathsOf>[0]][]) {
+      const node = tree[root].motion?.preset?.[pr.preset];
+      const leafs = (h ? node?.exit : node) as Record<string, Leaf> | undefined;
+      const got = slotPathsOf(half);
+      halves++;
+      for (const slot of ['duration', 'easing', 'delay'] as const) {
+        const want = asWritten(leafs?.[slot]?.$extensions?.prism3?.aliasOf, mp);
+        if (want !== got[slot]) bad.push(`${label} ${pr.preset}${h}.${slot}: emitted ${want === undefined ? 'nothing' : String(want)}, read back ${String(got[slot])}`);
+      }
+    }
+    return { halves, bad };
+  };
+  const wendysIn = standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input;
+  const examples = exampleBrands() as Record<string, BrandInput>;
+  const themeOf = (b: string): Theme | undefined => b === 'nb' ? nbTheme() : b === 'wendys' ? brandTheme(wendysIn)
+    : examples[b] ? brandTheme(examples[b]!) : undefined;
+  const brands = readdirSync(resolve(HERE, './out')).filter((f) => /^[^.]+\.tokens\.json$/.test(f)).map((f) => f.slice(0, -'.tokens.json'.length)).sort();
+  const unthemed = brands.filter((b) => !themeOf(b));
+  const bad: string[] = [];
+  let halves = 0, exits = 0, roleFollowers = 0;
+  for (const b of brands) {
+    const th = themeOf(b);
+    if (!th) continue;
+    const r = compare(b, JSON.parse(readFileSync(resolve(HERE, `./out/${b}.tokens.json`), 'utf8')), th);
+    halves += r.halves; bad.push(...r.bad);
+    exits += th.motion.presets.filter((p) => p.exit).length;
+    roleFollowers += th.motion.presets.flatMap((p) => p.exit ? [p, p.exit] : [p]).filter((h) => 'role' in h.easing).length;
+  }
+  ok(brands.length >= 5 && unthemed.length === 0 && exits >= brands.length * 5 && roleFollowers > 0 && bad.length === 0,
+    `#4571 slotPathsOf reads every preset and every exit half back as the alias the committed emission carries, in every committed brand (${brands.join(', ')}; ${halves} halves, ${exits} exits${unthemed.length ? `; no theme for ${unthemed.join(', ')}` : ''}; mismatches: ${bad.slice(0, 4).join(' | ') || 'none'})`);
+  // The spring path: a brand that eases surface by a spring, and its exit by a fixed curve with a delay.
+  const springTh = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { presets: {
+    surface: { easing: 'spring.gentle', duration: 'spring-duration.gentle', exit: { easing: 'easing.calm', delay: 'delay.show' } },
+  } } } as BrandInput);
+  const sr = compare('spring', buildTree(springTh).tree, springTh);
+  const ss = slotPathsOf(springTh.motion.presets.find((p) => p.preset === 'surface')!);
+  ok(sr.bad.length === 0 && sr.halves > 0 && ss.easing === 'spring.gentle' && ss.duration === 'spring-duration.gentle',
+    `#4571 slotPathsOf reads a spring-eased preset back as the spring and its settle time the fresh emission aliases (${JSON.stringify(ss)}; mismatches: ${sr.bad.slice(0, 4).join(' | ') || 'none'})`);
+}
+
 // #4571 — THE MOTION-ISOLATION GATE (proposal §4.2's last row, §5 PR 1). A motion-only edit leaves every non-motion
 // part of the emission byte-identical. SUBJECT = the emission for a brand with motion edits. ORACLE = a second,
 // independent emission of the same brand without them: two engine runs, never one run compared with itself. What
