@@ -89,7 +89,7 @@ anyway: the brand's value may differ from the number asked for, and that's the p
 | Someone says | Bind | Why |
 |---|---|---|
 | "fade it in", "make it appear softly" | `motion.preset.fade` (pattern `fade/in`); it leaves on `motion.preset.fade.exit` | An opacity change, arriving. |
-| "the little pop when a popover or menu opens", "the bouncy thing" | `motion.preset.pop` (patterns `popover/open`, `tooltip/show`) | A small surface arriving quickly, from a little under full size (R10). It doesn't overshoot: `motion.spring.bouncy` is for a release a person drives (R4). |
+| "the little pop when a popover or menu opens", "the bouncy thing" | `motion.preset.pop` (patterns `popover/open`, `tooltip/show`) | A small surface arriving quickly (R10); a popover also grows from a little under full size, a tooltip only fades. Keep a spring like `motion.spring.bouncy` for a release a person drives (R4). |
 | "slide the dialog in", "bring up the sheet", "open the drawer" | `motion.preset.surface` (the `dialog/*` patterns) | A large surface arriving over the page. |
 | "open the section smoothly", "grow the height" | `motion.preset.expand` (patterns `accordion/expand`, `accordion/collapse`) | A height change in place, the R5 exception. |
 | "slide the underline across", "move the thumb over" | `motion.preset.move` (patterns `tabs/select`, `switch/toggle`, `segmented/select`) | A change of position within the layout. |
@@ -213,8 +213,8 @@ it. Keep the track that shows what changed and where it went; let everything els
 at once. Each moving part asks for the person's attention, so fewer parts read faster.
 
 **C2. Run the rest in parallel.** What's left starts at the same moment, each on its own preset, as a
-dialog's backdrop, panel and content do. Parallel tracks end close together because their presets
-share one duration ramp.
+dialog's backdrop, panel and content do. Each track keeps its own preset's duration, so they may
+end a step apart; don't stretch one to match another.
 
 **C3. Sequence only when the order carries meaning.** Three orders do: reading order (items in a list
 or grid, first to last), cause and effect (the control a person touched answers before what it
@@ -233,8 +233,8 @@ binds its `.exit` half where one exists (R3), and all of them start at once: a p
 content fades, never after, and a list leaves together instead of staggering out. The person who
 dismissed it has already moved on.
 
-**C6. What the person is working with stays still.** The control they pressed, the field they're
-typing in and the page behind a dialog don't move while the rest of the change plays. The backdrop
+**C6. What the person is working with stays still.** The control they pressed (beyond its own press
+feedback), the field they're typing in and the page behind a dialog don't move while the rest of the change plays. The backdrop
 dims the page; nothing on the page moves.
 
 Under reduced motion there is no stagger and no sequence: every element arrives at once on its own
