@@ -1144,7 +1144,7 @@ const OWNER_RULES: OwnerRule[] = [
     skills: ['prism3-motion'],
     section: '## Choreography',
     roles: [],
-    must: [/\*\*C3\. Sequence only when the order carries meaning\.\*\*/, /reading order/i, /cause and effect/i, /arrival/i, /`motion\.stagger`/],
+    must: [/\*\*C3\. Sequence only when the order carries meaning\.\*\*/, /reading order/i, /arrival/i, /`motion\.stagger`/],
     resolve: [],
   },
   {

@@ -94,7 +94,8 @@ anyway: the brand's value may differ from the number asked for, and that's the p
 | "open the section smoothly", "grow the height" | `motion.preset.expand` (patterns `accordion/expand`, `accordion/collapse`) | A height change in place, the R5 exception. |
 | "slide the underline across", "move the thumb over" | `motion.preset.move` (patterns `tabs/select`, `switch/toggle`, `segmented/select`) | A change of position within the layout. |
 | "swap one panel for the other", "dissolve between them" | `motion.preset.crossfade` | One thing replaced by another in the same place. |
-| "the color change on hover", "feedback when I check it" | `motion.preset.state` (pattern `hover`) | A small state change on a control (R6). |
+| "the color change on hover" | `motion.preset.state` (pattern `hover`) | A small state change on a control (R6). |
+| "feedback when I check it" | the Selection controls recipe: `motion.duration.fast`, `motion.easing-role.default` | A checkbox, radio or switch changing state (R6). |
 | "the button squishes when I press it" | `motion.preset.press` (pattern `pressed`); it lets go on `motion.preset.state` (pattern `pressed/release`) | A control pressed down. |
 | "content comes into view" | `motion.preset.reveal` | Content arriving as it's shown. |
 | "draw the line on" | `motion.preset.draw` | A line or stroke drawn in place. |
@@ -216,9 +217,8 @@ at once. Each moving part asks for the person's attention, so fewer parts read f
 dialog's backdrop, panel and content do. Each track keeps its own preset's duration, so they may
 end a step apart; don't stretch one to match another.
 
-**C3. Sequence only when the order carries meaning.** Three orders do: reading order (items in a list
-or grid, first to last), cause and effect (the control a person touched answers before what it
-opens), and arrival (room opens before what fills it, as a banner's space is reserved before it fades
+**C3. Sequence only when the order carries meaning.** Two orders do: reading order (items in a list
+or grid, first to last) and arrival (room opens before what fills it, as a banner's space is reserved before it fades
 in). In a sequence, each element starts `motion.stagger` after the one before it, on its own preset,
 without waiting for that one to finish. Everything else runs in parallel (C2).
 
@@ -238,7 +238,9 @@ feedback), the field they're typing in and the page behind a dialog don't move w
 dims the page; nothing on the page moves.
 
 Under reduced motion there is no stagger and no sequence: every element arrives at once on its own
-preset's `.duration-reduced`, and a chained sequence shows its last step (R12).
+preset's `.duration-reduced`, and a chained sequence shows its last step (R12). A track that reduced motion turns off (a scale, a
+slide, a travel) doesn't play at all: its element takes its end state at once, and only its opacity or
+color change runs.
 
 ## Recipes
 
