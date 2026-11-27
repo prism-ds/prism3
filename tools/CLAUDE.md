@@ -244,6 +244,10 @@ spawns it, speaks MCP to it over stdio, drives the socket with an independently 
 the real relay against the real `main.ts`. The port is read from `apps/plugin/src/agent-bridge-relay.ts`
 (`BRIDGE_PORT`), which the manifest's `allowedDomains` entry must match — change all three together
 (and `ALLOWED` in `apps/plugin/lint-network-reach.ts`, the authored literal; #3147).
+Since #4646 (owner decision A) its MCP side runs on the official SDK, `@modelcontextprotocol/server`,
+pinned exactly in the root `package.json`: the one exception to `docs/08` §7's "no MCP SDK", while
+`packages/engine/mcp.ts` stays hand-written. The SDK is loaded only when the server runs, never at the
+top of `server.ts`, because two engine gates import its `TOOLS` and the engine needs no install.
 Its `initialize` answer is the engine server's rule, imported from `packages/engine/mcp.ts`, never a
 copy (#3109). Both servers are driven with the same probes (`packages/engine/mcp-handshake-probes.ts`),
 and `mcp-test.ts` fails on any `initialize` handler in the tree that the probes' register does not name.
