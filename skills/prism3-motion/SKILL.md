@@ -238,10 +238,11 @@ feedback), the field they're typing in and the page behind a dialog don't move w
 dims the page; nothing on the page moves.
 
 Under reduced motion there is no stagger and no sequence: every element arrives at once on its own
-preset's `.duration-reduced`, and a chained sequence shows its last step (R12). A scale, slide or travel on an element that also
-fades or changes color doesn't play: the element takes its end state at once, and the fade or color
-change still runs. One on an element with no fade of its own (a sheet or end panel sliding in) becomes
-a fade instead (R7).
+preset's `.duration-reduced`, and a chained sequence shows its last step (R12). A scale, slide or travel doesn't play when its element
+also fades, or when it's an in-place indicator (the tabs underline, the switch thumb, the segmented
+pill, the accordion indicator, a press): the element takes its end state at once, and any fade or
+color change still runs. Any other movement, on an element with no fade of its own (a sheet or end
+panel sliding in), becomes a fade instead (R7).
 
 ## Recipes
 
