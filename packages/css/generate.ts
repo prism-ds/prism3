@@ -294,27 +294,43 @@ const reduced: Rule[] = [
 const SPINNER_MOTION = ['motion.turn', 'motion.turn-reduced', 'motion.enter', 'motion.enter-reduced', 'motion.enter-easing'];
 
 // ------------------------------------------------------------------------------------------------ the button's motion
-// Q146 A (#3841, #4375): the state change and the press, from the def's five motion bindings. A part's transition
-// names exactly the paint properties some color row sets on it, so a paint added to the def is animated without an
-// edit here. Under reduced motion the color change keeps its reduced duration and the press resolves to none, as the
-// def's `motion.reduceMotion` says; the press has no reduced binding.
-const BUTTON_MOTION = ['motion.state', 'motion.state-easing', 'motion.state-reduced', 'motion.press', 'motion.press-easing'];
+// Q146 A (#3841, #4375), split per state by #4629 (owner Q1 A on #4623): the motion pattern file plays `pressed` on
+// `motion.preset.press` and `pressed/release` on `motion.preset.state`, each with a scale track and a color track. CSS
+// takes the transition from the rule a property is moving TO, so the pressed rule carries the press's transitions (the
+// scale and every paint, on `motion.press`) and the resting rule carries the release's (the same properties, on
+// `motion.state`); hover and every other state keep the resting rule's. A part's transition names exactly the paint
+// properties some color row sets on it, so a paint added to the def is animated without an edit here. Under reduced
+// motion (R7) the scale goes off (no transform transition; the press resolves to none) and each color change keeps its
+// own preset's reduced duration: `motion.press-reduced` into the press, `motion.state-reduced` otherwise.
+const BUTTON_MOTION = ['motion.state', 'motion.state-easing', 'motion.state-reduced', 'motion.press', 'motion.press-easing', 'motion.press-reduced'];
 const bmotion = (key: string) => v(motionBinding(spec, key));
 /** The press's magnitude. No token holds it: Q-PS1 A keeps it a documented raw value (`check-raw-values.ts`). */
 const PRESS_SCALE = '0.98';
+const PRESSED = `${ROOT_CLASS}${STATE_SEL.pressed}`;
 const painted = new Map<string, Set<string>>();
 for (const row of spec.colors) for (const p of row.parts) {
   for (const k of Object.keys(p)) if (k !== 'part') painted.set(p.part, new Set([...(painted.get(p.part) ?? []), PAINT_PROP[k]]));
 }
-for (const [part, props] of [...painted].sort(([a], [b]) => (a === 'container' ? -1 : b === 'container' ? 1 : a.localeCompare(b)))) {
-  const each = (dur: string) => [...props].sort().map((prop) => `${prop} ${dur} ${bmotion('motion.state-easing')}`);
-  const press = part === 'container' ? [`transform ${bmotion('motion.press')} ${bmotion('motion.press-easing')}`] : [];
-  add(partSel(ROOT_CLASS, part), [['transition', [...each(bmotion('motion.state')), ...press].join(', ')]],
-    part === 'container' ? 'motion (Q146 A): the state change on motion.state, the press on motion.press' : undefined);
-  reduced.push({ sel: partSel(ROOT_CLASS, part), decls: [['transition', each(bmotion('motion.state-reduced')).join(', ')]] });
+/** One half's transition list on a part: its paints, plus the scale on the container unless reduced motion drops it. */
+const halfOf = (part: string, props: Set<string>, dur: string, easing: string, scale: boolean) => [
+  ...[...props].sort().map((prop) => `${prop} ${bmotion(dur)} ${bmotion(easing)}`),
+  ...(scale && part === 'container' ? [`transform ${bmotion(dur)} ${bmotion(easing)}`] : []),
+].join(', ');
+const parts = [...painted].sort(([a], [b]) => (a === 'container' ? -1 : b === 'container' ? 1 : a.localeCompare(b)));
+for (const [part, props] of parts) {
+  add(partSel(ROOT_CLASS, part), [['transition', halfOf(part, props, 'motion.state', 'motion.state-easing', true)]],
+    part === 'container' ? 'motion (#4629): the release and every other state change on motion.state (pressed/release)' : undefined);
+  reduced.push({ sel: partSel(ROOT_CLASS, part), decls: [['transition', halfOf(part, props, 'motion.state-reduced', 'motion.state-easing', false)]] });
 }
-add(`${ROOT_CLASS}${STATE_SEL.pressed}`, [['transform', `scale(${PRESS_SCALE})`]], 'the press: a subtle scale, never on an inert button (Q-PS1 A: the magnitude is a documented raw value)');
-reduced.push({ sel: `${ROOT_CLASS}${STATE_SEL.pressed}`, decls: [['transform', 'none']] });
+for (const [part, props] of parts) {
+  const decls: [string, string][] = [['transition', halfOf(part, props, 'motion.press', 'motion.press-easing', true)]];
+  if (part === 'container') decls.push(['transform', `scale(${PRESS_SCALE})`]);
+  add(partSel(PRESSED, part), decls,
+    part === 'container' ? 'the press (#4629): the scale and the colors on motion.press (pressed), never on an inert button (Q-PS1 A: the magnitude is a documented raw value)' : undefined);
+  const rdecls: [string, string][] = [['transition', halfOf(part, props, 'motion.press-reduced', 'motion.press-easing', false)]];
+  if (part === 'container') rdecls.push(['transform', 'none']);
+  reduced.push({ sel: partSel(PRESSED, part), decls: rdecls });
+}
 
 // Every component this package draws (the three top-level ones and what they nest) has a rule for each motion binding
 // it carries, or generation stops by name (#4375).

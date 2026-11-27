@@ -974,9 +974,9 @@
   .p3-button[aria-busy="true"] > .p3-button__spinner {
     animation: p3-fade-in var(--pds3-motion-duration-fast) var(--pds3-motion-easing-role-enter) both;
   }
-  /* motion (Q146 A): the state change on motion.state, the press on motion.press */
+  /* motion (#4629): the release and every other state change on motion.state (pressed/release) */
   .p3-button {
-    transition: background-color var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing), border-color var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing), transform var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing);
+    transition: background-color var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing), border-color var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing), transform var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing);
   }
   .p3-button > .p3-button__label {
     transition: color var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing);
@@ -990,9 +990,22 @@
   .p3-button > .p3-button__trailing-visual {
     transition: color var(--pds3-motion-preset-state-duration) var(--pds3-motion-preset-state-easing);
   }
-  /* the press: a subtle scale, never on an inert button (Q-PS1 A: the magnitude is a documented raw value) */
+  /* the press (#4629): the scale and the colors on motion.press (pressed), never on an inert button (Q-PS1 A: the magnitude is a documented raw value) */
   .p3-button:active:not(:disabled, [aria-disabled="true"]) {
+    transition: background-color var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing), border-color var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing), transform var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing);
     transform: scale(0.98);
+  }
+  .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__label {
+    transition: color var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing);
+  }
+  .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__leading-visual {
+    transition: color var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing);
+  }
+  .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__spinner {
+    transition: color var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing);
+  }
+  .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__trailing-visual {
+    transition: color var(--pds3-motion-preset-press-duration) var(--pds3-motion-preset-press-easing);
   }
   @media (prefers-reduced-motion: reduce) {
     .p3-button > .p3-button__spinner > svg {
@@ -1017,7 +1030,20 @@
       transition: color var(--pds3-motion-preset-state-duration-reduced) var(--pds3-motion-preset-state-easing);
     }
     .p3-button:active:not(:disabled, [aria-disabled="true"]) {
+      transition: background-color var(--pds3-motion-preset-press-duration-reduced) var(--pds3-motion-preset-press-easing), border-color var(--pds3-motion-preset-press-duration-reduced) var(--pds3-motion-preset-press-easing);
       transform: none;
+    }
+    .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__label {
+      transition: color var(--pds3-motion-preset-press-duration-reduced) var(--pds3-motion-preset-press-easing);
+    }
+    .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__leading-visual {
+      transition: color var(--pds3-motion-preset-press-duration-reduced) var(--pds3-motion-preset-press-easing);
+    }
+    .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__spinner {
+      transition: color var(--pds3-motion-preset-press-duration-reduced) var(--pds3-motion-preset-press-easing);
+    }
+    .p3-button:active:not(:disabled, [aria-disabled="true"]) > .p3-button__trailing-visual {
+      transition: color var(--pds3-motion-preset-press-duration-reduced) var(--pds3-motion-preset-press-easing);
     }
   }
   @keyframes p3-spin {

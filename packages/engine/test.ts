@@ -45932,7 +45932,7 @@ arm: {
 //
 // The brief's ~100–150ms state change and the 0.98 press were prose (Q-MD4 A), so nothing could read or gate them. The
 // three Button defs now bind them in `tokens`, on the presets the `hover` and `pressed` patterns name (#2857). EXPECTED
-// is typed here: the five bindings, and prism3-motion R6's rule that a control's state change takes `instant` or `fast`
+// is typed here: the six bindings (#4629 added the press's reduced duration), and prism3-motion R6's rule that a control's state change takes `instant` or `fast`
 // (a literal set, not read from the skill or the ramp), checked on the duration step each brand's preset points at.
 // ACTUAL is each def's own `tokens`, and every bound path must resolve in every committed brand's emitted tree.
 {
@@ -45940,6 +45940,7 @@ arm: {
     'motion.state': 'motion.preset.state.duration', 'motion.state-easing': 'motion.preset.state.easing',
     'motion.state-reduced': 'motion.preset.state.duration-reduced',
     'motion.press': 'motion.preset.press.duration', 'motion.press-easing': 'motion.preset.press.easing',
+    'motion.press-reduced': 'motion.preset.press.duration-reduced',
   };
   const R6 = new Set(['motion.duration.instant', 'motion.duration.fast']);
   const trees = readdirSync(resolve(HERE, 'out')).filter((f) => /^[a-z0-9-]+\.tokens\.json$/.test(f) && !f.includes('.base.'))
@@ -45958,6 +45959,9 @@ arm: {
     ok(trees.length >= 4 && slow.length === 0, `#3408 Q146 A ${id}: the state change and the press are R6-quick, instant or fast, in every brand (${slow.slice(0, 3).join(', ') || 'both'})`);
     ok(tok['motion.state-reduced'] === tok['motion.state']?.replace(/\.duration$/, '.duration-reduced'),
       `#3408 Q146 A ${id}: the reduced state change is its preset's reduced duration (${tok['motion.state-reduced']} for ${tok['motion.state']})`);
+    // #4629 (owner Q1 A on #4623): the press's color keeps its own preset's reduced duration under reduced motion (R7).
+    ok(tok['motion.press-reduced'] === tok['motion.press']?.replace(/\.duration$/, '.duration-reduced'),
+      `#4629 ${id}: the reduced press is its preset's reduced duration (${tok['motion.press-reduced']} for ${tok['motion.press']})`);
     const unresolved = trees.flatMap(({ f, t }) => {
       const root = Object.keys(t)[0];
       return Object.values(got).filter((ref) => ref.split('.').reduce((n: any, k) => n?.[k], t[root])?.$value === undefined).map((ref) => `${ref} in ${f}`);

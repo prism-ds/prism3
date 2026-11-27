@@ -22,16 +22,18 @@
  *    #4140 the token CSS follows the OS into dark wherever no `data-theme` is set, so the demo's light section must
  *    name `data-theme="light"` or, on a dark OS, it shows dark tokens and only a light-scheme run can't see it.
  *
- * 6. MOTION (Q146 A, #4375). A forced state is read once its transition has finished, never mid-flight. The button's
- *    fill and border, and its label's ink, transition on the `motion.preset.state` preset, and the press (`:active`)
- *    scales it by 0.98 (Q-PS1 A, this file's own literal) on the `motion.preset.press` preset (#2857). An inert button
- *    (disabled, inactive, pending) never scales. Under `prefers-reduced-motion: reduce` the colors transition on
- *    `motion.preset.state.duration-reduced` and the press resolves to none. Which token is bound is held by
+ * 6. MOTION (Q146 A, #4375, #4629). A forced state is read once its transition has finished, never mid-flight. The
+ *    press (`:active`) scales the button by 0.98 (Q-PS1 A, this file's own literal), and its fill, border, label ink
+ *    and scale transition on the `motion.preset.press` preset; at rest (the release, and every other change) the same
+ *    properties transition on `motion.preset.state` (#2857, the `pressed` and `pressed/release` patterns). An inert
+ *    button (disabled, inactive, pending) never scales. Under `prefers-reduced-motion: reduce` the scale has no
+ *    transition, the colors keep each preset's `.duration-reduced`, and the press resolves to none. Which token is bound is held by
  *    `check-parity.ts`'s sentinels; this holds the values.
  *
- * SELF-TEST: seven mutants, each must fail by name — the label tracking rebound, a rest fill rebound to the hover
+ * SELF-TEST: eight mutants, each must fail by name — the label tracking rebound, a rest fill rebound to the hover
  * token, a ring drawn on any `:focus` (so a mouse click shows it), the medium hit target shrunk to 24px, the
- * transitions removed, the press kept under reduced motion, and a disabled button that scales on press.
+ * transitions removed, the press played on the release's preset (#4629), the press kept under reduced motion, and a
+ * disabled button that scales on press.
  */
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
@@ -209,19 +211,21 @@ export const run = async (browser: any, extraCss = '', colorScheme: 'light' | 'd
     const rm = reduce ? 'under reduced motion: ' : '';
     for (const [theme, mode] of Object.entries(THEMES)) {
       const rest = `[data-demo="${theme}/default/filled/default/medium/rest"]`;
-      const STATE_DUR = reduce ? 'motion.preset.state.duration-reduced' : 'motion.preset.state.duration';
-      const dur = await normTime(resolved(mode, STATE_DUR));
-      const crv = await normEase(ease(mode, 'motion.preset.state.easing'));
-      for (const [part, prop] of [['', 'background-color'], ['', 'border-color'], ['.p3-button__label', 'color']]) {
-        const t = await transitionOf(rest, part, prop);
-        const what = `${rm}${theme} filled rest${part ? ` ${part}` : ''} ${prop}`;
-        ok(!!t && t.duration === dur && t.easing === crv, `${what} transitions ${t ? `over ${t.duration} on ${t.easing}` : 'not at all'}, ${STATE_DUR} and motion.preset.state.easing resolve to ${dur} and ${crv}`);
-      }
-      const tf = await transitionOf(rest, '', 'transform');
-      if (!reduce) {
-        const pdur = await normTime(resolved(mode, 'motion.preset.press.duration'));
-        const pcrv = await normEase(ease(mode, 'motion.preset.press.easing'));
-        ok(!!tf && tf.duration === pdur && tf.easing === pcrv, `${theme} filled rest transform (the press) transitions ${tf ? `over ${tf.duration} on ${tf.easing}` : 'not at all'}, motion.preset.press.duration and motion.preset.press.easing resolve to ${pdur} and ${pcrv}`);
+      // #4629: each half is read in the state it plays into, its colors and its scale on one preset: the release (and
+      // every other change) at rest on `motion.preset.state`, the press forced `:active` on `motion.preset.press`.
+      // Under reduced motion the scale has no transition and each color keeps its own preset's reduced duration.
+      for (const [half, preset, pseudo] of [['rest (the release)', 'motion.preset.state', []], [':active (the press)', 'motion.preset.press', ['active']]] as [string, string, string[]][]) {
+        await force(rest, pseudo);
+        const DUR = `${preset}.${reduce ? 'duration-reduced' : 'duration'}`;
+        const dur = await normTime(resolved(mode, DUR));
+        const crv = await normEase(ease(mode, `${preset}.easing`));
+        for (const [part, prop] of [['', 'background-color'], ['', 'border-color'], ['.p3-button__label', 'color'], ['', 'transform']]) {
+          const t = await transitionOf(rest, part, prop);
+          const what = `${rm}${theme} filled ${half}${part ? ` ${part}` : ''} ${prop}`;
+          if (reduce && prop === 'transform') ok(!t, `${what} transitions ${t ? `over ${t.duration} on ${t.easing}` : 'not at all'}: under reduced motion the scale goes off (R7)`);
+          else ok(!!t && t.duration === dur && t.easing === crv, `${what} transitions ${t ? `over ${t.duration} on ${t.easing}` : 'not at all'}, ${DUR} and ${preset}.easing resolve to ${dur} and ${crv}`);
+        }
+        await force(rest, []);
       }
       const scale = (q: string) => page.evaluate((sel: string) => getComputedStyle(document.querySelector(sel)!).transform, q);
       const want = reduce ? 'none' : `matrix(${PRESS_SCALE}, 0, 0, ${PRESS_SCALE}, 0, 0)`;
@@ -273,7 +277,11 @@ const MUTANTS: { name: string; css: string; mustName: RegExp }[] = [
     mustName: /default\/filled\/default\/medium\/rest background-color is .*color\.interactive\.primary\.fill\.rest/ },
   { name: 'the transitions removed',
     css: '.p3-button, .p3-button > * { transition: none !important; }',
-    mustName: /light filled rest background-color transitions not at all, motion\.preset\.state\.duration and/ },
+    mustName: /light filled rest \(the release\) background-color transitions not at all, motion\.preset\.state\.duration and/ },
+  // #4629: the pre-split shape, where the press's colors played on the release's preset.
+  { name: 'the press played on the release preset',
+    css: '.p3-button:active { transition-duration: var(--pds3-motion-preset-state-duration) !important; }',
+    mustName: /light filled :active \(the press\) background-color transitions over [^,]+ on .*, motion\.preset\.press\.duration and motion\.preset\.press\.easing resolve/ },
   { name: 'the press kept under reduced motion',
     css: '@media (prefers-reduced-motion: reduce) { .p3-button:active:not(:disabled, [aria-disabled="true"]) { transform: scale(0.98) !important; } }',
     mustName: /under reduced motion: light filled :active transform is matrix\(0\.98, 0, 0, 0\.98, 0, 0\), the press resolves to none/ },
