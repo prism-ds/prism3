@@ -63,7 +63,7 @@
 import { localeFreeCompare } from './locale-free-order';
 import { hexToRgb, inGamut, rgbToOklch } from './color';
 import { toDesignMd } from './design-md';
-import type { FileFactsReport } from './file-facts';
+import { requireFactsFormat, type FileFactsReport } from './file-facts';
 import type { BrandInput, OKLCH } from './theme';
 
 export const FILE_SEED_FORMAT = 'prism3-file-seed/0.1';
@@ -395,6 +395,7 @@ const pickRadius = (r: FileFactsReport): Pick<number> => {
 /* ── the seed ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 export const seedFromFacts = (report: FileFactsReport, id = 'seed'): FileSeed => {
+  requireFactsFormat(report.format);     // a 0.1 or 0.2 report reads; any other id is refused by name (#2853 Q5 A)
   const colors = pickColors(report);
   const { primary, accent } = colors;
   const actionPalette = pickAction(report, colors);

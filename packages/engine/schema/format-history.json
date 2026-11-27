@@ -15,7 +15,8 @@
       {"version":"1.3","by":"feat/motion-patterns","shape":"60348d54f6333cc6","note":"motion.patterns: the motion patterns a def plays, by name, beside the prose generated from them (#2857 phase 2)"}
     ],
     "prism3-file-facts": [
-      {"version":"0.1","by":"seed (#4458)","shape":"ba9956b6b3faf7e5","note":"The version on main when this record began (#4458). Earlier versions predate it."}
+      {"version":"0.1","by":"seed (#4458)","shape":"ba9956b6b3faf7e5","note":"The version on main when this record began (#4458). Earlier versions predate it."},
+      {"version":"0.2","by":"tools/theme-inference-facts-scope","shape":"9f649b9f716e643d","note":"Adds scope (the pages or layers read, given as the whole file, the selection or explicit ids) and inventory (top-level frames with geometry, background, explicit modes and a structural fingerprint) (#2853 Q5 A)."}
     ]
   }
 }
