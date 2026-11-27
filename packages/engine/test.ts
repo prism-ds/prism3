@@ -47069,6 +47069,13 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
       `#2075 seed: the ${label} seed's design.md parses back to its input, validates and builds (errors ${JSON.stringify(errors)}, built ${built})`);
   }
   ok(JSON.stringify(seedFromFacts(p2)) === JSON.stringify(s), '#2075 seed: the same report seeds the same bytes');
+  // #2853 Q5 A: the facts format moved to 0.2 (scope and inventory added). A 0.1 capture still seeds, to the same picks;
+  // an id this engine does not know is refused by name rather than read on trust.
+  const old = seedFromFacts({ ...p2, format: 'prism3-file-facts/0.1' } as unknown as R);
+  ok(old.factsFormat === 'prism3-file-facts/0.1' && JSON.stringify(old.picks) === JSON.stringify(s.picks), '#2853 seed: a 0.1 facts report still seeds, to the same picks');
+  let refused = '';
+  try { seedFromFacts({ ...p2, format: 'prism3-file-facts/9.9' } as unknown as R); } catch (e) { refused = (e as Error).message; }
+  ok(refused.startsWith('file facts report format "prism3-file-facts/9.9" is not one this engine reads'), `#2853 seed: an unknown facts format is refused by name (got ${JSON.stringify(refused)})`);
 }
 
 // #3873 — an AUTHORED interactive anchor is applied exactly (#331), and `pickBrand` swapped an off-ramp step for 500

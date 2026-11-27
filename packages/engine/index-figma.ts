@@ -29,7 +29,7 @@ export { MATERIALIZATION_RENAMES, STYLE_RENAMES, planStyleRenames } from './mate
 export type { StyleRenameStep, StyleRule } from './materialization-renames';
 export { axisSource, coreGroupOf, inAxis, ownedCoreGroup, rootOf, tailOf } from './figma-names';
 export { STYLE_GUIDE_GROUPS, styleGuideGroup, styleGuideGroupOf } from './style-guide-groups';
-export { FILE_FACTS_FORMAT, scanFileFacts, sourceFromSnapshot } from './file-facts';
+export { FACTS_FORMATS_READ, FILE_FACTS_FORMAT, ScopeError, requireFactsFormat, scanFileFacts, scopePages, sourceFromSnapshot } from './file-facts';
 export type {
-  Binding, FactsComponent, FactsNode, FactsPage, FactsSource, FactsStyle, FileFactsReport, TextRun,
+  Binding, FactsComponent, FactsNode, FactsPage, FactsScope, FactsSource, FactsStyle, FileFactsReport, InventoryRow, ScopeRequest, TextRun,
 } from './file-facts';
