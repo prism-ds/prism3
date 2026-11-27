@@ -972,6 +972,8 @@ const SWEEP_PLACES = {
   type: ['[data-p3="tab-type"]'],
   shape: ['[data-p3="tab-shape"]'],
   depth: ['[data-p3="tab-depth"]'],
+  // #4571 (Q-ME3 A): Motion, split from Depth & motion.
+  motion: ['[data-p3="tab-motion"]'],
   layout: ['[data-p3="tab-layout"]'],
   // #2909 Q2909.9 A: the web's Components is a rail area, as the plugin's is, not a tab.
   components: ['[data-p3="rail-components"]'],

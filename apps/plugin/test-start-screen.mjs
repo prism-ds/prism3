@@ -1228,7 +1228,9 @@ console.log('\n8. the built panel is legible in both schemes and both Figma them
   /** The moved tabs the sweep measures (S8.2), each by its tab's hook and its levers' hook. Literal. */
   const TAB_SWEEP = [
     ['[data-p3="tab-color"]', '[data-p3="palettes-levers"]', 'Color'], ['[data-p3="tab-type"]', '[data-p3="type-levers"]', 'Type'],
-    ['[data-p3="tab-shape"]', '[data-p3="shape-levers"]', 'Shape'], ['[data-p3="tab-depth"]', '[data-p3="depth-levers"]', 'Depth & motion'],
+    ['[data-p3="tab-shape"]', '[data-p3="shape-levers"]', 'Shape'], ['[data-p3="tab-depth"]', '[data-p3="depth-levers"]', 'Depth'],
+    // #4571 (Q-ME3 A): Motion, split from Depth & motion.
+    ['[data-p3="tab-motion"]', '[data-p3="motion-levers"]', 'Motion'],
     ['[data-p3="tab-layout"]', '[data-p3="layout-levers"]', 'Layout'], ['[data-p3="rail-components"]', '[data-p3="components-levers"]', 'Components'],
   ];
   const measure = async (page, where) => {
