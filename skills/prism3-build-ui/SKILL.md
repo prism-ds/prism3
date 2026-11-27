@@ -258,10 +258,10 @@ swap the ink.
 
 After the token check, run a companion pass for general web quality against a brand-neutral rule
 set, such as Vercel's Web Interface Guidelines
-(https://github.com/vercel-labs/web-interface-guidelines), which covers what this skill doesn't:
-focus, keyboard, forms, reduced motion and performance; where the two disagree, Prism3's tokens win
-on every value (a color, a size, a radius, a duration) and the companion wins on general web
-behavior, and its brand-specific copywriting rules don't apply.
+(https://github.com/vercel-labs/web-interface-guidelines). It covers what this skill doesn't: focus,
+keyboard, forms and performance. Where the two disagree, Prism3's tokens win on every value (a color,
+a size, a radius, a duration), motion and reduced motion follow `prism3-motion`, and the companion
+wins on other web behavior. Its brand-specific copywriting rules don't apply.
 
 Then reread the brief against what you built. Each thing it asks for is either built from a Prism3
 component and its tokens, or named in your report as not built ("Say what you can't build", above).

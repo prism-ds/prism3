@@ -1057,7 +1057,7 @@ const OWNER_RULES: OwnerRule[] = [
     skills: ['prism3-build-ui'],
     section: '## The self-check',
     roles: [],
-    must: [/companion pass/i, /https:\/\/github\.com\/vercel-labs\/web-interface-guidelines/, /Prism3's tokens win\s+on every value/i, /companion wins on general web\s+behavior/i],
+    must: [/companion pass/i, /https:\/\/github\.com\/vercel-labs\/web-interface-guidelines/, /Prism3's tokens win\s+on every value/i, /motion and reduced motion follow `prism3-motion`/i, /companion\s+wins on other web behavior/i],
     resolve: [],
   },
   // #4468 (owner decision A): every build ends with a ledger under four headings, in this order of the
