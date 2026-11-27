@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
 import { scoreR1, scoreR2, buildOracle, type Violation } from '../../tools/agent-adherence/score-code';
 import { TOKEN_TREE, TOKEN_BASE, TOKEN_OVERLAYS, COMPONENTS } from '../../tools/agent-adherence/oracle';
-import { isEntry } from '@prism3/engine/harness';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');

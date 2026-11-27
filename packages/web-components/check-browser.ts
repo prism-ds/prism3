@@ -26,7 +26,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle, ELEMENT_SOURCE } from './bundle';
-import { isEntry } from '@prism3/engine/harness';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');

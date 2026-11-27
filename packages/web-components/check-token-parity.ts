@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { bundle, sourceOf } from './bundle';
 import { runParity as runButton, MARKUP, type Form as ButtonForm } from '../css/check-parity';
 import { runParity as runFields, isFilled, CONTRACTS as FIELD_CONTRACTS, type Form as FieldForm } from '../css/check-parity-fields';
-import { isEntry } from '@prism3/engine/harness';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CSS_DIR = resolve(HERE, '../css');

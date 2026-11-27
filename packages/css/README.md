@@ -262,7 +262,7 @@ The button def's `codeOnly` list, and its spinner and focus ring:
 | Press behavior, form integration (`runtime-behavior`) | — | S4: suppressing clicks while pending or inactive, the polite live region that announces busy, form status. |
 | Inactive (`not-projected`) | Takes the disabled paint, stays focusable. | Surfacing the blockage reason on focus. |
 | State change and press (`motion`, Q146 A, #4375) | The fill and border, and each part's ink, transition on `motion.state` with `motion.state-easing` (bound to the `motion.preset.state` preset): exactly the paint properties the spec's color rows set on the part. The press (`:active`) scales the button by 0.98, a documented raw value (Q-PS1 A), on `motion.press` with `motion.press-easing` (the `motion.preset.press` preset); an inert button (disabled, inactive, pending) never scales. Under reduced motion the colors keep `motion.state-reduced` and the press is none. The generator stops by name on a motion binding it has no rule for. | — |
-| Spinner rotation, reduced motion, enter fade (`motion`) | Turns on `motion.duration.spin`, slowed to `motion.duration-reduced.spin` under reduced motion; fades in on the `motion.preset.pop` preset. | The host's anti-flash delay and minimum show time (script). |
+| Spinner rotation, reduced motion, enter fade (`motion`) | Turns on `motion.duration.spin`, slowed to `motion.duration-reduced.spin` under reduced motion; fades in on `motion.duration.fast`. | The host's anti-flash delay and minimum show time (script). |
 
 ## The fields: decisions, and what the defs ask of code (S3)
 

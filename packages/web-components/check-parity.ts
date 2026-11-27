@@ -26,7 +26,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from '../css/emission';
 import { bundle, ELEMENT_SOURCE } from './bundle';
-import { isEntry } from '@prism3/engine/harness';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');

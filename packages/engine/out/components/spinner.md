@@ -64,9 +64,9 @@ Use a spinner for a short wait with no known end — about 200ms to 5s — insid
 
 ### Motion
 
-- **Enter:** A quick fade in on mount: opacity on the `motion.preset.pop` preset. The host decides when to mount it.
+- **Enter:** A quick fade in on mount: opacity over `motion.duration.fast` on the `motion.easing-role.enter` curve. The host decides when to mount it.
 - **Exit:** none
-- **Reduced motion:** The turn runs `motion.duration.spin` per turn, linear and infinite. Under prefers-reduced-motion it runs `motion.duration-reduced.spin` per turn instead — slower, never stopped. The enter fade stays, on `motion.preset.pop.duration-reduced` — a change of opacity is not vestibular motion.
+- **Reduced motion:** The turn runs `motion.duration.spin` per turn, linear and infinite. Under prefers-reduced-motion it runs `motion.duration-reduced.spin` per turn instead — slower, never stopped. The enter fade stays, on `motion.duration-reduced.fast` — a change of opacity is not vestibular motion.
 
 ## Content guidelines
 

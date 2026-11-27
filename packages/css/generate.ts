@@ -36,7 +36,7 @@ import { claimMotion, motionBinding, readUncommitted, uniformRedline } from './e
 import { hitTargetFloor, pendingReplacement } from './residual';
 import { tree, TOKEN_ROOT, v, leaf, kebab, tracking, fmt, type Rule } from './tokens';
 import { fieldLabelCss, fieldMessageCss, passwordFieldCss, textFieldCss } from './fields';
-import { isEntry } from '@prism3/engine/harness';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const CSS_FILE = resolve(HERE, 'button.css');

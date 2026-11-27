@@ -41,7 +41,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle, sourceOf } from './bundle';
 import { COPY, ICON, fieldHtml, type FieldOpts } from '../css/demo-fields';
-import { isEntry } from '@prism3/engine/harness';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');

@@ -94,11 +94,9 @@ export const spinner: ComponentDef = {
     // part binds them: Figma draws no motion.
     'motion.turn': 'motion.duration.spin',
     'motion.turn-reduced': 'motion.duration-reduced.spin',
-    // The enter fade binds the quick-arrival preset, `pop` (#2857): `fast` on the enter role by default, the values it
-    // had before the presets. The turn stays on the loop period: no preset times a loop.
-    'motion.enter': 'motion.preset.pop.duration',
-    'motion.enter-reduced': 'motion.preset.pop.duration-reduced',
-    'motion.enter-easing': 'motion.preset.pop.easing',
+    'motion.enter': 'motion.duration.fast',
+    'motion.enter-reduced': 'motion.duration-reduced.fast',
+    'motion.enter-easing': 'motion.easing-role.enter',
   },
 
   anatomy: {
@@ -159,7 +157,7 @@ export const spinner: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'enter fade — the spinner fades in when it mounts: `opacity` 0 → 1 over `var(--motion-preset-pop-duration)` on `var(--motion-preset-pop-easing)`, and under reduced motion over `var(--motion-preset-pop-duration-reduced)`, because a change of opacity is not vestibular motion. Figma holds the visible member.',
+          'enter fade — the spinner fades in when it mounts: `opacity` 0 → 1 over `var(--motion-duration-fast)` on `var(--motion-easing-role-enter)`, and under reduced motion over `var(--motion-duration-reduced-fast)`, because a change of opacity is not vestibular motion. Figma holds the visible member.',
       },
       {
         class: 'runtime-behavior',
@@ -243,9 +241,9 @@ export const spinner: ComponentDef = {
   },
 
   motion: {
-    enter: 'A quick fade in on mount: opacity on the `motion.preset.pop` preset. The host decides when to mount it.',
+    enter: 'A quick fade in on mount: opacity over `motion.duration.fast` on the `motion.easing-role.enter` curve. The host decides when to mount it.',
     exit: 'none',
-    reduceMotion: 'The turn runs `motion.duration.spin` per turn, linear and infinite. Under prefers-reduced-motion it runs `motion.duration-reduced.spin` per turn instead — slower, never stopped. The enter fade stays, on `motion.preset.pop.duration-reduced` — a change of opacity is not vestibular motion.',
+    reduceMotion: 'The turn runs `motion.duration.spin` per turn, linear and infinite. Under prefers-reduced-motion it runs `motion.duration-reduced.spin` per turn instead — slower, never stopped. The enter fade stays, on `motion.duration-reduced.fast` — a change of opacity is not vestibular motion.',
   },
 
   notes: {
