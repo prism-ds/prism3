@@ -248,8 +248,8 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
     const shown = now === null ? P.noDelay : `${now} · ${resolved(now)}`;
     const cell = hook(h('div', 'p3-tweight p3-preset-slot'), 'preset-slot');
     cell.dataset.slot = slot;
-    const name = h('label', 'p3-field-label', P.slot[slot]);
-    name.htmlFor = id;
+    // The easing rows' label (QA-B2): the slot's name first, its token under it.
+    const name = tokenLabel(`motion.preset.${preset}${half === 'exit' ? '.exit' : ''}.${slot}`, P.slot[slot], id, { wrap: true });
     const btn = pickButton(key, 'preset-pick', id, shown, `${P.title(preset, half, P.slot[slot].toLowerCase() as PresetSlot)}: ${shown}. Pick a value`, set, readOnly);
     btn.dataset.preset = preset;
     btn.dataset.half = half;
@@ -261,11 +261,12 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
     const targets: SlotTarget[] = slot === 'duration' ? durationTargetsFor(theme.motion, easingNow)
       : slot === 'easing' ? presetSlotTargets(theme.motion).easing : presetSlotTargets(theme.motion).delay;
     const values: PickerValue[] = targets.map((t, i) => ({
-      v: i + 1, label: t.path, note: resolved(t.path), group: P.groups[t.group],
-      sample: (e: HTMLElement) => { e.dataset.path = t.path; const b = bezierOf(t.path); if (b) e.append(curveSvg(b)); },
+      v: i + 1, label: t.path, group: P.groups[t.group],
+      // The sample: what the target resolves to in the mode in view, and its curve where it has one.
+      sample: (e: HTMLElement) => { e.dataset.path = t.path; e.append(h('span', 'p3-preset-resolved', resolved(t.path))); const b = bezierOf(t.path); if (b) e.append(curveSvg(b)); },
     }));
     // "No delay" is the slot unset: v 0 resets it.
-    if (slot === 'delay') values.unshift({ v: 0, label: P.noDelay, note: P.noDelayNote, group: P.groups.delay, sample: (e) => { e.dataset.path = ''; } });
+    if (slot === 'delay') values.unshift({ v: 0, label: P.noDelay, group: P.groups.delay, sample: (e) => { e.dataset.path = ''; e.append(h('span', 'p3-preset-resolved', P.noDelayNote)); } });
     const cur = now === null ? 0 : targets.findIndex((t) => t.path === now) + 1;
     const pk = valuePicker({
       name: P.title(preset, half, P.slot[slot].toLowerCase() as PresetSlot), modeLabel: modeLabel(currentMode), hint: P.hint[slot],

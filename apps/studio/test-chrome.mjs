@@ -10145,6 +10145,10 @@ if (runs('4571')) for (const host of ['web', 'figma']) {
     await hooks.need(page, '[data-p3="value-picker"]');
     const du = await pickerValues(page);
     ok(du.length === 9 && du.every((v) => v.path.startsWith('duration.')), `${where}: the duration picker lists the nine steps (${du.map((v) => v.path).join(', ')})`);
+    // The writes, read back from the persisted brand: web, where the brand persists to localStorage (the figma host
+    // keeps it in the file, so section 23's Q22 writes run on web too).
+    if (host === 'figma') await page.keyboard.press('Escape');
+    else {
     // A pick writes the slot's path.
     await pickPath(page, 'duration.slow');
     await waitPersisted(page, (b) => b.motionPersonality?.presets?.surface?.duration === 'duration.slow');
@@ -10188,12 +10192,14 @@ if (runs('4571')) for (const host of ['web', 'figma']) {
     await waitPersisted(page, (b) => b.motionPersonality?.presets?.surface === undefined);
     const b4 = await persisted(page);
     ok(JSON.stringify(b4) === JSON.stringify(b0), `#4571 ${host}: Reset returns surface to its default, and the brand to the one loaded`);
+    }
     // Brand-wide: previewing Dark, every preset picker is disabled under one line, and nothing writes.
     await chooseMode(page, 'dark');
     await hooks.need(page, '[data-p3="presets-brand-wide"]');
     const dk = await page.evaluate(() => ({ n: document.querySelectorAll('[data-p3="preset-pick"]').length, enabled: document.querySelectorAll('[data-p3="preset-pick"]:not(:disabled)').length,
       line: document.querySelector('[data-p3="presets-brand-wide"]')?.textContent ?? null }));
-    ok(dk.n === 36 && dk.enabled === 0 && dk.line === 'Presets are brand-wide. Preview Light to edit them.',
+    // 36 own slots, and on web surface's exit, still open from above, 3 more.
+    ok(dk.n === (host === 'web' ? 39 : 36) && dk.enabled === 0 && dk.line === 'Presets are brand-wide. Preview Light to edit them.',
       `#4571 previewing Dark, every preset picker is disabled under one line (${JSON.stringify(dk)})`);
     ok(errors.length === 0, `${where}: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
   } catch (e) {
@@ -12619,7 +12625,7 @@ const FOCUS_PLACE_FLOOR = 15;
  *  display-only since Q196, so it has none). Anything else that turns focusable in those views is read too, and must
  *  hold the same contract. */
 const SWEPT_LEGACY = ['[data-p3="components-style-guide"]', '[data-p3="inspect-token-list"]', '[data-p3="brand-style-guide"]',
-  '[data-p3="depth-style-guide"]', '[data-p3="interactive-style-guide"]'];
+  '[data-p3="depth-style-guide"]', '[data-p3="motion-style-guide"]', '[data-p3="interactive-style-guide"]'];   // #4571: Motion's, split from Depth's
 const FOCUS_SWEEP_SKIP = INSPECT_LEGACY.filter((h) => !SWEPT_LEGACY.includes(h));
 /** B2 (#2487): the legacy controls that drew the browser's 1px ring, each of which the sweep must now reach and measure:
  *  Brand's surface select, Depth & motion's replay and speed, and the token list's segments (Inspect › Token list, on
@@ -14199,7 +14205,8 @@ const EXPECT_HEADINGS = {
   // #4571 (Q-ME3 A): split from Depth & motion, with the presets' lever.
   motion: {
     L1: ['Motion', 'Presets'],
-    L2: ['Motion tempo', 'Easing per motion role', 'Motion presets'],
+    // Each preset's name heads its row at L2, as a Type card's name does; its slot rows are name-and-token rows.
+    L2: ['Motion tempo', 'Easing per motion role', 'Motion presets', 'state', 'fade', 'crossfade', 'move', 'reveal', 'draw', 'surface', 'expand', 'step', 'settle', 'pop', 'press'],
   },
   layout: {
     L1: ['Breakpoints', 'Grid', 'Containers'],
@@ -16326,8 +16333,10 @@ for (const host of ['web', 'figma']) {
               `${at}: a Tab walk from the line stops only on the named exceptions (${walk.fwd.length} stops${strays.length ? `; reached ${[...new Set(strays)].slice(0, 6).join(', ')}` : ''}; Shift+Tab ${walk.backInPane ? `stayed in the pane on ${walk.backHook}` : 'left the pane'})`);
             const ax = await roAxUnderPane(page);
             const axLive = ax.enabled.filter((x) => !RO_EXCEPTIONS.includes(x.hook));
-            ok(ax.found && axLive.length === 0 && ax.disabled >= RO_AX_DISABLED_FLOOR,
-              `${at}: the accessibility tree reports every setting under the levers pane disabled (pane found ${ax.found}; ${ax.disabled} disabled, floor ${RO_AX_DISABLED_FLOOR}${axLive.length ? `; enabled: ${axLive.slice(0, 5).map((x) => `${x.role} "${x.name}" [${x.hook}]`).join(', ')}` : ''})`);
+            // #4571: Depth, split from Depth & motion, holds one setting with Shadow tint folded: its softness slider.
+            const axFloor = place === 'depth' ? 1 : RO_AX_DISABLED_FLOOR;
+            ok(ax.found && axLive.length === 0 && ax.disabled >= axFloor,
+              `${at}: the accessibility tree reports every setting under the levers pane disabled (pane found ${ax.found}; ${ax.disabled} disabled, floor ${axFloor}${axLive.length ? `; enabled: ${axLive.slice(0, 5).map((x) => `${x.role} "${x.name}" [${x.hook}]`).join(', ')}` : ''})`);
             ok(ax.names.includes(RO_LINE(name)), `${at}: the accessibility tree reads the line under the levers pane`);
             if (place === 'color-fills' && mode === 'hc-light') {
               // The exceptions work: an ⓘ opens its help, a Jump to link scrolls the pane (RX1 A).
@@ -22718,7 +22727,10 @@ const RHYTHM_PLACES = {
   // each open a set's card alone.
   'color-interactive': { rows: 9, pairs: 4 },
   // #3079: Type's per-text-type levers moved into one card each, a card one row; measured 18 rows and 4 pairs.
-  type: { rows: 18, pairs: 4 }, shape: { rows: 4, pairs: 1 }, depth: { rows: 4, pairs: 1 },
+  type: { rows: 18, pairs: 4 }, shape: { rows: 4, pairs: 1 },
+  // #4571 (Q-ME3 A): Depth keeps softness and Shadow tint (2 rows; tint sits in Elevation's fold, so no pair), and
+  // Motion holds tempo and easing (a pair) and Presets.
+  depth: { rows: 2, pairs: 0 }, motion: { rows: 3, pairs: 1 },
   layout: { rows: 4, pairs: 1 }, components: { rows: 19, pairs: 10 }, export: { rows: 5, pairs: 4 },
 };
 /** Every control the second check holds off a name. */
