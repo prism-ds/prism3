@@ -38,9 +38,10 @@ import { buildFigmaColor, buildFigmaFont, buildFigmaFontFluid, buildFigmaTextSty
 import type { FigmaCollectionFile } from './emit-figma';
 import { buildAnimationStylesPlan } from './figma-animation-styles';
 import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
-import { judgeBelowFloor, KNOWN_PENDING } from './lint-shadcn-contrast';
+import { judgeBelowFloor, KNOWN_PENDING, parseFloors } from './lint-shadcn-contrast';
 import { handoffBrands, readHandoff } from './emit-shadcn';
-import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly } from './emit-dtcg-overlay';
+import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly, buildWebBase } from './emit-dtcg-overlay';
+import { presetSlotTargets, durationTargetsFor, slotPathsOf, easingSourceOf, presetSlotsSet, presetUsedBy, patternsReachedBy, trackTargets } from './motion-editor';
 import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme, windowsInvalidName } from './emit-dtcg';
@@ -47068,6 +47069,13 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
       `#2075 seed: the ${label} seed's design.md parses back to its input, validates and builds (errors ${JSON.stringify(errors)}, built ${built})`);
   }
   ok(JSON.stringify(seedFromFacts(p2)) === JSON.stringify(s), '#2075 seed: the same report seeds the same bytes');
+  // #2853 Q5 A: the facts format moved to 0.2 (scope and inventory added). A 0.1 capture still seeds, to the same picks;
+  // an id this engine does not know is refused by name rather than read on trust.
+  const old = seedFromFacts({ ...p2, format: 'prism3-file-facts/0.1' } as unknown as R);
+  ok(old.factsFormat === 'prism3-file-facts/0.1' && JSON.stringify(old.picks) === JSON.stringify(s.picks), '#2853 seed: a 0.1 facts report still seeds, to the same picks');
+  let refused = '';
+  try { seedFromFacts({ ...p2, format: 'prism3-file-facts/9.9' } as unknown as R); } catch (e) { refused = (e as Error).message; }
+  ok(refused.startsWith('file facts report format "prism3-file-facts/9.9" is not one this engine reads'), `#2853 seed: an unknown facts format is refused by name (got ${JSON.stringify(refused)})`);
 }
 
 // #3873 — an AUTHORED interactive anchor is applied exactly (#331), and `pickBrand` swapped an off-ramp step for 500
@@ -48016,6 +48024,46 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   ok(k.verdict === 'failing' && k.note.includes('BELOW ACCEPTED 4.24'), `#2997 a KNOWN pair below its accepted floor fails by name (got ${k.verdict}${k.note})`);
 }
 
+// #4587 (owner decision 2026-11-27): an accepted floor is compared with the same entry's floor at the base. Edited down,
+// it widens what the owner accepted and fails by name, whatever the measured ratio; a pair that improved under an
+// unchanged floor passes with a WARNING to record the new ratio; a new entry is written at its measurement, not under it;
+// a pair below its floor still fails as BELOW ACCEPTED. Entries and base floors are typed here, not read from KNOWN or
+// git, and the ratios are the ones the gate measured for `prism3 light: destructive/90 on card` (3.97...).
+// BY-NAME MUTATIONS: drop the FLOOR LOWERED return from `judgeBelowFloor` → the two `edited down` arms fail; drop the
+// `was === undefined` condition from the SLACK return → the `improved` arm fails (got failing … SLACK).
+{
+  const key = 'prism3 light: destructive/90 on card';
+  const at = (floor: number) => ({ [key]: { floor, why: 'fixture' } });
+  const base = (floor: number) => ({ [key]: floor });
+  const lowered = judgeBelowFloor(key, 3.975, at(3.0), {}, base(3.97));
+  ok(lowered.verdict === 'failing' && lowered.note.includes("FLOOR LOWERED KNOWN: floor 3, the base's floor 3.97"),
+    `#4587 a KNOWN floor edited down from the base's 3.97 to 3.00 fails as FLOOR LOWERED by name (got ${lowered.verdict}${lowered.note})`);
+  const fellWith = judgeBelowFloor(key, 3.505, {}, at(3.5), base(3.77));
+  ok(fellWith.verdict === 'failing' && fellWith.note.includes("FLOOR LOWERED PENDING: floor 3.5, the base's floor 3.77"),
+    `#4587 a KNOWN_PENDING floor edited down to follow its falling ratio fails as FLOOR LOWERED by name, with no slack (got ${fellWith.verdict}${fellWith.note})`);
+  const improved = judgeBelowFloor(key, 4.105, at(3.97), {}, base(3.97));
+  ok(improved.verdict === 'known' && improved.note === '' &&
+    improved.warning === `WARNING ${key}: measured 4.1, floor 3.97 — the pair improved; record 4.1 as its floor in KNOWN`,
+    `#4587 a pair that improved under an unchanged floor passes with a WARNING naming the pair, the ratio and the floor (got ${improved.verdict}${improved.note}, warning ${improved.warning})`);
+  const fresh = judgeBelowFloor(key, 3.975, at(3.0), {}, {});
+  ok(fresh.verdict === 'failing' && fresh.note.includes('SLACK KNOWN: a new entry, measured 3.97, floor 3'),
+    `#4587 a new KNOWN entry more than 0.01 under its measured ratio fails as SLACK by name (got ${fresh.verdict}${fresh.note})`);
+  const below = judgeBelowFloor(key, 3.905, at(3.97), {}, base(3.97));
+  ok(below.verdict === 'failing' && below.note.includes('BELOW ACCEPTED 3.97'),
+    `#4587 a pair below its unchanged floor still fails as BELOW ACCEPTED (got ${below.verdict}${below.note})`);
+  for (const [floor, was] of [[3.97, 3.97], [3.96, 3.96], [3.97, 3.9], [3.96, undefined]] as const) {
+    const v = judgeBelowFloor(key, 3.975, at(floor), {}, was === undefined ? {} : base(was));
+    ok(v.verdict === 'known' && v.note === '' && v.warning === undefined,
+      `#4587 a floor at, or one hundredth under, its measured 3.97, not below the base's, holds quietly (floor ${floor}, base ${was}, got ${v.verdict}${v.note} ${v.warning ?? ''})`);
+  }
+  const src = "export const KNOWN: Readonly<Record<string, Accepted>> = {\n  'a light: x on y': { floor: 3.97, why: 'q' },\n};\n" +
+    "export const KNOWN_PENDING: Readonly<Record<string, Accepted>> = {\n  'b dark: x on y': { floor: 4, why: \"q's\" },\n};\n";
+  const parsed = parseFloors(src);
+  ok(JSON.stringify(parsed) === JSON.stringify({ 'a light: x on y': 3.97, 'b dark: x on y': 4 }),
+    `#4587 parseFloors reads both tables' floors out of a copy of the gate's source (got ${JSON.stringify(parsed)})`);
+  ok(parseFloors(src.replace('KNOWN_PENDING', 'RENAMED')) === null, '#4587 parseFloors returns null, not an empty base, when a table is missing');
+}
+
 // #4428: a regression arm for #4155's filter in the shadcn projector's brand walk (`handoffBrands`). Since #4282 the
 // handoff also carries a web-only `<brand>.web.base.tokens.json` with no overlays; read as a brand, it crashed both
 // Chromium gates. A planted web base is skipped, and every brand the walk returns over the committed handoff reads.
@@ -48103,6 +48151,221 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   const stillContested = [['text-field', /ship both/], ['checkbox-row', /BORDER AND FILL AT ONE COORDINATE/], ['select', /settled as text-field settles it/]]
     .filter(([id, re]) => contestedOf(id as string).some((e) => (re as RegExp).test(e))).map(([id]) => id);
   ok(stillContested.length === 0, `#1716 the three entries that describe themselves as decided are out of contested (still there: ${stillContested.join(', ') || 'none'})`);
+}
+
+// #4571 — THE MOTION EDITOR'S READ MODEL (`motion-editor.ts`, proposal §5 PR 1). SUBJECT = the helpers' lists and
+// maps. ORACLE = the engine's own acceptance: every target a picker offers is fed back to `brandTheme` and must
+// compile, and the target lists are bounded by refusals the engine names. "Used by" is checked against tracks typed
+// here from the starter set (Q-PT16 A), never against `MOTION_PATTERNS` read back.
+{
+  const base = brandTheme(MINIMAL_BRAND);
+  const m = base.motion;
+  const targets = presetSlotTargets(m);
+  const compileWith = (presets: Record<string, unknown>): string => {
+    try { brandTheme({ ...MINIMAL_BRAND, motionPersonality: { presets } } as BrandInput); return ''; } catch (e) { return (e as Error).message; }
+  };
+  // Every easing target compiles on an arriving preset, with the duration the spring rule pairs it with.
+  const easingRefused = targets.easing.map((t) => [t.path, compileWith({ surface: { easing: t.path, duration: durationTargetsFor(m, t.path)[0]!.path } })])
+    .filter(([, err]) => err).map(([p, err]) => `${p}: ${err}`);
+  ok(easingRefused.length === 0 && targets.easing.length === 4 + 6 + 4,
+    `#4571 every easing target the editor offers compiles, 4 roles + 6 curves + 4 springs (${targets.easing.length} offered; refused: ${easingRefused.join(' | ') || 'none'})`);
+  ok(targets.easing.map((t) => t.group).join(',') === [...Array(4).fill('role'), ...Array(6).fill('curve'), ...Array(4).fill('spring')].join(','),
+    `#4571 easing targets list roles first, then curves, then springs (Q-ME1 A) (${targets.easing.map((t) => t.group).join(',')})`);
+  const stepRefused = durationTargetsFor(m, 'easing-role.enter').map((t) => [t.path, compileWith({ fade: { duration: t.path } })]).filter(([, e]) => e);
+  ok(stepRefused.length === 0 && durationTargetsFor(m, 'easing-role.enter').length === 9,
+    `#4571 every duration step the editor offers compiles, all nine (refused: ${stepRefused.map(([p]) => p).join(', ') || 'none'})`);
+  // The spring rule: a spring easing offers only its own settle time, and the engine refuses the step it hides.
+  const sp = durationTargetsFor(m, 'spring.gentle').map((t) => t.path);
+  ok(sp.join() === 'spring-duration.gentle' && compileWith({ surface: { easing: 'spring.gentle', duration: 'duration.slow' } }) !== '',
+    `#4571 the spring rule: spring.gentle offers only spring-duration.gentle (${sp.join()}), and a step with it is refused`);
+  const delayRefused = targets.delay.map((t) => [t.path, compileWith({ surface: { delay: t.path } })]).filter(([, e]) => e);
+  ok(delayRefused.length === 0 && targets.delay.map((t) => t.path).join() === 'delay.show,delay.min-show,delay.hide,delay.skip',
+    `#4571 the four delay steps are offered and each compiles (${targets.delay.map((t) => t.path).join()})`);
+  // Bounded from outside: the engine's refusal names the same list the editor offers, so a target added to one and
+  // not the other fails here.
+  const refusalList = (slot: string, bad: string): string => (compileWith({ surface: { [slot]: bad } }).match(/\(have: ([^;)]*)/)?.[1] ?? '');
+  ok(refusalList('easing', 'easing.nope') === targets.easing.map((t) => t.path).join(', ')
+    && refusalList('duration', 'duration.nope') === targets.duration.map((t) => t.path).join(', ')
+    && refusalList('delay', 'delay.nope') === targets.delay.map((t) => t.path).join(', '),
+    `#4571 each slot's targets are the list the engine's refusal names (easing: ${refusalList('easing', 'easing.nope').slice(0, 60)}…)`);
+  // A brand curve joins the easing targets, and compiles there.
+  const curved = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { curves: { glide: [0.1, 0.6, 0.3, 1] } } } as BrandInput).motion;
+  ok(presetSlotTargets(curved).easing.some((t) => t.path === 'easing.glide' && t.group === 'curve'),
+    '#4571 a brand curve is an easing target, listed with the curves');
+  // Follows a role, or fixed. `surface` follows enter; pointed at a curve it is fixed, and its paths read back as written.
+  const surf = (th: Theme) => th.motion.presets.find((p) => p.preset === 'surface')!;
+  const fixedTh = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { presets: { surface: { easing: 'easing.calm', delay: 'delay.show' } } } } as BrandInput);
+  ok(JSON.stringify(easingSourceOf(surf(base))) === '{"follows":"enter"}' && JSON.stringify(easingSourceOf(surf(fixedTh))) === '{"fixed":"curve","name":"calm"}',
+    `#4571 surface follows enter by default and is fixed to calm once pointed at it (${JSON.stringify(easingSourceOf(surf(fixedTh)))})`);
+  const paths = slotPathsOf(surf(fixedTh));
+  ok(paths.easing === 'easing.calm' && paths.delay === 'delay.show' && paths.duration === 'duration.moderate' && slotPathsOf(surf(base)).delay === null,
+    `#4571 a resolved half reads back as the paths a brand writes (${JSON.stringify(paths)})`);
+  ok(JSON.stringify(presetSlotsSet({ presets: { surface: { delay: 'delay.show', exit: { duration: 'duration.fast' } } } }, 'surface')) === '{"own":["delay"],"exit":["duration"]}'
+    && presetSlotsSet({}, 'press').exit === undefined,
+    '#4571 the slots a brand set are reported per half, and an in-place preset has no exit half');
+  // Used by, against the starter set typed here.
+  const used = presetUsedBy(base.motion.patterns!, base.motion.presets.map((p) => p.preset));
+  const said = (k: string) => used[k]!.map((u) => `${u.pattern} ${u.track}`).join('; ');
+  ok(said('surface') === 'dialog/enter scrim.opacity; dialog/enter panel.opacity; dialog/enter panel.transform; dialog/bottom/enter scrim.opacity; dialog/bottom/enter panel.transform; dialog/end/enter scrim.opacity; dialog/end/enter panel.transform',
+    `#4571 surface is used by the three dialog entrances' scrim and panel (${said('surface')})`);
+  ok(['reveal', 'draw', 'step', 'settle'].every((p) => used[p]!.length === 0) && used['reveal.exit']!.length === 0,
+    '#4571 the four presets no pattern names have empty used-by lists (they play on a plain specimen, proposal §3.1)');
+  ok(patternsReachedBy(base.motion.patterns!, 'fade').join() === 'dialog/enter,dialog/exit,dialog/bottom/enter,dialog/bottom/exit,toast/enter,toast/exit,fade/in,fade/out',
+    `#4571 one edit to fade reaches both halves of every pattern that names it (${patternsReachedBy(base.motion.patterns!, 'fade').join()})`);
+  // A track override moves a track in the map: used-by reads the resolved patterns, not the engine's defaults.
+  const moved = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { patterns: { 'tooltip/show': { 'tooltip.opacity': { preset: 'preset.fade' } } } } } as BrandInput).motion;
+  const mu = presetUsedBy(moved.patterns!);
+  ok(mu['fade']!.some((u) => u.pattern === 'tooltip/show') && !mu['pop']!.some((u) => u.pattern === 'tooltip/show'),
+    '#4571 a track override that re-points the tooltip to fade moves it from pop\'s used-by list to fade\'s');
+  // Track targets: each compiles as an override on a slide track.
+  const tt = trackTargets(base.motion.presets.map((p) => p.preset));
+  const distRefused = tt.distance.filter((d) => { try { brandTheme({ ...MINIMAL_BRAND, motionPersonality: { patterns: { 'toast/enter': { 'toast.transform': { distance: d } } } } } as BrandInput); return false; } catch { return true; } });
+  const redRefused = tt.reduced.filter((r) => { try { brandTheme({ ...MINIMAL_BRAND, motionPersonality: { patterns: { 'toast/enter': { 'toast.transform': { reduced: r } } } } } as BrandInput); return false; } catch { return true; } });
+  ok(distRefused.length === 0 && redRefused.length === 0 && tt.distance.includes('distance.nudge') && tt.reduced.join() === 'fade,keep,off' && tt.preset.includes('preset.surface.exit'),
+    `#4571 every track target compiles as an override (refused distances: ${distRefused.join(', ') || 'none'}; reduced: ${redRefused.join(', ') || 'none'})`);
+}
+
+// #4571 — `slotPathsOf` AGAINST THE EMISSION (review comment 7211749783). SUBJECT = `slotPathsOf` over each brand's
+// resolved presets, both halves. ORACLE = the `aliasOf` each emitted preset slot carries, read from the COMMITTED
+// `out/<brand>.tokens.json` of every committed brand (discovered from the directory), so a preset that follows `enter`
+// but reads back as `easing-role.exit` fails here. The tree aliases two things differently from the paths a brand
+// writes, and the translation is typed here, not taken from either side: a slot with no delay aliases the 0ms
+// primitive (`duration-ms.0` ↔ null), and a spring easing aliases its `spring-easing.<s>` curve (↔ `spring.<s>`).
+// No committed brand eases a preset with a spring, so a second pass emits a fresh tree for a brand that does and
+// reads the same aliases off it, covering the `spring-duration` and `spring` paths.
+{
+  type Leaf = { $extensions?: { prism3?: { aliasOf?: string } } };
+  const asWritten = (alias: string | undefined, mp: string): string | null | undefined => {
+    if (alias === undefined || !alias.startsWith(`${mp}.`)) return undefined;
+    const p = alias.slice(mp.length + 1);
+    return p === 'duration-ms.0' ? null : p.startsWith('spring-easing.') ? `spring.${p.slice('spring-easing.'.length)}` : p;
+  };
+  const compare = (label: string, tree: Record<string, any>, th: Theme): { halves: number; bad: string[] } => {
+    const root = Object.keys(tree).find((k) => !k.startsWith('$'))!;
+    const mp = `${root}.motion`;
+    const bad: string[] = [];
+    let halves = 0;
+    for (const pr of th.motion.presets) for (const [h, half] of (pr.exit ? [['', pr], ['.exit', pr.exit]] : [['', pr]]) as [string, Parameters<typeof slotPathsOf>[0]][]) {
+      const node = tree[root].motion?.preset?.[pr.preset];
+      const leafs = (h ? node?.exit : node) as Record<string, Leaf> | undefined;
+      const got = slotPathsOf(half);
+      halves++;
+      for (const slot of ['duration', 'easing', 'delay'] as const) {
+        const want = asWritten(leafs?.[slot]?.$extensions?.prism3?.aliasOf, mp);
+        if (want !== got[slot]) bad.push(`${label} ${pr.preset}${h}.${slot}: emitted ${want === undefined ? 'nothing' : String(want)}, read back ${String(got[slot])}`);
+      }
+    }
+    return { halves, bad };
+  };
+  const wendysIn = standardToBrandInput(parseStandardDesignMd(readFileSync(resolve(HERE, './examples/wendys.design.md'), 'utf8'))).input;
+  const examples = exampleBrands() as Record<string, BrandInput>;
+  const themeOf = (b: string): Theme | undefined => b === 'nb' ? nbTheme() : b === 'wendys' ? brandTheme(wendysIn)
+    : examples[b] ? brandTheme(examples[b]!) : undefined;
+  const brands = readdirSync(resolve(HERE, './out')).filter((f) => /^[^.]+\.tokens\.json$/.test(f)).map((f) => f.slice(0, -'.tokens.json'.length)).sort();
+  const unthemed = brands.filter((b) => !themeOf(b));
+  const bad: string[] = [];
+  let halves = 0, exits = 0, roleFollowers = 0;
+  for (const b of brands) {
+    const th = themeOf(b);
+    if (!th) continue;
+    const r = compare(b, JSON.parse(readFileSync(resolve(HERE, `./out/${b}.tokens.json`), 'utf8')), th);
+    halves += r.halves; bad.push(...r.bad);
+    exits += th.motion.presets.filter((p) => p.exit).length;
+    roleFollowers += th.motion.presets.flatMap((p) => p.exit ? [p, p.exit] : [p]).filter((h) => 'role' in h.easing).length;
+  }
+  ok(brands.length >= 5 && unthemed.length === 0 && exits >= brands.length * 5 && roleFollowers > 0 && bad.length === 0,
+    `#4571 slotPathsOf reads every preset and every exit half back as the alias the committed emission carries, in every committed brand (${brands.join(', ')}; ${halves} halves, ${exits} exits${unthemed.length ? `; no theme for ${unthemed.join(', ')}` : ''}; mismatches: ${bad.slice(0, 4).join(' | ') || 'none'})`);
+  // The spring path: a brand that eases surface by a spring, and its exit by a fixed curve with a delay.
+  const springTh = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { presets: {
+    surface: { easing: 'spring.gentle', duration: 'spring-duration.gentle', exit: { easing: 'easing.calm', delay: 'delay.show' } },
+  } } } as BrandInput);
+  const sr = compare('spring', buildTree(springTh).tree, springTh);
+  const ss = slotPathsOf(springTh.motion.presets.find((p) => p.preset === 'surface')!);
+  ok(sr.bad.length === 0 && sr.halves > 0 && ss.easing === 'spring.gentle' && ss.duration === 'spring-duration.gentle',
+    `#4571 slotPathsOf reads a spring-eased preset back as the spring and its settle time the fresh emission aliases (${JSON.stringify(ss)}; mismatches: ${sr.bad.slice(0, 4).join(' | ') || 'none'})`);
+}
+
+// #4571 — THE MOTION-ISOLATION GATE (proposal §4.2's last row, §5 PR 1). A motion-only edit leaves every non-motion
+// part of the emission byte-identical. SUBJECT = the emission for a brand with motion edits. ORACLE = a second,
+// independent emission of the same brand without them: two engine runs, never one run compared with itself. What
+// counts as motion is a literal declared here, not read from the motion builder: the `<root>.motion` group of each
+// token tree, the `motion:` and `modeLevers:` lines of the tree's decisions, the agent file's `motion*` keys and its
+// `motion.*` primitives, and Figma's `motion` collection (`motion.json`, or one file per mode). Everything else is compared whole, the shadcn and Tailwind themes included.
+// Each edit must also move the motion part, or the comparison would be of two identical emissions (docs/34).
+{
+  type Json = Record<string, unknown>;
+  const { webThemeHandoff, shadcnFiles, tailwindFiles } = await import('./web-themes') as typeof import('./web-themes');
+  const stripTree = (tree: unknown): unknown => {
+    const t = JSON.parse(JSON.stringify(tree)) as Json;
+    for (const [k, v] of Object.entries(t)) if (!k.startsWith('$') && v && typeof v === 'object') delete (v as Json).motion;
+    const ext = (t.$extensions as Json | undefined)?.prism3 as Json | undefined;
+    // `modeLevers:` names every mode that has a per-mode lever, motion's included, so a per-mode tempo adds its mode there.
+    if (ext && Array.isArray(ext.decisions)) ext.decisions = (ext.decisions as string[]).filter((d) => !d.startsWith('motion:') && !d.startsWith('modeLevers:'));
+    return t;
+  };
+  const motionOfTree = (tree: unknown): string => JSON.stringify(Object.entries(tree as Json).filter(([k]) => !k.startsWith('$')).map(([, v]) => (v as Json).motion));
+  const stripAi = (ai: Json): unknown => {
+    const out: Json = {};
+    for (const [k, v] of Object.entries(ai)) {
+      if (k.startsWith('motion')) continue;
+      out[k] = k === 'primitives' ? Object.fromEntries(Object.entries(v as Json).filter(([p]) => !p.startsWith('motion.'))) : v;
+    }
+    return out;
+  };
+  const emission = (input: BrandInput): { parts: Record<string, string>; motion: string } => {
+    const th = brandTheme(input);
+    const { tree } = buildTree(th);
+    const set = buildOverlaySet(tree);
+    const ai = buildAiMetadata(th, tree) as Json;
+    const h = webThemeHandoff(tree, th.id);
+    const parts: Record<string, string> = {
+      'tokens.json': JSON.stringify(stripTree(tree)),
+      'base.tokens.json': JSON.stringify(stripTree(set.base)),
+      'web.base.tokens.json': JSON.stringify(stripTree(buildWebBase(tree))),
+      'css-only.json': JSON.stringify(stripTree(buildCssOnly(tree))),
+      'ai.json': JSON.stringify(stripAi(ai)),
+    };
+    for (const o of set.overlays) parts[`${o.mode}.overlay.tokens.json`] = JSON.stringify(stripTree(o.tree));
+    for (const a of figmaArtifacts(th).artifacts) if (!/^motion(\.[^/]+)?\.json$/.test(a.path)) parts[`figma/${a.path}`] = JSON.stringify(a.content);
+    for (const f of [...shadcnFiles(h), ...tailwindFiles(h)]) parts[f.path] = f.text;
+    const motion = [motionOfTree(tree), ...set.overlays.map((o) => motionOfTree(o.tree)), JSON.stringify(ai.motion_patterns), JSON.stringify(ai.motion_presets),
+      JSON.stringify(figmaArtifacts(th).artifacts.filter((a) => /^motion(\.[^/]+)?\.json$/.test(a.path)).map((a) => a.content))].join('\n');
+    return { parts, motion };
+  };
+  const withMotion = (i: BrandInput, mp: Record<string, unknown>, ml?: Record<string, unknown>): BrandInput => ({
+    ...i, motionPersonality: { ...(i.motionPersonality ?? {}), ...mp },
+    ...(ml ? { modeLevers: { ...(i.modeLevers ?? {}), dark: { ...((i.modeLevers as Record<string, Json> | undefined)?.dark ?? {}), ...ml } } } : {}),
+  } as BrandInput);
+  const EDITS: [string, (i: BrandInput) => BrandInput][] = [
+    ['tempo', (i) => withMotion(i, { tempo: i.motionPersonality?.tempo === 'relaxed' ? 'snappy' : 'relaxed' })],
+    ['easing roles', (i) => withMotion(i, { easingRoles: { enter: 'calm', exit: 'linear' } })],
+    ['preset slots', (i) => withMotion(i, { presets: { surface: { duration: 'duration.slow', easing: 'easing.calm', delay: 'delay.show', exit: { duration: 'duration.fast' } }, press: { easing: 'spring.snappy' } } })],
+    ['track overrides', (i) => withMotion(i, { patterns: { 'toast/enter': { 'toast.transform': { distance: 6, reduced: 'off' } }, 'dialog/enter': { 'panel.transform': { scale: 0.9 } }, 'tooltip/show': { 'tooltip.opacity': { preset: 'preset.fade' } } } })],
+    ['per-mode tempo and roles', (i) => withMotion(i, {}, { tempo: i.motionPersonality?.tempo === 'relaxed' ? 'snappy' : 'relaxed', easings: { enter: 'calm' } })],
+  ];
+  const brands = Object.entries({ ...exampleBrands(), minimal: MINIMAL_BRAND }) as Array<[string, BrandInput]>;
+  const leaks: string[] = [];
+  const unmoved: string[] = [];
+  let compared = 0;
+  for (const [id, input] of brands) {
+    const a = emission(input);
+    for (const [label, edit] of EDITS) {
+      const b = emission(edit(input));
+      if (a.motion === b.motion) unmoved.push(`${id} / ${label}`);
+      const names = new Set([...Object.keys(a.parts), ...Object.keys(b.parts)]);
+      for (const n of names) {
+        compared++;
+        if (a.parts[n] === b.parts[n]) continue;
+        const x = a.parts[n] ?? '', y = b.parts[n] ?? '';
+        let at = 0;
+        while (at < x.length && x[at] === y[at]) at++;
+        leaks.push(`${id} / ${label}: ${n} differs at …${x.slice(Math.max(0, at - 60), at + 40)}… → …${y.slice(Math.max(0, at - 60), at + 40)}…`);
+      }
+    }
+  }
+  ok(unmoved.length === 0, `#4571 motion isolation: every motion edit moves the motion part of the emission, so the comparison is not of two identical emissions (unmoved: ${unmoved.join(', ') || 'none'})`);
+  ok(leaks.length === 0 && compared >= brands.length * EDITS.length * 30,
+    `#4571 motion isolation: a motion-only edit leaves every non-motion part of the emission byte-identical (${brands.length} brands × ${EDITS.length} edits, ${compared} artifacts compared${leaks.length ? `; LEAKS: ${leaks.slice(0, 6).join(' | ')}` : ''})`);
 }
 
 // ------------------------------------------------------------------- report

@@ -35,7 +35,22 @@
  *   · the usage-row sort dropped (comparator `0`, walk order kept) → `order/paints: most-used first, a tie by color`;
  *   · the components sort dropped → `order/components: most-used first, a tie by name`.
  *   · the format id moved off 0.x in the scanner and the schema together (`prism3-file-facts/1.0`) →
- *     `vars/format is the unstable 0.x id prism3-file-facts/0.1` (and `styles`, `raw`, …), D3685.1 C;
+ *     `vars/format is the unstable 0.x id prism3-file-facts/0.2` (and `styles`, `raw`, …), D3685.1 C;
+ *   SCOPE AND INVENTORY (0.2, #2853 Q5 A), each applied to the file named:
+ *   · a write slipped into the selection path (`file-facts-figma.ts`: `current.selection = [...current.selection]`) →
+ *     `selection/the scan wrote nothing to a layer`;
+ *   · a write slipped into the ids path (`file-facts-figma.ts`: `await host.setCurrentPageAsync(all[0])`, the branch
+ *     that also serves the whole file) → `vars/the scan wrote nothing to the file` and every whole-file or ids scan;
+ *   · a write slipped into the scope search (`file-facts.ts` `scopePages`: `n.setPluginData('p3', 'scope')` on a root) →
+ *     `selection/the scan wrote nothing to a layer` and every scoped scan;
+ *   · the selection loading every page (`figmaFactsSource` loads `all` on every branch) →
+ *     `selection/only the current page was loaded`;
+ *   · ids kept in selection order, not file order → `selection/scope: …, ids in file order whatever the selection order`;
+ *   · a named layer inside another not covered by it (`cover` a no-op) →
+ *     `ids nested/a screen named inside a named section is covered, not refused`;
+ *   · the empty-selection fallback dropped (an empty selection scans nothing) → `empty selection/…current page`;
+ *   · the background read from the bottom paint → `whole/inventory: f:concept's background is its topmost solid fill`;
+ *   · names or colors in the fingerprint → `whole/inventory: a light and a dark copy of one screen share a fingerprint`.
  *   · the schema's "Unstable" sentence dropped → `unstable/the schema description says 0.x is unstable`
  *     (or `unstable/the format field says 0.x is unstable`).
  */
@@ -43,9 +58,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FileShim, NodeShim, type NodeSpec } from './file-shim';
-import { scanOpenFile, type FactsHost } from './src/file-facts-figma';
+import { scanOpenFile, type FactsHost, type ScopeChoice } from './src/file-facts-figma';
 import { validate } from '@prism3/engine/harness';
-import { FILE_FACTS_FORMAT, scanFileFacts, sourceFromSnapshot, type Binding, type FactsNode, type FileFactsReport } from '@prism3/engine/figma';
+import { FACTS_FORMATS_READ, FILE_FACTS_FORMAT, ScopeError, requireFactsFormat, scanFileFacts, sourceFromSnapshot, type Binding, type FactsNode, type FileFactsReport } from '@prism3/engine/figma';
 
 let failed = 0;
 let executed = 0;
@@ -67,22 +82,49 @@ ok(/Unstable while it reads 0\.x/.test(SCHEMA.properties.format.description), 'u
 
 type Library = { collections?: any[]; variables?: any[]; styles?: any[] };
 /** The host slice the adapter reads, over the two shims plus a hand-written library. */
-const hostOf = (file: FileShim, nodes: NodeShim, lib: Library = {}): FactsHost => {
+const HOST_READS = new Set(['getLocalVariableCollectionsAsync', 'getLocalVariablesAsync', 'getVariableByIdAsync', 'getVariableCollectionByIdAsync',
+  'getLocalPaintStylesAsync', 'getLocalTextStylesAsync', 'getLocalEffectStylesAsync', 'getLocalGridStylesAsync', 'getStyleByIdAsync', 'then', 'toJSON']);
+/** The host and its `variables`, behind Proxies that log every write and every call outside `HOST_READS` (#2853 Q5 A). */
+const logged = <T extends object>(o: T, at: string, log: string[]): T => new Proxy(o, {
+  get(t, prop, recv) {
+    const v = Reflect.get(t, prop, recv);
+    if (typeof v === 'function' && typeof prop === 'string' && !HOST_READS.has(prop)) return (...a: unknown[]) => { log.push(`call ${at}.${prop}`); return (v as (...x: unknown[]) => unknown).apply(t, a); };
+    return v;
+  },
+  set(t, prop, v) { log.push(`set ${at}.${String(prop)}`); return Reflect.set(t, prop, v); },
+  defineProperty(t, prop, d) { log.push(`define ${at}.${String(prop)}`); return Reflect.defineProperty(t, prop, d); },
+  deleteProperty(t, prop) { log.push(`delete ${at}.${String(prop)}`); return Reflect.deleteProperty(t, prop); },
+});
+/** Each page wrapped to count its `loadAsync` calls, so a test can tell which pages a scope loaded. */
+const counted = (page: any, loads: Map<string, number>): any => new Proxy(page, {
+  get(t, prop) {
+    if (prop === 'loadAsync') return async () => { loads.set(t.id, (loads.get(t.id) ?? 0) + 1); return t.loadAsync(); };
+    return Reflect.get(t, prop);
+  },
+});
+type Opts = { lib?: Library; current?: number; hostWrites?: string[]; loads?: Map<string, number> };
+const hostOf = (file: FileShim, nodes: NodeShim, opts: Opts = {}): FactsHost => {
+  const lib = opts.lib ?? {};
+  const log = opts.hostWrites ?? [];
+  const pages = nodes.pages.map((p) => counted(p, opts.loads ?? new Map()));
   const localStyles = (): any[] => [...file.styles.paint, ...file.styles.text, ...file.styles.effect, ...file.styles.grid];
-  return {
-    variables: {
+  return logged({
+    // Methods the real `figma` has that change the file: present, so a scan that calls one is logged, not crashed.
+    setCurrentPageAsync: async () => undefined, createPage: () => undefined, commitUndo: () => undefined,
+    currentPage: pages[opts.current ?? 0],
+    variables: logged({
       getLocalVariableCollectionsAsync: () => file.getLocalVariableCollectionsAsync(),
       getLocalVariablesAsync: () => file.getLocalVariablesAsync(),
       getVariableByIdAsync: async (id) => file.vars.find((v) => v.id === id) ?? lib.variables?.find((v) => v.id === id) ?? null,
-      getVariableCollectionByIdAsync: async (id) => file.collections.find((c) => c.id === id) ?? lib.collections?.find((c) => c.id === id) ?? null,
-    },
+      getVariableCollectionByIdAsync: async (id: string) => file.collections.find((c) => c.id === id) ?? lib.collections?.find((c) => c.id === id) ?? null,
+    }, 'figma.variables', log),
     getLocalPaintStylesAsync: () => file.getLocalPaintStylesAsync(),
     getLocalTextStylesAsync: () => file.getLocalTextStylesAsync(),
     getLocalEffectStylesAsync: () => file.getLocalEffectStylesAsync(),
     getLocalGridStylesAsync: () => file.getLocalGridStylesAsync(),
-    getStyleByIdAsync: async (id) => localStyles().find((s) => s.id === id) ?? lib.styles?.find((s) => s.id === id) ?? null,
-    root: { children: nodes.pages },
-  };
+    getStyleByIdAsync: async (id: string) => localStyles().find((s) => s.id === id) ?? lib.styles?.find((s) => s.id === id) ?? null,
+    root: { children: pages },
+  }, 'figma', log) as FactsHost;
 };
 
 const alias = (v: { id: string }) => ({ type: 'VARIABLE_ALIAS', id: v.id });
@@ -99,17 +141,19 @@ const typeRow = (rows: FileFactsReport['usage']['typography']['fontFamilies'], v
   one(rows.filter((x) => x.value === value && x.binding.kind === kind));
 
 /** Scan, then check what every report owes: the schema, determinism, and no writes. */
-const scan = async (label: string, file: FileShim, nodes: NodeShim, lib?: Library): Promise<FileFactsReport> => {
+const scan = async (label: string, file: FileShim, nodes: NodeShim, lib?: Library, choice?: ScopeChoice, opts: Opts = {}): Promise<FileFactsReport> => {
   const before = { vars: file.vars.length, colls: file.collections.length, styles: Object.values(file.styles).flat().length };
-  const report = await scanOpenFile(hostOf(file, nodes, lib));
-  const again = await scanOpenFile(hostOf(file, nodes, lib));
+  const hostWrites: string[] = [];
+  const report = await scanOpenFile(hostOf(file, nodes, { ...opts, lib, hostWrites }), choice);
+  const again = await scanOpenFile(hostOf(file, nodes, { ...opts, lib, hostWrites, loads: undefined }), choice);
   const errors = validate(SCHEMA, report);
   ok(errors.length === 0, `${label}/the report matches schema/file-facts.schema.json`, errors.slice(0, 5));
   ok(report.format === FILE_FACTS_FORMAT && SCHEMA.$id === FILE_FACTS_FORMAT, `${label}/format equals the schema's $id`);
   // D3685.1 C: the id is held as a literal, so a scanner and schema that move together off 0.x still fail here.
-  ok(report.format === 'prism3-file-facts/0.1', `${label}/format is the unstable 0.x id prism3-file-facts/0.1`, report.format);
+  ok(report.format === 'prism3-file-facts/0.2', `${label}/format is the unstable 0.x id prism3-file-facts/0.2`, report.format);
   ok(JSON.stringify(report) === JSON.stringify(again), `${label}/two scans of one file are byte-identical`);
   ok(nodes.writes.length === 0, `${label}/the scan wrote nothing to a layer`, nodes.writes);
+  ok(hostWrites.length === 0, `${label}/the scan wrote nothing to the file`, hostWrites);
   const after = { vars: file.vars.length, colls: file.collections.length, styles: Object.values(file.styles).flat().length };
   ok(eq(before, after), `${label}/the scan created and removed no variable, collection or style`, after);
   return report;
@@ -436,6 +480,142 @@ section('button words — btn and cta, with no other cue');
     ok(eq(counts(one(paintRow(r, 'fill', 'button-like', '#0066ff', 'raw'))), [1, 0]) && eq(counts(one(paintRow(r, 'fill', 'background', '#0066ff', 'raw'))), [1, 0]),
       `button words/a frame named "${word}" is button-like; its neighbor is a background`, r.usage.paints);
   }
+}
+
+/* ── scope and inventory (0.2, #2853 Q5 A) ──────────────────────────────────────────────────────────────────────────── */
+// Three pages. "Handoff" holds a section with a light and a dark copy of one screen (explicit modes, inverted fills, the
+// same structure), a hidden frame and a loose rectangle. "Explore" holds a concept frame whose topmost fill is white
+// over blue. "Cover" holds one frame. Every expected row below is written by hand from this fixture.
+section('scope and inventory — a handoff page, an exploration page and a cover');
+{
+  const file = new FileShim();
+  const sem = file.createVariableCollection('semantic');
+  sem.renameMode(sem.modes[0].modeId, 'light');
+  const lightMode = sem.modes[0].modeId;
+  const darkMode = sem.addMode('dark');
+  const text = (id: string, family: string, c: typeof BLUE): NodeSpec => ({ id, type: 'TEXT', name: 'Text', fills: [solid(c.r, c.g, c.b)], fontName: { family, style: 'Regular' }, fontSize: 16, textStyleId: '' });
+  const screen = (id: string, name: string, x: number, ground: typeof BLUE, ink: typeof BLUE, mode: string): NodeSpec => ({
+    id, type: 'FRAME', name, x, y: 0, width: 390, height: 844, fills: [solid(ground.r, ground.g, ground.b)],
+    explicitVariableModes: { [sem.id]: mode }, layoutMode: 'VERTICAL', itemSpacing: 16, layoutGrids: [{ pattern: 'COLUMNS' }],
+    children: [text(`${id}:t`, 'Inter', ink), { id: `${id}:b`, type: 'FRAME', name: 'Button', fills: [solid(BLUE.r, BLUE.g, BLUE.b)], children: [text(`${id}:bt`, 'Poppins', WHITE)] }],
+  });
+  const pages: NodeSpec[] = [
+    { id: 'p:a', type: 'PAGE', name: 'Handoff', selection: [{ id: 'f:dark' }, { id: 'f:light' }], children: [
+      { id: 's:modes', type: 'SECTION', name: 'Modes', x: 0, y: 0, width: 1000, height: 900, fills: [], children: [
+        screen('f:light', 'Home / light', 0, WHITE, GRAY, lightMode),
+        screen('f:dark', 'Home / dark', 400, GRAY, WHITE, darkMode),
+      ] },
+      { id: 'f:hidden', type: 'FRAME', name: 'Old', visible: false, fills: [solid(1, 0, 0)] },
+      { id: 'r:loose', type: 'RECTANGLE', name: 'Swatch', fills: [solid(BLUE.r, BLUE.g, BLUE.b)] },
+    ] },
+    { id: 'p:b', type: 'PAGE', name: 'Explore', selection: [], children: [
+      { id: 'f:concept', type: 'FRAME', name: 'Concept 1', x: 0, y: 0, width: 1440, height: 900,
+        fills: [solid(BLUE.r, BLUE.g, BLUE.b), solid(WHITE.r, WHITE.g, WHITE.b)], children: [
+          text('f:concept:h', 'Lora', GRAY),
+          { id: 'f:concept:star', type: 'VECTOR', name: 'Star', fills: [solid(BLUE.r, BLUE.g, BLUE.b)] },
+          { id: 'f:concept:gone', type: 'RECTANGLE', name: 'Gone', visible: false, fills: [solid(1, 0, 0)] },
+        ] },
+    ] },
+    { id: 'p:c', type: 'PAGE', name: 'Cover', children: [
+      { id: 'f:cover', type: 'FRAME', name: 'Cover', x: 0, y: 0, width: 1920, height: 1080, fills: [solid(BLUE.r, BLUE.g, BLUE.b)] },
+    ] },
+  ];
+  const fresh = () => new NodeShim(pages);
+  const ids = (r: FileFactsReport) => r.inventory.map((x) => x.id);
+  const row = (r: FileFactsReport, id: string) => r.inventory.find((x) => x.id === id);
+  const page = (id: string, name: string, index: number) => ({ id, name, index });
+  // The fingerprint's recipe, restated here: FNV-1a over `<depth>:<type>;` for each visible layer in order.
+  const fnv = (str: string): string => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); };
+
+  // ── the whole file ──
+  {
+    const r = await scan('whole', file, fresh());
+    ok(eq(r.scope, { kind: 'file', from: 'whole-file', ids: [], pages: [page('p:a', 'Handoff', 0), page('p:b', 'Explore', 1), page('p:c', 'Cover', 2)] }), 'whole/scope: the whole file, every page', r.scope);
+    ok(r.coverage.pages === 3 && r.coverage.layers === 14 && r.coverage.hiddenLayers === 2, 'whole/coverage: three pages, fourteen layers, two hidden', r.coverage);
+    ok(eq(ids(r), ['s:modes', 'f:light', 'f:dark', 'f:concept', 'f:cover']), 'whole/inventory: the section, its two screens, the concept and the cover; no hidden frame, no rectangle', ids(r));
+    ok(eq(row(r, 'f:light'), {
+      page: 'Handoff', pageIndex: 0, id: 'f:light', type: 'FRAME', name: 'Home / light', section: 's:modes',
+      x: 0, y: 0, width: 390, height: 844, background: '#ffffff',
+      explicitModes: [{ collectionId: sem.id, collection: 'semantic', modeId: lightMode, mode: 'light' }],
+      layoutMode: 'VERTICAL', layoutGrids: 1, fingerprint: fnv('0:FRAME;1:TEXT;1:FRAME;2:TEXT;'),
+      descendants: 3, textLayers: 2, instances: 0, hiddenLayers: 0, unreadableLayers: 0,
+      families: ['Inter', 'Poppins'], fills: [{ color: '#ffffff', layers: 2 }, { color: '#0066ff', layers: 1 }, { color: '#1a1a1a', layers: 1 }],
+    }), 'whole/inventory: the light screen, every field', row(r, 'f:light'));
+    ok(eq([row(r, 'f:dark')?.background, row(r, 'f:dark')?.explicitModes.map((m) => m.mode)], ['#1a1a1a', ['dark']]), 'whole/inventory: the dark screen, its ground and its mode', row(r, 'f:dark'));
+    ok(row(r, 'f:light')?.fingerprint === row(r, 'f:dark')?.fingerprint && row(r, 'f:light')?.fingerprint !== row(r, 'f:concept')?.fingerprint,
+      'whole/inventory: a light and a dark copy of one screen share a fingerprint', r.inventory.map((x) => [x.id, x.fingerprint]));
+    ok(eq(row(r, 's:modes'), {
+      page: 'Handoff', pageIndex: 0, id: 's:modes', type: 'SECTION', name: 'Modes', section: null, x: 0, y: 0, width: 1000, height: 900,
+      background: null, explicitModes: [], layoutMode: null, layoutGrids: 0,
+      fingerprint: fnv('0:SECTION;1:FRAME;2:TEXT;2:FRAME;3:TEXT;1:FRAME;2:TEXT;2:FRAME;3:TEXT;'),
+      descendants: 8, textLayers: 4, instances: 0, hiddenLayers: 0, unreadableLayers: 0,
+      families: ['Inter', 'Poppins'], fills: [{ color: '#ffffff', layers: 4 }, { color: '#0066ff', layers: 2 }, { color: '#1a1a1a', layers: 2 }],
+    }), 'whole/inventory: the section counts both screens', row(r, 's:modes'));
+    ok(row(r, 'f:concept')?.background === '#ffffff', "whole/inventory: f:concept's background is its topmost solid fill", row(r, 'f:concept'));
+    ok(eq([row(r, 'f:concept')?.pageIndex, row(r, 'f:concept')?.descendants, row(r, 'f:concept')?.hiddenLayers, row(r, 'f:concept')?.families, row(r, 'f:concept')?.fills],
+      [1, 2, 1, ['Lora'], [{ color: '#0066ff', layers: 2 }, { color: '#1a1a1a', layers: 1 }, { color: '#ffffff', layers: 1 }]]),
+      'whole/inventory: the concept, its counts, family and fills (a hidden child skipped)', row(r, 'f:concept'));
+    ok(eq([row(r, 'f:cover')?.pageIndex, row(r, 'f:cover')?.descendants, row(r, 'f:cover')?.fills], [2, 0, [{ color: '#0066ff', layers: 1 }]]), 'whole/inventory: the cover, on the third page', row(r, 'f:cover'));
+  }
+
+  // ── the selection (Q1 A), given in reverse order ──
+  {
+    const loads = new Map<string, number>();
+    const r = await scan('selection', file, fresh(), undefined, { from: 'selection' }, { current: 0, loads });
+    ok(eq(r.scope, { kind: 'nodes', from: 'selection', ids: ['f:light', 'f:dark'], pages: [page('p:a', 'Handoff', 0)] }),
+      'selection/scope: two screens on the current page, ids in file order whatever the selection order', r.scope);
+    ok(eq([...loads.entries()], [['p:a', 1]]), 'selection/only the current page was loaded', [...loads.entries()]);
+    ok(r.coverage.pages === 1 && r.coverage.layers === 8 && r.coverage.hiddenLayers === 0, 'selection/coverage: one page, the eight layers of the two screens', r.coverage);
+    ok(eq(ids(r), ['f:light', 'f:dark']) && r.inventory.every((x) => x.section === null), 'selection/inventory: the two screens, each a root', r.inventory);
+    ok(eq(r.usage.typography.fontFamilies.map((x) => x.value), ['Inter', 'Poppins']), 'selection/usage: no family from outside the scope', r.usage.typography.fontFamilies);
+    ok(r.variables.collections.some((c) => c.name === 'semantic'), 'selection/variables stay file-wide', r.variables.collections.map((c) => c.name));
+  }
+  {
+    const loads = new Map<string, number>();
+    const r = await scan('empty selection', file, fresh(), undefined, { from: 'selection' }, { current: 1, loads });
+    ok(eq(r.scope, { kind: 'pages', from: 'current-page', ids: ['p:b'], pages: [page('p:b', 'Explore', 1)] }), 'empty selection/scope: nothing selected reads the current page', r.scope);
+    ok(eq(ids(r), ['f:concept']) && eq([...loads.entries()], [['p:b', 1]]), 'empty selection/inventory: the concept alone, one page loaded', [ids(r), [...loads.entries()]]);
+  }
+
+  const refusal = async (choice: ScopeChoice): Promise<string> => {
+    const nodes = fresh();
+    try { await scanOpenFile(hostOf(file, nodes), choice); return 'scanned'; } catch (e) { return `${e instanceof ScopeError ? 'ScopeError' : 'other'}: ${(e as Error).message}${nodes.writes.length ? ' (wrote)' : ''}`; }
+  };
+  // ── explicit ids ──
+  const nested = await refusal({ from: 'ids', ids: ['f:light', 's:modes'] });
+  ok(nested === 'scanned', 'ids nested/a screen named inside a named section is covered, not refused', nested);
+  if (nested === 'scanned') {
+    const r = await scan('ids nested', file, fresh(), undefined, { from: 'ids', ids: ['f:light', 's:modes'] });
+    ok(eq(r.scope, { kind: 'nodes', from: 'ids', ids: ['s:modes'], pages: [page('p:a', 'Handoff', 0)] }), 'ids nested/scope: a screen inside the named section is covered by it', r.scope);
+    ok(eq(r.inventory.map((x) => [x.id, x.section]), [['s:modes', null], ['f:light', 's:modes'], ['f:dark', 's:modes']]), 'ids nested/inventory: the section, then its screens', r.inventory.map((x) => [x.id, x.section]));
+  }
+  {
+    const r = await scan('ids page', file, fresh(), undefined, { from: 'ids', ids: ['p:c'] });
+    ok(eq(r.scope, { kind: 'pages', from: 'ids', ids: ['p:c'], pages: [page('p:c', 'Cover', 2)] }) && eq(ids(r), ['f:cover']) && r.coverage.pages === 1,
+      'ids page/scope: one named page, its frame inventoried', [r.scope, ids(r)]);
+  }
+  {
+    const r = await scan('ids across pages', file, fresh(), undefined, { from: 'ids', ids: ['f:cover', 'f:concept'] });
+    ok(eq(r.scope, { kind: 'nodes', from: 'ids', ids: ['f:concept', 'f:cover'], pages: [page('p:b', 'Explore', 1), page('p:c', 'Cover', 2)] }),
+      'ids across pages/scope: two frames on two pages, in file order', r.scope);
+    ok(r.coverage.pages === 2 && r.coverage.layers === 4, 'ids across pages/coverage: two pages, the four layers of the two frames', r.coverage);
+  }
+  const missing = await refusal({ from: 'ids', ids: ['f:light', 'nope'] });
+  ok(missing === 'ScopeError: scope: no page or layer with id nope', 'ids refused/an id the file does not hold refuses the scan by name', missing);
+  const mixed = await refusal({ from: 'ids', ids: ['p:c', 'f:light'] });
+  ok(/^ScopeError: scope: name pages or layers, not both \(pages p:c; layers f:light\)$/.test(mixed), 'ids refused/pages and layers in one list refuse by name', mixed);
+  const none = await refusal({ from: 'ids', ids: [] });
+  ok(none === 'ScopeError: scope: an explicit scope names no ids', 'ids refused/an empty list refuses by name', none);
+}
+
+/* ── readers: which format ids this engine reads (0.2) ──────────────────────────────────────────────────────────────── */
+section('readers — a 0.1 report still reads, an unknown id is refused by name');
+{
+  const verdict = (f: unknown): string => { try { requireFactsFormat(f); return 'reads'; } catch (e) { return (e as Error).message; } };
+  ok(eq(FACTS_FORMATS_READ, ['prism3-file-facts/0.1', 'prism3-file-facts/0.2']), 'readers/0.1 and 0.2, oldest first', FACTS_FORMATS_READ);
+  ok(verdict('prism3-file-facts/0.1') === 'reads' && verdict('prism3-file-facts/0.2') === 'reads', 'readers/a 0.1 and a 0.2 report read');
+  ok(verdict('prism3-file-facts/0.3') === 'file facts report format "prism3-file-facts/0.3" is not one this engine reads (prism3-file-facts/0.1, prism3-file-facts/0.2)',
+    'readers/an unknown id is refused, naming it and what is read', verdict('prism3-file-facts/0.3'));
 }
 
 console.log(`\n${executed - failed}/${executed} passed`);

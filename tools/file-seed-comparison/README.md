@@ -67,15 +67,24 @@ For each file (three with local variables, three with none; none of them a Prism
 1. **Open the file in Figma as a viewer, or on a duplicate.** The scan writes nothing (part 1's plugin suite runs
    it under a write-logging shim and fails on any write), but a duplicate keeps the original out of reach anyway.
    No plugin needs to be running.
-2. In this checkout on the Mac: `npx tsx tools/file-seed-comparison/scan-script.ts print 0 > chunk-script-0.js`.
-3. Run `chunk-script-0.js` as one `use_figma` call against that file. It loads every page, runs part 1's
-   `scanOpenFile`, and returns `{ format, chunk, chunks, length, fnv, text }`. Save the returned value, unedited, as
-   `<out>/<row>/chunk-0.json`.
-4. For `n` = 1 to `chunks − 1`: `print <n>`, run it, save as `<out>/<row>/chunk-<n>.json`. **Don't edit the file
-   between calls.** Every call rescans, and `join` refuses chunks that disagree.
+2. In this checkout on the Mac: `npx tsx tools/file-seed-comparison/scan-script.ts print 0 --scope <scope> > chunk-script-0.js`.
+   `--scope` is required (#2853 Q5 A):
+   - `file`: every page, the whole-file report.
+   - `selection`: the layers selected on the current page, or the current page when nothing is selected (Q1 A).
+   - `<id>[,<id>…]`: the named pages, or the named frames or sections, as Figma ids (`12:345`). Pages or layers,
+     not both. An id the file does not hold fails the call by name.
+3. Run `chunk-script-0.js` as one `use_figma` call against that file. It loads the pages its scope needs, runs part
+   1's `scanOpenFile`, and returns `{ format, chunk, chunks, length, fnv, text }`. Save the returned value, unedited,
+   as `<out>/<row>/chunk-0.json`.
+4. For `n` = 1 to `chunks − 1`: `print <n> --scope <the same scope>`, run it, save as `<out>/<row>/chunk-<n>.json`.
+   **Don't edit the file, change the selection or switch pages between calls.** Every call rescans, the scope is in
+   the report, and `join` refuses chunks that disagree.
 5. `npx tsx tools/file-seed-comparison/scan-script.ts join <out>/<row> --out <out>/<row>.report.json`. If it
    refuses, capture again from step 2.
-6. Note, per row, whether the file has local variables, and the report's `coverage` line. Return the
+6. Note, per row, whether the file has local variables, and the report's `scope` and `coverage` lines. Since
+   `prism3-file-facts/0.2` the report also carries `inventory`: one row per top-level frame, section or component set
+   in scope (geometry, background, explicit variable modes, a structural fingerprint, counts, families and top
+   fills), so no separate inventory call is needed. Return the
    `<row>.report.json` files over a private channel, never a commit, a PR, an issue or a comment.
 
 The script runs no network call and calls no method that changes a node, a variable or a style. Never run it with
