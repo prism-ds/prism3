@@ -29,9 +29,20 @@
 /** The bound on one input. */
 export const INPUT_MS = 15000;
 
+/** The original, unbounded methods `boundEvaluates` replaced, on each prototype it patched. Only the probes in this file
+ *  read them: a probe that asks whether a stuck page renders must not itself be bounded, or its own bound's diagnosis
+ *  would probe again. `lint-chrome-bounds` (section 20 of test-chrome) fails by name on any use outside this file. */
+const RAW = Symbol('p3.unbounded');
+/** `page.evaluate` without the bound, for this file's probes. A page from a browser `boundEvaluates` never patched
+ *  (test-smoke's) has no originals stored, so its own method is the raw one. */
+const rawEvaluate = (page, fn) => {
+  const f = page.mainFrame();
+  return (Object.getPrototypeOf(f)[RAW]?.evaluate ?? f.evaluate).call(f, fn);
+};
+
 /** Whether the page renders a frame within 3 s, bounded on this side. */
 export const rendersFrame = (page) => Promise.race([
-  page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(true)))).catch(() => false),
+  rawEvaluate(page, () => new Promise((r) => requestAnimationFrame(() => r(true)))).catch(() => false),
   new Promise((r) => setTimeout(() => r(false), 3000)),
 ]);
 
@@ -90,7 +101,7 @@ const stallStack = async (page) => {
  *  #4465's first capture on CI (PR #4505) read "not running JavaScript", which (1) and (2) split. */
 export const stallWhere = async (page, backMs = 30000) => {
   if (!watched.has(page)) return '';
-  const answers = await Promise.race([page.evaluate(() => true).catch(() => false), new Promise((r) => setTimeout(() => r(false), 3000))]);
+  const answers = await Promise.race([rawEvaluate(page, () => true).catch(() => false), new Promise((r) => setTimeout(() => r(false), 3000))]);
   const runs = answers ? 'the main thread still runs a script, so it is idle and no frame is being produced' : 'the main thread runs no script, so it is busy';
   const t0 = Date.now();
   while (Date.now() - t0 < backMs) {
@@ -147,4 +158,123 @@ export const makeBounded = ({ ok, isDead = () => false, onDead, inputMs = INPUT_
     return false;
   };
   return { bounded, stats };
+};
+
+/** The words a wait that hit its bound ends with (#4127, #4612): whether the page still renders a frame (busy elsewhere)
+ *  or none (stuck), and on a page `watchStalls` watches, where it stopped. `backMs` bounds how long `stallWhere` waits
+ *  for a frame to come back. test-chrome's `within` and every bounded evaluate below say it the same way. */
+export const stallMessage = async (page, label, ms, backMs = 30000) => {
+  if (page?.isClosed()) return `${label} did not settle within ${ms / 1000}s; the page was closed`;
+  const live = page ? await rendersFrame(page) : false;
+  const at = page && !live ? await stallWhere(page, Math.min(ms, backMs)) : '';
+  return `${label} did not settle within ${ms / 1000}s; the page ${!page ? 'is unknown' : live ? 'still renders frames, so the wait was on something else' : 'renders no frame'}${at ? `; ${at}` : ''}`;
+};
+
+/** A bounded evaluate's promise carries this; `within` calls it to take the bound over with its own label and limit. */
+export const DISARM = Symbol('p3.disarm');
+/** A page's own bound for its bounded evaluates, in ms, set by a self-check that wants a short one on a page of its own. */
+export const BOUND_MS = Symbol('p3.boundMs');
+
+/**
+ * EVERY EVALUATE HAS A BOUND (#4342). Playwright sends `evaluate`, `evaluateAll`, `$eval` and `$$eval` with no timeout
+ * at all (`kNoTimeout` in its client), so on a page whose main thread is busy, or that renders no frame while the
+ * script awaits one, the call waits until the section watchdog (#3044) stops the run 600 s later, naming only the last
+ * check that passed. #4127 and #4612 bounded the calls on the paths that stalled, one `within` at a time; the next
+ * stall came at a plain read on another path (18-s4f's Gradients read, 2026-11-27). The suite holds about 1,500 such
+ * calls, so they are bounded where they all go through, not one by one: this replaces the evaluate family on
+ * Playwright's own client prototypes, read off a live page (Page, Frame, Locator, JSHandle, ElementHandle), so every
+ * page any context of this process opens is bounded from its first call, however it was made.
+ *
+ *   · The bound is `ms`, or a page's own `BOUND_MS`. A `waitForFunction` already ends on Playwright's own timeout; its
+ *     bound is that timeout plus `ms`, so Playwright's error still comes first, and a `timeout: 0` gets `ms`.
+ *   · On the bound the call rejects with its LABEL: the method, the call site (the first two frames of the caller's
+ *     stack outside this file and Playwright: function and line), and `where()` (test-chrome: the section and the
+ *     last check reached), then `stallMessage`'s reading of the page. So a stall names the step and where it stopped.
+ *   · One bound per call: a public method that calls another (Page.evaluate into Frame.evaluate, Locator.evaluate
+ *     into JSHandle.evaluate after an await) is bounded at the outer call alone, which an AsyncLocalStorage marks.
+ *   · `within(page, label, page.evaluate(…), ms)` passes the promise itself, and takes the bound over (`DISARM`), so
+ *     an explicit label and limit always win over these.
+ *   · The process-wide reach is the point, and the limit: a page of another browser binary or a CDP `Runtime.evaluate`
+ *     is not covered, which `lint-chrome-bounds` keeps out of the suite.
+ * Returns the stats `log` gathers: the slowest call that settled, by site, so the bound's margin can be measured.
+ */
+export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
+  const { AsyncLocalStorage } = await import('node:async_hooks');
+  const inner = new AsyncLocalStorage();
+  const stats = { calls: 0, slowestMs: 0, slowestSite: '', bySite: new Map() };
+  const ctx = await browser.newContext();
+  try {
+    const page = await ctx.newPage();
+    await page.setContent('<p>bounds</p>');
+    const handle = await page.locator('p').elementHandle();
+    const protoOf = (o, name) => { for (let p = Object.getPrototypeOf(o); p; p = Object.getPrototypeOf(p)) if (Object.hasOwn(p, name)) return p; return null; };
+    const targets = [
+      [Object.getPrototypeOf(page), (o) => o, ['evaluate', 'evaluateHandle', '$eval', '$$eval', 'waitForFunction']],
+      [Object.getPrototypeOf(page.mainFrame()), (o) => o.page(), ['evaluate', 'evaluateHandle', '$eval', '$$eval', 'waitForFunction']],
+      [Object.getPrototypeOf(page.locator('p')), (o) => o.page(), ['evaluate', 'evaluateAll', 'evaluateHandle']],
+      [protoOf(handle, 'evaluate'), (o) => o._parentOfType?.('Page') ?? null, ['evaluate', 'evaluateHandle']],
+      [protoOf(handle, '$$eval'), (o) => o._parentOfType?.('Page') ?? null, ['$eval', '$$eval']],
+    ];
+    const kinds = { Page: 'page', Frame: 'frame', Locator: 'locator', JSHandle: 'handle', ElementHandle: 'handle' };
+    for (const [proto, pageOf, names] of targets) {
+      if (!proto) throw new Error('boundEvaluates: a Playwright prototype was not found, so the evaluates cannot be bounded');
+      const kind = kinds[proto.constructor.name.replace(/^_/, '')] ?? proto.constructor.name;
+      proto[RAW] = {};
+      for (const name of names) {
+        const orig = proto[name];
+        if (typeof orig !== 'function') throw new Error(`boundEvaluates: ${proto.constructor.name}.${name} is not a method`);
+        proto[RAW][name] = orig;
+        proto[name] = function bounded(...a) {
+          if (inner.getStore()) return orig.apply(this, a);
+          const site = {};
+          const lim = Error.stackTraceLimit;
+          Error.stackTraceLimit = 40;
+          Error.captureStackTrace(site, bounded);
+          Error.stackTraceLimit = lim;
+          const page = pageOf(this);
+          let bound = page?.[BOUND_MS] ?? ms;
+          if (name === 'waitForFunction') {
+            const t = a[2]?.timeout;
+            if (t !== 0) bound += t ?? 30000;
+          }
+          const t0 = Date.now();
+          const raw = inner.run(true, () => orig.apply(this, a));
+          let timer = null, late = false;
+          const out = new Promise((resolve, reject) => {
+            // The slowest call that settled inside its bound, for the margin `ms` keeps (a stalled one is not a measure).
+            const done = () => {
+              clearTimeout(timer);
+              if (late) return;
+              const took = Date.now() - t0;
+              stats.calls++;
+              if (took > stats.slowestMs) { stats.slowestMs = took; stats.slowestSite = `${kind}.${name} (${siteOf(site)})`; }
+              if (took > 1000) { const k = `${kind}.${name} (${siteOf(site)})`; stats.bySite.set(k, Math.max(took, stats.bySite.get(k) ?? 0)); }
+            };
+            raw.then((v) => { done(); resolve(v); }, (e) => { done(); reject(e); });
+            timer = setTimeout(async () => {
+              late = true;
+              const w = where();
+              reject(new Error(await stallMessage(page, `${kind}.${name} (${siteOf(site)}${w ? `; ${w}` : ''})`, bound)));
+            }, bound);
+          });
+          out[DISARM] = () => { clearTimeout(timer); late = true; };
+          return out;
+        };
+      }
+    }
+  } finally { await ctx.close(); }
+  return stats;
+};
+
+/** The caller's first two frames outside this file and Playwright, as `function file:line`, from a captured stack. A
+ *  name is kept only when it is a plain identifier: V8 infers dotted names for an arrow in a literal from the keys around
+ *  it (`bp.waitForFunction.timeout` for an arrow in an array), which name nothing a reader can find. */
+const siteOf = (site) => {
+  const here = import.meta.url.split('/').pop();
+  const frames = String(site.stack ?? '').split('\n').slice(1)
+    .map((l) => l.trim().replace(/^at (async )?/, ''))
+    .filter((l) => !l.includes('node_modules') && !l.includes('node:') && !l.includes(here))
+    .map((l) => { const m = /^(?:(.*?) \()?(?:file:\/\/)?[^()]*\/([^/():]+):(\d+):\d+\)?$/.exec(l); return m ? `${/^[\w$]+$/.test(m[1] ?? '') ? `${m[1]} ` : ''}${m[2]}:${m[3]}` : null; })
+    .filter(Boolean);
+  return frames.slice(0, 2).join(' < ') || 'no call site in the stack';
 };

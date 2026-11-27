@@ -604,18 +604,44 @@ const OUT_DIR = join(ROOT, '..', '..', 'packages', 'engine', 'out');
 
 /** Export › Download, collecting every file it writes (#2552). The download is the CONSUMER set — the base plus one
  *  overlay per mode, several files — so a test reading one download would see only the base. The count expected is
- *  read off the brand's committed base + overlay files, never from the page. Returns { name → parsed JSON }. */
+ *  read off the brand's committed base + overlay files, never from the page. Returns { name → parsed JSON }.
+ *
+ *  A set that comes back short says why, in its non-enumerable `why` (#4596): how many downloads the click started,
+ *  counted in the page (each anchor with `download` the page clicks), how many of the expected arrived and whether the
+ *  15s ran out, and each file that arrived but could not be read, with the browser's failure. Without it a short set
+ *  read the same whether the click started nothing, the browser dropped a file, or a download failed: #4596's "no base
+ *  file" on one Mac, every run, could not be told apart. The started count is reported, never waited on or compared:
+ *  the expected count stays the committed files', independent of the page (docs/34). */
 const downloadSet = async (page, id, expect) => {
   const count = expect ?? readdirSync(OUT_DIR).filter((f) => f === `${id}.base.tokens.json` || (f.startsWith(`${id}.`) && f.endsWith('.overlay.tokens.json'))).length;
   const got = new Map();
+  let on;
   const all = new Promise((res) => {
-    const on = (dl) => { got.set(dl.suggestedFilename(), dl); if (got.size >= count) { page.off('download', on); res(); } };
+    on = (dl) => { got.set(dl.suggestedFilename(), dl); if (got.size >= count) res(); };
     page.on('download', on);
   });
+  await page.evaluate(() => {
+    if (!window.__p3Started) {
+      window.__p3Started = [];
+      document.addEventListener('click', (e) => { if (e.target instanceof HTMLAnchorElement && e.target.hasAttribute('download')) window.__p3Started.push(e.target.download); }, true);
+    }
+    window.__p3Started.length = 0;
+  });
   await hooks.click(page.locator('[data-p3="export-page"] [data-p3="dialog-confirm"]'));
-  await Promise.race([all, new Promise((res) => setTimeout(res, 15000))]);
+  const inTime = await Promise.race([all.then(() => true), new Promise((res) => setTimeout(() => res(false), 15000))]);
+  page.off('download', on);
+  const started = await page.evaluate(() => [...(window.__p3Started ?? [])]).catch(() => null);
   const out = {};
-  for (const [name, dl] of got) { try { out[name] = JSON.parse(await readFile(await dl.path(), 'utf8')); } catch { /* reported by the caller */ } }
+  const unread = [];
+  for (const [name, dl] of got) {
+    try { out[name] = JSON.parse(await readFile(await dl.path(), 'utf8')); } catch (e) {
+      unread.push(`${name}: ${(await dl.failure().catch(() => null)) ?? String(e?.message ?? e).split('\n')[0]}`);
+    }
+  }
+  Object.defineProperty(out, 'why', {
+    enumerable: false,
+    value: `the click started ${started ? `${started.length} download${started.length === 1 ? '' : 's'}` : 'an unknown number of downloads (the page did not answer)'}; ${got.size} of ${count} arrived${inTime ? '' : ' before 15s ran out'}${got.size ? ` (${[...got.keys()].join(', ')})` : ''}${unread.length ? `; arrived but unreadable: ${unread.join(' | ')}` : ''}`,
+  });
   return out;
 };
 /** One mode's view of an exported consumer set: the base with that mode's overlay laid over it, as a consumer merges. */
@@ -5916,7 +5942,7 @@ console.log(`\n#2942 — Custom underline: the switch, the two % fields and the 
     const base = set[`${id}.base.tokens.json`];
     const root = base ? base[Object.keys(base).find((k) => !k.startsWith('$'))] : undefined;
     await gotoType(page);
-    return base ? (root?.core?.font?.underline ?? null) : 'no base file';
+    return base ? (root?.core?.font?.underline ?? null) : `no base file: ${set.why}`;
   };
   await gotoType(page);
   const sw = page.locator('[data-p3="type-underline-switch"]');

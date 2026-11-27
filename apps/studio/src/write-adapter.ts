@@ -104,6 +104,9 @@ export type HostMessage =
   // #2909 — the file's Documentation settings (`apps/plugin/src/doc-settings.ts`): the usage-panel and cover switches,
   // and the Style guides tab's choices as the panel last saved them (`null` until it has). `error` when a save was refused.
   | { kind: 'doc-settings'; panels: boolean; cover: boolean; styleGuide: Record<string, unknown> | null; error: string | null }
+  // #4469 — Export manifest's answer: the file's component manifest as JSON to download, `null` when the file holds none;
+  // `error` when it could not be read.
+  | { kind: 'component-manifest'; text: string | null; error: string | null }
   // #2909 — Update file's checklist: the def ids whose set the file holds, whether Set up file has run, and (Q2909.8 A)
   // what the as-built ledger says each present set is: current, due and why, or not recorded.
   // #3110: `partial` when the host read it from the ledger alone at open, before any page loaded.
@@ -228,6 +231,9 @@ export interface HostCommit {
   /** #2830 Q2830.3 A: Documentation › Specs' Draw specs, the spec panels for the current page (`draw-specs`). Figma
    *  only; inert on the web. */
   postDrawSpecs(): void;
+  /** #4469: Docs › Spec drawings' Export manifest, a read of the file's component manifest (`manifest-export`). Figma
+   *  only; inert on the web. */
+  requestManifest(): void;
   /** #2909: keep Documentation's settings in the file (`doc-settings-save`). Figma only; inert on the web. */
   saveDocSettings(settings: unknown): void;
   /** #2909: ask which sets the file holds (`file-sets-request`), and what is due against `input`, the brand the panel
@@ -641,6 +647,8 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
     const sg = x.styleGuide && typeof x.styleGuide === 'object' && !Array.isArray(x.styleGuide) ? x.styleGuide as Record<string, unknown> : null;
     return { kind: 'doc-settings', panels: x.panels !== false, cover: x.cover !== false, styleGuide: sg, error: str(m.error) && m.error ? m.error : null };
   },
+  // #4469. A text that is not a string reads as no manifest.
+  'component-manifest': (m) => ({ kind: 'component-manifest', text: str(m.text) && m.text ? m.text : null, error: str(m.error) && m.error ? m.error : null }),
   // #2909. Ids that are not strings are dropped; a malformed `setUp` reads as not set up, the claim that asks for more.
   'file-sets': (m) => ({ kind: 'file-sets', present: Array.isArray(m.present) ? (m.present as unknown[]).filter(str) : [], setUp: m.setUp === true,
     error: str(m.error) && m.error ? m.error : null, due: dueOf(m.due), queued: idsOf(m.queued), ...(Array.isArray(m.docBlockLacks) ? { docBlockLacks: idsOf(m.docBlockLacks) } : {}), ...(Array.isArray(m.setupIncomplete) ? { setupIncomplete: idsOf(m.setupIncomplete) } : {}), ...(m.partial === true ? { partial: true } : {}), ...(m.atOpen === true ? { atOpen: true } : {}),
@@ -793,6 +801,9 @@ const figmaCommit = (): HostCommit => ({
   postDrawSpecs() {
     post({ type: 'draw-specs' });
   },
+  requestManifest() {
+    post({ type: 'manifest-export' });
+  },
   onHostMessage(cb) {
     window.addEventListener('message', (e: MessageEvent) => {
       const msg = toHostMessage(e.data);
@@ -822,6 +833,7 @@ const webCommit = (): HostCommit => ({
   postPrune() {/* no figma.variables on web — CSS custom properties have no stale-item problem (#1521) */},
   saveDocSettings() {/* no file on web (#2909) */},
   postDrawSpecs() {/* no canvas on web (#2830) */},
+  requestManifest() {/* no file on web (#4469) */},
   requestFileSets() {/* no file on web (#2909) */},
   requestDue() {/* no file on web (#3081) */},
   requestHandEdits() {/* no file on web (#2909) */},

@@ -14,7 +14,8 @@
  *     file › Clean up can remove them (Q3137.7 A);
  *   · Cover: one switch, on unless the file says off: the library cover and the file thumbnail (#2977);
  *   · Specs: Draw specs (#2830 Q2830.3 A), the spec panel beside each usage panel for the sets on the current page,
- *     through the agent's `draw-specs` action, with its result line under it.
+ *     through the agent's `draw-specs` action, with its result line under it. Under it, Export manifest (#4469, owner
+ *     decision A): the file's component manifest, which Build and Update file keep in the file for agents, downloaded.
  *
  * HOW IT TALKS TO THE REST: it reads the file's settings through `lend.read` and saves the whole record through
  * `lend.save`; it repaints on `host:docs`. It names no legacy repaint tier (`test-shell-imports.ts`).
@@ -41,6 +42,11 @@ export type DocumentationLend = {
   readonly specs: {
     readonly read: () => { readonly state: ActionState; readonly busy: boolean; readonly off: string | null };
     readonly draw: () => void;
+  };
+  /** #4469: Export manifest: its last state, and the request, which the host answers with the file's manifest. */
+  readonly manifest: {
+    readonly read: () => 'pending' | 'done' | 'empty' | 'error' | null;
+    readonly export: () => void;
   };
   /** #3137: Usage panels' reads. `missing`: with panels on, how many sets in the file have no usage panel, and whether
    *  that is every set that leads one (null before the host has said, or with panels off). `drawn`: with panels off, how
@@ -72,6 +78,13 @@ export const DOCS_COPY = {
   specsDraw: 'Draw specs',
   specsBusy: 'Drawing specs',
   saveError: 'Couldn’t save the setting in this file. Check you can edit this file, then try again.',
+  /** #4469 (owner decision A). DRAFT, for owner approval. */
+  manifest: 'Component manifest',
+  manifestDesc: 'A list of the component sets in this file, with their properties and the id to place each one, for agents to read. Build and Update file keep it in the file, and nothing is drawn. The export holds this file’s ids, so keep it with the file’s own material.',
+  manifestExport: 'Export manifest',
+  manifestBusy: 'Exporting manifest',
+  manifestEmpty: 'No manifest in this file yet. Build or update a set, and the manifest is written.',
+  manifestError: 'Couldn’t read the manifest in this file.',
 } as const;
 
 /** The tab open, kept for the session: leaving the area and coming back returns to it. */
@@ -210,7 +223,16 @@ export const mountDocumentation = (root: HTMLElement, lend: DocumentationLend, n
     const result = hook(h('p', 'p3-upd-summary', ''), 'docs-specs-result');
     result.setAttribute('aria-live', 'polite');
     card.append(h('h2', 'p3-docs-cardtitle', DOCS_COPY.specs), h('p', 'p3-sub', DOCS_COPY.specsDesc), draw, result);
-    body.append(card);
+    // #4469: Export manifest, a read of the file, so never held by another write.
+    const mCard = hook(h('section', 'p3-docs-card'), 'docs-manifest');
+    const mGo = hook(h('button', 'p3-btn p3-btn-page'), 'docs-manifest-export');
+    mGo.type = 'button';
+    mGo.append(pendingLabel(DOCS_COPY.manifestExport, DOCS_COPY.manifestBusy));
+    mGo.onclick = () => { if (lend.manifest.read() !== 'pending') lend.manifest.export(); };
+    const mLine = hook(h('p', 'p3-upd-summary', ''), 'docs-manifest-result');
+    mLine.setAttribute('aria-live', 'polite');
+    mCard.append(h('h2', 'p3-docs-cardtitle', DOCS_COPY.manifest), h('p', 'p3-sub', DOCS_COPY.manifestDesc), mGo, mLine);
+    body.append(card, mCard);
     const paint = (): void => {
       const { state, busy, off } = lend.specs.read();
       const pending = state === 'pending';
@@ -222,6 +244,10 @@ export const mountDocumentation = (root: HTMLElement, lend: DocumentationLend, n
       const v = state && state !== 'pending' ? state : null;
       result.textContent = v ? `${v.headline}. ${v.summary}` : '';
       result.hidden = !v;
+      const ms = lend.manifest.read();
+      setBusy(mGo, ms === 'pending');
+      mLine.textContent = ms === 'empty' ? DOCS_COPY.manifestEmpty : ms === 'error' ? DOCS_COPY.manifestError : '';
+      mLine.hidden = !mLine.textContent;
     };
     paint();
     tabCleanups.push(subscribe('host', paint));

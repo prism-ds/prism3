@@ -730,6 +730,7 @@
     {
       "server": "prism3-figma-bridge",
       "run": "npx tsx tools/figma-bridge/server.ts [--port 17331]",
+      "requires": "@modelcontextprotocol/server@2.4.0, installed by npm ci at the repository root",
       "transport": "stdio, newline-delimited JSON-RPC 2.0; drives the running plugin over a WebSocket on 127.0.0.1:17331",
       "protocolVersions": [
         "2026-07-28",

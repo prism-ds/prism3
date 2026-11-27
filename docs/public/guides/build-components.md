@@ -25,12 +25,13 @@ On a file that isn't set up yet, the same run sets it up first. See [Set up a fi
 
 ## What a build does
 
-For each set, the plugin: <!-- src: apps/plugin/src/main.ts@"try { headers.push(await".."const alsoBuilt = await"#bc047daf -->
+For each set, the plugin: <!-- src: apps/plugin/src/main.ts@"try { headers.push(await".."const alsoBuilt = await"#12875cd9 -->
 
 - builds any set the chosen one contains first, such as the icon and focus ring inside a button;
 - creates the set's page if the file does not have it, and switches Figma to that page;
 - builds the set, its properties and its prototype interactions;
 - adds the page header and the labels beside the set;
+- lists the set in the file's component manifest, which agents read: each set's properties, their values and defaults, and the id to place it by; <!-- src: apps/plugin/src/component-manifest.ts@"export const manifestSetOf"#b32934b8 -->
 - draws the family's usage panel beside its lead, while Docs has usage panels on. <!-- src: apps/plugin/src/main.ts@"// #846: its usage panel".."// #2909: unless Documentation"#03cbfa05 --> A family has one panel, beside its lead set: the Buttons page has one, beside Button, and the other sets on the page have none of their own. An icon, the spinner and a provider logo are single components, with no set and no panel. <!-- src: apps/plugin/src/doc-panel.ts@"/** Whether `defId`'".."export const leadsPanel"#b6f87a5f -->
 
 A new set's description in Figma is its one-line summary from the engine. When the summary changes, Update file rewrites a description Prism3 wrote, and keeps one you changed. On a set Prism3 built before it recorded its descriptions, Update file can't tell the two apart and rewrites it. <!-- src: apps/plugin/src/write-components.ts@"/** A COMPONENT / COMPONENT_SET".."*  on an existing set"#b707248a -->

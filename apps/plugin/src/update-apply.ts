@@ -270,6 +270,9 @@ export type ApplyResult = {
   version?: string;
   missing: string[];
   refused: { def: string; reason: string }[];
+  /** #4469 — each set the apply read, by set name, with its node id, for the component manifest (`component-manifest.ts`).
+   *  Absent when the apply read no set. */
+  ids?: Record<string, string>;
   /** #2568 — the component pages the apply put in alphabetical order, by full page name. Absent when none. */
   reordered?: string[];
   /** #2989 — the sets moved to the page the taxonomy names now, and the pages that left empty (never deleted). Absent
@@ -1133,6 +1136,8 @@ export const applyUpdate = async (
     const p = preview.sets.find((s) => s.set === (t.plans[0]?.component ?? t.def));
     const live = p ? await liveFor(host, t, p.set, opts.ledger) : undefined;
     if (!p || !live) continue;
+    const liveId = idOf(live);
+    if (liveId) (res.ids ??= {})[p.set] = liveId;
     // UPDATES OFF (#2956, skip-and-report): left as it is, whatever its plan or its blockers say, and reported calmly.
     // Nothing on it is written, so every hand edit on it stays where the designer left it.
     if (p.updatesOff) { res.outcomes.push({ def: t.def, set: p.set, off: p.updatesOff, updated: [], added: 0, renamed: 0, deprecated: [], skipped: [], kept: [], unrecorded: [], handEdits: choiceFor(opts.choices, p.set), identity: [], content: [], misses: [] }); continue; }

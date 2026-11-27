@@ -92,6 +92,14 @@ const mcpTool = (file: string, t: Tool) => ({
   source: at(file, new RegExp(`name: '${esc(t.name)}'`), `name: '${t.name}'`),
 });
 
+/** The bridge's one install requirement (#4646): the MCP SDK and its exact pin in the root `package.json`. */
+const BRIDGE_SDK = '@modelcontextprotocol/server';
+const bridgeSdk = (): string => {
+  const pin = (JSON.parse(read('package.json')) as { devDependencies?: Record<string, string> }).devDependencies?.[BRIDGE_SDK];
+  if (!pin) throw new Error(`emit-agent-reference: the root package.json pins no ${BRIDGE_SDK}, which tools/figma-bridge/server.ts imports`);
+  return `${BRIDGE_SDK}@${pin}, installed by npm ci at the repository root`;
+};
+
 const mcp = () => [
   {
     server: SERVER_INFO.name,
@@ -104,6 +112,8 @@ const mcp = () => [
   {
     server: BRIDGE_INFO.name,
     run: 'npx tsx tools/figma-bridge/server.ts [--port 17331]',
+    // #4646: the bridge runs on the official MCP SDK, so it needs the repo's `npm ci` first. Read from the root pin.
+    requires: bridgeSdk(),
     transport: `stdio, newline-delimited JSON-RPC 2.0; drives the running plugin over a WebSocket on 127.0.0.1:${BRIDGE_PORT}`,
     protocolVersions: [...PROTOCOL_VERSIONS],
     source: at('tools/figma-bridge/server.ts', /^const isMain/, 'isMain'),

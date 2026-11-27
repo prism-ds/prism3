@@ -10,9 +10,9 @@
  *   PRISM3_BRIDGE_ARM=0|1|2 picks what a fresh agent is shown, for the adherence test (#3440; unset is 2, today's bridge).
  *
  * TWO SIDES, ONE PROCESS:
- *   · stdio MCP (newline-delimited JSON-RPC, hand-rolled like `packages/engine/mcp.ts`, whose protocol
- *     constants it reuses) with three tools — `figma_status`, `figma_run {cmd, args, timeoutMs}`,
- *     `figma_logs {since, limit}`;
+ *   · stdio MCP on the official SDK (`@modelcontextprotocol/server`, #4646; the engine's handshake rule and protocol
+ *     constants are imported from `packages/engine/mcp.ts`) with three tools — `figma_status`,
+ *     `figma_run {cmd, args, timeoutMs}`, `figma_logs {since, limit}`;
  *   · a WebSocket server on 127.0.0.1 (RFC 6455, hand-rolled on `node:http` + `node:crypto` — no `ws`
  *     package). The plugin's UI iframe connects to it while the owner has the agent link switched on, and
  *     relays each command to the main thread's dispatcher (`apps/plugin/src/agent-bridge-relay.ts`).
@@ -77,6 +77,8 @@ import { AGENT_PROTOCOL_VERSION, AGENT_COMMANDS } from '../../apps/plugin/src/ag
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
 import { CLIENT_NONCE_RE, CODE_ALPHABET, CODE_LENGTH, CLOSE, HELLO_LABEL, PAIR_LABEL, PAIRED_LABEL, TOKEN_LABEL, WELCOME_LABEL, formatCode } from '../../apps/plugin/src/bridge-auth';
 import type { AgentCommand, AgentResult, AgentLinkState, AgentProgress } from '../../apps/plugin/src/agent-protocol';
+// Types only, erased at run time: the SDK itself is loaded by `import()` where the MCP server is made (#4646).
+import type { JSONRPCMessage, Server, Transport } from '@modelcontextprotocol/server';
 import { ENGINE_VERSION } from '@prism3/engine/version';
 import { isEntry } from '../../packages/engine/entry-point';
 
@@ -144,8 +146,15 @@ export const loadResources = (root = REPO_ROOT): Map<string, Loaded> => {
   return loadedResources;
 };
 
-/** Server capabilities, shared by `initialize` and `server/discover` so the two can never disagree. */
-export const CAPABILITIES = { tools: { listChanged: false }, resources: { listChanged: false } };
+/** Server capabilities, shared by `initialize` and `server/discover` so the two can never disagree. `logging` is
+ *  declared because the bridge streams the plugin's console lines as `notifications/message`, which MCP allows only from
+ *  a server that declares it; the SDK refuses to send them otherwise (#4646). */
+export const CAPABILITIES = { tools: { listChanged: false }, resources: { listChanged: false }, logging: {} };
+/** What an arm advertises: below arm 2 there is no resources capability (#3440). */
+export const capabilitiesFor = (arm: BridgeArm) => {
+  const { resources, ...rest } = CAPABILITIES;
+  return armView(arm).resources ? { ...CAPABILITIES } : rest;
+};
 
 /* ── the adherence test's arms (#3440, Q3440.3 A) ───────────────────────────────────────────────────── */
 
@@ -632,8 +641,16 @@ export const listen = async (bridge: Bridge, port: number): Promise<{ port: numb
 
 /* ── MCP ────────────────────────────────────────────────────────────────────────────────────────────── */
 
-type Rpc = { jsonrpc?: string; id?: number | string | null; method: string; params?: any };
-type RpcOut = { jsonrpc: '2.0'; id: number | string | null; result?: unknown; error?: { code: number; message: string; data?: unknown } };
+/*
+ * ON THE OFFICIAL SDK (#4646, the owner's decision A). The MCP side runs on `@modelcontextprotocol/server`, v2 of what
+ * was `@modelcontextprotocol/sdk` (v2 ships as split packages), pinned exactly in the root `package.json`. Tasks,
+ * Elicitation and Skills over MCP need server-to-client requests, per-run state, cancellation and resume, which is where
+ * a hand-written server breaks. The bridge is the one exception to docs/08 §7's "no MCP SDK": `packages/engine/mcp.ts`
+ * stays hand-written, because the engine runs with no `npm install` (docs/07 §3) and the bridge is local tooling.
+ *
+ * The SDK is loaded with `import()` inside `createMcpServer` and the stdio shell, never at the top of this file:
+ * `lint-ecosystem.ts` and `emit-agent-reference.ts` import `TOOLS` from here, and they are engine gates.
+ */
 
 /**
  * #2639: `figma_run`'s `args` description, one entry per command, read from the source rather than typed here. It was
@@ -725,93 +742,136 @@ export const toolsFor = (arm: BridgeArm) => {
 
 const text = (v: unknown, isError = false) => ({ content: [{ type: 'text', text: JSON.stringify(v, null, 2) }], structuredContent: v, ...(isError ? { isError: true } : {}) });
 
+/** A JSON-RPC message as it arrives on stdio, before the SDK reads it. */
+type WireMessage = { jsonrpc?: string; id?: number | string | null; method?: string; params?: any };
+
 /**
- * Handle one JSON-RPC message; `notify` sends a server notification (progress / log lines during a run).
- * Returns null for a notification, which gets no reply.
+ * WHERE THE BRIDGE'S WIRE DIFFERS FROM THE SDK'S DEFAULTS, and stays as it was (#4646 step 0: nothing an agent or a test
+ * reads moves). `bridgeTransport` puts this in front of the SDK, on each message read from stdio:
+ *   · `server/discover` is answered in any state, in the shape the bridge always sent. The SDK pins one protocol era per
+ *     connection and answers `server/discover` only on a 2026-07-28 one; the bridge answers it beside `initialize`.
+ *   · `initialize` is served at the version the engine's rule picks (`negotiateHandshakeVersion`, imported, never copied:
+ *     #3109), and one sent without `capabilities` or `clientInfo` is served with empty ones rather than refused.
+ *   · A read of a resource this bridge does not serve fails with -32002 and names a renamed URI (#3412). The SDK
+ *     re-codes -32002 as -32602.
+ * Everything else goes to the SDK unchanged. Pure, so it is tested without a process.
  */
-export const handleRpc = async (req: Rpc, bridge: Bridge, notify: (method: string, params: unknown) => void, opts: RpcOptions = {}): Promise<RpcOut | null> => {
-  const id = req.id ?? null;
+export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown } | { forward: WireMessage } => {
+  if (typeof m !== 'object' || m === null || typeof m.method !== 'string' || m.id === undefined || m.id === null) return { forward: m };
+  const view = armView(arm);
+  const id = m.id;
+  if (m.method === 'server/discover') {
+    return { reply: { jsonrpc: '2.0', id, result: {
+      resultType: 'complete', protocolVersions: [...PROTOCOL_VERSIONS], capabilities: capabilitiesFor(arm), serverInfo: SERVER_INFO,
+      ...(view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {}), _meta: { [META.serverInfo]: SERVER_INFO },
+    } } };
+  }
+  if (m.method === 'initialize') {
+    const p = m.params && typeof m.params === 'object' ? m.params : {};
+    return { forward: { ...m, params: { ...p, protocolVersion: negotiateHandshakeVersion(p.protocolVersion), capabilities: p.capabilities ?? {}, clientInfo: p.clientInfo ?? { name: 'unknown', version: '0' } } } };
+  }
+  if (m.method === 'resources/read' && view.resources) {
+    const uri = m.params?.uri;
+    if (!RESOURCES.some((r) => r.uri === uri)) {
+      const now = typeof uri === 'string' ? RENAMED_RESOURCES[uri] : undefined;
+      const message = now ? `Resource not found: ${uri} was renamed; read ${now}` : `Resource not found: ${uri}`;
+      return { reply: { jsonrpc: '2.0', id, error: { code: RESOURCE_NOT_FOUND, message, data: now ? { uri, renamedTo: now } : { uri } } } };
+    }
+  }
+  return { forward: m };
+};
+
+/** The SDK's stdio transport with `compatAnswer` in front of it. Reading, framing and sending are the SDK's own; one
+ *  difference from the hand-written loop is the SDK's: a line that is not JSON is skipped, not answered -32700. */
+export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => {
+  const outer: Transport = {
+    start: () => inner.start(),
+    send: (msg, options) => inner.send(msg, options),
+    close: () => inner.close(),
+    setProtocolVersion: (v: string) => inner.setProtocolVersion?.(v),
+  };
+  inner.onmessage = (msg, extra) => {
+    const c = compatAnswer(msg as WireMessage, arm);
+    if ('reply' in c) void inner.send(c.reply as JSONRPCMessage).catch((e: Error) => outer.onerror?.(e));
+    else outer.onmessage?.(c.forward as JSONRPCMessage, extra);
+  };
+  inner.onerror = (e) => outer.onerror?.(e);
+  inner.onclose = () => outer.onclose?.();
+  return outer;
+};
+
+/** Largest JSON-RPC line read from stdio: the WebSocket's own ceiling, so a `run-code` body the plugin accepts is never
+ *  cut off at the SDK's 10 MB default. */
+const MAX_STDIO_MESSAGE = MAX_MESSAGE;
+
+/**
+ * The MCP server: the three tools, the five resources and the note, by arm, on the SDK's `Server`. Progress and console
+ * lines during a run go out as `notifications/progress` (with the caller's `progressToken`) and `notifications/message`.
+ */
+export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Promise<Server> => {
+  const { Server, ProtocolError, ProtocolErrorCode } = await import('@modelcontextprotocol/server');
   const arm = opts.arm ?? DEFAULT_ARM;
   const view = armView(arm);
-  const caps = view.resources ? CAPABILITIES : { tools: CAPABILITIES.tools };
-  const note = view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {};
-  const ok = (result: Record<string, unknown>): RpcOut => ({ jsonrpc: '2.0', id, result: { resultType: 'complete', ...result, _meta: { [META.serverInfo]: SERVER_INFO } } });
-  const err = (code: number, message: string): RpcOut => ({ jsonrpc: '2.0', id, error: { code, message } });
-  switch (req.method) {
-    case 'server/discover':
-      return ok({ protocolVersions: [...PROTOCOL_VERSIONS], capabilities: caps, serverInfo: SERVER_INFO, ...note });
-    // The engine server's rule, imported rather than copied: a copy here kept the old fallback after
-    // #1867 fixed it there, and Claude Code refused the bridge's `2026-07-28` answer (#3109).
-    case 'initialize':
-      return ok({ protocolVersion: negotiateHandshakeVersion(req.params?.protocolVersion), capabilities: caps, serverInfo: SERVER_INFO, ...note });
-    case 'notifications/initialized':
-    case 'initialized':
-      return null;
-    case 'ping':
-      return ok({});
-    case 'tools/list':
-      return ok({ tools: toolsFor(arm), ttlMs: 3_600_000, cacheScope: 'public' });
-    // An arm below 2 has no resources capability, so these are methods it does not have (#3440).
-    case 'resources/list':
-    case 'resources/templates/list':
-    case 'resources/read':
-      if (!view.resources) return err(-32601, `method not found: ${req.method}`);
-      break;
-  }
-  switch (req.method) {
-    case 'resources/list':
-      return ok({ resources: RESOURCES.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) });
-    case 'resources/templates/list':
-      return ok({ resourceTemplates: [] });
-    case 'resources/read': {
-      const uri = req.params?.uri;
-      const r = RESOURCES.find((x) => x.uri === uri);
-      if (!r) {
-        const now = typeof uri === 'string' ? RENAMED_RESOURCES[uri] : undefined;
-        const message = now ? `Resource not found: ${uri} was renamed; read ${now}` : `Resource not found: ${uri}`;
-        return { jsonrpc: '2.0', id, error: { code: RESOURCE_NOT_FOUND, message, data: now ? { uri, renamedTo: now } : { uri } } };
+  const server = new Server(SERVER_INFO, {
+    capabilities: capabilitiesFor(arm),
+    ...(view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {}),
+    // The engine's list: `initialize` is answered at the version `compatAnswer` hands it, which this list must hold.
+    supportedProtocolVersions: [...PROTOCOL_VERSIONS],
+  });
+
+  server.setRequestHandler('tools/list', () => ({ tools: toolsFor(arm) }));
+
+  server.setRequestHandler('tools/call', async (req, ctx) => {
+    const name = req.params.name;
+    const a = (req.params.arguments ?? {}) as Record<string, unknown>;
+    if (name === 'figma_status') {
+      const st = bridge.status();
+      return text({ ...st, commands: view.context ? st.commands : st.commands.filter((c) => c !== CONTEXT_CMD), ...(view.note ? { readFirst: BRIDGE_INSTRUCTIONS } : {}) });
+    }
+    if (name === 'figma_logs') {
+      return text(bridge.logs(typeof a.since === 'number' ? a.since : 0, typeof a.limit === 'number' ? a.limit : 200));
+    }
+    if (name === 'figma_run') {
+      const seq = opts.record?.attempt(arm, a.cmd, a.args ?? {});
+      const done = (outcome: Extract<RecordLine, { kind: 'outcome' }>['outcome'], error?: unknown) => { if (seq !== undefined) opts.record!.outcome(seq, outcome, error); };
+      if (typeof a.cmd !== 'string') { done('refused-by-bridge', 'figma_run needs cmd'); return text({ error: 'figma_run needs cmd' }, true); }
+      if (a.cmd === CONTEXT_CMD && !view.context) { done('refused-by-bridge', ARM_REFUSAL); return text({ error: ARM_REFUSAL }, true); }
+      const timeoutMs = typeof a.timeoutMs === 'number' && a.timeoutMs > 0 ? Math.min(a.timeoutMs, 3_600_000) : 600_000;
+      const token = ctx.mcpReq._meta?.progressToken;
+      const progress = createProgressCounter();
+      try {
+        const r = await bridge.run(a.cmd, a.args ?? {}, timeoutMs, {
+          onProgress: (p) => {
+            if (token !== undefined) void ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: progress(p), message: `${p.phase} ${p.done}/${p.total}` } }).catch(() => undefined);
+          },
+          onLog: (line) => { void ctx.mcpReq.log('info', line, 'figma').catch(() => undefined); },
+        });
+        // A result that arrived is the tool working — `ok: false` inside it is the action's own verdict.
+        const env = r as { ok?: unknown; error?: unknown };
+        done(env.ok === false ? 'not-ok' : 'ok', env.ok === false ? env.error : undefined);
+        return text(r);
+      } catch (e) {
+        done('tool-error', (e as Error).message);
+        return text({ error: (e as Error).message }, true);
       }
+    }
+    throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Unknown tool: ${name}`);
+  });
+
+  // An arm below 2 has no resources capability, so it registers no resource methods and the SDK answers them -32601 (#3440).
+  if (view.resources) {
+    server.setRequestHandler('resources/list', () => ({ resources: RESOURCES.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) }));
+    server.setRequestHandler('resources/templates/list', () => ({ resourceTemplates: [] }));
+    server.setRequestHandler('resources/read', (req) => {
+      // An unknown URI never reaches here: `compatAnswer` answers it with -32002.
+      const r = RESOURCES.find((x) => x.uri === req.params.uri);
+      if (!r) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Resource not found: ${req.params.uri}`);
       const got = loadResources().get(r.uri)!;
-      if ('error' in got) return err(-32603, got.error);
-      return ok({ contents: [{ uri: r.uri, mimeType: r.mimeType, text: got.text, _meta: { 'prism3/engineVersion': ENGINE_VERSION } }] });
-    }
-    case 'tools/call': {
-      const name = req.params?.name;
-      const a = (req.params?.arguments ?? {}) as Record<string, unknown>;
-      if (name === 'figma_status') {
-        const st = bridge.status();
-        return ok(text({ ...st, commands: view.context ? st.commands : st.commands.filter((c) => c !== CONTEXT_CMD), ...(view.note ? { readFirst: BRIDGE_INSTRUCTIONS } : {}) }));
-      }
-      if (name === 'figma_logs') {
-        return ok(text(bridge.logs(typeof a.since === 'number' ? a.since : 0, typeof a.limit === 'number' ? a.limit : 200)));
-      }
-      if (name === 'figma_run') {
-        const seq = opts.record?.attempt(arm, a.cmd, a.args ?? {});
-        const done = (outcome: Extract<RecordLine, { kind: 'outcome' }>['outcome'], error?: unknown) => { if (seq !== undefined) opts.record!.outcome(seq, outcome, error); };
-        if (typeof a.cmd !== 'string') { done('refused-by-bridge', 'figma_run needs cmd'); return ok(text({ error: 'figma_run needs cmd' }, true)); }
-        if (a.cmd === CONTEXT_CMD && !view.context) { done('refused-by-bridge', ARM_REFUSAL); return ok(text({ error: ARM_REFUSAL }, true)); }
-        const timeoutMs = typeof a.timeoutMs === 'number' && a.timeoutMs > 0 ? Math.min(a.timeoutMs, 3_600_000) : 600_000;
-        const token = req.params?._meta?.progressToken;
-        const progress = createProgressCounter();
-        try {
-          const r = await bridge.run(a.cmd, a.args ?? {}, timeoutMs, {
-            onProgress: (p) => { if (token !== undefined) notify('notifications/progress', { progressToken: token, progress: progress(p), message: `${p.phase} ${p.done}/${p.total}` }); },
-            onLog: (line) => notify('notifications/message', { level: 'info', logger: 'figma', data: line }),
-          });
-          // A result that arrived is the tool working — `ok: false` inside it is the action's own verdict.
-          const env = r as { ok?: unknown; error?: unknown };
-          done(env.ok === false ? 'not-ok' : 'ok', env.ok === false ? env.error : undefined);
-          return ok(text(r));
-        } catch (e) {
-          done('tool-error', (e as Error).message);
-          return ok(text({ error: (e as Error).message }, true));
-        }
-      }
-      return err(-32602, `Unknown tool: ${name}`);
-    }
-    default:
-      return err(-32601, `method not found: ${req.method}`);
+      if ('error' in got) throw new ProtocolError(ProtocolErrorCode.InternalError, got.error);
+      return { contents: [{ uri: r.uri, mimeType: r.mimeType, text: got.text, _meta: { 'prism3/engineVersion': ENGINE_VERSION } }] };
+    });
   }
+  return server;
 };
 
 /* ── I/O shell ──────────────────────────────────────────────────────────────────────────────────────── */
@@ -846,29 +906,16 @@ if (isMain) {
   const bridge = createBridge({ graceMs, pairing });
   // The five resources are read now, once: what they serve is this checkout's commit (#3300).
   for (const [uri, r] of loadResources()) if ('error' in r) say(`resource ${uri}: ${r.error}`);
-  const send = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + '\n');
-  const notify = (method: string, params: unknown) => send({ jsonrpc: '2.0', method, params });
+  // The SDK loads first, so a checkout without `npm ci` stops here, before the socket opens (#4646).
+  const { StdioServerTransport } = await import('@modelcontextprotocol/server/stdio');
+  const server = await createMcpServer(bridge, { arm: arm as BridgeArm, record });
   const bound = await listen(bridge, port).catch((e: Error) => {
     process.stderr.write(`[figma-bridge] cannot listen on localhost:${port} — ${e.message}\n`);
     process.exit(1);
   });
-  let buf = '';
-  process.stdin.setEncoding('utf8');
-  process.stdin.on('data', (chunk: string) => {
-    buf += chunk;
-    let nl: number;
-    while ((nl = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, nl).trim();
-      buf = buf.slice(nl + 1);
-      if (!line) continue;
-      let req: Rpc;
-      try { req = JSON.parse(line); } catch { send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); continue; }
-      // Each request is answered when it finishes; a long figma_run does not block figma_status.
-      void handleRpc(req, bridge, notify, { arm, record })
-        .then((res) => { if (res) send(res); })
-        .catch((e) => send({ jsonrpc: '2.0', id: req.id ?? null, error: { code: -32603, message: `internal error: ${(e as Error).message}` } }));
-    }
-  });
-  process.stdin.on('end', () => { void bound.close().then(() => process.exit(0)); });
+  // Requests are answered as each finishes, so a long figma_run does not block figma_status. stdin closing ends the bridge.
+  server.onerror = (e) => say(`mcp: ${e.message}`);
+  server.onclose = () => { void bound.close().then(() => process.exit(0)); };
+  await server.connect(bridgeTransport(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: MAX_STDIO_MESSAGE }), arm as BridgeArm));
   process.stderr.write(`[figma-bridge] listening on localhost:${bound.port} — MCP on stdio — tools: ${TOOLS.map((t) => t.name).join(', ')}${arm === DEFAULT_ARM ? '' : ` — arm ${arm}`}${recordPath ? ` — recording to ${recordPath}` : ''}\n`);
 }

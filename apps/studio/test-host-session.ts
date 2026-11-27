@@ -47,7 +47,7 @@ const plain = (s: HostSession): unknown => ({ ...s, hostFontStyles: [...s.hostFo
 /** Every kind the UI's handler receives, written out here rather than read from the code under test. */
 const KINDS = [
   'apply-result', 'component-result', 'component-update-result', 'file-setup-result', 'style-guide-result', 'component-progress', 'style-guide-progress',
-  'prune-result', 'seed-info', 'restore-input', 'restore-input-empty', 'restore-input-reading', 'restore-input-library', 'restore-input-error', 'font-list', 'doc-settings', 'file-sets',
+  'prune-result', 'seed-info', 'restore-input', 'restore-input-empty', 'restore-input-reading', 'restore-input-library', 'restore-input-error', 'font-list', 'doc-settings', 'component-manifest', 'file-sets',
   'hand-edits', 'hand-edits-done', 'update-check', 'update-check-progress', 'file-due', 'add-queue', 'updates-off', 'set-in-file', 'panels-clean-result',
   'agent-started', 'agent-progress', 'agent-finished', 'refused',
   'style-guide-catalog', 'style-guide-tables', 'style-guide-table', 'style-guide-cleanup-result',
@@ -67,7 +67,7 @@ ok(typeof (globalThis as { document?: unknown }).document === 'undefined', 'prem
 
 const init = initialHostSession();
 ok(same(plain(init), {
-  seedOutcome: null, inputRecovered: false, restoreError: null, applyState: null, collisions: null, collisionsChosen: null, componentState: null, componentUpdate: null, componentLatest: null, specsState: null, overrideState: null,
+  seedOutcome: null, inputRecovered: false, restoreError: null, applyState: null, collisions: null, collisionsChosen: null, componentState: null, componentUpdate: null, componentLatest: null, specsState: null, manifestExport: null, overrideState: null,
   fileSetupState: null, styleGuideState: null, componentProgress: null, styleGuideProgress: null, styleGuideCatalog: null, styleGuideRun: null, styleGuideRetired: [], styleGuideCleanup: null, componentDef: null, setBuilds: [], componentSet: null, setInFile: [], pruneBusy: false, prunePreview: null,
   pruneVerdict: null, openDetail: null, hostFonts: [], hostFontStyles: [], hostFontStyleNames: [], agentRun: null, refused: null, docSettings: null, fileSets: null, liveDue: null, panelsClean: { busy: false, count: null, verdict: null }, addQueue: null, updatesOffError: null,
   handEdits: [], handPass: 'idle', updateCheck: null, updateProgress: null,
@@ -458,6 +458,16 @@ ok(refuses, 'premise: the engine refuses an empty object as a BrandInput');
   const d = step(init, { kind: 'doc-settings', panels: false, cover: true, styleGuide: { view: null }, error: null });
   ok(same(d.next.docSettings, { panels: false, cover: true, styleGuide: { view: null }, error: null }), 'doc-settings: the switches and the style-guide record land in the slot');
   ok(same(d.topics, ['host:docs']), 'doc-settings: only host:docs is invalidated');
+}
+{
+  // #4469: Export manifest's answer: a manifest is `done` (main.ts downloads it), none is `empty`, a failed read `error`,
+  // and each repaints the Spec drawings tab, which subscribes to `host`.
+  const done = step({ ...init, manifestExport: 'pending' }, { kind: 'component-manifest', text: '{"v":1}', error: null });
+  const none = step({ ...init, manifestExport: 'pending' }, { kind: 'component-manifest', text: null, error: null });
+  const bad = step({ ...init, manifestExport: 'pending' }, { kind: 'component-manifest', text: null, error: 'unreadable' });
+  ok(done.next.manifestExport === 'done' && none.next.manifestExport === 'empty' && bad.next.manifestExport === 'error',
+    `#4469 component-manifest: a manifest reads done, none empty, a failed read error (${done.next.manifestExport}, ${none.next.manifestExport}, ${bad.next.manifestExport})`);
+  ok(same(done.topics, ['host']) && same(none.topics, ['host']), '#4469 component-manifest: only host is invalidated');
 }
 {
   // #2909: Update file's checklist read lands in its own slot and moves only the overlay's topic.
