@@ -95,7 +95,7 @@ anyway: the brand's value may differ from the number asked for, and that's the p
 | "slide the underline across", "move the thumb over" | `motion.preset.move` (patterns `tabs/select`, `switch/toggle`, `segmented/select`) | A change of position within the layout. |
 | "swap one panel for the other", "dissolve between them" | `motion.preset.crossfade` | One thing replaced by another in the same place. |
 | "the color change on hover" | `motion.preset.state` (pattern `hover`) | A small state change on a control (R6). |
-| "feedback when I check it" | the Selection controls recipe: `motion.duration.fast`, `motion.easing-role.default` | A checkbox, radio or switch changing state (R6). |
+| "feedback when I check it" | the Selection controls recipe: `motion.duration.fast`, `motion.easing-role.default` | A checkbox or radio changing state (R6). |
 | "the button squishes when I press it" | `motion.preset.press` (pattern `pressed`); it lets go on `motion.preset.state` (pattern `pressed/release`) | A control pressed down. |
 | "content comes into view" | `motion.preset.reveal` | Content arriving as it's shown. |
 | "draw the line on" | `motion.preset.draw` | A line or stroke drawn in place. |
@@ -238,9 +238,10 @@ feedback), the field they're typing in and the page behind a dialog don't move w
 dims the page; nothing on the page moves.
 
 Under reduced motion there is no stagger and no sequence: every element arrives at once on its own
-preset's `.duration-reduced`, and a chained sequence shows its last step (R12). A track that reduced motion turns off (a scale, a
-slide, a travel) doesn't play at all: its element takes its end state at once, and only its opacity or
-color change runs.
+preset's `.duration-reduced`, and a chained sequence shows its last step (R12). A scale, slide or travel on an element that also
+fades or changes color doesn't play: the element takes its end state at once, and the fade or color
+change still runs. One on an element with no fade of its own (a sheet or end panel sliding in) becomes
+a fade instead (R7).
 
 ## Recipes
 
