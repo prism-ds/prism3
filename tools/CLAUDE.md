@@ -248,8 +248,9 @@ Since #4646 (owner decision A) its MCP side runs on the official SDK, `@modelcon
 pinned exactly in the root `package.json`: the one exception to `docs/08` §7's "no MCP SDK", while
 `packages/engine/mcp.ts` stays hand-written. The SDK is loaded only when the server runs, never at the
 top of `server.ts`, because two engine gates import its `TOOLS` and the engine needs no install.
-Its `initialize` answer was the engine server's rule from #3109; since #4646 step 1 it has its own list,
-which adds `2025-11-25` for Tasks. Both servers' answers are literals in `HANDSHAKE_PROBES`, never `2026-07-28`. Both servers are driven with the same probes (`packages/engine/mcp-handshake-probes.ts`),
+Its `initialize` answer was the engine server's rule from #3109; since #4646 step 1 it echoes the client's
+revision when the SDK speaks it, else `2025-11-25`, and offers `tasks` only at `2025-11-25`. Both servers'
+answers are literals in `HANDSHAKE_PROBES`, never `2026-07-28`. Both servers are driven with the same probes (`packages/engine/mcp-handshake-probes.ts`),
 and `mcp-test.ts` fails on any `initialize` handler in the tree that the probes' register does not name.
 
 ## `tools/sd-version-matrix/`

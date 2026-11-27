@@ -148,31 +148,43 @@ export const loadResources = (root = REPO_ROOT): Map<string, Loaded> => {
 };
 
 /**
- * THE BRIDGE'S HANDSHAKE (#4646 step 1). Until then it answered by the engine server's rule, `2024-11-05` to every
- * handshake client (#3109). Tasks are a `2025-11-25` feature, and a client offers them only to a server that answers
- * that revision, so the bridge now has its own list: it echoes `2025-11-25` or `2024-11-05`, and answers anything else
- * with `2025-11-25`. It never answers `2026-07-28`, the revision with no `initialize`, which Claude Code refuses (#3109).
- * The engine's `mcp.ts` keeps answering `2024-11-05`: `HANDSHAKE_PROBES` holds both servers' answers as literals.
+ * THE BRIDGE'S HANDSHAKE (#4646 step 1, and the owner's note on #4646 of 2026-11-27). Until then it answered by the
+ * engine server's rule, `2024-11-05` to every handshake client (#3109). Tasks and Elicitation are newer-revision features
+ * a client uses only with a server that answers its revision, so the bridge now answers with the revision the client
+ * asked for whenever the SDK speaks it (this list, which is the SDK's handshake list), so an older client keeps
+ * `2024-11-05`, and answers anything else with the newest, `2025-11-25`. It never answers `2026-07-28`, the revision with
+ * no `initialize`, which Claude Code refuses (#3109). The engine's `mcp.ts` keeps answering `2024-11-05`:
+ * `HANDSHAKE_PROBES` holds both servers' answers as literals, and the bridge suite's `handshake/<version>` arms hold the
+ * capabilities each revision gets.
  */
-export const BRIDGE_HANDSHAKE_VERSIONS = ['2025-11-25', '2024-11-05'] as const;
+export const BRIDGE_HANDSHAKE_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'] as const;
 /** Every revision the bridge names: the 2026 one for `server/discover`, then the handshake ones. */
 export const BRIDGE_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, ...BRIDGE_HANDSHAKE_VERSIONS] as const;
 /** The revision the bridge answers an `initialize` with. */
 export const negotiateBridgeHandshake = (want: unknown): string =>
   typeof want === 'string' && (BRIDGE_HANDSHAKE_VERSIONS as readonly string[]).includes(want) ? want : BRIDGE_HANDSHAKE_VERSIONS[0];
+/** The first revision that defines Tasks (`2025-11-25`): only a session at it or later is offered them. */
+export const TASKS_SINCE = '2025-11-25';
 
-/** Server capabilities, shared by `initialize` and `server/discover` so the two can never disagree. `logging` is
- *  declared because the bridge streams the plugin's console lines as `notifications/message`, which MCP allows only from
- *  a server that declares it; the SDK refuses to send them otherwise (#4646). `tasks` (#4646 step 1): `figma_run` can
- *  run as a task, and `tasks/list` lists them. No `cancel`: the plugin cannot stop a command once it has it. */
+/** Server capabilities. `logging` is declared because the bridge streams the plugin's console lines as
+ *  `notifications/message`, which MCP allows only from a server that declares it; the SDK refuses to send them otherwise
+ *  (#4646). `tasks` (#4646 step 1): `figma_run` can run as a task, and `tasks/list` lists them. No `cancel`: the plugin
+ *  cannot stop a command once it has it. `tasks` goes only to a session at `TASKS_SINCE` or later (`capabilitiesFor`). */
 export const CAPABILITIES = {
   tools: { listChanged: false }, resources: { listChanged: false }, logging: {},
   tasks: { list: {}, requests: { tools: { call: {} } } },
 };
-/** What an arm advertises: below arm 2 there is no resources capability (#3440). */
-export const capabilitiesFor = (arm: BridgeArm) => {
-  const { resources, ...rest } = CAPABILITIES;
-  return armView(arm).resources ? { ...CAPABILITIES } : rest;
+/** What a session is offered, by arm and revision: below arm 2 there is no resources capability (#3440), and below
+ *  `TASKS_SINCE` no tasks. `server/discover` asks with no revision and gets no tasks: on `2026-07-28` Tasks are an
+ *  extension (SEP-2663), a different surface the bridge does not serve. */
+export const capabilitiesFor = (arm: BridgeArm, revision?: string) => {
+  const { tools, resources, logging, tasks } = CAPABILITIES;
+  return {
+    tools,
+    ...(armView(arm).resources ? { resources } : {}),
+    logging,
+    ...(revision !== undefined && revision >= TASKS_SINCE ? { tasks } : {}),
+  };
 };
 
 /* ── the adherence test's arms (#3440, Q3440.3 A) ───────────────────────────────────────────────────── */
@@ -910,7 +922,8 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
   const arm = opts.arm ?? DEFAULT_ARM;
   const view = armView(arm);
   const server = new Server(SERVER_INFO, {
-    capabilities: capabilitiesFor(arm),
+    // Everything a session can be offered; `initialize` answers with what its revision gets (below).
+    capabilities: capabilitiesFor(arm, TASKS_SINCE),
     ...(view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {}),
     // `initialize` is answered at the version `compatAnswer` hands it, which this list must hold.
     supportedProtocolVersions: [...BRIDGE_PROTOCOL_VERSIONS],
@@ -1047,9 +1060,15 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     return { task: taskView(t) };
   };
   const handlers = (server as unknown as { _requestHandlers?: unknown })._requestHandlers;
-  if (!(handlers instanceof Map) || typeof handlers.get('tools/call') !== 'function') {
+  if (!(handlers instanceof Map) || typeof handlers.get('tools/call') !== 'function' || typeof handlers.get('initialize') !== 'function') {
     throw new Error(`figma-bridge: the MCP SDK no longer keeps its request handlers where tasks expect them; run the version pinned in package.json`);
   }
+  // The capabilities an `initialize` answers with are the negotiated revision's: no tasks below `TASKS_SINCE`.
+  const plainInit = handlers.get('initialize') as (req: unknown, ctx: unknown) => Promise<{ protocolVersion: string; capabilities: unknown }>;
+  handlers.set('initialize', async (req: unknown, ctx: unknown) => {
+    const r = await plainInit(req, ctx);
+    return { ...r, capabilities: capabilitiesFor(arm, r.protocolVersion) };
+  });
   const plainCall = handlers.get('tools/call') as (req: { params?: Record<string, unknown> }, ctx: unknown) => Promise<unknown>;
   handlers.set('tools/call', (req: { params?: Record<string, unknown> }, ctx: Parameters<typeof streamTo>[0]) => {
     const params = req?.params;

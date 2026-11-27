@@ -143,10 +143,13 @@ A reconnect mid-run (#2497, `awaitingReconnect`) keeps the same run, so a task g
 task, and `figma_result` reads the result the plugin re-sends.
 
 To offer tasks, a client has to be told the server speaks `2025-11-25`. So since #4646 step 1 the
-bridge has its own handshake list: it echoes `2025-11-25` or `2024-11-05`, and answers anything else
-with `2025-11-25`. It never answers `2026-07-28`, which Claude Code refuses (#3109). The engine's MCP
-server still answers `2024-11-05`; `packages/engine/mcp-handshake-probes.ts` holds both servers'
-answers as literals.
+bridge answers with the revision the client asked for whenever the MCP SDK speaks it (`2025-11-25`,
+`2025-06-18`, `2025-03-26`, `2024-11-05`, `2024-10-07`), so an older client keeps its own, and answers
+anything else with `2025-11-25`. It never answers `2026-07-28`, which Claude Code refuses (#3109).
+Only a `2025-11-25` session is offered `tasks`; every session gets `tools` and `logging`, and arm 2
+`resources`. The engine's MCP server still answers `2024-11-05`; `packages/engine/mcp-handshake-probes.ts`
+holds both servers' answers as literals, and the suite's `handshake/<version>` arms hold what each
+revision is offered.
 
 **A reconnect mid-run does not lose the result** (#2497). A long command (a large `update-components`
 apply runs for minutes) can outlive the plugin's socket. The server keeps the call waiting for up to
@@ -211,8 +214,8 @@ from `BRIDGE_INSTRUCTIONS`.
   hand-written; the bridge is the one exception to `docs/08` §7's "no MCP SDK", because Tasks,
   Elicitation and Skills need server-to-client requests and per-run state. The SDK is loaded only when
   the server runs, so the engine gates that import the bridge's `TOOLS` need no install.
-  Its `initialize` rule is its own since #4646 step 1, `negotiateBridgeHandshake`: `2025-11-25` or
-  `2024-11-05`, never `2026-07-28`, which Claude Code refuses (#3109).
+  Its `initialize` rule is its own since #4646 step 1, `negotiateBridgeHandshake`: the client's revision
+  when the SDK speaks it, else `2025-11-25`; never `2026-07-28`, which Claude Code refuses (#3109).
   `compatAnswer` keeps three answers the SDK would give differently, so nothing a client read moved
   with the SDK: `server/discover` is answered beside `initialize` on one connection, an `initialize`
   without `capabilities` or `clientInfo` is served rather than refused, and an unknown resource fails

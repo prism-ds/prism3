@@ -17,9 +17,12 @@ the agent had to rebuild the outcome from `figma_logs`. Step 1 of #4646 fixes th
 - **A reconnect keeps the task.** The task id is the run's id, and #2497's reconnect already kept the run, so a drop
   mid-task resumes the same task with no new code. `tasks/reconnect` proves it against a fake slow plugin.
 - **The handshake had to move.** A client offers tasks only to a server that answers `2025-11-25`, and the bridge
-  answered every handshake client `2024-11-05` by the engine's rule (#3109). The bridge now has its own list: it echoes
-  `2025-11-25` or `2024-11-05` and answers anything else `2025-11-25`, never `2026-07-28`. `HANDSHAKE_PROBES` gains a
-  `bridge` answer beside the engine's, both literals; the engine's MCP server is unchanged.
+  answered every handshake client `2024-11-05` by the engine's rule (#3109). Per the owner's note on #4646, it now
+  answers with the client's own revision whenever the SDK speaks it (`2025-11-25` down to `2024-10-07`), so an older
+  client keeps `2024-11-05`, and answers anything else `2025-11-25`, never `2026-07-28`. Only a `2025-11-25` session is
+  offered `tasks`. A first draft answered `2025-06-18` with `2025-11-25`, a revision that client cannot speak; the note
+  caught it before Ready. `HANDSHAKE_PROBES` gains a `bridge` answer beside the engine's, both literals, and the suite's
+  `handshake/<version>` arms hold the revision and capabilities each request gets. The engine's MCP server is unchanged.
 - **The SDK serves the `2025-11-25` task methods but gives them no runtime.** It validates a `tools/call` result as a
   `CallToolResult` and refuses a `CreateTaskResult`, so a task-augmented `figma_run` is answered in front of that check,
   through the SDK's handler map, as the MCP project's own `ext-tasks` receiver does. The pinned version holds it in
@@ -27,7 +30,7 @@ the agent had to rebuild the outcome from `figma_logs`. Step 1 of #4646 fixes th
   surface; the bridge pins the `2025` era over stdio, so it does not apply here.
 - **Ordering trap.** With no plugin a run fails before its task reply is written, so the first draft announced the
   task's status before the reply that names it. The notice now waits one turn; `tasks/order` pins it.
-- **Tests.** `apps/plugin/test-agent-bridge.ts`: 303 assertions, all pass (271 before). Mutations, each failing by
+- **Tests.** `apps/plugin/test-agent-bridge.ts`: 310 assertions, all pass (271 before). Mutations, each failing by
   name: the task id differing from the run id → `tasks/status`, `tasks/result`, `tasks/reconnect`, `tasks/failed`;
   a timeout dropping the run → `figma_result/working`, `figma_result/late`; the `tasks` capability removed →
   `tasks/capability`, `arm/0-tasks`, `arm/1-tasks`; the status notice sent at once → `tasks/order`.

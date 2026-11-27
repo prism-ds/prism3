@@ -25,7 +25,7 @@
  * one appended to the context refusal's message → `arm/no-leak: arm 0's context refusal …`)
  * tasks/capability · tasks/tool · tasks/plugin · tasks/create · tasks/id · tasks/status · tasks/progress · tasks/result · tasks/notify ·
  * tasks/list · tasks/same-run · tasks/once · tasks/unknown · tasks/reconnect · tasks/failed · tasks/order · timeout/run-id ·
- * figma_result/working · figma_result/late · figma_result/once · figma_result/unknown · arm/<n>-tasks (#4646 step 1: figma_run as a
+ * figma_result/working · figma_result/late · figma_result/once · figma_result/unknown · arm/<n>-tasks · handshake/<asked> (#4646 step 1: figma_run as a
  * task against a fake slow plugin, a reconnect mid-task resuming the same task, and a run kept past its caller's timeout)
  *
  * #3147 Phase 2a: each read-only node command (inspect, component-keys, audit-frames, snapshot) through figma_run, against
@@ -1230,6 +1230,21 @@ section('tasks — figma_run as a task, and figma_result after a timeout (#4646 
     `tasks/capability: at 2025-11-25 initialize advertises tasks for tools/call and tasks/list, and no cancel, since the plugin cannot stop a command (${JSON.stringify(caps?.tasks)})`);
   ok(caps?.logging !== undefined && JSON.stringify(Object.keys(caps ?? {})) === JSON.stringify(['tools', 'resources', 'logging', 'tasks']),
     `tasks/capability: arm 2 declares tools, resources, logging and tasks, and nothing else (${JSON.stringify(Object.keys(caps ?? {}))})`);
+  // handshake/<asked>: the revision and capabilities each initialize gets (the owner's note on #4646, 2026-11-27). The
+  // bridge echoes a revision the SDK speaks, so an older client keeps its own; anything else gets the newest, never
+  // 2026-07-28 (#3109); tasks go only to 2025-11-25. Written here as literals, not read from the bridge's lists.
+  const TABLE: readonly [asked: string, answer: string, tasks: boolean][] = [
+    ['2024-10-07', '2024-10-07', false], ['2024-11-05', '2024-11-05', false], ['2025-03-26', '2025-03-26', false],
+    ['2025-06-18', '2025-06-18', false], ['2025-11-25', '2025-11-25', true], ['2026-07-28', '2025-11-25', true], ['1999-01-01', '2025-11-25', true],
+  ];
+  for (const [asked, answer, withTasks] of TABLE) {
+    const r = await rpc('initialize', { protocolVersion: asked, capabilities: {}, clientInfo: { name: 'version-probe', version: '1' } });
+    const keys = Object.keys(r.result?.capabilities ?? {});
+    const want = withTasks ? ['tools', 'resources', 'logging', 'tasks'] : ['tools', 'resources', 'logging'];
+    ok(r.result?.protocolVersion === answer && JSON.stringify(keys) === JSON.stringify(want),
+      `handshake/${asked}: answers ${answer} with ${want.join(', ')} (got ${r.result?.protocolVersion}; ${keys.join(', ')})`);
+  }
+  await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: { tasks: {} }, clientInfo: { name: 'tasks', version: '1' } });
   const tools = (await rpc('tools/list')).result?.tools ?? [];
   const byName = (n: string) => tools.find((t: { name: string }) => t.name === n);
   ok(byName('figma_run')?.execution?.taskSupport === 'optional' && byName('figma_status')?.execution === undefined && byName('figma_result')?.inputSchema?.required?.[0] === 'id',
@@ -1430,12 +1445,15 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     const cx = await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'context' } });
     const cxv = cx.result?.structuredContent;
     const lg = await s.ask('tools/call', { name: 'figma_logs', arguments: { since: 0 } });
-    // #4646 step 1: tasks, logging and figma_result are how the bridge works, not what an agent is shown, so every arm has them.
+    // #4646 step 1: tasks, logging and figma_result are how the bridge works, not what an agent is shown, so every arm has
+    // them; tasks only for a 2025-11-25 session, as at arm 2 (`handshake/<asked>`).
     const toolNames: string[] = (tools.result?.tools ?? []).map((t: { name: string }) => t.name);
     const armRun = (tools.result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run');
-    ok(init.result?.capabilities?.tasks?.requests?.tools?.call !== undefined && init.result?.capabilities?.logging !== undefined
+    const init25 = await s.ask('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'arm', version: '1' } });
+    ok(init25.result?.protocolVersion === '2025-11-25' && init25.result?.capabilities?.tasks?.requests?.tools?.call !== undefined && init25.result?.capabilities?.logging !== undefined
+      && init.result?.capabilities?.tasks === undefined && init.result?.capabilities?.logging !== undefined
       && armRun?.execution?.taskSupport === 'optional' && JSON.stringify(toolNames) === JSON.stringify(['figma_status', 'figma_run', 'figma_logs', 'figma_result']),
-      `arm/${arm}-tasks: tasks and logging are declared, figma_run may run as a task, and figma_result is listed (${JSON.stringify(Object.keys(init.result?.capabilities ?? {}))}; ${toolNames.join(', ')})`);
+      `arm/${arm}-tasks: a 2025-11-25 session is offered tasks and a 2024-11-05 one is not, both get logging, figma_run may run as a task, and figma_result is listed (${JSON.stringify(Object.keys(init25.result?.capabilities ?? {}))}; ${toolNames.join(', ')})`);
     const enumCmds: string[] = (tools.result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run')?.inputSchema?.properties?.cmd?.enum ?? [];
     const statusCmds: string[] = st.result?.structuredContent?.commands ?? [];
     // `context` is refused at the bridge, as the build's own code for a command it lacks, written here by hand.
