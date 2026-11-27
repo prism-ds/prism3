@@ -955,7 +955,8 @@
         "items": [
           "figma_status",
           "figma_run",
-          "figma_logs"
+          "figma_logs",
+          "figma_result"
         ]
       }
     },

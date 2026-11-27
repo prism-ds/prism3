@@ -734,8 +734,26 @@
       "transport": "stdio, newline-delimited JSON-RPC 2.0; drives the running plugin over a WebSocket on 127.0.0.1:17331",
       "protocolVersions": [
         "2026-07-28",
+        "2025-11-25",
         "2024-11-05"
       ],
+      "capabilities": {
+        "tools": {
+          "listChanged": false
+        },
+        "resources": {
+          "listChanged": false
+        },
+        "logging": {},
+        "tasks": {
+          "list": {},
+          "requests": {
+            "tools": {
+              "call": {}
+            }
+          }
+        }
+      },
       "source": "tools/figma-bridge/server.ts#isMain",
       "tools": [
         {
@@ -754,7 +772,10 @@
         },
         {
           "name": "figma_run",
-          "description": "Run one agent-link command in the connected plugin and return its result envelope (v, id, cmd, ok, startedAt, finishedAt, engineVersion, transport, result {verdict, data, logs} | error, progress). Commands: status, apply-theme, build-components, file-setup, style-guide, prune, readback, update-components, capture-baseline, adopt-members, draw-specs, inspect, component-keys, audit-frames, snapshot, activity, panels-clean, context, set-override. The plugin runs it through the same handler the panel's button reaches. 'prune' with confirm: true deletes — preview with confirm: false first, and echo its previewHash. apply-theme and prune take the brand as args.input, the object the engine's MCP tools call `brand`.",
+          "description": "Run one agent-link command in the connected plugin and return its result envelope (v, id, cmd, ok, startedAt, finishedAt, engineVersion, transport, result {verdict, data, logs} | error, progress). Commands: status, apply-theme, build-components, file-setup, style-guide, prune, readback, update-components, capture-baseline, adopt-members, draw-specs, inspect, component-keys, audit-frames, snapshot, activity, panels-clean, context, set-override. The plugin runs it through the same handler the panel's button reaches. 'prune' with confirm: true deletes — preview with confirm: false first, and echo its previewHash. apply-theme and prune take the brand as args.input, the object the engine's MCP tools call `brand`. A call that times out leaves the command running in the plugin: don't send it again. Its error names the run's id, and figma_result returns the result once it lands. A client with tasks can run this as a task instead, and read the result from it.",
+          "execution": {
+            "taskSupport": "optional"
+          },
           "inputSchema": {
             "type": "object",
             "properties": {
@@ -822,6 +843,28 @@
             "text": "a JSON object in content[0].text; this tool declares no outputSchema"
           },
           "source": "tools/figma-bridge/server.ts#name: 'figma_logs'"
+        },
+        {
+          "name": "figma_result",
+          "description": "A figma_run command's result, by its run id: the result envelope once the plugin has answered, or the run's status and last progress while it is still running. Use it after a figma_run that timed out, whose error names the id, rather than sending the command again.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The run's id: the id a figma_run timeout names, or a result envelope's id."
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "output": {
+            "structuredContent": null,
+            "text": "a JSON object in content[0].text; this tool declares no outputSchema"
+          },
+          "source": "tools/figma-bridge/server.ts#name: 'figma_result'"
         }
       ]
     }

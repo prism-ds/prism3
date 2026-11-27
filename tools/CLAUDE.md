@@ -237,7 +237,7 @@ real `main.ts` is `apps/plugin/test-agent-link.ts`, an arm of the plugin's `test
 ## `tools/figma-bridge/`
 
 The agent link's transport B: `server.ts` is a stdio MCP server (`figma_status`, `figma_run`,
-`figma_logs`) plus a hand-rolled RFC 6455 WebSocket server on `ws://localhost:17331`, which the plugin's
+`figma_logs`, `figma_result`; `figma_run` also runs as an MCP task, #4646) plus a hand-rolled RFC 6455 WebSocket server on `ws://localhost:17331`, which the plugin's
 UI iframe connects to while the owner has the link on. It is a TOOL the owner registers with Claude Code,
 not a measurement, and like `figma-mcp/` its gate lives in the plugin: `apps/plugin/test-agent-bridge.ts`
 spawns it, speaks MCP to it over stdio, drives the socket with an independently written client, and runs
@@ -248,8 +248,8 @@ Since #4646 (owner decision A) its MCP side runs on the official SDK, `@modelcon
 pinned exactly in the root `package.json`: the one exception to `docs/08` §7's "no MCP SDK", while
 `packages/engine/mcp.ts` stays hand-written. The SDK is loaded only when the server runs, never at the
 top of `server.ts`, because two engine gates import its `TOOLS` and the engine needs no install.
-Its `initialize` answer is the engine server's rule, imported from `packages/engine/mcp.ts`, never a
-copy (#3109). Both servers are driven with the same probes (`packages/engine/mcp-handshake-probes.ts`),
+Its `initialize` answer was the engine server's rule from #3109; since #4646 step 1 it has its own list,
+which adds `2025-11-25` for Tasks. Both servers' answers are literals in `HANDSHAKE_PROBES`, never `2026-07-28`. Both servers are driven with the same probes (`packages/engine/mcp-handshake-probes.ts`),
 and `mcp-test.ts` fails on any `initialize` handler in the tree that the probes' register does not name.
 
 ## `tools/sd-version-matrix/`

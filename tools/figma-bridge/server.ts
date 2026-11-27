@@ -11,8 +11,9 @@
  *
  * TWO SIDES, ONE PROCESS:
  *   · stdio MCP on the official SDK (`@modelcontextprotocol/server`, #4646; the engine's handshake rule and protocol
- *     constants are imported from `packages/engine/mcp.ts`) with three tools — `figma_status`,
- *     `figma_run {cmd, args, timeoutMs}`, `figma_logs {since, limit}`;
+ *     constants are imported from `packages/engine/mcp.ts`) with four tools — `figma_status`,
+ *     `figma_run {cmd, args, timeoutMs}` (a plain call, or a task when the client asks for one, #4646 step 1),
+ *     `figma_logs {since, limit}` and `figma_result {id}`;
  *   · a WebSocket server on 127.0.0.1 (RFC 6455, hand-rolled on `node:http` + `node:crypto` — no `ws`
  *     package). The plugin's UI iframe connects to it while the owner has the agent link switched on, and
  *     relays each command to the main thread's dispatcher (`apps/plugin/src/agent-bridge-relay.ts`).
@@ -72,7 +73,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, statSyn
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { PROTOCOL_VERSIONS, META, negotiateHandshakeVersion } from '../../packages/engine/mcp';
+import { LATEST_PROTOCOL_VERSION, META } from '../../packages/engine/mcp';
 import { AGENT_PROTOCOL_VERSION, AGENT_COMMANDS } from '../../apps/plugin/src/agent-protocol';
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
 import { CLIENT_NONCE_RE, CODE_ALPHABET, CODE_LENGTH, CLOSE, HELLO_LABEL, PAIR_LABEL, PAIRED_LABEL, TOKEN_LABEL, WELCOME_LABEL, formatCode } from '../../apps/plugin/src/bridge-auth';
@@ -92,8 +93,8 @@ export const SERVER_INFO = { name: 'prism3-figma-bridge', version: ENGINE_VERSIO
  * The note a fresh agent reads before its first command: the rules that matter in a Figma file and where to read more.
  * The owner's text, approved verbatim (Q3300.1 A); change it only with the owner. Sent from this one constant in three
  * places — the `initialize` and `server/discover` results (`instructions`) and `figma_status`'s `readFirst` — because
- * the bridge answers Claude Code at `2024-11-05` (#3109), a version older than the `instructions` field, and a host may
- * not read it there. `figma_status` says "Call first", so the text arrives either way.
+ * the bridge answered Claude Code at `2024-11-05` until #4646 step 1 (#3109), a version older than the `instructions`
+ * field, and a host may still not show it. `figma_status` says "Call first", so the text arrives either way.
  *
  * Product-agent channel, not the payload channel (docs/voice-standard.md §4): no RFC 2119 words. Kept short because
  * hosts truncate long server instructions; `test-agent-bridge.ts` caps it at 1,200 characters (`instructions/length`).
@@ -146,10 +147,28 @@ export const loadResources = (root = REPO_ROOT): Map<string, Loaded> => {
   return loadedResources;
 };
 
+/**
+ * THE BRIDGE'S HANDSHAKE (#4646 step 1). Until then it answered by the engine server's rule, `2024-11-05` to every
+ * handshake client (#3109). Tasks are a `2025-11-25` feature, and a client offers them only to a server that answers
+ * that revision, so the bridge now has its own list: it echoes `2025-11-25` or `2024-11-05`, and answers anything else
+ * with `2025-11-25`. It never answers `2026-07-28`, the revision with no `initialize`, which Claude Code refuses (#3109).
+ * The engine's `mcp.ts` keeps answering `2024-11-05`: `HANDSHAKE_PROBES` holds both servers' answers as literals.
+ */
+export const BRIDGE_HANDSHAKE_VERSIONS = ['2025-11-25', '2024-11-05'] as const;
+/** Every revision the bridge names: the 2026 one for `server/discover`, then the handshake ones. */
+export const BRIDGE_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, ...BRIDGE_HANDSHAKE_VERSIONS] as const;
+/** The revision the bridge answers an `initialize` with. */
+export const negotiateBridgeHandshake = (want: unknown): string =>
+  typeof want === 'string' && (BRIDGE_HANDSHAKE_VERSIONS as readonly string[]).includes(want) ? want : BRIDGE_HANDSHAKE_VERSIONS[0];
+
 /** Server capabilities, shared by `initialize` and `server/discover` so the two can never disagree. `logging` is
  *  declared because the bridge streams the plugin's console lines as `notifications/message`, which MCP allows only from
- *  a server that declares it; the SDK refuses to send them otherwise (#4646). */
-export const CAPABILITIES = { tools: { listChanged: false }, resources: { listChanged: false }, logging: {} };
+ *  a server that declares it; the SDK refuses to send them otherwise (#4646). `tasks` (#4646 step 1): `figma_run` can
+ *  run as a task, and `tasks/list` lists them. No `cancel`: the plugin cannot stop a command once it has it. */
+export const CAPABILITIES = {
+  tools: { listChanged: false }, resources: { listChanged: false }, logging: {},
+  tasks: { list: {}, requests: { tools: { call: {} } } },
+};
 /** What an arm advertises: below arm 2 there is no resources capability (#3440). */
 export const capabilitiesFor = (arm: BridgeArm) => {
   const { resources, ...rest } = CAPABILITIES;
@@ -161,7 +180,7 @@ export const capabilitiesFor = (arm: BridgeArm) => {
 /**
  * WHAT A FRESH AGENT IS SHOWN, by arm, for the agent-adherence test (#3440 §2). `PRISM3_BRIDGE_ARM` picks one; unset is
  * arm 2, today's bridge, so nothing changes for anyone who doesn't set it.
- *   · 0 (F0) — the three tools and nothing else: no `instructions`, no `readFirst`, no resources capability, and
+ *   · 0 (F0) — the tools and nothing else: no `instructions`, no `readFirst`, no resources capability, and
  *     `figma_run context` refused here, before it reaches the plugin. `context` is also left out of the tools' command
  *     list and `figma_status`'s `commands`, so the arm does not advertise what it refuses.
  *   · 1 (F1) — arm 0 plus the note: `instructions` and `readFirst`. Still no resources and no `context`.
@@ -392,6 +411,30 @@ const LOG_KEEP = 5000;
 export const DEFAULT_GRACE_MS = 120_000;
 /** Ids whose result was already delivered, so a re-sent copy is named a repeat rather than a stranger. */
 const DELIVERED_KEEP = 200;
+/** Runs kept for `figma_result` and the task methods after they settle; the oldest settled one goes first (#4646). */
+export const RUN_KEEP = 200;
+
+/**
+ * ONE `figma_run`, BY ITS ID (#4646 step 1). The id is the command's own (`b…`), given when the call is made, before the
+ * command is queued, so a caller that stops waiting still has it. A run is `working` until the plugin's result arrives
+ * (`completed`, whatever its `ok` says: that is the action's own verdict) or the bridge gives up on it (`failed`: no
+ * plugin, or a drop it did not come back from). It settles once. A caller's timeout ends that caller's wait, never the
+ * run: a result that lands later still settles it, so `figma_result` can read it and nothing is sent twice.
+ */
+export type RunStatus = 'working' | 'completed' | 'failed';
+export type RunOutcome = { result: AgentResult } | { error: string };
+export type RunHooks = { onProgress?(p: AgentProgress): void; onLog?(line: string): void };
+export type RunView = { id: string; cmd: string; status: RunStatus; createdAt: string; lastUpdatedAt: string; progress: string | null; error: string | null; result: AgentResult | null };
+export type Run = {
+  id: string;
+  /** Resolves when the command has been sent to the plugin, or refused for want of one. Its caller's clock starts here. */
+  sent: Promise<void>;
+  /** Resolves once, when the run settles. */
+  done: Promise<RunOutcome>;
+  view(): RunView;
+  /** Hear its progress and console lines from now on; returns the call that stops hearing them. */
+  listen(hooks: RunHooks): () => void;
+};
 
 export const createBridge = (opts: { pairing: Pairing; now?: () => Date; log?: (s: string) => void; graceMs?: number; authMs?: number }) => {
   const now = opts.now ?? (() => new Date());
@@ -402,7 +445,9 @@ export const createBridge = (opts: { pairing: Pairing; now?: () => Date; log?: (
   let plugin: Conn | null = null;
   let pluginState: AgentLinkState | null = null;
   /** `conn` is the connection the command was sent on, or the later one whose hello said it holds it. */
-  const pending = new Map<string, { conn: Conn; resolve(r: AgentResult): void; reject(e: Error): void; timer: NodeJS.Timeout; onProgress?(p: AgentProgress): void; onLog?(line: string): void }>();
+  const pending = new Map<string, { conn: Conn; settle(o: RunOutcome): void }>();
+  /** Every run, by id, newest last: the ones still working and the last `RUN_KEEP` settled ones. */
+  const runs = new Map<string, { view: RunView; hooks: Set<RunHooks>; run: Run }>();
   const delivered = new Set<string>();
   let grace: NodeJS.Timeout | null = null;
   const logs: LogEntry[] = [];
@@ -418,10 +463,9 @@ export const createBridge = (opts: { pairing: Pairing; now?: () => Date; log?: (
   const fail = (id: string, why: string) => {
     const p = pending.get(id);
     if (!p) return;
-    clearTimeout(p.timer);
     pending.delete(id);
     record(id, 'bridge', why);
-    p.reject(new Error(why));
+    p.settle({ error: why });
   };
   /** Commands sent on a connection that is no longer the plugin's, still waiting for it to come back. */
   const orphans = () => [...pending].filter(([, p]) => p.conn !== plugin).map(([id]) => id);
@@ -512,47 +556,86 @@ export const createBridge = (opts: { pairing: Pairing; now?: () => Date; log?: (
         record(id, 'bridge', delivered.has(id) ? 'a repeated result, already delivered: ignored' : 'a result for a command this bridge is not waiting on');
         return;
       }
-      clearTimeout(p.timer);
       pending.delete(id);
       delivered.add(id);
       if (delivered.size > DELIVERED_KEEP) delivered.delete(delivered.values().next().value as string);
       if (grace && !orphans().length) { clearTimeout(grace); grace = null; }
-      p.resolve(m.result);
+      p.settle({ result: m.result });
       return;
     }
     if (m.type === 'progress' && typeof m.id === 'string' && m.progress) {
       const pr = m.progress;
       record(m.id, 'progress', `${pr.phase} ${pr.done}/${pr.total} (${pr.chunkMs} ms)`);
-      pending.get(m.id)?.onProgress?.(pr);
+      const r = runs.get(m.id);
+      if (r && r.view.status === 'working') {
+        r.view.progress = `${pr.phase} ${pr.done}/${pr.total}`;
+        r.view.lastUpdatedAt = now().toISOString();
+        for (const h of r.hooks) h.onProgress?.(pr);
+      }
       return;
     }
     if (m.type === 'log' && typeof m.id === 'string' && typeof m.line === 'string') {
       record(m.id, 'log', m.line);
-      pending.get(m.id)?.onLog?.(m.line);
+      const r = runs.get(m.id);
+      if (r && r.view.status === 'working') for (const h of r.hooks) h.onLog?.(m.line);
     }
   };
 
-  /** Send one command and wait for its result. Queued: one command in flight at a time. */
-  const run = (cmd: string, args: unknown, timeoutMs: number, hooks: { onProgress?(p: AgentProgress): void; onLog?(l: string): void } = {}): Promise<AgentResult> => {
-    const go = () => new Promise<AgentResult>((res, rej) => {
-      if (!plugin) { rej(new Error('no plugin is connected — the owner opens the Prism3 plugin in Figma and switches Agent link on')); return; }
-      const id = `b${now().getTime().toString(36)}-${(++idSeq).toString(36)}`;
+  /** Drop the oldest settled runs past `RUN_KEEP`. A run still working is never dropped. */
+  const trimRuns = () => {
+    let settled = [...runs.values()].filter((r) => r.view.status !== 'working').length;
+    for (const [id, r] of runs) {
+      if (settled <= RUN_KEEP) return;
+      if (r.view.status !== 'working') { runs.delete(id); settled--; }
+    }
+  };
+
+  /**
+   * Start one command: the run exists, with its id, at once. Queued: one command in flight at a time, and a command
+   * holds the line until it settles or `holdMs` after it was sent, whichever comes first, as before #4646. The run
+   * itself is kept past `holdMs`, until it settles.
+   */
+  const start = (cmd: string, args: unknown, holdMs: number, hooks: RunHooks = {}): Run => {
+    const id = `b${now().getTime().toString(36)}-${(++idSeq).toString(36)}`;
+    const at = now().toISOString();
+    const view: RunView = { id, cmd, status: 'working', createdAt: at, lastUpdatedAt: at, progress: null, error: null, result: null };
+    const hookSet = new Set<RunHooks>([hooks]);
+    let settleDone!: (o: RunOutcome) => void;
+    const done = new Promise<RunOutcome>((res) => { settleDone = res; });
+    const settle = (o: RunOutcome) => {
+      if (view.status !== 'working') return;
+      view.lastUpdatedAt = now().toISOString();
+      if ('result' in o) { view.status = 'completed'; view.result = o.result; } else { view.status = 'failed'; view.error = o.error; }
+      hookSet.clear();
+      settleDone(o);
+      trimRuns();
+    };
+    let markSent!: () => void;
+    const sent = new Promise<void>((res) => { markSent = res; });
+    const run: Run = {
+      id, sent, done,
+      view: () => ({ ...view }),
+      listen: (h) => { if (view.status === 'working') hookSet.add(h); return () => { hookSet.delete(h); }; },
+    };
+    runs.set(id, { view, hooks: hookSet, run });
+    const go = () => new Promise<void>((release) => {
+      markSent();
+      if (!plugin) { settle({ error: 'no plugin is connected — the owner opens the Prism3 plugin in Figma and switches Agent link on' }); release(); return; }
       const command: AgentCommand = { v: AGENT_PROTOCOL_VERSION, id, cmd, args: args ?? {}, issuedAt: now().toISOString() };
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        rej(new Error(`no result for '${cmd}' (${id}) within ${timeoutMs} ms — the plugin may still be running it; figma_logs shows its last lines`));
-      }, timeoutMs);
-      pending.set(id, { conn: plugin, resolve: res, reject: rej, timer, ...hooks });
+      const hold = setTimeout(release, holdMs);
+      void done.then(() => { clearTimeout(hold); release(); });
+      pending.set(id, { conn: plugin, settle });
       record(id, 'bridge', `sent ${cmd}`);
       plugin.send({ type: 'command', command });
     });
-    const next = queue.then(go, go);
-    queue = next.catch(() => undefined);
-    return next;
+    queue = queue.then(go, go);
+    return run;
   };
 
   return {
-    open, detach, onMessage, run,
+    open, detach, onMessage, start,
+    /** A run by id, while it is kept. */
+    run: (id: string): Run | null => runs.get(id)?.run ?? null,
     status: () => ({
       connected: !!plugin, connectedAt: plugin?.connectedAt ?? null, plugin: pluginState, pairingCode: plugin ? pairing.code() : pairing.request(),
       running: [...pending.keys()], awaitingReconnect: orphans(), bridge: SERVER_INFO, protocol: AGENT_PROTOCOL_VERSION, commands: [...AGENT_COMMANDS],
@@ -686,7 +769,9 @@ export const TOOLS = [
   },
   {
     name: 'figma_run',
-    description: `Run one agent-link command in the connected plugin and return its result envelope (v, id, cmd, ok, startedAt, finishedAt, engineVersion, transport, result {verdict, data, logs} | error, progress). Commands: ${AGENT_COMMANDS.join(', ')}. The plugin runs it through the same handler the panel's button reaches. 'prune' with confirm: true deletes — preview with confirm: false first, and echo its previewHash. apply-theme and prune take the brand as args.input, the object the engine's MCP tools call \`brand\`.`,
+    description: `Run one agent-link command in the connected plugin and return its result envelope (v, id, cmd, ok, startedAt, finishedAt, engineVersion, transport, result {verdict, data, logs} | error, progress). Commands: ${AGENT_COMMANDS.join(', ')}. The plugin runs it through the same handler the panel's button reaches. 'prune' with confirm: true deletes — preview with confirm: false first, and echo its previewHash. apply-theme and prune take the brand as args.input, the object the engine's MCP tools call \`brand\`. A call that times out leaves the command running in the plugin: don't send it again. Its error names the run's id, and figma_result returns the result once it lands. A client with tasks can run this as a task instead, and read the result from it.`,
+    // #4646 step 1: run as a task when the client asks for one, and as a plain call when it doesn't.
+    execution: { taskSupport: 'optional' as const },
     inputSchema: {
       type: 'object',
       properties: {
@@ -702,6 +787,11 @@ export const TOOLS = [
     name: 'figma_logs',
     description: 'Console and progress lines the plugin streamed, newest last. Pass `since` (the `last` from a previous call) to read only new lines.',
     inputSchema: { type: 'object', properties: { since: { type: 'number' }, limit: { type: 'number' } }, additionalProperties: false },
+  },
+  {
+    name: 'figma_result',
+    description: "A figma_run command's result, by its run id: the result envelope once the plugin has answered, or the run's status and last progress while it is still running. Use it after a figma_run that timed out, whose error names the id, rather than sending the command again.",
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: "The run's id: the id a figma_run timeout names, or a result envelope's id." } }, required: ['id'], additionalProperties: false },
   },
 ];
 
@@ -740,7 +830,13 @@ export const toolsFor = (arm: BridgeArm) => {
   });
 };
 
-const text = (v: unknown, isError = false) => ({ content: [{ type: 'text', text: JSON.stringify(v, null, 2) }], structuredContent: v, ...(isError ? { isError: true } : {}) });
+const text = (v: unknown, isError = false) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v, null, 2) }], structuredContent: v as Record<string, unknown>, ...(isError ? { isError: true } : {}) });
+/** What figma_run returns for a settled run: the plugin's result envelope, or the bridge's error. */
+const runResult = (o: RunOutcome) => ('result' in o ? text(o.result) : text({ error: o.error }, true));
+/** How often a task's requester is asked to poll `tasks/get`, in ms (`pollInterval`). */
+export const TASK_POLL_MS = 5_000;
+/** The longest `ttl` a task keeps; a longer one asked for is cut to this. */
+export const TASK_TTL_MAX_MS = 24 * 3_600_000;
 
 /** A JSON-RPC message as it arrives on stdio, before the SDK reads it. */
 type WireMessage = { jsonrpc?: string; id?: number | string | null; method?: string; params?: any };
@@ -750,8 +846,8 @@ type WireMessage = { jsonrpc?: string; id?: number | string | null; method?: str
  * reads moves). `bridgeTransport` puts this in front of the SDK, on each message read from stdio:
  *   · `server/discover` is answered in any state, in the shape the bridge always sent. The SDK pins one protocol era per
  *     connection and answers `server/discover` only on a 2026-07-28 one; the bridge answers it beside `initialize`.
- *   · `initialize` is served at the version the engine's rule picks (`negotiateHandshakeVersion`, imported, never copied:
- *     #3109), and one sent without `capabilities` or `clientInfo` is served with empty ones rather than refused.
+ *   · `initialize` is served at the version the bridge's rule picks (`negotiateBridgeHandshake`, #4646 step 1; never
+ *     `2026-07-28`, #3109), and one sent without `capabilities` or `clientInfo` is served with empty ones, not refused.
  *   · A read of a resource this bridge does not serve fails with -32002 and names a renamed URI (#3412). The SDK
  *     re-codes -32002 as -32602.
  * Everything else goes to the SDK unchanged. Pure, so it is tested without a process.
@@ -762,13 +858,13 @@ export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown }
   const id = m.id;
   if (m.method === 'server/discover') {
     return { reply: { jsonrpc: '2.0', id, result: {
-      resultType: 'complete', protocolVersions: [...PROTOCOL_VERSIONS], capabilities: capabilitiesFor(arm), serverInfo: SERVER_INFO,
+      resultType: 'complete', protocolVersions: [...BRIDGE_PROTOCOL_VERSIONS], capabilities: capabilitiesFor(arm), serverInfo: SERVER_INFO,
       ...(view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {}), _meta: { [META.serverInfo]: SERVER_INFO },
     } } };
   }
   if (m.method === 'initialize') {
     const p = m.params && typeof m.params === 'object' ? m.params : {};
-    return { forward: { ...m, params: { ...p, protocolVersion: negotiateHandshakeVersion(p.protocolVersion), capabilities: p.capabilities ?? {}, clientInfo: p.clientInfo ?? { name: 'unknown', version: '0' } } } };
+    return { forward: { ...m, params: { ...p, protocolVersion: negotiateBridgeHandshake(p.protocolVersion), capabilities: p.capabilities ?? {}, clientInfo: p.clientInfo ?? { name: 'unknown', version: '0' } } } };
   }
   if (m.method === 'resources/read' && view.resources) {
     const uri = m.params?.uri;
@@ -805,8 +901,9 @@ export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => 
 const MAX_STDIO_MESSAGE = MAX_MESSAGE;
 
 /**
- * The MCP server: the three tools, the five resources and the note, by arm, on the SDK's `Server`. Progress and console
- * lines during a run go out as `notifications/progress` (with the caller's `progressToken`) and `notifications/message`.
+ * The MCP server: the four tools, the five resources and the note, by arm, on the SDK's `Server`, and figma_run as a
+ * task. Progress and console lines during a run go out as `notifications/progress` (with the caller's `progressToken`)
+ * and `notifications/message`.
  */
 export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Promise<Server> => {
   const { Server, ProtocolError, ProtocolErrorCode } = await import('@modelcontextprotocol/server');
@@ -815,11 +912,41 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
   const server = new Server(SERVER_INFO, {
     capabilities: capabilitiesFor(arm),
     ...(view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {}),
-    // The engine's list: `initialize` is answered at the version `compatAnswer` hands it, which this list must hold.
-    supportedProtocolVersions: [...PROTOCOL_VERSIONS],
+    // `initialize` is answered at the version `compatAnswer` hands it, which this list must hold.
+    supportedProtocolVersions: [...BRIDGE_PROTOCOL_VERSIONS],
   });
 
-  server.setRequestHandler('tools/list', () => ({ tools: toolsFor(arm) }));
+  // `toolsFor`'s JSON Schemas are plain objects; the SDK's type wants its own schema type for them.
+  server.setRequestHandler('tools/list', () => ({ tools: toolsFor(arm) as never }));
+
+  type Outcome = Extract<RecordLine, { kind: 'outcome' }>['outcome'];
+  /** figma_run's checks, before anything is queued: the refusal to answer with, or what to start and how to record it. */
+  const prepareRun = (a: Record<string, unknown>):
+    { refusal: ReturnType<typeof text> } | { cmd: string; args: unknown; timeoutMs: number; outcome(o: Outcome, error?: unknown): void } => {
+    const seq = opts.record?.attempt(arm, a.cmd, a.args ?? {});
+    const outcome = (o: Outcome, error?: unknown) => { if (seq !== undefined) opts.record!.outcome(seq, o, error); };
+    if (typeof a.cmd !== 'string') { outcome('refused-by-bridge', 'figma_run needs cmd'); return { refusal: text({ error: 'figma_run needs cmd' }, true) }; }
+    if (a.cmd === CONTEXT_CMD && !view.context) { outcome('refused-by-bridge', ARM_REFUSAL); return { refusal: text({ error: ARM_REFUSAL }, true) }; }
+    const timeoutMs = typeof a.timeoutMs === 'number' && a.timeoutMs > 0 ? Math.min(a.timeoutMs, 3_600_000) : 600_000;
+    return { cmd: a.cmd, args: a.args ?? {}, timeoutMs, outcome };
+  };
+  /** A settled run's `--record` outcome. A result that arrived is the tool working: `ok: false` is the action's verdict. */
+  const recordOutcome = (outcome: (o: Outcome, error?: unknown) => void, o: RunOutcome) => {
+    if ('error' in o) { outcome('tool-error', o.error); return; }
+    const env = o.result as { ok?: unknown; error?: unknown };
+    outcome(env.ok === false ? 'not-ok' : 'ok', env.ok === false ? env.error : undefined);
+  };
+  /** One request's stream: progress to its `progressToken`, if it sent one, and console lines as `notifications/message`. */
+  const streamTo = (ctx: { mcpReq: { _meta?: { progressToken?: string | number }; notify(n: unknown): Promise<void>; log(level: 'info', data: unknown, logger?: string): Promise<void> } }): RunHooks => {
+    const token = ctx.mcpReq._meta?.progressToken;
+    const progress = createProgressCounter();
+    return {
+      onProgress: (p) => {
+        if (token !== undefined) void ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: progress(p), message: `${p.phase} ${p.done}/${p.total}` } }).catch(() => undefined);
+      },
+      onLog: (line) => { void ctx.mcpReq.log('info', line, 'figma').catch(() => undefined); },
+    };
+  };
 
   server.setRequestHandler('tools/call', async (req, ctx) => {
     const name = req.params.name;
@@ -832,30 +959,113 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
       return text(bridge.logs(typeof a.since === 'number' ? a.since : 0, typeof a.limit === 'number' ? a.limit : 200));
     }
     if (name === 'figma_run') {
-      const seq = opts.record?.attempt(arm, a.cmd, a.args ?? {});
-      const done = (outcome: Extract<RecordLine, { kind: 'outcome' }>['outcome'], error?: unknown) => { if (seq !== undefined) opts.record!.outcome(seq, outcome, error); };
-      if (typeof a.cmd !== 'string') { done('refused-by-bridge', 'figma_run needs cmd'); return text({ error: 'figma_run needs cmd' }, true); }
-      if (a.cmd === CONTEXT_CMD && !view.context) { done('refused-by-bridge', ARM_REFUSAL); return text({ error: ARM_REFUSAL }, true); }
-      const timeoutMs = typeof a.timeoutMs === 'number' && a.timeoutMs > 0 ? Math.min(a.timeoutMs, 3_600_000) : 600_000;
-      const token = ctx.mcpReq._meta?.progressToken;
-      const progress = createProgressCounter();
-      try {
-        const r = await bridge.run(a.cmd, a.args ?? {}, timeoutMs, {
-          onProgress: (p) => {
-            if (token !== undefined) void ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: progress(p), message: `${p.phase} ${p.done}/${p.total}` } }).catch(() => undefined);
-          },
-          onLog: (line) => { void ctx.mcpReq.log('info', line, 'figma').catch(() => undefined); },
-        });
-        // A result that arrived is the tool working — `ok: false` inside it is the action's own verdict.
-        const env = r as { ok?: unknown; error?: unknown };
-        done(env.ok === false ? 'not-ok' : 'ok', env.ok === false ? env.error : undefined);
-        return text(r);
-      } catch (e) {
-        done('tool-error', (e as Error).message);
-        return text({ error: (e as Error).message }, true);
+      const p = prepareRun(a);
+      if ('refusal' in p) return p.refusal;
+      const run = bridge.start(p.cmd, p.args, p.timeoutMs);
+      const stop = run.listen(streamTo(ctx));
+      // The clock starts when the command is sent, as before: time spent queued behind another command is not counted.
+      await run.sent;
+      let timer: NodeJS.Timeout | undefined;
+      const o = await Promise.race([run.done, new Promise<null>((r) => { timer = setTimeout(() => r(null), p.timeoutMs); })]);
+      clearTimeout(timer);
+      stop();
+      if (o === null) {
+        // #4646: the run goes on. Its id is stable, so the caller fetches the result instead of sending the command again.
+        const error = `no result for '${p.cmd}' (${run.id}) within ${p.timeoutMs} ms — the plugin may still be running it. Don't send it again: figma_result {"id": "${run.id}"} returns its result once it lands`;
+        p.outcome('tool-error', error);
+        return text({ error, runId: run.id }, true);
       }
+      recordOutcome(p.outcome, o);
+      return runResult(o);
+    }
+    if (name === 'figma_result') {
+      const id = typeof a.id === 'string' ? a.id : '';
+      const run = bridge.run(id);
+      if (!run) return text({ error: `no run ${JSON.stringify(id)} on this bridge: it restarted since, or the run is older than the last ${RUN_KEEP} that finished` }, true);
+      const v = run.view();
+      if (v.status === 'completed') return text(v.result);
+      if (v.status === 'failed') return text({ error: v.error, runId: v.id }, true);
+      return text({ runId: v.id, cmd: v.cmd, status: v.status, createdAt: v.createdAt, lastUpdatedAt: v.lastUpdatedAt, progress: v.progress });
     }
     throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Unknown tool: ${name}`);
+  });
+
+  /*
+   * TASKS (#4646 step 1), the `2025-11-25` form. A `tools/call` of figma_run that carries `params.task` is answered at
+   * once with the run as a task (`CreateTaskResult`): its id is the run's id, so `figma_result` and the task methods name
+   * the same run, and a reconnect mid-run (`awaitingReconnect`, #2497) goes on being that task. `tasks/get` gives its
+   * status, with the last progress reading as `statusMessage`; the request's `progressToken` keeps getting
+   * `notifications/progress` for the task's life; `tasks/result` waits for the run and returns what the plain call would
+   * have, figma_run's result envelope; `notifications/tasks/status` goes out when it settles. A task `failed` only when
+   * the bridge gave up on the run (no plugin, a drop it did not come back from), and `statusMessage` says why.
+   *
+   * The SDK validates a `tools/call` result as a `CallToolResult` and refuses a `CreateTaskResult` (its `2025-11-25`
+   * tasks have no runtime), so a task-augmented figma_run is answered in front of that check, the way the MCP project's
+   * own `ext-tasks` receiver binds its task methods. That reaches into the SDK's handler map; the version is pinned,
+   * and the `tasks/…` arms of `test-agent-bridge.ts` fail by name if it moves.
+   */
+  const { RELATED_TASK_META_KEY } = await import('@modelcontextprotocol/server');
+  type TaskRec = { run: Run; ttl: number | null; expiresAt: number | null };
+  const tasks = new Map<string, TaskRec>();
+  const taskView = (t: TaskRec) => {
+    const v = t.run.view();
+    const statusMessage = v.status === 'failed' ? v.error : v.status === 'working' ? v.progress : null;
+    return { taskId: v.id, status: v.status, ttl: t.ttl, createdAt: v.createdAt, lastUpdatedAt: v.lastUpdatedAt, pollInterval: TASK_POLL_MS, ...(statusMessage ? { statusMessage } : {}) };
+  };
+  const expireTasks = () => {
+    const at = Date.now();
+    for (const [id, t] of tasks) if (t.expiresAt !== null && at >= t.expiresAt) tasks.delete(id);
+    // The oldest finished tasks go first past `RUN_KEEP`; a task still working is never dropped.
+    let finished = [...tasks.values()].filter((t) => t.run.view().status !== 'working').length;
+    for (const [id, t] of tasks) { if (finished <= RUN_KEEP) break; if (t.run.view().status !== 'working') { tasks.delete(id); finished--; } }
+  };
+  const taskOf = (taskId: string): TaskRec => {
+    expireTasks();
+    const t = tasks.get(taskId);
+    if (!t) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `unknown or expired task: ${taskId}`);
+    return t;
+  };
+  const startTask = (params: { arguments?: unknown; task?: unknown }, ctx: Parameters<typeof streamTo>[0]) => {
+    const aug = params.task;
+    if (aug === null || typeof aug !== 'object' || Array.isArray(aug)) throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'task must be an object, such as {} or { "ttl": 3600000 }');
+    const asked = (aug as { ttl?: unknown }).ttl;
+    if (asked !== undefined && !(typeof asked === 'number' && Number.isInteger(asked) && asked >= 0)) throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'task.ttl must be a whole number of milliseconds, 0 or more');
+    const p = prepareRun((params.arguments ?? {}) as Record<string, unknown>);
+    // Refused before anything is queued: answered at once as a plain result, which a task requester accepts.
+    if ('refusal' in p) return p.refusal;
+    const run = bridge.start(p.cmd, p.args, p.timeoutMs);
+    run.listen(streamTo(ctx));
+    const ttl = asked === undefined ? null : Math.min(asked as number, TASK_TTL_MAX_MS);
+    const t: TaskRec = { run, ttl, expiresAt: ttl === null ? null : Date.now() + ttl };
+    tasks.set(run.id, t);
+    expireTasks();
+    void run.done.then((o) => {
+      recordOutcome(p.outcome, o);
+      // After this turn, so a run that settles at once (no plugin) is still announced after the reply that names it.
+      setImmediate(() => { void server.notification({ method: 'notifications/tasks/status', params: taskView(t) }).catch(() => undefined); });
+    });
+    return { task: taskView(t) };
+  };
+  const handlers = (server as unknown as { _requestHandlers?: unknown })._requestHandlers;
+  if (!(handlers instanceof Map) || typeof handlers.get('tools/call') !== 'function') {
+    throw new Error(`figma-bridge: the MCP SDK no longer keeps its request handlers where tasks expect them; run the version pinned in package.json`);
+  }
+  const plainCall = handlers.get('tools/call') as (req: { params?: Record<string, unknown> }, ctx: unknown) => Promise<unknown>;
+  handlers.set('tools/call', (req: { params?: Record<string, unknown> }, ctx: Parameters<typeof streamTo>[0]) => {
+    const params = req?.params;
+    if (params && typeof params === 'object' && 'task' in params && params.name === 'figma_run') {
+      try { return Promise.resolve(startTask(params, ctx)); } catch (e) { return Promise.reject(e); }
+    }
+    return plainCall(req, ctx);
+  });
+  // The SDK leaves the `2025-11-25` task methods out of its method type but serves them: its codec validates each request.
+  const setTaskHandler = server.setRequestHandler.bind(server) as unknown as (method: 'tasks/get' | 'tasks/list' | 'tasks/result', handler: (req: { params: { taskId: string } }) => unknown) => void;
+  setTaskHandler('tasks/get', (req) => taskView(taskOf(req.params.taskId)));
+  setTaskHandler('tasks/list', () => { expireTasks(); return { tasks: [...tasks.values()].map(taskView) }; });
+  setTaskHandler('tasks/result', async (req) => {
+    const t = taskOf(req.params.taskId);
+    const o = await t.run.done;
+    return { ...runResult(o), _meta: { [RELATED_TASK_META_KEY]: { taskId: t.run.id } } };
   });
 
   // An arm below 2 has no resources capability, so it registers no resource methods and the SDK answers them -32601 (#3440).

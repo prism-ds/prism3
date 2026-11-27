@@ -118,6 +118,36 @@ come back: no plugin connected, a timeout (default 600 s), or the plugin not com
 mid-run disconnect. A result whose `ok` is false is the action's own verdict and arrives as a normal
 result.
 
+## Long runs: tasks and `figma_result` (#4646)
+
+Apply Theme, or a full `build-components` or `update-components` on a large file, can take longer than
+any call should wait. Two things keep the result:
+
+- **`figma_run` as a task.** The bridge declares the MCP `tasks` capability (`2025-11-25`), and
+  `figma_run` has `execution.taskSupport: "optional"`. A client that sends `task` with the call gets
+  a task back at once. The task id is the run's id, the same id the plugin's command and result
+  carry. `tasks/get` reports `working`, with the last progress reading (`build 24/48`) as
+  `statusMessage`. The call's `progressToken` keeps getting `notifications/progress` while the task
+  runs, and `notifications/tasks/status` goes out when it ends. `tasks/result` waits for the run and
+  returns what the plain call would have: the plugin's result envelope, tied to the task. A task
+  `failed` only when the bridge gave up on the run (no plugin, or a drop it did not come back from),
+  and `statusMessage` says why. `tasks/list` lists them. There is no `tasks/cancel`: the plugin
+  cannot stop a command once it has it.
+- **A timeout keeps the run.** A plain call still waits `timeoutMs`. When that runs out, the error
+  names the run's id (`runId`), and the command goes on in the plugin. Don't send it again:
+  `figma_result {id}` returns the result envelope once it lands, or the run's status and last
+  progress while it is still running. A result that lands late is kept as the run's result. The
+  bridge keeps the last 200 runs that ended, and every run still working.
+
+A reconnect mid-run (#2497, `awaitingReconnect`) keeps the same run, so a task goes on being the same
+task, and `figma_result` reads the result the plugin re-sends.
+
+To offer tasks, a client has to be told the server speaks `2025-11-25`. So since #4646 step 1 the
+bridge has its own handshake list: it echoes `2025-11-25` or `2024-11-05`, and answers anything else
+with `2025-11-25`. It never answers `2026-07-28`, which Claude Code refuses (#3109). The engine's MCP
+server still answers `2024-11-05`; `packages/engine/mcp-handshake-probes.ts` holds both servers'
+answers as literals.
+
 **A reconnect mid-run does not lose the result** (#2497). A long command (a large `update-components`
 apply runs for minutes) can outlive the plugin's socket. The server keeps the call waiting for up to
 `--grace-ms` (default 120000, or `PRISM3_BRIDGE_GRACE_MS`) for the plugin to reconnect; `figma_status`
@@ -136,8 +166,8 @@ more:
 
 - **A short note**, the owner's text (Q3300.1 A), from one constant, `BRIDGE_INSTRUCTIONS` in
   `server.ts`. It is sent as `instructions` in the `initialize` and `server/discover` results, and again
-  as `readFirst` in every `figma_status` result. The bridge answers Claude Code at `2024-11-05` (#3109),
-  older than the `instructions` field, so a host may not show the field. `figma_status` says "Call
+  as `readFirst` in every `figma_status` result. Until #4646 the bridge answered Claude Code at
+  `2024-11-05` (#3109), and a host may still not show the field. `figma_status` says "Call
   first", so the note arrives either way. It stays under 1,200 characters, because hosts truncate long
   instructions.
 - **Five static resources** (`resources/list`, `resources/read`; Q3300.3 A). Each is a file from the
@@ -162,12 +192,13 @@ The bridge points at the engine MCP server (`prism3-engine`) rather than proxyin
 
 `PRISM3_BRIDGE_ARM` picks what a fresh agent is shown, for the agent-adherence test (`tools/agent-adherence/figma.md`):
 
-- `0`: the three tools only. There are no `instructions`, no `readFirst` and no resources, and `figma_run context` is
+- `0`: the four tools only. There are no `instructions`, no `readFirst` and no resources, and `figma_run context` is
   refused at the bridge with `unknown-command`. `context` is also left out of the command lists.
 - `1`: arm 0 plus the note.
 - `2`, the default: the bridge as described above.
 
-A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
+Every arm declares `tasks` and `logging` and lists `figma_result` (#4646 step 1): they are how the bridge works, not
+what an agent is shown. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
 `figma_run` call before it runs, and one `outcome` line after it ends, refused calls included.
 `apps/plugin/test-agent-bridge.ts` (`arm/…`, `record/…`) checks both. Its sentinels are written in the test, not read
 from `BRIDGE_INSTRUCTIONS`.
@@ -180,8 +211,8 @@ from `BRIDGE_INSTRUCTIONS`.
   hand-written; the bridge is the one exception to `docs/08` §7's "no MCP SDK", because Tasks,
   Elicitation and Skills need server-to-client requests and per-run state. The SDK is loaded only when
   the server runs, so the engine gates that import the bridge's `TOOLS` need no install.
-  It reuses the engine's protocol constants and its `initialize` rule, `negotiateHandshakeVersion`: a
-  handshake client gets `2024-11-05` back, never `2026-07-28`, which Claude Code refuses (#3109).
+  Its `initialize` rule is its own since #4646 step 1, `negotiateBridgeHandshake`: `2025-11-25` or
+  `2024-11-05`, never `2026-07-28`, which Claude Code refuses (#3109).
   `compatAnswer` keeps three answers the SDK would give differently, so nothing a client read moved
   with the SDK: `server/discover` is answered beside `initialize` on one connection, an `initialize`
   without `capabilities` or `clientInfo` is served rather than refused, and an unknown resource fails
