@@ -38,6 +38,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from './emission';
 import { ARM_1, load, tokenProperty } from '../../apps/storybook/arm-contract';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../engine/out');
@@ -368,16 +369,16 @@ const MUTANTS: { name: string; css: string; markup: Markup; mustName: RegExp }[]
   { name: 'drop a prop value in the markup contract (appearance=text)',
     css: CSS, markup: withoutValue(MARKUP, 'appearance', 'text'), mustName: /prop value appearance=text has no markup mapping/ },
   { name: 'the press rebound to the reduced duration',
-    css: CSS.replace(/(transform var\(--pds3-motion-)duration-fast\)/, '$1duration-reduced-fast)'),
-    markup: MARKUP, mustName: /motion\.press \(container transform duration\) binds motion\.duration-reduced\.fast, the spec names motion\.duration\.fast/ },
+    css: CSS.replace(/(transform var\(--pds3-motion-preset-press-)duration\)/, '$1duration-reduced)'),
+    markup: MARKUP, mustName: /motion\.press \(container transform duration\) binds motion\.preset\.press\.duration-reduced, the spec names motion\.preset\.press\.duration/ },
   { name: 'the reduced-motion transition dropped (the container keeps motion.state)',
-    css: CSS.replace(/\n +\.p3-button \{\n +transition: [^;]*duration-reduced-fast[^;]*;\n +\}/, ''),
-    markup: MARKUP, mustName: /motion\.state-reduced \(container background-color duration, reduced motion\) binds motion\.duration\.fast, the spec names motion\.duration-reduced\.fast/ },
+    css: CSS.replace(/\n +\.p3-button \{\n +transition: [^;]*preset-state-duration-reduced[^;]*;\n +\}/, ''),
+    markup: MARKUP, mustName: /motion\.state-reduced \(container background-color duration, reduced motion\) binds motion\.preset\.state\.duration, the spec names motion\.preset\.state\.duration-reduced/ },
   { name: 'drop the tracking (every letter-spacing declaration)',
     css: CSS.replace(/\n\s*letter-spacing: [^;]+;/g, ''), markup: MARKUP, mustName: /container\/label letterSpacing binds \(no token: ls:NaN\), the spec names core\.font\.letter-spacing-role\.normal/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();
   let bad = 0;

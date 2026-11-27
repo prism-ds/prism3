@@ -43,7 +43,9 @@ export type HostMessage =
   // whether a build landed, so it has its own kind and never overwrites the build's verdict.
   | { kind: 'component-update-result'; ok: boolean; headline: string; summary: string; lines: readonly string[] | null; publish: string | null; causes: readonly Cause[] | null;
       /** #3711 (Q-UF3 A): the applied update went through every set, some left to check; false when the host did not say. */
-      completed: boolean }
+      completed: boolean;
+      /** #4067: the sets the applied update wrote to, its headline's count; absent when the host did not say. */
+      sets?: number }
   // #1558 — the outcome of a `file-setup` scaffold. A FOURTH kind of the `{ok, headline, summary}`
   // shape, distinct for the same one-kind-per-fact reason `component-result` is: "did the page
   // skeleton get laid" is separately true and separately actionable from a theme or component write,
@@ -62,13 +64,13 @@ export type HostMessage =
   | { kind: 'style-guide-catalog'; catalog: StyleGuideCatalog; error: string | null }
   | { kind: 'style-guide-tables'; tables: { key: string; title: string; page: string }[] }
   | { kind: 'style-guide-table'; index: number; status: 'drawing' | 'done' | 'failed'; reason: string | null }
-  | { kind: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number }
+  | { kind: 'component-progress'; phase: 'build' | 'wire' | 'retry'; done: number; total: number; chunkMs: number; throttled: boolean }
   // #1778 — how far a style-guide run has got: `done` of `total` tables. Non-terminal, like
   // `component-progress`, so it belongs in the style guide's pending state, never its verdict slot.
-  | { kind: 'style-guide-progress'; done: number; total: number }
+  | { kind: 'style-guide-progress'; done: number; total: number; throttled: boolean }
   // #3170 part 2 — how far a run the panel started has got, for the status strip (`state/status-strip.ts`). Non-terminal,
   // like `component-progress`: never a verdict.
-  | { kind: 'run-progress'; run: 'read' | 'update' | 'apply-theme' | 'capture' | 'adopt'; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number }
+  | { kind: 'run-progress'; run: 'read' | 'update' | 'apply-theme' | 'capture' | 'adopt'; phase: 'check' | 'work' | 'finish'; item: string | null; done: number; total: number; throttled: boolean }
   // #1521 — a prune preview (`applied: false`, `count` = what would be removed) or its outcome
   // (`applied: true`, `count` = what was removed). The UI reads `count` on a preview to decide
   // whether to open its confirm dialog, and `applied` to tell a preview from a verdict.
@@ -117,6 +119,8 @@ export type HostMessage =
   | { kind: 'add-queue'; queued: readonly string[]; error: string | null }
   // #2956 — the answer to "Turn off updates" / "Turn updates back on": the set, what was asked, and why it failed.
   | { kind: 'updates-off'; def: string; off: boolean; error: string | null }
+  // #3119 — whether the file holds the set a Build set built, or a "Show the set in Figma" looked for.
+  | { kind: 'set-in-file'; def: string; inFile: boolean }
   // #2909 Q2909.8 A — one set's hand edits from the background pass after load, or its end.
   | { kind: 'hand-edits'; def: string; members: number; edited: number }
   | { kind: 'hand-edits-done' }
@@ -149,8 +153,11 @@ export type CheckedSetView = {
   /** #2831 — on a published set, what the update breaks for library consumers, as one line. Absent otherwise. */
   readonly breaks?: string;
   /** #3711 (Q-UF2 A) — those changes, each named, and how many in all, for the callout before the run. Absent otherwise. */
-  readonly changes?: { readonly count: number; readonly lines: readonly string[] };
+  readonly changes?: { readonly count: number; readonly lines: readonly string[]; readonly kinds?: ChangeKinds };
 };
+/** #4481 — a set's changes for files that use the library, counted by what they do there: break them, retire a member,
+ *  or take the set out of the library. The three add up to the set's count. */
+export type ChangeKinds = { readonly breaks: number; readonly retired: number; readonly leaves: number };
 
 /** What the library home states about the library a file uses (#2879), as the host found it on the current page. */
 export type LibraryFileView = {
@@ -235,6 +242,9 @@ export interface HostCommit {
   postAddQueue(ids: readonly string[], on: boolean): void;
   /** #2956: turn the set's updates off (`off`) or back on (`updates-off`). Figma only; inert on the web. */
   postUpdatesOff(def: string, off: boolean): void;
+  /** #3119: "Show the set in Figma" (`show-set`): the set's page made current, the view fitted to it. Figma only; inert
+   *  on the web. */
+  postShowSet(def: string): void;
   /** #3309: the panel's own summary of a run of several writes (`activity-note`), kept by the main thread for the agent
    *  link's `activity` command. Figma only; inert on the web. */
   noteActivity(op: 'components' | 'update', ok: boolean, headline: string, lines: readonly string[]): void;
@@ -432,9 +442,17 @@ const checkedSet = (x: unknown): CheckedSetView[] => {
 const changesOf = (x: unknown): { changes?: CheckedSetView['changes'] } => {
   const c = x as Record<string, unknown> | null;
   const k = c && typeof c === 'object' ? count(c.count) : null;
-  return k && Array.isArray(c!.lines) && c!.lines.length && c!.lines.every(str) ? { changes: { count: k, lines: [...c!.lines as string[]] } } : {};
+  return k && Array.isArray(c!.lines) && c!.lines.length && c!.lines.every(str) ? { changes: { count: k, lines: [...c!.lines as string[]], ...kindsOf(c!.kinds, k) } } : {};
 };
-const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid'];
+/** #4481: the changes' counts by kind, kept only when each is a count and they add up to the set's count, so the summary
+ *  never states a split the host didn't send. Absent otherwise, and the summary then gives the total alone. */
+const kindsOf = (x: unknown, total: number): { kinds?: ChangeKinds } => {
+  const c = x as Record<string, unknown> | null;
+  if (!c || typeof c !== 'object') return {};
+  const [breaks, retired, leaves] = [count(c.breaks), count(c.retired), count(c.leaves)];
+  return breaks !== null && retired !== null && leaves !== null && breaks + retired + leaves === total ? { kinds: { breaks, retired, leaves } } : {};
+};
+const KINDS: readonly StyleGuideKind[] = ['color', 'dimension', 'font', 'text', 'effect', 'gradient', 'grid', 'animation'];
 /** The style guide's catalog (S11.2), checked entry by entry: an entry with a field of the wrong type is dropped, and
  *  an item whose table index points at no table reads as one no phase draws (-1), so the page never offers a table
  *  the host did not name. `null` when the shape is not a catalog at all. */
@@ -481,7 +499,8 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
   // panel on "Building…", #870); it reads as a build that did not finish, the claim that needs no evidence.
   'component-result': (m) => ({ ...verdict('component-result', m, '✓ built', '✗ build failed'), completed: m.completed === true, lines: linesOf(m.lines), causes: causesOf(m.causes), ...(linesOf(m.alsoBuilt) ? { alsoBuilt: linesOf(m.alsoBuilt)! } : {}) }),
   'component-update-result': (m) => ({ ...verdict('component-update-result', m, '✓ checked', '✗ check failed'), lines: linesOf(m.lines),   // #2265
-    publish: typeof m.publish === 'string' && m.publish ? m.publish : null, causes: causesOf(m.causes), completed: m.completed === true }),   // #2858, #3326, #3711
+    publish: typeof m.publish === 'string' && m.publish ? m.publish : null, causes: causesOf(m.causes), completed: m.completed === true,
+    ...(typeof m.sets === 'number' && Number.isInteger(m.sets) && m.sets >= 0 ? { sets: m.sets } : {}) }),   // #2858, #3326, #3711, #4067
   'file-setup-result': (m) => verdict('file-setup-result', m, '✓ file set up', '✗ setup failed'),   // #1558
   // #3394: the plugin always sends a headline; one that arrives without falls back to the summary's first words.
   'override-result': (m) => {
@@ -527,7 +546,8 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
     // so a degraded one is still worth showing; a progress reading is one of dozens and the next one
     // is milliseconds away, so a "0 of 0" is strictly worse than the previous reading staying put.
     const r = progressReading(m);
-    return r ? { kind: 'component-progress', ...r, chunkMs: count(m.chunkMs) ?? 0 } : null;
+    // #4476: `throttled` is true only when the host says so; anything else reads as not throttled.
+    return r ? { kind: 'component-progress', ...r, chunkMs: count(m.chunkMs) ?? 0, throttled: m.throttled === true } : null;
   },
   // #3170. Validated and dropped when unusable, for the `component-progress` reason above: a reading that says nothing
   // usable leaves the strip on the last one.
@@ -537,12 +557,12 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
     const done = count(m.done);
     const total = count(m.total);
     if (!run || !phase || done === null || total === null || done > total) return null;
-    return { kind: 'run-progress', run, phase, item: isId(m.item) ? m.item : null, done, total };
+    return { kind: 'run-progress', run, phase, item: isId(m.item) ? m.item : null, done, total, throttled: m.throttled === true };
   },
   'style-guide-progress': (m) => {
     // #1778. Validated and dropped when unusable, for the `component-progress` reason above.
     const r = tableReading(m);
-    return r ? { kind: 'style-guide-progress', ...r } : null;
+    return r ? { kind: 'style-guide-progress', ...r, throttled: m.throttled === true } : null;
   },
   'prune-result': (m) => {
     // #1521. `count` and `applied` are validated at the boundary like the other numeric/flag fields
@@ -637,6 +657,8 @@ const INBOUND: { readonly [K in MainToUi['type']]: Validator<K> | null } = {
   // none. Ids that are not strings are dropped.
   // #2956. An answer with no set is dropped; one that is not ok carries its reason, or a fixed one.
   'updates-off': (m) => (isId(m.def) ? { kind: 'updates-off', def: m.def, off: m.off === true, error: m.ok === true ? null : str(m.error) && m.error ? m.error : 'not written' } : null),
+  // #3119. An answer with no set is dropped; anything but `true` reads as not in the file, so nothing unshowable is offered.
+  'set-in-file': (m) => (isId(m.def) ? { kind: 'set-in-file', def: m.def, inFile: m.inFile === true } : null),
   'add-queue': (m) => (Array.isArray(m.queued) ? { kind: 'add-queue', queued: idsOf(m.queued), error: str(m.error) && m.error ? m.error : null } : null),
   // #2909 Q2909.8 A. A reading with a field of the wrong type is dropped: a guessed count would be a status nobody read.
   'hand-edits': (m) => {
@@ -744,6 +766,9 @@ const figmaCommit = (): HostCommit => ({
   postUpdatesOff(def, off) {
     post({ type: 'updates-off', def, off });
   },
+  postShowSet(def) {
+    post({ type: 'show-set', def });
+  },
   noteActivity(op, ok, headline, lines) {
     post({ type: 'activity-note', op, ok, headline, lines: [...lines] });
   },
@@ -802,6 +827,7 @@ const webCommit = (): HostCommit => ({
   requestHandEdits() {/* no file on web (#2909) */},
   postAddQueue() {/* no file on web (#3129 Q3129.12 A) */},
   postUpdatesOff() {/* no file on web */},
+  postShowSet() {/* no file on web */},
   noteActivity() {/* no main thread on web (#3309) */},
   noteRunEnded() {/* no main thread on web (#533) */},
   requestUpdateCheck() {/* no file on web (#2909) */},

@@ -22,6 +22,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = import.meta.dirname ?? '';
 
@@ -130,6 +131,6 @@ export const read = async (): Promise<Reading> => {
   return out;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'one-edit.ts') && process.argv.includes('--read')) {
+if (isEntry(import.meta.url) && process.argv.includes('--read')) {
   read().then((r) => console.log(JSON.stringify(r)), (e) => { console.error(`FAIL one edit: the browser read failed: ${(e as Error).message}`); process.exit(1); });
 }

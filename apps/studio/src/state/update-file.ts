@@ -20,7 +20,8 @@
  *     file and has no live panel (`panelSetsOf`), less the Due sets and the queue, whose own runs draw the panel. One tick
  *     for the group, on by default. The panels ride the in-place update, scoped to these sets: the step's defs are the
  *     ticked Due sets and these (`updateDefsOf`), so the scoped check reads them and the page re-spaces to make room;
- *   · Style guides: drawn with Documentation's saved settings (Q2909.23 A), ticked on a file that is not set up.
+ *   · Style guides: drawn with Documentation's saved settings (Q2909.23 A), ticked on a file that is not set up. Its chip
+ *     counts the tables the step will draw (#4480 Q2 A), once the host has listed the file's tables.
  * The cover is not an item of its own: it follows Documentation's switch, drawn by Set up file. Nor is a panel a set gains
  * by being added or updated: its build or update draws it.
  * A run that sets the file up and writes its theme ends with one more step, `cover` (#3308, Q3308.4 A): Set up file,
@@ -38,7 +39,7 @@
  */
 import type { Catalog } from './component-catalog';
 import { displayNameOf, inListOrder, isPrivate, neededOf } from './component-groups';
-import type { CheckedSetView, FacetView, MovedView, SetDueView } from '../write-adapter';
+import type { ChangeKinds, CheckedSetView, FacetView, MovedView, SetDueView } from '../write-adapter';
 
 /** `update` is the in-place update of the due sets (Q2909.8 A); `sets` builds the add queue (#3129); `cover` draws the
  *  cover and About this library at the end of a run that sets the file up and writes its theme (#3308, Q3308.4 A). */
@@ -264,8 +265,8 @@ export const statusesOf = (id: string, f: FileSets | null, hand: ReadonlyMap<str
 
 export type StepResult = { readonly step: StepKey; readonly ok: boolean; readonly headline: string;
   /** #3308: not clean, but the step did all it was asked: every queued set was built, some with problems. The run goes
-   *  on to the next step; the verdict line says the step had problems. Never set with `ok`. */
-  readonly warn?: true };
+   *  on to the next step; the verdict line says the step had problems. Never set with `ok`. #4067 `sets`: the update step's sets written to, its verdict's count. */
+  readonly warn?: true; readonly sets?: number };
 export type UpdateRun = {
   readonly steps: readonly StepKey[];
   /** The sets the `sets` step builds: the add queue, in Components' order (#3129). */
@@ -287,11 +288,11 @@ export const stepOf = (r: UpdateRun): StepKey | null => (r.done ? null : r.steps
 
 /** The run after the running step's verdict: done after a failure, after Stop, or after the last step. A step that is
  *  not `ok` but did all it was asked (`warn`, #3308: every set built, some with problems) is not a failure: the run goes on. */
-export const stepDone = (r: UpdateRun, ok: boolean, headline: string, warn = false): UpdateRun => {
+export const stepDone = (r: UpdateRun, ok: boolean, headline: string, warn = false, sets: number | null = null): UpdateRun => {
   const step = stepOf(r);
   if (!step) return r;
   const w = !ok && warn;
-  const results: StepResult[] = [...r.results, { step, ok, headline, ...(w ? { warn: true as const } : {}) }];
+  const results: StepResult[] = [...r.results, { step, ok, headline, ...(w ? { warn: true as const } : {}), ...(step === 'update' && sets !== null ? { sets } : {}) }];
   return { ...r, results, done: (!ok && !w) || r.stopping || results.length >= r.steps.length };
 };
 
@@ -365,7 +366,7 @@ export const UPDATE_COPY = {
     : d.reason === 'executor' ? 'Engine update: Prism3 draws components differently' : d.reason === 'panel' ? 'Engine update: Prism3 draws usage panels differently' : 'Due · its settings changed'),
   /** #3090 finding 1: an engine update over a set recorded before Prism3 kept a print of its drawing, so nothing can be
    *  named; the next update records the print. DRAFT (Q2909.10 A). */
-  engineUnprinted: 'Engine update: recorded before Prism3 noted what it drew',
+  engineUnprinted: 'Engine update: built by an earlier Prism3, so the changes can’t be listed',
   /** #3302 (the owner's Q3302.1–.3 A, 2026-11-02; the strings approved as written): the check's progress in the dialog's
    *  foot, "Reading this file…" until every set is found, then "Checked n of N sets"; and the line of the set being
    *  checked now. A set not reached yet has no line. */
@@ -382,13 +383,13 @@ export const UPDATE_COPY = {
    *  edits section; and each kept set's line. */
   handHint: {
     keep: 'Keep: each edit stays. A set whose edits hold back changes is listed under Kept edits until resolved.',
-    overwrite: 'Overwrite: the plan’s values replace each edit.',
+    overwrite: 'Overwrite: Prism3’s values replace each edit.',
     accept: 'Accept as baseline: each edit stays and becomes the record, so it is no longer listed.',
   } as Record<HandEditChoice, string>,
   kept: 'Kept edits',
-  keptSub: (n: number): string => `${plural(n)} ${n === 1 ? 'holds' : 'hold'} hand edits over changes the plan makes. Each stays here until Overwrite or Accept as baseline is chosen for it.`,
+  keptSub: (n: number): string => `${plural(n)} ${n === 1 ? 'holds' : 'hold'} hand edits over changes Prism3 makes. Each stays here until Overwrite or Accept as baseline is chosen for it.`,
   keptLine: (h: { readonly members: number; readonly changes: readonly string[] }): string =>
-    `${h.members} member${h.members === 1 ? ' keeps' : 's keep'} out ${h.changes.length} of the plan’s values${h.changes.length ? `: ${h.changes.slice(0, 3).join(', ')}${h.changes.length > 3 ? `, ${h.changes.length - 3} more` : ''}` : ''}`,
+    `${h.members} variant${h.members === 1 ? ' keeps' : 's keep'} out ${h.changes.length} of Prism3’s values${h.changes.length ? `: ${h.changes.slice(0, 3).join(', ')}${h.changes.length > 3 ? `, ${h.changes.length - 3} more` : ''}` : ''}`,
   keptChoice: (name: string): string => `Hand edits on ${name}`,
   /** #2956 (owner decisions 2026-11-17, approved): the state, its two actions and the quiet reason line, shown only when
    *  the update turned it off by itself. The group's line and the actions' accessible names are DRAFT. */
@@ -423,6 +424,9 @@ export const UPDATE_COPY = {
   /** #3308 (Q3308.4 A): the last step of a run that sets the file up and writes its theme. DRAFT. */
   coverStep: 'Cover and About this library',
   guidesSub: 'Drawn with the settings in Docs. A rerun updates each table in place.',
+  /** #4480 (owner decision Q2 A, 2026-11-23; DRAFT for the owner): the Style guides row's chip, the tables the step will
+   *  draw, counted before the run (`savedDrawCount`). */
+  guidesCount: (n: number): string => (n === 0 ? 'No tables' : `${n} table${n === 1 ? '' : 's'}`),
   go: 'Update file',
   /** #3713 (3 of 4, DRAFT): beside a disabled Update file, `goWhyOf`. */
   nothing: (blocked: readonly string[]): string => (blocked.length ? `Nothing to write: ${andList(blocked)} can’t be updated yet.` : 'Nothing to write: nothing above is ticked.'),
@@ -434,16 +438,34 @@ export const UPDATE_COPY = {
   runState: { updating: 'Updating', updated: 'Updated' } as Record<'updating' | 'updated', string>,
   running: (step: string, at: number, of: number): string => `Step ${at} of ${of} · ${step}`,
   stopped: (step: string, headline: string): string => `The last update stopped at ${step}: ${headline}`,
-  cleanLead: 'Things Prism3 wrote earlier and no longer writes. Nothing here rides Update file.',
+  cleanLead: 'Things Prism3 wrote earlier and no longer writes. Update file doesn’t remove them.',
   cleanChecking: 'Checking for stale items…',
   cleanNone: 'Nothing stale in this file.',
-  cleanRetired: (n: number): string => `${n} style-guide table${n === 1 ? '' : 's'} the generator no longer draws.`,
+  cleanRetired: (n: number): string => `${n} style-guide table${n === 1 ? '' : 's'} Prism3 no longer draws.`,
   removeTables: (n: number): string => `Remove ${n} table${n === 1 ? '' : 's'}`,
   /** #3711 (Q-UF2 A), DRAFT: the button while the update passes changes on to files that use the library, and the
    *  callout above it that names each one. */
   goLibrary: (n: number): string => `Update, including ${n} library change${n === 1 ? '' : 's'}`,
-  library: 'Files that use this library',
-  librarySub: (n: number): string => `${n} change${n === 1 ? '' : 's'} in this update ${n === 1 ? 'reaches' : 'reach'} them at the next library publish:`,
+  /** #4481 (owner decision A, 2026-11-23; DRAFT for the owner's sign-off): the callout is one line, the changes counted
+   *  by what they do to files that use the library, each kind naming its sets, then a control that shows the full list.
+   *  Without the host's split (`kinds` null), the total alone. */
+  librarySummary: (lib: { readonly count: number; readonly kinds: ChangeKinds | null; readonly setsBy: Readonly<Record<keyof ChangeKinds, readonly string[]>> }, nameOf: (id: string) => string = (id) => id): string => {
+    const n = lib.count;
+    const head = `${n} change${n === 1 ? '' : 's'} ${n === 1 ? 'reaches' : 'reach'} files that use this library`;
+    if (!lib.kinds) return `${head}.`;
+    const named = (k: keyof ChangeKinds): string => ` (${andList([...new Set(lib.setsBy[k].map(nameOf))])})`;
+    const { breaks, retired, leaves } = lib.kinds;
+    const parts = [
+      breaks ? `${breaks} ${breaks === 1 ? 'breaks' : 'break'} their instances${named('breaks')}` : '',
+      retired ? `${retired} ${retired === 1 ? 'is' : 'are'} retired${named('retired')}` : '',
+      leaves ? `${leaves} ${leaves === 1 ? 'takes a set' : 'take sets'} out of the library${named('leaves')}` : '',
+    ].filter(Boolean);
+    return `${head}: ${parts.join(', ')}.`;
+  },
+  libraryShow: 'Show the changes',
+  libraryHide: 'Hide the changes',
+  /** The list's accessible name, as a region that scrolls. */
+  libraryList: 'Changes that reach files that use this library',
   /** #3712 (Q-UD2, direction C; DRAFT for the owner's sign-off): Components' status chip, what its card holds, said on its
    *  head row so a folded card still says it. Each part only when it counts. */
   compsChip: (n: { readonly add: number; readonly due: number; readonly blocked: number; readonly kept: number; readonly panels: number; readonly off?: number }): string =>
@@ -467,7 +489,7 @@ const listCount = (list: string): number => { const parts = list.split(', '); co
 const s_ = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 /** #3713: the blocker lines Theme's run clears (the variables and the text and effect styles it writes), matched by the
  *  same words `blockedWhy` reads them by. With Theme ticked they no longer block, so the row skips them. */
-const THEME_CLEARS = /^(?:\d+ variables? the plan binds (?:is|are) not in this file|(?:text|effect) styles? not in this file: )/;
+const THEME_CLEARS = /^(?:\d+ variables? Prism3 binds (?:is|are) not in this file|(?:text|effect) styles? not in this file: )/;
 /** #3713: one of the check's blocker lines (`update-plan.ts`, `fileBlockers` and `setRefusal`) in plain words, as the
  *  clause after "Can’t update yet —", with the step that clears it where Studio or Figma offers one. The words are the
  *  owner's (#3721, D3721.1–.6, 2026-11-12), except the unknown-shape line, which is DRAFT. A line of a shape not known
@@ -475,26 +497,26 @@ const THEME_CLEARS = /^(?:\d+ variables? the plan binds (?:is|are) not in this f
  *  shapes are matched by their words, so a reworded blocker falls through to the fixed line, never to a wrong reason. */
 export const blockedWhy = (line: string, nameOf: (id: string) => string = (id) => id): { readonly why: string; readonly next: string | null } => {
   let m: RegExpMatchArray | null;
-  if ((m = line.match(/^Not in this file: (.+)\. Build (.+) first, then run the update again$/)))
+  if ((m = line.match(/^Not in this file: (.+)\. Build (.+) first, then run Update file again$/)))
     return { why: `it needs ${setNames(m[2], nameOf)}, which this file doesn’t have.`, next: `Tick ${setNames(m[2], nameOf)} on Components first.` };
-  if ((m = line.match(/^(\d+) variables? the plan binds (?:is|are) not in this file/)))
+  if ((m = line.match(/^(\d+) variables? Prism3 binds (?:is|are) not in this file/)))
     return { why: `it needs ${s_(Number(m[1]), 'variable', 'variables')} this file doesn’t have.`, next: 'Tick Theme to write them.' };
   if ((m = line.match(/^(text|effect) styles? not in this file: (.+)$/)))
     return { why: `it needs ${listCount(m[2]) === 1 ? `a ${m[1]} style` : `${m[1]} styles`} this file doesn’t have: ${m[2]}.`, next: 'Tick Theme to write them.' };
-  if ((m = line.match(/^components? the plan swaps to (?:is|are) not in this file: (.+)$/)))
+  if ((m = line.match(/^components? Prism3 swaps to (?:is|are) not in this file: (.+)$/)))
     return { why: `it swaps to ${setNames(m[1], nameOf)}, which this file doesn’t have.`, next: `Tick ${setNames(m[1], nameOf)} on Components first.` };
   if ((m = line.match(/^fonts: (.+) will not load/)))
     return { why: `these fonts won’t load: ${m[1]}.`, next: 'Install or turn them on in Figma, then open this again.' };
-  if (/^an axis the plan removed would collapse members/.test(line))
+  if (/^an axis Prism3 removed would collapse variants/.test(line))
     return { why: 'a property it drops would merge variants into one.', next: null };
   // D3721.4: only the agent's Adopt clears this, and Studio has none; its write path is #3714.
   if ((m = line.match(/^the axes change, and (\d+) members? not built by Prism3/)))
-    return { why: `its properties change, and ${s_(Number(m[1]), 'variant', 'variants')} not built by Prism3 would be left behind.`, next: 'Studio can’t do this yet.' };
+    return { why: `its properties change, and ${s_(Number(m[1]), 'variant', 'variants')} not built by Prism3 would be left behind.`, next: 'Remove the extra variants in Figma, or send it with Report a problem.' };
   if ((m = line.match(/^renaming (.+) would give it the name of another member \((.+)\)$/)))
     return { why: `renaming ${m[1]} would clash with ${m[2]}.`, next: 'Rename or remove one of them in Figma.' };
-  if ((m = line.match(/^(\d+) members share the coordinate (\S+)/)))
+  if ((m = line.match(/^(\d+) variants share the coordinate (\S+)/)))
     return { why: `${m[1]} variants share one name, ${m[2]}.`, next: 'Rename or remove the extra one in Figma.' };
-  if (/^the members disagree on the axis list/.test(line))
+  if (/^the variants disagree on the axis list/.test(line))
     return { why: 'its variants don’t all have the same properties.', next: 'Fix the variant names in Figma.' };
   // DRAFT (D3721.1 b: the decision is the owner's, these words are not yet): Report a problem is the control's own name.
   return { why: 'the check gave a reason Studio doesn’t recognize.', next: 'Report it with Report a problem.' };
@@ -522,9 +544,24 @@ export const STEP_TITLE: Readonly<Record<StepKey, string>> = { setup: UPDATE_COP
 /** #3711 (Q-UF2 A): the changes the update step would pass on to files that use the library, from the sets it runs
  *  (`updateDefsOf`), each named, and how many in all. The callout above the button lists the lines; the button carries
  *  the count, so the click is the acknowledgement. Empty when no set the update runs has any. */
-export const libraryChangesOf = (defs: readonly string[], check: { readonly sets: readonly CheckedSetView[] } | null): { readonly count: number; readonly lines: readonly string[] } => {
-  const hit = defs.flatMap((id) => check?.sets.find((c) => c.def === id)?.changes ?? []);
-  return { count: hit.reduce((k, c) => k + c.count, 0), lines: hit.flatMap((c) => c.lines) };
+export type LibraryChanges = {
+  readonly count: number;
+  readonly lines: readonly string[];
+  /** #4481: the count split by kind, summed over the sets; null when a set the update runs came without its split. */
+  readonly kinds: ChangeKinds | null;
+  /** #4481: the sets with changes of each kind, in run order, for the summary to name. */
+  readonly setsBy: Readonly<Record<keyof ChangeKinds, readonly string[]>>;
+};
+export const libraryChangesOf = (defs: readonly string[], check: { readonly sets: readonly CheckedSetView[] } | null): LibraryChanges => {
+  const hit = defs.flatMap((id) => { const c = check?.sets.find((x) => x.def === id)?.changes; return c ? [{ id, c }] : []; });
+  const split = hit.every(({ c }) => !!c.kinds);
+  const sum = (k: keyof ChangeKinds): number => hit.reduce((t, { c }) => t + (c.kinds?.[k] ?? 0), 0);
+  const ids = (k: keyof ChangeKinds): string[] => hit.filter(({ c }) => (c.kinds?.[k] ?? 0) > 0).map(({ id }) => id);
+  return {
+    count: hit.reduce((k, { c }) => k + c.count, 0), lines: hit.flatMap(({ c }) => c.lines),
+    kinds: split ? { breaks: sum('breaks'), retired: sum('retired'), leaves: sum('leaves') } : null,
+    setsBy: split ? { breaks: ids('breaks'), retired: ids('retired'), leaves: ids('leaves') } : { breaks: [], retired: [], leaves: [] },
+  };
 };
 
 /** #3712 (Q-UD3 A, the owner's decision of 2026-11-14): Components' card opens by itself only while it holds something

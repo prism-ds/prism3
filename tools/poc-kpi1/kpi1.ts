@@ -40,10 +40,11 @@
  * failure, with a FAIL line, so the scorecard's cell reads FAIL, never a time.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { asComputed, expected, judge, key, resolveToken, PROBES, FORMS, THEMES, type Form, type Reading, type Theme } from './one-edit';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = import.meta.dirname ?? '';
 const REPO = resolve(HERE, '../..');
@@ -193,7 +194,7 @@ const copyTree = (dest: string) => {
 };
 
 export const kpi1 = (run: Run, opts: { plant?: string; keep?: boolean } = {}): Result => {
-  const tmp = mkdtempSync(join(tmpdir(), `prism3-kpi1-${run}-`));
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), `prism3-kpi1-${run}-`));
   const res: Result = { run, steps: [], seconds: 0, installSeconds: 0, probes: 0, failure: null, copy: tmp };
   const outside = relative(REPO, tmp);
   try {
@@ -362,7 +363,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
     return s === want[0] && u === want[1] ? null : `${s}\n${u}`; } },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'kpi1.ts')) {
+if (isEntry(import.meta.url)) {
   const arg = (n: string) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
   if (process.argv.includes('--self-test')) {
     let bad = 0;

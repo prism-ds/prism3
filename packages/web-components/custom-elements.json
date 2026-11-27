@@ -507,7 +507,7 @@
               "type": {
                 "text": "string | undefined"
               },
-              "description": "Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format before failure.",
+              "description": "Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format before failure.",
               "default": "undefined",
               "attribute": "data-prop-helptext",
               "reflects": true
@@ -755,7 +755,7 @@
               "type": {
                 "text": "string | undefined"
               },
-              "description": "Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format before failure.",
+              "description": "Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format before failure.",
               "default": "undefined",
               "fieldName": "helpText"
             },
@@ -1091,7 +1091,7 @@
               "type": {
                 "text": "string | undefined"
               },
-              "description": "Persistent guidance (rendered as FieldMessage, default status), wired via aria-describedby. State the rules for a new password here, before the user types.",
+              "description": "Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. State the rules for a new password here, before the user types.",
               "default": "undefined",
               "attribute": "data-prop-helptext",
               "reflects": true
@@ -1272,7 +1272,7 @@
               "type": {
                 "text": "string | undefined"
               },
-              "description": "Persistent guidance (rendered as FieldMessage, default status), wired via aria-describedby. State the rules for a new password here, before the user types.",
+              "description": "Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. State the rules for a new password here, before the user types.",
               "default": "undefined",
               "fieldName": "helpText"
             },

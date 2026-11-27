@@ -1,0 +1,21 @@
+{
+  "note": "AUTHORED RECORD, never a regen artifact (see lint-format-history.ts). Per published format, one row per version, oldest first: the branch that took it, a hash of the format's JSON schema with its prose removed, and what the version adds. Written by `npx tsx packages/engine/lint-format-history.ts --accept --note \"...\"`, which appends a row for a version not yet recorded and never rewrites a row another branch wrote. Two PRs that take the same version each append a row here, so they conflict; a merge that keeps both rows fails DUPLICATE, and one that keeps one fails SHAPE (#4458, #4330).",
+  "formats": {
+    "prism3-ai-metadata": [
+      {"version":"0.7","by":"seed (#4458)","shape":"ef60d4ff13b61f8e","note":"The version on main when this record began (#4458). Earlier versions predate it."},
+      {"version":"0.8","by":"feat/motion-preset-tier","shape":"ab2c664672b14a8a","note":"motion_presets names each preset's motion.preset.<name> tokens, with what each slot resolves to (#2857)"},
+      {"version":"0.9","by":"feat/motion-patterns","shape":"f435cf25b622dd4c","note":"motion_presets: each arriving preset's exit half; motion_patterns: the motion patterns, each a list of tracks on named presets (#2857 phase 2)"}
+    ],
+    "prism3-component-defs": [
+      {"version":"1.7","by":"seed (#4458)","shape":"54ffeb373c4328f0","note":"The version on main when this record began (#4458). Earlier versions predate it."},
+      {"version":"1.8","by":"feat/motion-patterns","shape":"72c7d01038c988a2","note":"def.motion.patterns: the motion patterns a def plays, by name, beside the prose generated from them (#2857 phase 2)"}
+    ],
+    "prism3-component-docs": [
+      {"version":"1.2","by":"seed (#4458)","shape":"885b169d98506e43","note":"The version on main when this record began (#4458). Earlier versions predate it."},
+      {"version":"1.3","by":"feat/motion-patterns","shape":"60348d54f6333cc6","note":"motion.patterns: the motion patterns a def plays, by name, beside the prose generated from them (#2857 phase 2)"}
+    ],
+    "prism3-file-facts": [
+      {"version":"0.1","by":"seed (#4458)","shape":"ba9956b6b3faf7e5","note":"The version on main when this record began (#4458). Earlier versions predate it."}
+    ]
+  }
+}

@@ -48,9 +48,9 @@
  * were kept as a hand edit. Either failing makes the verdict a failure.
  */
 import { failureDetail } from './apply-summary';
-import { diffAnatomy, type HostNode, planComponentName, planSetProperties, type AnatomyPlan } from '@prism3/engine/components';
+import { diffAnatomy, type HostNode, planComponentName, planSetProperties, type AnatomyPlan, type FigmaNodePlan } from '@prism3/engine/components';
 import { coordKey, partRenames, type ComponentRename, slotMigrationOf, slotTextMigrationOf } from '@prism3/engine';
-import { applyComponentPlan, emitCoordValue, keptBoundOf, memberStamp, STAMP_KEY, type ComponentApplyResult, type ComponentsApi, type CompPageTarget } from './write-components';
+import { applyComponentPlan, descriptionIsOurs, emitCoordValue, keptBoundOf, memberStamp, STAMP_KEY, writeDescription, type ComponentApplyResult, type Described, type ComponentsApi, type CompPageTarget } from './write-components';
 import { NS } from './persist-figma';
 import { UPDATING_KEY, baselineDiff, baselineOf, builtByPrism3, readBaseline, snapshotMember, type OwnershipRead, type SnapNode } from './member-baseline';
 import { drawnFaults, faultAt, faultLine, varsById } from './drawn';
@@ -75,6 +75,9 @@ import { cause, runCause, mergeCauses, CAUSE_WHAT } from './causes';
 import { UPDATES_OFF_COPY, writeUpdatesOff, type UpdatesOff } from './updates-off';
 import { COVER_NAME, coverIsWork, coverLine, coverPageOnlyLine, drawCover, type CoverApi, type CoverOutcome, type CoverRoot } from './cover-frame';
 
+/** #3392 — what a merge reads and writes on a member and its placed instances. */
+type MergeInstance = { width?: unknown; height?: unknown; swapComponent?: (c: unknown) => void; resize?: (w: number, h: number) => void };
+type MergeNode = { name?: string; remove?: () => void; getInstancesAsync?: () => Promise<MergeInstance[]> };
 /** The set's record of the members an update kept and marked deprecated (Q2): a JSON list of member names. */
 export const RETAINED_KEY = 'retained';
 /** What a deprecated member's description starts with (owner decision Q104 A). */
@@ -129,6 +132,49 @@ export type UpdateChoices = {
 const choiceFor = (c: UpdateChoices | undefined, set: string): HandEditChoice => c?.sets?.[set]?.handEdits ?? c?.handEdits ?? 'keep';
 const noRecordFor = (c: UpdateChoices | undefined, set: string): NoRecordChoice => c?.sets?.[set]?.noBaseline ?? c?.noBaseline ?? 'update';
 
+/** #4068 — one part whose plan face did not load, written in the fallback its plan declares, `count` times. */
+export type FontFallback = { part: string; face: string; used: string; count: number };
+
+/** #4068 — THE FONT FALLBACKS AMONG A BUILD'S MISSES. For a `literalFont` the executor loads the face, then the plan's
+ *  fallback, and reports each face that did not load as `<part>.font -> <family> <style> REFUSED (<ErrorClass>: <reason>)`
+ *  (`write-components.ts`, #4358; `fontMissHead` below is that form's one copy here). A face miss on a part whose plan declares that face with a fallback is the
+ *  designed outcome when the fallback then landed. The misses carry no member name, and a label whose fallback did not
+ *  land reports its face twice (the literal's load, then the text write's load of the font the node still holds), so
+ *  no count pairs them. The rule is the safe one: a part's face misses are fallbacks only when no miss says its fallback
+ *  did not land (`<part>.font -> <fallback> REFUSED (`, or a `<part>.literalFont ->` miss naming it); otherwise every one stays
+ *  a miss. A miss is never hidden as a fallback; a fallback can at worst read as a miss, as it did before #4068. */
+/** #4068 — THE HEAD OF THE EXECUTOR'S MISS FOR A FACE THAT DID NOT LOAD (`write-components.ts`, every `loadFontAsync` catch:
+ *  `<part>.font -> <family> <style> REFUSED (<ErrorClass>: <reason>)`, the form #4358 gave it). Both reads in
+ *  `splitFontFallbacks` key on this one copy, and `test-update-apply.ts` checks it against the misses the real executor
+ *  reports (`fallback/miss form`), so a change to the executor's wording fails by name rather than turning every
+ *  fallback back into a miss in silence. The paste twin (`anatomy-figma.ts`) words it without `REFUSED`; an update runs
+ *  the plugin executor only. */
+export const fontMissHead = (part: string, face: string): string => `${part}.font -> ${face} REFUSED (`;
+
+export const splitFontFallbacks = (misses: readonly string[], plans: readonly AnatomyPlan[]): { fallbacks: FontFallback[]; misses: string[] } => {
+  const declared = new Map<string, { part: string; face: string; used: string }>();
+  const walk = (n: FigmaNodePlan): void => {
+    const f = n.literalFont;
+    if (f) {
+      const face = `${f.family} ${f.style}`;
+      declared.set(fontMissHead(n.name, face), { part: n.name, face, used: `${f.fallback.family} ${f.fallback.style}` });
+    }
+    for (const c of n.children) walk(c);
+  };
+  for (const pl of plans) walk(pl.root);
+  const drop = new Set<number>();
+  const fallbacks: FontFallback[] = [];
+  for (const [key, d] of declared) {
+    const at = misses.flatMap((m, i) => (m.startsWith(key) ? [i] : []));
+    const notLanded = misses.filter((m) => m.startsWith(fontMissHead(d.part, d.used)) || m.startsWith(`${d.part}.literalFont -> ${d.used} `)
+      || m.startsWith(`${d.part}.literalFont -> DISCARDED (set ${d.used} `)).length;
+    const count = notLanded ? 0 : at.length;
+    for (const i of at.slice(0, count)) drop.add(i);
+    if (count) fallbacks.push({ ...d, count });
+  }
+  return { fallbacks, misses: misses.filter((_, i) => !drop.has(i)) };
+};
+
 export type SetOutcome = {
   def: string;
   set: string;
@@ -138,6 +184,9 @@ export type SetOutcome = {
   added: number;
   renamed: number;
   deprecated: string[];
+  /** #3392 — members merged into another (an axis the ledger merges): their placed instances swapped onto the
+   *  surviving member, then the member removed. Each with how many instances moved. Absent when none. */
+  merged?: { member: string; into: string; instances: number }[];
   /** Members left as they are, each with its reason. */
   skipped: { member: string; reason: string }[];
   /** #2956 — of `skipped`, the members skipped because the update could not apply around their hand edits (a layer added
@@ -150,6 +199,12 @@ export type SetOutcome = {
   /** #2956 — this run turned the set's updates off by itself: it skipped a member whose hand edits the update could not
    *  apply around (`aroundEdits`). The rest of the set was written as usual. Absent otherwise. */
   turnedOff?: true;
+  /** #2865 — how many nodes (the set, or a single-component def's components) took the def's summary as their
+   *  description in this run. Absent when none. */
+  described?: number;
+  /** #3907 — of `skipped`, the members the dry run read as behind today's plan whatever their hand edits (`behind` on
+   *  its states): left out of date, so the ledger does not record the set as built from today's def. Absent when none. */
+  behind?: string[];
   /** Members updated with no as-built record, so with no hand-edit check (`choices.noBaseline`, default `update`). */
   unrecorded: string[];
   /** Of `unrecorded`, those whose record was from an earlier format (#2379 review). */
@@ -174,6 +229,10 @@ export type SetOutcome = {
   content: string[];
   /** The build pass's own misses, apart from its notes on members it was told to leave alone. */
   misses: string[];
+  /** #4068 — the literal faces that did not load where the plan declares a fallback, and the fallback landed: the
+   *  designed outcome, so listed apart from the misses, one entry per part and face, and never a part to check. A face
+   *  whose fallback did not land either stays a miss. Absent when none. */
+  fallbacks?: FontFallback[];
   /** For a set the apply entered with nothing to write: the dry run's own set line, and whether the dry run called the
    *  set up to date. The verdict says what the dry run said (#2495, owner Q205 A). */
   asPreviewed?: { line: string; upToDate: boolean };
@@ -282,6 +341,21 @@ const liveFor = async (host: ApplyHost, t: UpdateTarget, name: string, ledger?: 
   // #2759 — before its rename, the set is under an earlier def id (the dry run's `setRename`).
   return now ?? (locateSets(host, t, ledger).found[0] as unknown as LiveSet | undefined);
 };
+/** #2865 (owner decision A): the summary the check planned, on each node whose description is still Prism3's: the set,
+ *  or a single-component def's stamped components. The build's pass has already written it on a set it applied, which
+ *  reads here as done. A node a designer changed since the check is left, and a write the host refuses is a miss. */
+const describe = (live: LiveSet, t: UpdateTarget, p: SetPreview, o: SetOutcome): void => {
+  if (!p.description) return;
+  const to = p.description.to;
+  const nodes = (t.single ? kidsOf(live).filter((k) => !!(k as { getSharedPluginData?(a: string, b: string): string }).getSharedPluginData?.(NS, STAMP_KEY)) : [live]) as unknown as Described[];
+  let k = 0;
+  for (const d of nodes) {
+    if (String(d.description ?? '') === to) { k++; continue; }
+    if (!descriptionIsOurs(d)) continue;
+    try { writeDescription(d, to); k++; } catch (e) { o.misses.push(`description -> REFUSED (${failureDetail(e)})`); }
+  }
+  if (k) o.described = Math.min(k, p.description.nodes);
+};
 /** The page a target's components sit on, for the build's placement: the set's, or the first single component's. */
 const pageFor = (t: UpdateTarget, live: LiveSet): CompPageTarget | undefined => pageOf(t.single ? kidsOf(live)[0] : live);
 
@@ -322,7 +396,7 @@ export { nestedFirst };
 const preflight = (p: SetPreview): string | null => (p.blockers.length ? p.blockers.join('; ') : null);
 
 /** Which members this update configures, which it leaves, and why, from the dry run alone. */
-const plan = (p: SetPreview, choice: HandEditChoice, noRecord: NoRecordChoice): { members: Map<string, { keep: Set<string>; accept?: boolean; edited?: Set<string> }>; skipped: SetOutcome['skipped']; around: string[]; kept: { member: string; path: string }[]; unrecorded: string[]; restamp: string[]; earlierRecord: string[] } => {
+const plan = (p: SetPreview, choice: HandEditChoice, noRecord: NoRecordChoice): { members: Map<string, { keep: Set<string>; accept?: boolean; edited?: Set<string> }>; skipped: SetOutcome['skipped']; around: string[]; behind: string[]; kept: { member: string; path: string }[]; unrecorded: string[]; restamp: string[]; earlierRecord: string[] } => {
   const byMember = new Map<string, SetPreview['handEdits']>();
   for (const h of p.handEdits) byMember.set(h.member, [...(byMember.get(h.member) ?? []), h]);
   const members = new Map<string, { keep: Set<string>; accept?: boolean; edited?: Set<string> }>();
@@ -358,8 +432,8 @@ const plan = (p: SetPreview, choice: HandEditChoice, noRecord: NoRecordChoice): 
       // such a destination (`reactions.ts`).
       const d = s.damaged ?? [];
       skipped.push({ member: s.member, reason: 'a layer was added or removed by hand'
-        + (d.length ? `, and it draws other than its plan (${d.slice(0, 3).join('; ')}${d.length > 3 ? '; …' : ''})` : '')
-        + (s.dangling ? `, and its ${REACTIONS} point at a member no longer in the set` : '') });
+        + (d.length ? `, and it draws other than Prism3 expects (${d.slice(0, 3).join('; ')}${d.length > 3 ? '; …' : ''})` : '')
+        + (s.dangling ? `, and its ${REACTIONS} point at a variant no longer in the set` : '') });
       around.push(s.member);
       continue;
     }
@@ -383,7 +457,10 @@ const plan = (p: SetPreview, choice: HandEditChoice, noRecord: NoRecordChoice): 
   // Every member the dry run read as not built by Prism3 is named, the ones off the plan too (a designer's own icon
   // under the def's prefix, #2296): the update never writes them, and the verdict says so rather than leaving them out.
   for (const u of p.unstamped) if (!skipped.some((x) => x.member === u)) skipped.push({ member: u, reason: 'not built by Prism3' });
-  return { members, skipped, around, kept, unrecorded, restamp, earlierRecord };
+  // #3907: a skipped member the dry run read as behind its plan is left out of date by this run.
+  const left = new Set(skipped.map((x) => x.member));
+  const behind = p.states.filter((s) => s.behind && left.has(s.member)).map((s) => s.member);
+  return { members, skipped, around, behind, kept, unrecorded, restamp, earlierRecord };
 };
 
 /** THE LEDGER AFTER AN APPLY (#2909 Q2909.8 A; #3421, owner decision Q39 A): each set the apply acted on, recorded as
@@ -400,7 +477,9 @@ const plan = (p: SetPreview, choice: HandEditChoice, noRecord: NoRecordChoice): 
  *  kept set; it never reads one current while its edits keep the plan out. */
 export const ledgerAfter = (outcomes: readonly SetOutcome[], entryOf: (def: string) => LedgerEntry | null, was: Ledger = {}): Record<string, LedgerEntry> =>
   // #2956: a set left because its updates are off was not written, so its entry stands.
-  Object.fromEntries(outcomes.filter((o) => !o.refused && !o.stopped && !o.off).flatMap((o) => {
+  // #3907: so does a set whose run skipped a member still behind its plan: recorded as current, Update file's due read
+  // would stop offering it while that member is out of date (and, once its updates are turned back on, never again).
+  Object.fromEntries(outcomes.filter((o) => !o.refused && !o.stopped && !o.off && !o.behind?.length).flatMap((o) => {
     const e = entryOf(o.def);
     if (!e) return [];
     const { held: _now, ...rest } = e;
@@ -560,6 +639,7 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
   const work = plan(p, opts.handEdits, opts.noBaseline);
   out.skipped = work.skipped;
   if (work.around.length) out.aroundEdits = work.around;
+  if (work.behind.length) out.behind = work.behind;
   out.unrecorded = work.unrecorded;
   if (work.earlierRecord.length) out.earlierRecord = work.earlierRecord;
   out.kept = work.kept;
@@ -623,6 +703,25 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
       const coord = toCoord(String(c.name ?? ''));
       if (work.members.has(movedTo.get(coord) ?? coord)) rename(c);
     }
+  }
+
+  // ── MERGES (#3392), before the identity is read and before the renames: a member an axis the ledger merges collapses
+  // onto the coordinate of the member it merges into. Every instance of it placed in the file is swapped onto that
+  // member, at the width it had (the merged axis set only the width, so its overrides carry across), and the member is
+  // removed, so the rename block below never sees two members land on one coordinate.
+  for (const mg of p.merges ?? []) {
+    const kids = kidsOf(live);
+    const gone = kids.find((c) => coordKey(String(c.name ?? '')) === coordKey(mg.member)) as MergeNode | undefined;
+    const into = kids.find((c) => coordKey(String(c.name ?? '')) === coordKey(mg.into)) as MergeNode | undefined;
+    if (!gone || !into) continue;
+    const placed = (await gone.getInstancesAsync?.()) ?? [];
+    for (const i of placed) {
+      const w = Number(i.width), h = Number(i.height);
+      i.swapComponent?.(into);
+      if (Number.isFinite(w) && Math.abs(Number(i.width) - w) > 0.5) i.resize?.(w, Number.isFinite(Number(i.height)) ? Number(i.height) : h);
+    }
+    gone.remove?.();
+    (out.merged ??= []).push({ member: mg.member, into: mg.into, instances: placed.length });
   }
 
   // ── THE IDENTITY BEFORE ─────────────────────────────────────────────────────────────────────────────────
@@ -711,7 +810,7 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
       ...(opts.description ? { description: opts.description } : {}),
       ...(opts.yieldTo ? { yieldTo: opts.yieldTo } : {}),
       // #3170 Q3170.5 A: the plugin passes 1, so `yieldTo` is asked after every member and hands the thread back once
-      // about 50 ms of work has run (`main.ts` `paced`). The executor's own chunking is unchanged.
+      // about 50 ms of work has run (the run's `handBack` in `main.ts`, #4476). The executor's own chunking is unchanged.
       ...(opts.chunk ? { chunk: opts.chunk } : {}),
       ...(pageFor(t, live) ? { targetPage: pageFor(t, live) } : {}),
       // A single-component def is built and updated as the build makes it: separate components, no set (#2296).
@@ -768,6 +867,10 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
     });
     if (editedMisses.length) out.editedMisses = editedMisses;
   }
+  // A DECLARED FONT FALLBACK IS NOT A MISS (#4068): the face not installed, the plan's fallback written, as the def allows.
+  const fb = splitFontFallbacks(out.misses, t.plans);
+  out.misses = fb.misses;
+  if (fb.fallbacks.length) out.fallbacks = fb.fallbacks;
 
   // ── VERIFY (a): IDENTITY, OFF THE HOST ─────────────────────────────────────────────────────────────────────
   const now = t.single ? (await liveFor(host, t, p.set)) ?? live
@@ -820,7 +923,7 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
       if (d.field === 'member') continue;
       const at = rel(d.path);
       if ([...keep].some((k) => at === k || at.startsWith(`${k}/`))) continue;
-      out.content.push(`${faultAt(name, at)}.${d.field}: ${d.actual} (the plan says ${d.expected})`);
+      out.content.push(`${faultAt(name, at)}.${d.field}: ${d.actual} (Prism3 expects ${d.expected})`);
     }
     // A PAINT THE PLAN DOES NOT GIVE (#2369). `diffAnatomy` reads the paints a plan declares, so a node the plan
     // leaves unpainted is never checked, and a fill a superseded plan gave it would pass. Read here off the live
@@ -829,8 +932,8 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
       if (!hn || pn.type !== 'FRAME' || [...keep].some((k) => at === k || at.startsWith(`${k}/`))) return;
       const shown = (ps: unknown): number => (Array.isArray(ps) ? ps.filter((x) => (x as { visible?: boolean })?.visible !== false).length : 0);
       // A literal paint (`literalPaints`, #2343 PR 5; WalletButton's ground since #3174) is a paint the plan gives too.
-      if (!pn.paints?.fills && !pn.gradientFill && !pn.literalPaints?.fills && shown(hn.fills)) out.content.push(`${faultAt(name, at)}.fills: ${shown(hn.fills)} paint(s) (the plan says none)`);
-      if (!pn.paints?.strokes && !pn.literalPaints?.strokes && shown(hn.strokes)) out.content.push(`${faultAt(name, at)}.strokes: ${shown(hn.strokes)} paint(s) (the plan says none)`);
+      if (!pn.paints?.fills && !pn.gradientFill && !pn.literalPaints?.fills && shown(hn.fills)) out.content.push(`${faultAt(name, at)}.fills: ${shown(hn.fills)} paint(s) (Prism3 expects none)`);
+      if (!pn.paints?.strokes && !pn.literalPaints?.strokes && shown(hn.strokes)) out.content.push(`${faultAt(name, at)}.strokes: ${shown(hn.strokes)} paint(s) (Prism3 expects none)`);
       const kids = (hn.children ?? []) as (LiveNode & { fills?: unknown; strokes?: unknown })[];
       for (const c of pn.children ?? []) unpainted(c, kids.find((k) => String(k.name ?? '') === c.name), at === '.' ? c.name : `${at}/${c.name}`);
     };
@@ -843,7 +946,7 @@ const applySet = async (host: ApplyHost, api: ComponentsApi, t: UpdateTarget, pr
     const want = plannedRx.get(name);
     if (want && snap.reactions && !keep.has(REACTIONS_PATH)) {
       const planned = want.map((r) => plannedRead(name, r));
-      if (reactionVerdict(planned, snap.reactions).differs) out.content.push(`${name}/${REACTIONS}: ${reactionsText(snap.reactions)} (the plan says ${reactionsText(planned)})`);
+      if (reactionVerdict(planned, snap.reactions).differs) out.content.push(`${name}/${REACTIONS}: ${reactionsText(snap.reactions)} (Prism3 expects ${reactionsText(planned)})`);
     }
   }
   if (work.restamp.length) await restampMembers(now, work.restamp, plans, out, hostOf);
@@ -941,6 +1044,10 @@ const settle = async (host: ApplyHost, targets: readonly UpdateTarget[], preview
   }, snug);
 };
 
+/** The sets a run changed, for the publish description: any member write, a merge included (#4091 review nit). */
+export const changedSets = (outcomes: readonly SetOutcome[]): string[] =>
+  outcomes.filter((o) => !o.refused && (o.updated.length || o.added || o.renamed || o.deprecated.length || o.merged?.length || o.described)).map((o) => o.set);
+
 /**
  * THE ABOUT FRAME AND THE PUBLISH DESCRIPTION (#2858), once a run has written: `res.version` is set by whichever path
  * saved the named version first, the apply's or `settle`'s re-spacing. The frame is redrawn last, so its date is the
@@ -971,9 +1078,11 @@ const finishAbout = async (host: ApplyHost, api: ComponentsApi, preview: UpdateP
   }
   // With no version, no set changed: the library has nothing new to publish, and the description has no title.
   if (!res.version) return;
-  const changed = res.outcomes.filter((o) => !o.refused && (o.updated.length || o.added || o.renamed || o.deprecated.length)).map((o) => o.set);
+  const changed = changedSets(res.outcomes);
   res.publish = publishDescription({
     title: res.version, sets: changed, from: res.about?.from ?? (preview.about?.state === 'stale' ? preview.about.from.engine : null),
+    // #2882 (owner decision A): each set's range starts at its own members' stamps, as the check read them.
+    stampedBy: Object.fromEntries(preview.sets.filter((s) => changed.includes(s.set) && s.engines).map((s) => [s.set, s.engines!])),
     consumerBreaks: res.outcomes.reduce((k, o) => k + (o.breaking?.filter(breaksConsumers).length ?? 0), 0),   // #3711 (Q-UF1 A): a retired member is not breaking
   });
 };
@@ -1018,7 +1127,7 @@ export const applyUpdate = async (
   }
   // PREFLIGHT EVERY SET, before anything is written anywhere.
   const ordered = nestedFirst(targets);
-  const ready: { t: UpdateTarget; p: SetPreview; live: LiveSet; stampOnly?: boolean; carryOnly?: boolean }[] = [];
+  const ready: { t: UpdateTarget; p: SetPreview; live: LiveSet; stampOnly?: boolean; carryOnly?: boolean; descOnly?: boolean }[] = [];
   const furnishing: (SetPreview & { def: string })[] = [];
   for (const t of ordered) {
     const p = preview.sets.find((s) => s.set === (t.plans[0]?.component ?? t.def));
@@ -1039,6 +1148,8 @@ export const applyUpdate = async (
     // writes no member: its fills run alone.
     if (nothing && carryDue(p)) { ready.push({ t, p, live, carryOnly: true }); continue; }
     if (nothing && p.counts.revisionUnknown) { ready.push({ t, p, live, stampOnly: true }); continue; }
+    // #2865: a set whose only other work is its description writes no member: the description alone is written.
+    if (nothing && p.description) { ready.push({ t, p, live, descOnly: true }); continue; }
     // A set whose only work is its canvas furniture (#2803) touches no member: it takes an outcome naming the furniture,
     // which `settle` draws through `opts.furnish` once the apply is done, and the named version below covers it.
     if (nothing && furnitureDueCount(p.furniture)) {
@@ -1049,7 +1160,7 @@ export const applyUpdate = async (
     if (nothing) {
       // A set left alone must not leave a difference the dry run named: each is a failure of this set, by name,
       // the way verify's content check names a field an applied member still holds. Never "already up to date".
-      const left = p.changes.filter((c) => c.field !== 'stamp').map((c) => `${c.sample[0] ?? p.set}/${c.part}.${c.field}: ${c.from} (the plan says ${c.to})`);
+      const left = p.changes.filter((c) => c.field !== 'stamp').map((c) => `${c.sample[0] ?? p.set}/${c.part}.${c.field}: ${c.from} (Prism3 expects ${c.to})`);
       res.outcomes.push({ def: t.def, set: p.set, updated: [], added: 0, renamed: 0, deprecated: [], skipped: [], kept: [], unrecorded: [], handEdits: choiceFor(opts.choices, p.set), identity: [], content: left, misses: [], asPreviewed: { line: previewLine(p), upToDate: setUpToDate(p) } });
       continue;
     }
@@ -1149,7 +1260,7 @@ export const applyUpdate = async (
     if (done.length) res.headers = done.map(({ outcome: _o, ...d }) => d);
     if (h.emptied.length) res.emptied = [...(res.emptied ?? []), ...h.emptied];
   }
-  for (const [i, { t, p, live, stampOnly, carryOnly }] of ready.entries()) {
+  for (const [i, { t, p, live, stampOnly, carryOnly, descOnly }] of ready.entries()) {
     // #3170 Q3170.4 A: "Stop after <set>" is read at each boundary, so the set before it is finished and this one untouched.
     if (i > 0 && opts.stop?.()) { halt(i); break; }
     opts.progress?.({ phase: 'work', item: t.def, done: i, total: ready.length });
@@ -1162,6 +1273,14 @@ export const applyUpdate = async (
       const w = plan(p, choiceFor(opts.choices, p.set), noRecordFor(opts.choices, p.set));
       await restampMembers(fresh, w.restamp, new Map(t.plans.map((x) => [planComponentName(x), x] as const)), o, namesFor(t).hostOf);
       if (p.furniture) o.furniture = p.furniture;
+      describe(fresh, t, p, o);
+      res.outcomes.push(o);
+      continue;
+    }
+    if (descOnly) {
+      const o: SetOutcome = { def: t.def, set: p.set, updated: [], added: 0, renamed: 0, deprecated: [], skipped: [], kept: [], unrecorded: [], handEdits: choiceFor(opts.choices, p.set), identity: [], content: [], misses: [] };
+      if (p.furniture) o.furniture = p.furniture;
+      describe(fresh, t, p, o);
       res.outcomes.push(o);
       continue;
     }
@@ -1185,6 +1304,7 @@ export const applyUpdate = async (
     const o = carryOnly ? { def: t.def, set: p.set, updated: [], added: 0, renamed: 0, deprecated: [], skipped: [], kept: [], unrecorded: [], handEdits: choiceFor(opts.choices, p.set), identity: [], content: [], misses: [] } as SetOutcome : await applySet(host, api, t, p, fresh, { description: opts.descriptionOf?.(t.def), yieldTo: opts.yieldTo, chunk: opts.chunk, handEdits: choiceFor(opts.choices, p.set), noBaseline: noRecordFor(opts.choices, p.set), ledger: opts.ledger });
     // Kept as soon as the set's write returns (#3697 L1), so a throw in its fill below still reports what was written.
     res.outcomes.push(o);
+    if (!o.refused && !o.stopped) describe(fresh, t, p, o);
     // UPDATES OFF, BY ITSELF (#2956, owner decision 2026-11-17): only when this update could not apply around the set's
     // hand edits, so it skipped a member whole for them. The rest of the set is written as usual; the mark stops later
     // runs. A refused or stopped set is not marked: its next run meets the same members and decides then.
@@ -1267,7 +1387,7 @@ export const heldLine = (set: string, h: { members: readonly string[] | number; 
   const k = typeof h.members === 'number' ? h.members : h.members.length;
   // Every change named: the gate's rule is that no change a kept edit holds back goes unsaid (#3421 item 4).
   const named = h.changes.join(', ');
-  return `${set}: hand edits kept on ${n(k, 'member')} keep out ${h.changes.length} of the plan's values (${named}). Listed under Kept edits until Overwrite or Accept as baseline is chosen for it.`;
+  return `${set}: hand edits kept on ${n(k, 'variant')} keep out ${h.changes.length} of Prism3's values (${named}). Listed under Kept edits until Overwrite or Accept as baseline is chosen for it.`;
 };
 
 const NOT_RECORDED = '.asBuilt -> NOT RECORDED';
@@ -1285,6 +1405,17 @@ const unfinishedOf = (o: SetOutcome): { members: string[]; others: string[] } =>
   return { members, others };
 };
 
+/** #4068 (DRAFT wording for the owner): a part written in the fallback face its component declares. */
+export const fallbackLine = (set: string, f: FontFallback): string =>
+  `${set}: ${f.face} isn't installed, so ${n(f.count, f.part)} ${f.count === 1 ? 'uses' : 'use'} ${f.used}, as the component allows.`;
+
+/** #4067 — A SET UPDATED, the one meaning every line of the run gives the words: a set this run wrote to (a member
+ *  written or stamped, a carry filled, its canvas furniture drawn, or the set moved). Not a set refused, stopped, with
+ *  updates off, entered and left as it was (`isIdle`), or given with nothing to write (`asPreviewed`): those wrote
+ *  nothing. The named version, saved before the first write, names the sets the check planned to write; the two agree
+ *  unless the run stopped, refused a set, or the re-spacing moved a set the check did not list. */
+const wroteTo = (o: SetOutcome): boolean => !o.refused && !o.stopped && !o.off && !isIdle(o) && !o.asPreviewed;
+
 /** #3170 Q3170.4 A, DRAFT wording: a run the person stopped at a set boundary. */
 const haltedHeadline = (h: NonNullable<ApplyResult['halted']>): string =>
   h.after ? `⚠ stopped after ${h.after}: ${h.done} of ${n(h.total, 'set')} updated` : '⚠ stopped before writing: nothing updated';
@@ -1296,15 +1427,15 @@ const haltedLine = (h: NonNullable<ApplyResult['halted']>): string =>
 const coverDid = (c: CoverOutcome | undefined): boolean => !!c && c.did !== 'none';
 
 /** A set the apply entered and wrote nothing to (see `idle` in `applyVerdict`). */
-const isIdle = (o: SetOutcome): boolean => !o.refused && !o.stopped && o.skipped.length > 0 && !o.updated.length && !o.added && !o.renamed && !o.deprecated.length && !o.moved && !o.setMoved;
+const isIdle = (o: SetOutcome): boolean => !o.refused && !o.stopped && o.skipped.length > 0 && !o.updated.length && !o.added && !o.renamed && !o.deprecated.length && !o.merged?.length && !o.moved && !o.setMoved;
 
 /** #3711 (Q-UF3 A): `completed` is true when the run went through every set it was given: none stopped, none refused or
  *  left not updated, and no stop asked for. A run that wrote every set and left some to check is `completed` and not
  *  `ok`: Update file's run goes on past it as a warning, as a To add step with problems does (#3308). */
-export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean; headline: string; summary: string; lines: string[]; causes: Cause[] } => {
+export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean; headline: string; summary: string; lines: string[]; causes: Cause[]; sets: number } => {
   if (r.refusedAll) {
     const lines = [`Nothing was updated: ${r.refusedAll}.`];
-    return { ok: false, completed: false, headline: '✗ update refused', summary: lines.join('\n'), lines, causes: [runCause('✗ update refused', r.refusedAll)] };
+    return { ok: false, completed: false, headline: '✗ update refused', summary: lines.join('\n'), lines, causes: [runCause('✗ update refused', r.refusedAll)], sets: 0 };
   }
   const stopped = r.outcomes.find((o) => o.stopped);
   // A miss from the build's own pass is a set not verified, as an identity or content difference is (#2477): the set
@@ -1321,6 +1452,7 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
   const updated = r.outcomes.reduce((k, o) => k + done(o), 0);
   const added = r.outcomes.reduce((k, o) => k + o.added, 0);
   const deprecated = r.outcomes.reduce((k, o) => k + o.deprecated.length, 0);
+  const merged = r.outcomes.reduce((k, o) => k + (o.merged?.length ?? 0), 0);
   const renamed = r.outcomes.reduce((k, o) => k + o.renamed, 0);
   const moved = r.outcomes.reduce((k, o) => k + (o.moved ?? 0), 0);
   const setsMoved = r.outcomes.filter((o) => o.setMoved).length;
@@ -1342,7 +1474,7 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
     for (const u of o.unkept ?? []) lines.push(unkeptLine(o.set, u));
     if (o.stopped) {
       causes.push(cause('bad', o.def, CAUSE_WHAT.stopped, [o.stopped]));
-      lines.push(`${o.set}: stopped (${o.stopped}). ${n(o.updated.length, 'member')} updated; the rest are unchanged and still read as out of date. Run the update again to finish, or undo once to revert it.`);
+      lines.push(`${o.set}: stopped (${o.stopped}). ${n(o.updated.length, 'variant')} updated; the rest are unchanged and still read as out of date. Run Update file again to finish, or undo once to revert it.`);
       continue;
     }
     const parts = [
@@ -1350,12 +1482,16 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
       o.added ? `${o.added} added` : '',
       o.renamed ? `${o.renamed} renamed` : '',
       o.deprecated.length ? `${o.deprecated.length} marked deprecated` : '',
+      // #3392 (DRAFT wording for the owner, #4091 review S1): the dry run's "to merge into another member" as done.
+      o.merged?.length ? `${o.merged.length} merged into another member` : '',
       // DRAFT wording for the owner (#2188 Q173), the dry run's "to move" as done.
       o.moved ? `${o.moved} moved` : '',
       // Wording approved, Q246 A (#2542, Q245.2 A), the dry run's "moves to its place on the page" as done.
       o.setMoved ? 'the set moved to its place on the page' : '',
+      // DRAFT wording for the owner (#2865), the dry run's "description to update" as done.
+      o.described ? (o.described > 1 ? `${o.described} descriptions updated` : 'description updated') : '',
       ...furnitureParts(o.furniture, 'drawn', 'cleared'),
-      o.kept.length ? `${n(o.kept.length, 'hand edit')} ${o.handEdits === 'overwrite' ? 'overwritten' : o.handEdits === 'accept' ? 'accepted as built' : 'kept'}${keptProps(o)}` : '',
+      o.kept.length ? `${n(o.kept.length, 'hand edit')} ${o.handEdits === 'overwrite' ? 'overwritten' : o.handEdits === 'accept' ? 'accepted as baseline' : 'kept'}${keptProps(o)}` : '',
       o.unrecorded.length - (o.earlierRecord?.length ?? 0) ? `${o.unrecorded.length - (o.earlierRecord?.length ?? 0)} of them without an as-built record` : '',
       // The owner's wording (2026-10-09).
       o.earlierRecord?.length ? `${o.earlierRecord.length} of them recorded by an earlier plugin version` : '',
@@ -1372,20 +1508,22 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
     // DRAFT wording for the owner (#2649): the placed instances whose rows became slot items.
     if (o.carriedText) lines.push(`${o.set}: ${n(o.carriedText.instances, 'instance')} carried: ${n(o.carriedText.moved, 'body', 'bodies')} moved into the text property, ${o.carriedText.rich} kept in the slot, ${o.carriedText.emptied} left empty.`);
     if (o.carried) lines.push(`${o.set}: ${n(o.carried.instances, 'instance')} carried into the slot, ${n(o.carried.items, 'item')} in all.${o.carried.limits.length ? ` Outside the slot's limits: ${o.carried.limits.join('; ')}.` : ''}`);
+    // #4068 (DRAFT wording for the owner): a declared font fallback, one line per part and face, never ⚠.
+    for (const f of o.fallbacks ?? []) lines.push(fallbackLine(o.set, f));
     const at = lines.length;
     if (o.identity.length) lines.push(`${o.set}: component IDs changed — ${o.identity.slice(0, 3).join('; ')}${o.identity.length > 3 ? '; …' : ''}.`);
-    if (o.content.length) lines.push(`${o.set}: ${n(o.content.length, 'field')} still ${o.content.length === 1 ? 'differs' : 'differ'} from the plan — ${o.content.slice(0, 3).join('; ')}${o.content.length > 3 ? '; …' : ''}.`);
+    if (o.content.length) lines.push(`${o.set}: ${n(o.content.length, 'field')} still ${o.content.length === 1 ? 'differs' : 'differ'} from what Prism3 expects — ${o.content.slice(0, 3).join('; ')}${o.content.length > 3 ? '; …' : ''}.`);
     // DRAFT wording for the owner (#2477, the issue's option A): a member written but not finished, by name.
     const { members, others } = unfinishedOf(o);
     if (members.length) {
       lines.push(members.length === 1
-        ? `${o.set}: 1 member not finished — ${members[0]} (its as-built record could not be written). It still reads as out of date; run the update again to finish it.`
-        : `${o.set}: ${members.length} members not finished — ${members.join(', ')} (their as-built records could not be written). They still read as out of date; run the update again to finish them.`);
+        ? `${o.set}: 1 variant not finished — ${members[0]} (its as-built record could not be written). It still reads as out of date; run Update file again to finish it.`
+        : `${o.set}: ${members.length} variants not finished — ${members.join(', ')} (their as-built records could not be written). They still read as out of date; run Update file again to finish them.`);
     }
     // DRAFT wording for the owner (#2477): any other miss the build's pass reported, with its own reason.
     // #2956 point 4 (Q1 A, DRAFT wording for the owner): what the build left because the member is hand-edited, apart
     // from the misses and never ⚠.
-    if (o.editedMisses?.length) lines.push(`${o.set}: not written because the member is hand-edited — ${o.editedMisses.slice(0, 3).join('; ')}${o.editedMisses.length > 3 ? '; …' : ''}.`);
+    if (o.editedMisses?.length) lines.push(`${o.set}: not written because the variant is hand-edited — ${o.editedMisses.slice(0, 3).join('; ')}${o.editedMisses.length > 3 ? '; …' : ''}.`);
     if (others.length) lines.push(`${o.set}: ${n(others.length, 'part')} not written as planned — ${others.slice(0, 3).join('; ')}${others.length > 3 ? '; …' : ''}.`);
     // The set is not verified by exactly the lines above (identity, content, a member not finished, a part not written).
     if (o.identity.length || o.content.length || o.misses.length) {
@@ -1407,17 +1545,20 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
     // A stop the person asked for: each set it left is not updated, and the stop is the reason.
     for (const def of r.halted.leftDefs) causes.push(cause('warn', def, CAUSE_WHAT.notUpdated, [haltedLine(r.halted)]));
   }
-  if (r.missing.length) lines.push(`Not in this file: ${r.missing.join(', ')}.`);
+  if (r.missing.length) lines.push(`Not in this file: ${r.missing.join(', ')}. Build them first, then run Update file again.`);
   // #2858: the Cover page's About frame, drawn last.
   // #2859: the library cover, kept current before it.
   if (r.cover && coverLine(r.cover)) lines.push(coverLine(r.cover));
   if (r.about) lines.push(aboutLine(r.about));
+  // #4067 (DRAFT wording for the owner): the sets to check, by name, so the headline's count names what it counts.
+  const completedRun = !stopped && !r.halted && !refused;
+  if (completedRun && failed.length) lines.push(`To check: ${failed.map((o) => o.set).join(', ')}. The lines above say what differs on each.`);
   if (r.version) lines.push(`Saved a version first: "${r.version}".`);
   else if (r.aboutOnly && (r.about?.drawn || coverDid(r.cover))) lines.push(coverPageOnlyLine({ about: !!r.about?.drawn, cover: coverDid(r.cover) }, true));
-  const completed = !stopped && !r.halted && !refused;
-  // #3711 (Q-UF3 A, DRAFT wording): every set written, some left to check. The count is the sets the run wrote,
-  // those to check among them; each one's lines above name what differs.
-  const written = r.outcomes.filter((o) => !o.refused && !o.stopped && !o.off && !isIdle(o)).length;
+  const completed = completedRun;
+  // #3711 (Q-UF3 A, DRAFT wording): every set written, some left to check. The count is the sets the run wrote
+  // (`wroteTo`, #4067), those to check after it; the To check line names them.
+  const written = r.outcomes.filter(wroteTo).length;
   const headline = stopped ? `✗ update stopped at ${stopped.set}`
     : r.halted ? haltedHeadline(r.halted)
     // A set not updated stops the run, so it heads the verdict over any set to check beside it.
@@ -1426,6 +1567,8 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
         : updated ? `✓ updated ${updated} in place`
           : added ? `✓ added ${added}`
             : deprecated ? `✓ ${deprecated} marked deprecated`
+              // DRAFT wording for the owner (#3392, #4091 review S1): a run whose only member write was a merge.
+              : merged ? `✓ ${merged} merged into another member`
               : renamed ? `✓ renamed ${renamed}`
                 : moved ? `✓ moved ${moved}`
                   // DRAFT wording for the owner: sets moved AND pages reordered in one run, the two approved headlines
@@ -1439,7 +1582,7 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
                       // DRAFT wording for the owner (#3172): a run whose only work was a block header.
                       : headers ? `✓ ${n(headers, 'section header')} placed`
                       // DRAFT wording for the owner (#2803, Q379 A): a run whose only work was the canvas furniture.
-                      : furnished ? `✓ canvas furniture drawn for ${n(furnished, 'set')}`
+                      : furnished ? `✓ labels and panels drawn for ${n(furnished, 'set')}`
                         // DRAFT wording for the owner (#2858): a run whose only work was the About frame.
                         : r.about?.drawn ? `✓ ${ABOUT_NAME} drawn`
                           // DRAFT wording for the owner (#2859): a run whose only work was the cover.
@@ -1452,8 +1595,8 @@ export const applyVerdict = (r: ApplyResult): { ok: boolean; completed: boolean;
   // DRAFT wording for the owner: the line that introduces the partial result.
   if (r.failed) {
     const all = [`The update failed: ${r.failed}. What is listed below was done before it.`, ...lines];
-    return { ok: false, completed: false, headline: '✗ update failed', summary: all.join('\n'), lines: all, causes: mergeCauses([runCause('✗ update failed', r.failed), ...causes]) };
+    return { ok: false, completed: false, headline: '✗ update failed', summary: all.join('\n'), lines: all, causes: mergeCauses([runCause('✗ update failed', r.failed), ...causes]), sets: written };
   }
   const ok = !stopped && !r.halted && !failed.length && !refused;
-  return { ok, completed, headline: `${headline}${held ? ` · ${n(held, 'set')} kept edits over changes` : ''}${breakingClause(r.outcomes)}`, summary: lines.join('\n'), lines, causes: ok ? [] : mergeCauses(causes) };
+  return { ok, completed, headline: `${headline}${held ? ` · ${n(held, 'set')} kept edits over changes` : ''}${breakingClause(r.outcomes)}`, summary: lines.join('\n'), lines, causes: ok ? [] : mergeCauses(causes), sets: written };
 };

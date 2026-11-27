@@ -85,10 +85,12 @@
  *                 file components.
  *
  * INDEPENDENCE (docs/34): every expected number and string is written out here, never read off `canvas-furniture.ts`
- * or `furniture-templates.ts`. The positions on real sets are measured off the shim's nodes by this file.
+ * or `furniture-templates.ts`. The positions on real sets are measured off the shim's nodes by this file. One expected
+ * list is read instead of written: which defs build a set, from the authored surface baseline (`rollout/switch`, #4510).
  *
  * Run: `npx tsx apps/plugin/test-canvas-furniture.ts`
  */
+import { readFileSync } from 'node:fs';
 import { figmaAnatomySet, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, planComponentName, planSetLayout, type AnatomyPlan, componentDefs } from '@prism3/engine/components';
 import { applyComponentPlan, placeNewSet, STAMP_KEY } from './src/write-components';
 import { SWAP_TARGET } from './src/build-deps';
@@ -300,7 +302,7 @@ section('draw — the executor places, tags, redraws and clears');
   ok(buildItems.length === 1 && buildItems[0] === both,
     `templates/missing build: one line for the run, naming both templates and Set up file (${JSON.stringify(buildItems)})`);
   const updateItems = furnitureItems([none], 'update');
-  ok(updateItems.length === 1 && updateItems[0] === both.replace('then build again', 'then update again'),
+  ok(updateItems.length === 1 && updateItems[0] === both.replace('then build again', 'then run Update file again'),
     `templates/missing update: the update's line asks for an update again (${JSON.stringify(updateItems)})`);
   // Only `_Label` missing: the backdrop is drawn, and the line names the labels alone.
   const noLabel = await drawFurniture(fakeTemplates({ labels: false }), set, handLayout, 'grid');
@@ -327,11 +329,11 @@ section('draw — the executor places, tags, redraws and clears');
   ]), `templates/cause build: one cause per set that lacked a template, the template line its reason (${JSON.stringify(built.causes)})`);
   const updated = withTemplateWarning({ ok: true, headline: '✓ updated 3 in place', causes: [] as Cause[] }, [noLabel], 'update');
   ok(JSON.stringify(updated.causes) === JSON.stringify([{ kind: 'warn', subject: 'grid', what: 'updated with problems',
-    reasons: ['No canvas labels drawn: this file has no _Label component. Run Set up file, then update again.'] }]),
+    reasons: ['No canvas labels drawn: this file has no _Label component. Run Set up file, then run Update file again.'] }]),
     `templates/cause update: the update's cause names the set and the update's line (${JSON.stringify(updated.causes)})`);
   // A set the verdict already holds a cause for keeps one cause: its reasons first, the template line after.
   const merged = withTemplateWarning({ ok: false, headline: '⚠ 1 set not verified', causes: [{ kind: 'warn', subject: 'grid', what: 'not verified', reasons: ['1 field still differs'] }] as Cause[] }, [none], 'update');
-  ok(merged.causes.length === 1 && merged.causes[0].what === 'not verified' && JSON.stringify(merged.causes[0].reasons) === JSON.stringify(['1 field still differs', `${both.replace('then build again', 'then update again')}.`]),
+  ok(merged.causes.length === 1 && merged.causes[0].what === 'not verified' && JSON.stringify(merged.causes[0].reasons) === JSON.stringify(['1 field still differs', `${both.replace('then build again', 'then run Update file again')}.`]),
     `templates/cause merge: one cause per set, the template line after the set's own reason (${JSON.stringify(merged.causes)})`);
   const clean = { ok: true, headline: '✓ built 8', causes: [] as Cause[] };
   ok(withTemplateWarning(clean, [o, again], 'build') === clean, `templates/cause none: a file with both templates leaves the verdict and its causes as they were`);
@@ -348,9 +350,9 @@ section('draw — the executor places, tags, redraws and clears');
     { kind: 'note', subject: null, what: `${HEAD}.`, reasons: ['Run Set up file, then build again.'] },
     { kind: 'warn', subject: 'badge', what: 'built with problems', reasons: ['No canvas labels drawn: this file has no _Label component. Run Set up file, then build again.'] },
   ]), `#3467 doc-block/label still warns: _Label missing too, the run is ⚠ for _Label alone, the usage panels a note (${JSON.stringify(bothB.causes)})`);
-  ok(docBlockLine([noBlock], 'build', { theme: false, lacks: ['badge', 'tag', 'list-item', 'divider'] }) === `${HEAD}, and it is built from the theme. Apply the theme, then build again`,
+  ok(docBlockLine([noBlock], 'build', { theme: false, lacks: ['badge', 'tag', 'list-item', 'divider'] }) === `${HEAD}, and it is built from the theme. Run Update file with Theme ticked, then build again`,
     `#3467 doc-block/fix no theme: the theme first ("${docBlockLine([noBlock], 'build', { theme: false, lacks: ['badge'] })}")`);
-  ok(docBlockLine([noBlock], 'update', { theme: true, lacks: ['list-item'] }) === `${HEAD}. Build list-item, then run Set up file and update again`,
+  ok(docBlockLine([noBlock], 'update', { theme: true, lacks: ['list-item'] }) === `${HEAD}. Build list-item, then run Set up file and run Update file again`,
     `#3467 doc-block/fix sets: the sets it lacks, then Set up file ("${docBlockLine([noBlock], 'update', { theme: true, lacks: ['list-item'] })}")`);
   ok(docBlockLine([noBlock], 'build', { theme: true, lacks: [] }) === `${HEAD}. Run Set up file, then build again`,
     `#3467 doc-block/fix ready: everything in the file, Set up file alone ("${docBlockLine([noBlock], 'build', { theme: true, lacks: [] })}")`);
@@ -509,11 +511,11 @@ section('group / panel / backdrop — Button, built by the real executor');
   const c0 = pre.counts;
   ok(c0.move === MOVES && c0.current === 576 && c0.update + c0.add + c0.drop + c0.rename + c0.handEdited + c0.noBaseline + c0.unstamped + c0.revisionUnknown === 0 && pre.moves.length === 0 && pre.positions?.length === MOVES,
     `group/existing dry run: an old-layout Button reports ${MOVES} moves and nothing else — no rename, add, drop or hand edit (${JSON.stringify(c0)})`);
-  ok(previewLine(pre) === `button: 576 members. ${MOVES} to move.` && previewVerdict({ sets: [pre], missing: [], refused: [] }).headline === 'Would change 1 of 1',
+  ok(previewLine(pre) === `button: 576 variants. ${MOVES} to move.` && previewVerdict({ sets: [pre], missing: [], refused: [] }).headline === 'Would change 1 of 1',
     `group/existing dry run line: the moves are named (${previewLine(pre)})`);
   // FURNITURE ONLY OVER ONE INVERSE BLOCK: on the ungrouped set nothing is drawn, so no backdrop or bracket per band.
   const un = await drawFurniture(fakeTemplates(), set, furnitureLayout(plans), 'button');
-  ok(furnitureOn(page).length === 0 && un.backdrops + un.rows + un.columns === 0 && un.skipped.length === 1 && /inverse rows are not in one block yet/.test(un.skipped[0]),
+  ok(furnitureOn(page).length === 0 && un.backdrops + un.rows + un.columns === 0 && un.skipped.length === 1 && /inverse rows aren't together yet/.test(un.skipped[0]),
     `furniture/ungrouped: an ungrouped set gets no labels and no backdrop, and says why (${furnitureOn(page).length}, ${JSON.stringify(un.skipped)})`);
 
   // THE UPDATE'S APPLY moves them: the grid re-laid in place, every id kept, nothing rewritten.
@@ -526,7 +528,7 @@ section('group / panel / backdrop — Button, built by the real executor');
   const v1 = applyVerdict(res);
   ok(v1.ok && v1.headline === `✓ moved ${MOVES}` && v1.lines[0] === `button: ${MOVES} moved.`, `update/apply verdict: ${v1.headline} / ${v1.lines[0]}`);
   const next = (await previewUpdate(host, [{ def: 'button', plans }])).sets[0];
-  ok(next.counts.move === undefined && next.positions === undefined && previewLine(next) === 'button: up to date (576 members).',
+  ok(next.counts.move === undefined && next.positions === undefined && previewLine(next) === 'button: up to date (576 variants).',
     `update/next dry run: reads current after the apply (${previewLine(next)})`);
 
   // A MEMBER PRISM3 DIDN'T BUILD, ON A PLANNED COORDINATE AND OFF THE GRID (#2471 review): Prism3 never touches a
@@ -562,7 +564,7 @@ section('group / panel / backdrop — Button, built by the real executor');
     // And a set that IS up to date still reads so, on the dry run and on the apply.
     const p5 = (await previewUpdate(host, [{ def: 'button', plans }]));
     const r5 = applyVerdict(await applyUpdate(host as never, bApi as never, [{ def: 'button', plans }], previewHashOf(p5)));
-    ok(previewLine(p5.sets[0]) === 'button: up to date (576 members).' && r5.headline === '✓ already up to date' && r5.lines[0] === 'button: already up to date.',
+    ok(previewLine(p5.sets[0]) === 'button: up to date (576 variants).' && r5.headline === '✓ already up to date' && r5.lines[0] === 'button: already up to date.',
       `unbuilt/up to date: with the member Prism3's again, the dry run reads up to date and the apply "already up to date" (${previewLine(p5.sets[0])} | ${r5.headline} | ${r5.lines[0]})`);
   }
   // ITS HEIGHT STILL COUNTS (#2471 review, UI lane): a member Prism3 didn't build is never moved, but the executor's
@@ -584,7 +586,7 @@ section('group / panel / backdrop — Button, built by the real executor');
     const grew = Number(own.height);
     const at = JSON.stringify([own.x, own.y]);
     const p3 = (await previewUpdate(host, [{ def: 'button', plans }])).sets[0];
-    ok(grew === hWas + 40 && previewLine(p3) === 'button: 576 members. 558 to move, 1 not built by Prism3.' && !p3.positions?.includes(String(own.name)),
+    ok(grew === hWas + 40 && previewLine(p3) === 'button: 576 variants. 558 to move, 1 not built by Prism3.' && !p3.positions?.includes(String(own.name)),
       `unbuilt/row height: a member Prism3 didn't build, taller than its row, moves every row below it, and is not itself a move (${hWas} → ${grew}px; ${previewLine(p3)})`);
     const r3 = await applyUpdate(host as never, bApi as never, [{ def: 'button', plans }], previewHashOf(await previewUpdate(host, [{ def: 'button', plans }])));
     const v3 = applyVerdict(r3);
@@ -609,7 +611,7 @@ section('group / panel / backdrop — Button, built by the real executor');
     Object.defineProperty(own, 'width', { configurable: true, enumerable: wDesc.enumerable, get: () => wWas + 400 });
     const grew = Number(own.width);
     const p4 = (await previewUpdate(host, [{ def: 'button', plans }])).sets[0];
-    ok(grew === wWas + 400 && previewLine(p4) === 'button: 576 members. 480 to move, 1 not built by Prism3.' && !p4.positions?.includes(String(own.name)),
+    ok(grew === wWas + 400 && previewLine(p4) === 'button: 576 variants. 480 to move, 1 not built by Prism3.' && !p4.positions?.includes(String(own.name)),
       `unbuilt/column width: a member Prism3 didn't build, wider than its column, moves every column to its right, and is not itself a move (${wWas} → ${grew}px; ${previewLine(p4)})`);
     own.setSharedPluginData(NS, STAMP_KEY, stampWas);
     Object.defineProperty(own, 'width', wDesc);
@@ -755,7 +757,7 @@ section('columns — radio-control: every column label reads in full, the column
   // AN EXISTING FILE: the set as a build before this fix left it, its grid unwidened. The update corrects it in place:
   // the apply (nothing to write) then the furniture, as `main.ts` runs an update.
   const pre = (await previewUpdate(host, targets)).sets[0];
-  ok(!!pre && previewLine(pre) === `radio-control: up to date (${members.length} members).`, `premise: a set built before the fix reads up to date (${pre ? previewLine(pre) : 'no set read'})`);
+  ok(!!pre && previewLine(pre) === `radio-control: up to date (${members.length} variants).`, `premise: a set built before the fix reads up to date (${pre ? previewLine(pre) : 'no set read'})`);
   await applyUpdate(host as never, api as never, targets, previewHashOf(await previewUpdate(host, targets)));
   const o = await drawFurniture(fakeTemplates(), set, furnitureLayout(plans), 'radio-control');
   const cols = furnitureOn(page).filter((n) => Number(n.y) < Number(set.y));
@@ -779,7 +781,7 @@ section('columns — radio-control: every column label reads in full, the column
   ok(members.every((m) => ids.get(String(m.name)) === String(m.id)), `columns/in place: every member keeps its id`);
   // THE NEXT DRY RUN READS THE WIDENED GRID AS UP TO DATE: no member to move back.
   const next = (await previewUpdate(host, targets)).sets[0];
-  ok(!!next && previewLine(next) === `radio-control: up to date (${members.length} members).` && !next.counts.move,
+  ok(!!next && previewLine(next) === `radio-control: up to date (${members.length} variants).` && !next.counts.move,
     `columns/converges: the next dry run reads up to date, nothing to move (${next ? previewLine(next) : 'no set read'})`);
   // AND THE NEXT UPDATE'S LAY OUT PASS KEEPS IT: the executor reads the recorded width, before any furniture redraw.
   // An update with nothing to write never lays the grid out, so one member is stamped by an earlier executor revision:
@@ -997,8 +999,8 @@ section('scrim — Dialog: the backdrop is furniture behind each center, bottom 
     const want = p === 'center' ? { x: b.x - 12, y: b.y - 12, w: b.w + 24, h: b.h + 24 } : p === 'end' ? { x: b.x - 12, y: b.y, w: b.w + 12, h: b.h } : { x: b.x, y: b.y - 12, w: b.w, h: b.h + 12 };
     return scrims.some((n) => Number(n.x) === want.x && Number(n.y) === want.y && Number(n.width) === want.w && Number(n.height) === want.h);
   });
-  ok(o.scrims === 20 && scrims.length === 20 && spanned,
-    `scrim/drawn: 20 scrims, one fitted to each of the 12 center, 4 bottom and 4 end members, none for the 4 full ones (${o.scrims}, ${scrims.length})`);
+  ok(o.scrims === 12 && scrims.length === 12 && spanned,
+    `scrim/drawn: 12 scrims, one fitted to each of the 4 center (one per footer since #3392 A), 4 bottom and 4 end members, none for the 4 full ones (${o.scrims}, ${scrims.length})`);
   ok(scrims.every((n) => page.children.indexOf(n) < page.children.indexOf(set)) && !members.some((m) => /scrim/.test(String(m.name))),
     'scrim/behind and outside: every scrim is under the set on the page, and no member of the set is a scrim');
   const fullBoxes = members.filter((m) => valuesOf(String(m.name)).placement === 'full').map((m) => boxOf(set, m));
@@ -1018,13 +1020,27 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
   // THE SWITCH COVERS EVERY SET. The oracle is the def registry, never the engine's list: every def with Figma
   // properties builds a set, except the three that build single components (`emitAsComponents`), which have no grid:
   // Icon, Provider logo (#2343) and Spinner.
-  // A SET OF ONE MEMBER HAS NO GRID (#4008): Popover builds one member, so there is no row or column to label and it
-  // takes no furniture. Named here, never derived, so a second one-member set fails the count by name.
-  const ONE_MEMBER = ['popover'];
+  // A SET OF ONE MEMBER HAS NO GRID (#4008): Popover, Menu and Menu.Group each build one member, so there is no row or column to label and each
+  // takes no furniture. Named here, never derived, so a second one-member set fails by name: the baseline records it with one
+  // member, and `rollout/switch` names it as a one-member set missing from this list (#4510).
+  const ONE_MEMBER = ['popover', 'menu', 'menu-group'];
+  const SINGLE = ['icon', 'provider-logo', 'spinner'];
   const withSet = componentDefs.filter((d) => d.figmaProperties && !d.figmaProperties.emitAsComponents && !ONE_MEMBER.includes(d.id)).map((d) => d.id);
   const single = componentDefs.filter((d) => d.figmaProperties?.emitAsComponents).map((d) => d.id);
-  ok(withSet.length === 60 && withSet.every(hasFurniture) && JSON.stringify(single) === JSON.stringify(['icon', 'provider-logo', 'spinner']) && !single.some(hasFurniture),
-    `rollout/switch: all 60 defs that build a set of more than one member have furniture; Icon, Provider logo and Spinner, single components, do not (off: ${JSON.stringify(withSet.filter((id) => !hasFurniture(id)))})`);
+  // WHICH SETS, BY NAME, NOT HOW MANY (#4510). This held `withSet.length === <n>`, a count every new set raised by
+  // hand. Two PRs that each added a set each wrote n+1, git merged the identical lines, and the merged tree held n+2:
+  // #4260 went 60 → 61 on both sides when 62 was true, and only the merge queue's full run caught it. The expected
+  // list is now the authored surface baseline's: each default projection (a key with no `@`) of more than one member,
+  // less the three single components. Only `lint-component-surface.ts --accept` writes that file, so it is not derived
+  // from the registry filter above (docs/34), and two PRs that each add a set each add their own key, which merges
+  // to both. A def that leaves `withSet`, or a set the baseline does not hold, fails here by id.
+  const surface = JSON.parse(readFileSync(new URL('../../packages/engine/schema/component-surface.json', import.meta.url), 'utf8')).defs as Record<string, { members: number } | null>;
+  const recorded = Object.entries(surface).filter(([id, s]) => !id.includes('@') && s !== null && s.members > 1 && !SINGLE.includes(id)).map(([id]) => id);
+  const missing = recorded.filter((id) => !withSet.includes(id));
+  const oneMember = withSet.filter((id) => surface[id]?.members === 1);
+  const extra = withSet.filter((id) => !recorded.includes(id) && !oneMember.includes(id));
+  ok(recorded.length > 0 && !missing.length && !extra.length && !oneMember.length && withSet.every(hasFurniture) && JSON.stringify(single) === JSON.stringify(SINGLE) && !single.some(hasFurniture),
+    `rollout/switch: all ${withSet.length} defs that build a set of more than one member have furniture, the ${recorded.length} the surface baseline records; Icon, Provider logo and Spinner, single components, do not (not built: ${JSON.stringify(missing)}; not in the baseline: ${JSON.stringify(extra)}; one member in the baseline, not in ONE_MEMBER: ${JSON.stringify(oneMember)}; off: ${JSON.stringify(withSet.filter((id) => !hasFurniture(id)))})`);
   ok(ONE_MEMBER.every((id) => componentDefs.some((d) => d.id === id) && !hasFurniture(id)),
     `rollout/one member: ${ONE_MEMBER.join(', ')} builds a set of one member and has no furniture (${JSON.stringify(ONE_MEMBER.filter(hasFurniture))})`);
 
@@ -1077,7 +1093,7 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
       ok(res.outcomes[0]?.moved === want, `rollout/${id} apply: ${want} moved (${applyVerdict(res).lines[0]})`);
     }
     const next = (await previewUpdate(host, targets)).sets[0];
-    ok(!!next && previewLine(next) === `${id}: up to date (${members.length} members).` && members.every((m) => Number(m.x) === built.get(String(m.name))!.x && Number(m.y) === built.get(String(m.name))!.y),
+    ok(!!next && previewLine(next) === `${id}: up to date (${members.length} variants).` && members.every((m) => Number(m.x) === built.get(String(m.name))!.x && Number(m.y) === built.get(String(m.name))!.y),
       `rollout/${id} converges: the next dry run reads up to date, every member back where a fresh build puts it (${next ? previewLine(next) : 'no set read'})`);
 
     const o = await drawFurniture(fakeTemplates(), set, furnitureLayout(plans), id);
@@ -1088,7 +1104,7 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
     ok(due.labels + due.backdrops === 0 && due.clear === 0, `rollout/${id} due: nothing due right after the draw (${JSON.stringify(due)})`);
     const surfaces = new Set(members.map((m) => valuesOf(String(m.name)).surface).filter(Boolean));
     // THE SCRIMS (#2609, #2877, #2880): Dialog alone, one behind each of its 12 center, 4 bottom and 4 end members; every other def none.
-    ok(o.scrims === (id === 'dialog' ? 20 : 0), `rollout/${id} scrims: ${id === 'dialog' ? '20, behind the center, bottom and end members' : 'none'} (${o.scrims})`);
+    ok(o.scrims === (id === 'dialog' ? 12 : 0), `rollout/${id} scrims: ${id === 'dialog' ? '12, behind the center, bottom and end members' : 'none'} (${o.scrims})`);
     ok(o.columns + o.rows > 0 && o.skipped.length === 0 && furn.length === o.columns + o.rows + o.backdrops + o.scrims,
       `rollout/${id} drawn: ${o.columns} column and ${o.rows} row labels, nothing skipped (${JSON.stringify(o.skipped)})`);
     ok(BACKDROP.has(id) ? o.backdrops === 1 && surfaces.has('inverse') : o.backdrops === 0,
@@ -1120,6 +1136,8 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
     // #2661: Button.Group joins the Button family's page.
     Buttons: ['button', 'button-destructive', 'button-neutral', 'button-group'],
     'Icon button': ['icon-button', 'icon-button-destructive', 'icon-button-neutral'],
+    // #4112: the toggle pair on its own page.
+    'Toggle button': ['toggle-button', 'toggle-icon-button'],
     Checkbox: ['checkbox-control', 'checkbox-row', 'checkbox-group'],
     Radio: ['radio-control', 'radio-row', 'radio-group'],
     Switch: ['switch-control', 'switch-row'],
@@ -1131,11 +1149,15 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
     'Segmented control': ['segmented-control-segment', 'segmented-control'],
     Accordion: ['_accordion-indicator', 'accordion'],
     List: ['list-item', 'list'],
+    // #4007: Menu.Item builds first, then the group and the menu, whose slots hold it.
+    Menu: ['menu-item', 'menu-group', 'menu'],
     // #2666 Q382 A, #2989 Q656 A: the breadcrumb separator and step join the Breadcrumbs page, first, as the Accordion
     // indicator joins the Accordion's.
     Breadcrumbs: ['_breadcrumb-separator', 'breadcrumb-item', 'breadcrumbs'],
     // #3345: PageNav.Item builds first on the Page navigation page, as Breadcrumbs' item does.
     'Page navigation': ['page-nav-item', 'page-nav'],
+    // #3055: StepItem builds first on the Steps page, as Breadcrumbs' item does.
+    Steps: ['step-item', 'steps'],
     // #2665: Pagination.Item and the row.
     Pagination: ['pagination-item', 'pagination'],
     // #2669: the Slider's thumb builds first on its page.
@@ -1146,7 +1168,7 @@ section('rollout — every def that builds a set: drawn, converged, and clear of
   // Sets only: Icons & assets holds two defs since #3148, Icon and Provider logo, and both build single components.
   const buildsSet = (id: string): boolean => !componentDefs.find((d) => d.id === id)?.figmaProperties?.emitAsComponents;
   const fromTaxonomy = Object.fromEntries(allLeaves().filter(({ leaf }) => leaf.defs.filter(buildsSet).length > 1).map(({ leaf }) => [leaf.page, [...leaf.defs]]));
-  ok(JSON.stringify(fromTaxonomy) === JSON.stringify(SHARED), `clearance/pages: the sixteen pages that hold more than one set (${JSON.stringify(Object.keys(fromTaxonomy))})`);
+  ok(JSON.stringify(fromTaxonomy) === JSON.stringify(SHARED), `clearance/pages: the seventeen pages that hold more than one set (${JSON.stringify(Object.keys(fromTaxonomy))})`);
   const box = (n: FNode) => ({ x: Number(n.x), y: Number(n.y), w: Number(n.width), h: Number(n.height) });
   const meets = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   for (const [name, ids] of Object.entries(SHARED)) {
@@ -1424,14 +1446,14 @@ section('due — furniture the page lacks is listed by the dry run, drawn by the
     `premise: Button's labels are drawn and its backdrop is not, for want of the template (${first.columns} + ${first.rows}, ${first.backdrops}; missing ${JSON.stringify(first.missing)})`);
   // A template the file still lacks is not a change: the apply could not draw it.
   const absent = await previewUpdate(host, targets);
-  ok(!absent.sets[0].furniture && previewLine(absent.sets[0]) === 'button: up to date (576 members).',
+  ok(!absent.sets[0].furniture && previewLine(absent.sets[0]) === 'button: up to date (576 variants).',
     `due/template absent: a backdrop with no template to draw it from is not listed (${previewLine(absent.sets[0])})`);
   withBackdrop = true;
   const members = (): string => JSON.stringify((set.children as FNode[]).map((m) => [m.id, m.x, m.y, (m.getSharedPluginData as (a: string, b: string) => string)(NS, STAMP_KEY)]));
   const membersWas = members();
   const pre = await previewUpdate(host, targets);
   const v = previewVerdict(pre);
-  ok(JSON.stringify(pre.sets[0].furniture) === JSON.stringify({ labels: 0, backdrops: 1, clear: 0 }) && previewLine(pre.sets[0]) === 'button: 576 members. 1 backdrop to draw.' && v.headline === 'Would change 1 of 1',
+  ok(JSON.stringify(pre.sets[0].furniture) === JSON.stringify({ labels: 0, backdrops: 1, clear: 0 }) && previewLine(pre.sets[0]) === 'button: 576 variants. 1 backdrop to draw.' && v.headline === 'Would change 1 of 1',
     `due/dry run lists: with the template added, the dry run lists the one backdrop to draw and nothing else (${JSON.stringify(pre.sets[0].furniture)}; ${previewLine(pre.sets[0])}; ${v.headline})`);
   const versions = (api as { _versions?: string[] })._versions;
   const res = await applyUpdate(host as never, api as never, targets, previewHashOf(pre));
@@ -1439,7 +1461,7 @@ section('due — furniture the page lacks is listed by the dry run, drawn by the
   const av = applyVerdict(res);
   const bds = furnitureOn(page).filter((n) => tagOf(n).kind === 'backdrop');
   ok(!res.refusedAll && drawn[0]?.backdrops === 1 && bds.length === 1 && members() === membersWas
-    && av.headline === '✓ canvas furniture drawn for 1 set' && av.lines[0] === 'button: 1 backdrop drawn.' && (versions ?? []).at(-1) === 'Saved before Prism3 updated button',
+    && av.headline === '✓ labels and panels drawn for 1 set' && av.lines[0] === 'button: 1 backdrop drawn.' && (versions ?? []).at(-1) === 'Saved before Prism3 updated button',
     `due/apply draws: the apply saves a version and draws the backdrop, and every member keeps its id, place and stamp (${res.refusedAll ?? 'applied'}; ${bds.length} backdrop(s); ${av.headline} / ${av.lines[0]}; ${JSON.stringify((versions ?? []).at(-1))})`);
   const next = await previewUpdate(host, targets);
   ok(!next.sets[0].furniture && previewVerdict(next).headline === '✓ All sets up to date',
@@ -1447,7 +1469,7 @@ section('due — furniture the page lacks is listed by the dry run, drawn by the
   // STALE: the designer moves the set; its furniture stays behind, so every part is listed again, and one apply converges.
   set.x = Number(set.x) + 500;
   const moved = await previewUpdate(host, targets);
-  ok(JSON.stringify(moved.sets[0].furniture) === JSON.stringify({ labels: 41, backdrops: 1, clear: 42 }) && previewLine(moved.sets[0]) === 'button: 576 members. 41 canvas labels to draw, 1 backdrop to draw.',
+  ok(JSON.stringify(moved.sets[0].furniture) === JSON.stringify({ labels: 41, backdrops: 1, clear: 42 }) && previewLine(moved.sets[0]) === 'button: 576 variants. 41 canvas labels to draw, 1 backdrop to draw.',
     `due/stale: furniture left where the set was is listed to draw again (${JSON.stringify(moved.sets[0].furniture)}; ${previewLine(moved.sets[0])})`);
   const res2 = await applyUpdate(host as never, api as never, targets, previewHashOf(moved));
   await furnishUpdate(fApi, res2, targets);

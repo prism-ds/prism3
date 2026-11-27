@@ -39,10 +39,10 @@ import { ComponentDef } from '../component-schema';
 import { BUTTON_SPACING } from '../button-spacing';
 
 /** One size's spacing entries from `BUTTON_SPACING`, spread beside that size's height and type. */
-const BUTTON_SPACING_AT = Object.fromEntries(['small', 'medium', 'large'].map((sz) =>
+export const BUTTON_SPACING_AT = Object.fromEntries(['small', 'medium', 'large'].map((sz) =>
   [sz, Object.fromEntries(Object.entries(BUTTON_SPACING).filter(([k]) => k.startsWith(`size.${sz}.`)))])) as Record<string, Record<string, string>>;
 
-type IntentFamily = 'primary' | 'neutral' | 'destructive';
+export type IntentFamily = 'primary' | 'neutral' | 'destructive';
 
 /**
  * The per-family PAINT (docs/20), authored ONCE and called per component — #1223 split the three
@@ -58,7 +58,7 @@ type IntentFamily = 'primary' | 'neutral' | 'destructive';
  * `disabled.*` is cross-cutting (intent-independent, docs/20 §7) and lives in the shared token block, not
  * here — its identity across all three components is the whole reason the split loses no coverage.
  */
-const intentTokens = (family: IntentFamily): Record<string, string> => ({
+export const intentTokens = (family: IntentFamily): Record<string, string> => ({
   // filled — interactive fill + on-fill ink
   'filled.fill': `color.interactive.${family}.fill.rest`,
   'filled.fill.hover': `color.interactive.${family}.fill.hover`,
@@ -307,16 +307,17 @@ const makeButton = (id: string, name: string, summary: string, description: stri
     'focus-ring': 'color.border.focus',
     'ring-width': 'focus.ring.width',
     'ring-offset': 'focus.ring.offset',
-    // THE MOTION, AS BINDINGS (#3408 Q146 A, after Q-MD4 A named them in prose). The state change (fill, border, ink,
-    // shadow) and the press both run on the ramp's `fast` step with the default curve: the brief's ~100–150ms, and
-    // prism3-motion R6 (a control's state change is `instant` or `fast`). Under reduced motion the color change keeps
-    // its reduced twin and the press scale resolves to none, so the press has no reduced binding. The press's 0.98
-    // MAGNITUDE is not a timing and no token holds it: it stays in `motion.reduceMotion` (OWNER DECISION on the PR).
-    'motion.state': 'motion.duration.fast',
-    'motion.state-easing': 'motion.easing-role.default',
-    'motion.state-reduced': 'motion.duration-reduced.fast',
-    'motion.press': 'motion.duration.fast',
-    'motion.press-easing': 'motion.easing-role.default',
+    // THE MOTION, AS BINDINGS (#3408 Q146 A, after Q-MD4 A named them in prose). Since the motion presets (#2857) they
+    // bind the presets the `hover` and `pressed` patterns name: the state change (fill, border, ink, shadow) on
+    // `motion.preset.state`, the press on `motion.preset.press`, both R6-quick by default (`fast` and `instant`). Under
+    // reduced motion the color change keeps the preset's reduced duration and the press scale resolves to none, so the
+    // press has no reduced binding. The press's 0.98 MAGNITUDE is not a timing and no token holds it: it stays in
+    // `motion.reduceMotion` (OWNER DECISION on the PR).
+    'motion.state': 'motion.preset.state.duration',
+    'motion.state-easing': 'motion.preset.state.easing',
+    'motion.state-reduced': 'motion.preset.state.duration-reduced',
+    'motion.press': 'motion.preset.press.duration',
+    'motion.press-easing': 'motion.preset.press.easing',
     // A flush button's padding (#2350): the zero step, bound rather than left a literal 0, so the designer reads
     // `space/0` on both sides and a brand cannot move it. Zero by meaning: a pinned icon sits at the edge.
     'inset.flush': 'space.0',
@@ -774,6 +775,13 @@ const makeButton = (id: string, name: string, summary: string, description: stri
       'Lead with a verb, name the object ("Publish post", not "Submit")',
       'Keep exactly one filled button per view; demote the rest to outline / text, so a view of three actions is three buttons at three appearances rather than three fills competing',
       'Set `surface=inverse` for a button on a dark or brand-filled band, so its fill, ink, border and disabled treatment bind the inverse counterparts instead of losing contrast against the flipped ground',
+      // #2350 (owner Q143) — DRAFT words, for the owner.
+      'Set inset=flush on a button at appearance=text that starts, ends or centers a row of content, so its label lines up with the content edge; give it `padding-inline: 0` and no `min-inline-size`, and, at medium and large sizes, extend its hit area to at least 44×44px with a transparent `::before` inset outward and centered on the label, so the target clears 44px while the box stays label-width; extend it the same way to at least 24×24px at small',
+      // #4204 (owner decision 2 a) — the one place "inactive" and "disabled" are defined; Counter and Pagination reuse the words. DRAFT.
+      'Use isInactive for a control the user can still unblock, such as Submit on an unfinished form; it stays focusable and says why. Use disabled only when the control doesn\'t apply right now',
+      ...sibling.do,
+    ],
+    implementation: [
       // THE BRAND'S BUTTON SETTINGS (#1667), stated for the agent that builds this component in code: the
       // def is brand-agnostic, so the settings travel as brand input (`buttonIcons`,
       // `buttonMinWidthMultiplier`, `buttonContentSize`, and #1752's `buttonLabelWeight`) and these lines
@@ -789,11 +797,7 @@ const makeButton = (id: string, name: string, summary: string, description: stri
       'Underline the label of a button at appearance=text, at rest and in every state, disabled included, with its underlined label style (`type.label.sm.emphasis-link`, `type.label.md.emphasis-link`, `type.label.lg.emphasis-link`); the underline is fixed, not a brand setting',
       'Never fill a button at appearance=text at rest; under the brand\'s `buttonTextHover` setting `text` (Text & icon only, the default), change only its label and icon colors on hover and pressed',
       'On a brand whose `buttonTextHover` is `fill` (Fill), also give a button at appearance=text the overlay wash on hover and pressed, as outline buttons take it',
-      // #2350 (owner Q143) — DRAFT words, for the owner.
-      'Set inset=flush on a button at appearance=text that starts, ends or centers a row of content, so its label lines up with the content edge; give it `padding-inline: 0` and no `min-inline-size`, and, at medium and large sizes, extend its hit area to at least 44×44px with a transparent `::before` inset outward and centered on the label, so the target clears 44px while the box stays label-width; extend it the same way to at least 24×24px at small',
       'Never fill a flush button on hover or pressed, whatever the brand\'s `buttonTextHover` is: with no padding the fill would hug the label; only its label and icon colors change',
-      'Use isInactive (focusable) for a control blocked by satisfiable state; reserve disabled for the irrelevant',
-      ...sibling.do,
     ],
     dont: [
       'Set `inset=flush` on a filled or outline button — their visible edge needs its padding; flush is for `appearance=text`',
@@ -809,10 +813,10 @@ const makeButton = (id: string, name: string, summary: string, description: stri
     // #3555 Q-MD14 A: one line per sibling, in the imperative register every def's primaryPurpose takes.
     primaryPurpose: { primary: 'Trigger an action in place, in the brand\'s primary style.', destructive: 'Trigger an action in place that deletes or removes something.', neutral: 'Trigger an action in place that carries no brand emphasis.' }[family],
     whenToUse: 'The user needs to act on this surface — submit, confirm, open, apply, or start async work.',
-    avoidWhen: `The target is a different location/URL → use Link (or give the button an \`href\`, which renders an \`<a>\`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use a toggle button (not built yet). Icon-only with no visible text → use ${ICON_BUTTON_OF[family]} (the accessible name is required there at the type level). ${sibling.avoidWhen}`,
+    avoidWhen: `The target is a different location/URL → use Link (or give the button an \`href\`, which renders an \`<a>\`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use ToggleButton. Icon-only with no visible text → use ${ICON_BUTTON_OF[family]} (the accessible name is required there at the type level). ${sibling.avoidWhen}`,
     // #1697 — `spinner` (the pending state swaps it in, #1670) and `focus-ring` (every focus-visible member
     // nests it) are the two components this one always builds with, beside the icon in its slots.
-    commonPartners: ['icon', 'spinner', 'focus-ring', 'button-group', 'popover'],
+    commonPartners: ['icon', 'spinner', 'focus-ring', 'button-group', 'popover', 'menu', 'tooltip'],
     triggerKeywords: sibling.triggerKeywords,
     generationPriority: sibling.generationPriority,
   },
@@ -823,17 +827,17 @@ const makeButton = (id: string, name: string, summary: string, description: stri
     composesWith: ['focus-ring', 'spinner'],
     // #1697 — each sibling points at the icon-button of its OWN family, so the destructive button's
     // icon-only alternative is the destructive icon-button rather than the primary one.
-    alternativeTo: [family === 'primary' ? 'icon-button' : `icon-button-${family}`, 'switch-row', ...(family === 'primary' ? ['tag', 'link'] : [])],
-    planned: ['tooltip', 'menu', 'toggle-button', 'split-button'],
+    alternativeTo: [family === 'primary' ? 'icon-button' : `icon-button-${family}`, 'switch-row', ...(family === 'primary' ? ['tag', 'link'] : []), ...(family === 'destructive' ? [] : ['toggle-button'])],
+    planned: ['split-button'],
     replacesPatterns: ['input[type=button|submit]', '`div[role=button]`'],
   },
 
   motion: {
     enter: 'none (present on mount)',
     exit: 'none',
-    // Q-MD4 A (#3555): the brief's ~100–150ms maps to motion.duration.fast. Since #3408 Q146 A the tokens are bound in
+    // Q-MD4 A (#3555): the brief's ~100–150ms maps to motion.duration.fast, now behind motion.preset.state. Since #3408 Q146 A the tokens are bound in
     // `tokens` (`motion.state*`, `motion.press*`), and `test.ts` holds the bindings; this prose names the same ones.
-    reduceMotion: 'State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.',
+    reduceMotion: 'State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.',
   },
 
   notes: {

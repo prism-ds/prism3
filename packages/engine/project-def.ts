@@ -41,9 +41,10 @@ export const projectDef = (def: ComponentDef) =>
     }])),
     accessibility: compact({ ...def.accessibility, wcag: def.accessibility.wcag ? [...def.accessibility.wcag] : undefined }),
     content: def.content ? compact({ ...def.content }) : undefined,
-    docs: compact({ usage: def.docs.usage, do: def.docs.do ?? [], dont: def.docs.dont ?? [], contentGuidelines: def.docs.contentGuidelines }),
+    docs: compact({ usage: def.docs.usage, do: def.docs.do ?? [], dont: def.docs.dont ?? [], implementation: def.docs.implementation ?? [], contentGuidelines: def.docs.contentGuidelines }),
     ai: compact({ ...def.ai, commonPartners: def.ai.commonPartners ?? [], triggerKeywords: def.ai.triggerKeywords ?? [] }),
-    motion: def.motion ? compact({ ...def.motion }) : undefined,
+    // #2857 phase 2: `patterns`, the motion patterns a def plays, by name, beside the prose generated from them.
+    motion: def.motion ? compact({ ...def.motion, patterns: def.motion.patterns ? [...def.motion.patterns] : undefined }) : undefined,
     composition: compact({
       composesWith: def.composition?.composesWith ?? [],
       alternativeTo: def.composition?.alternativeTo ?? [],

@@ -17,6 +17,7 @@
  */
 import { applyWritePlan, applyFloatPlan, applyVarCollectionPlan, beginMigration, unownedCore } from './write-figma';
 import { applyStylesPlan } from './write-styles';
+import { applyAnimationStylesPlan } from './write-animation-styles';
 import { applyGridStylePlan } from './write-grid-styles';
 import { applyTextStylePlan } from './write-text-styles';
 import { renameStylesForPlan, renameTextStylesForPlan } from './rename-styles';
@@ -26,19 +27,21 @@ import { conflictKey, resolveCollisions, type CollisionChoices, type ChoiceTally
 /** How many times one apply resolves the person's choices before the guarded pre-flight decides (#1909). Each pass needs
  *  a choice for a collision the last pass made, which only a renamed name already taken does; this bounds it. */
 const RESOLVE_PASSES = 8;
-import { preloadFonts, availableStylesByFamily, resolveCutPlan } from './preload-fonts';
+import { preloadFonts, availableStylesByFamily, resolveCutPlan, fillMissingWeights } from './preload-fonts';
+import { retireUnusedWeights } from './retire-weights';
 import { persistInput, restoreInput } from './persist-figma';
 import { emissionOf, stampEmission } from './theme-emission';
 import { fontPreloadApiOf, preflightApiOf, textApiOf } from './theme-ports';
 import type { ThemeHost } from './theme-ports';
-import { buildFigmaColor, buildWritePlan, buildFloatWritePlan, buildStylesPlan, buildGridStylePlan, buildFontVarPlan, buildMotionVarPlan, buildTextStylePlan } from '@prism3/engine/figma';
+import { buildFigmaColor, buildWritePlan, buildFloatWritePlan, buildStylesPlan, buildGridStylePlan, buildFontVarPlan, buildMotionVarPlan, buildTextStylePlan, buildAnimationStylesPlan, withSharedTree } from '@prism3/engine/figma';
 import { brandTheme, type BrandInput } from '@prism3/engine';
 
 export type { ThemeHost };
 
 /** Every plan one apply writes, built once from the brand. Exported so the paste harness slices the SAME
- *  objects the plugin writes, rather than rebuilding them by a second route. */
-export const themePlans = (input: BrandInput) => {
+ *  objects the plugin writes, rather than rebuilding them by a second route. #4230: the plans share one token tree
+ *  (`withSharedTree`), where each emitter built its own: about nine builds of the same tree, 129 ms of 158. */
+export const themePlans = (input: BrandInput) => withSharedTree(() => {
   const theme = brandTheme(input);
   const textPlan = buildTextStylePlan(theme);
   // Hoisted rather than inlined into the calls below because the #1152 stranded-collection pass
@@ -51,10 +54,13 @@ export const themePlans = (input: BrandInput) => {
   const fontPlan = buildFontVarPlan(theme);
   // `motion` (#2412): TIMING + EASING, so the mixed-type executor's, not the FLOAT one's.
   const motionPlan = buildMotionVarPlan(theme);
+  // Motion phase 3 (#2857): an animation style per motion pattern and its reduced sibling, written after the preset
+  // variables they bind, in the same stage.
+  const animationPlan = buildAnimationStylesPlan(theme);
   const stylesPlan = buildStylesPlan(theme);
   const gridPlan = buildGridStylePlan(theme);
-  return { theme, textPlan, colorFiles, colorPlan, floatPlan, fontPlan, motionPlan, stylesPlan, gridPlan };
-};
+  return { theme, textPlan, colorFiles, colorPlan, floatPlan, fontPlan, motionPlan, animationPlan, stylesPlan, gridPlan };
+});
 export type ThemePlans = ReturnType<typeof themePlans>;
 
 /** #3170 Q3170.5 A: Apply Theme's seven write stages, in the order `runApplyTheme` writes them. The panel's status strip
@@ -97,7 +103,14 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
       for (const c of found) applied[conflictKey(c)] = choices[conflictKey(c)];
     }
   }
-  const { text: textPlan, color: colorPlan, float: floatPlan, font: fontPlan, motion: motionPlan, styles: stylesPlan, grid: gridPlan } = exec;
+  const { color: colorPlan, float: floatPlan, motion: motionPlan, styles: stylesPlan, grid: gridPlan } = exec;
+  // A WEIGHT THE FAMILY LACKS (#4474, owner decision A): found here, before the font preload and before any write, and
+  // filled by the nearest weight the family has, so the warning can come first and no text style is skipped mid-run.
+  // `weightFallbacks` is what the report names. Only the text plan and the cut values the write reads change; the
+  // pre-flight, the print and the orphan reports read the plans as built, as they do after `resolveCutPlan` below.
+  const stylesByFamily = await availableStylesByFamily(fontPreloadApiOf(host));
+  const filled = fillMissingWeights(exec.text, exec.font, stylesByFamily);
+  const textPlan = filled.text, fontPlan = filled.plans, weightFallbacks = filled.fallbacks;
   // FONTS FIRST (#680), before ANY variable write. Writing a `font/family/*` variable makes Figma
   // re-resolve every text style bound to it, and re-resolution throws `unloaded font` — which used to
   // abort the whole apply from inside a writer that touches no text. The face needed is the CROSS
@@ -108,7 +121,7 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
   // THE CUT VARIABLES IN EACH FAMILY'S OWN SPELLING (#1728), resolved before the variable stage writes them, so no
   // stage writes a cut the family lacks under that name (Playfair's `SemiBold Italic`, not the engine's `Semi Bold
   // Italic`). Only the values the variable stage writes change: the pre-flight and the print read the plans as built.
-  const cutPlan = resolveCutPlan(fontPlan, textPlan, await availableStylesByFamily(fontPreloadApiOf(host)));
+  const cutPlan = resolveCutPlan(fontPlan, textPlan, stylesByFamily);
   // THE BRAND THIS APPLY REPLACES (#2695), read before the write persists the new one, so the report can say when the
   // field style moved (`field-style-note.ts`). An unreadable store reads as none, as every other restore here does.
   let before: BrandInput | null = null;
@@ -172,6 +185,9 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
       // Styles.
       await pace?.stage('type-vars', 4);
       const tv = await applyVarCollectionPlan(cutPlan.plans, host.variables, mig, pace?.tick);
+      // THE WEIGHT VARIABLES THE BRAND NO LONGER USES (#4474, owner decision A), after the weight roles alias their new
+      // weights. Narrow: only `…/font/weight/<n>` in the font plan's own collection (`retire-weights.ts`).
+      const rw = await retireUnusedWeights(host.variables, cutPlan.plans);
       // The Text Style port needs figma's style/font surface + figma.variables' getter (`theme-ports.ts`).
       await pace?.stage('text-styles', 5);
       const tr = await renameTextStylesForPlan(textPlan, textApiOf(host));   // #1040, as for the styles above
@@ -180,6 +196,9 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
       // executor. Independent of every other axis: nothing aliases into or out of `motion`.
       await pace?.stage('motion', 6);
       const mv = await applyVarCollectionPlan(motionPlan, host.variables, mig, pace?.tick);
+      // THE ANIMATION STYLES (#2857 phase 3), after the preset variables they bind exist. A host with no animation styles
+      // skips this and says so (`supportsAnimationStyles`).
+      const as = await applyAnimationStylesPlan(plans.animationPlan, host, pace?.tick, bindIn);
       // THE `core` VARIABLES NO SLICE OWNS (#1109), read after the three `core` writers ran: each reports its own slice,
       // so a variable in a group none of them owns was in no report. Only here are all three slices in scope.
       const uc = await unownedCore(host.variables, names.core, [
@@ -192,8 +211,8 @@ export const runApplyTheme = async (input: BrandInput, host: ThemeHost, beforeWr
       persistInput(host.root, input);
       // #3422 Q44.1 A: and the print of what was written, so the recount can tell an engine update apart (`theme-emission.ts`).
       stampEmission(host.root, emissionOf(plans));
-      return { mig, r, f, s, gs, tv, ts, mv, uc, styleRenames: [...sr, ...tr] };
+      return { mig, r, f, s, gs, tv, ts, mv, as, uc, rw, styleRenames: [...sr, ...tr] };
     },
   );
-  return { plans, pf, guarded, before, chose, exec, names, applied };
+  return { plans, pf, guarded, before, chose, exec, names, applied, weightFallbacks };
 };

@@ -13,7 +13,7 @@ In-flow trigger for a destructive action — delete, remove, discard, disconnect
 
 - **Purpose:** Trigger an action in place that deletes or removes something.
 - **Use when:** The user needs to act on this surface — submit, confirm, open, apply, or start async work.
-- **Avoid when:** The target is a different location/URL → use Link (or give the button an `href`, which renders an `<a>`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use a toggle button (not built yet). Icon-only with no visible text → use IconButton.Destructive (the accessible name is required there at the type level). The action is not destructive → use Button, or Button.Neutral for one with no brand emphasis. Color is a weak carrier on its own, so a destructive action also names its consequence in the label.
+- **Avoid when:** The target is a different location/URL → use Link (or give the button an `href`, which renders an `<a>`, if it must look like a button). A persistent on/off state → use Switch.Row. One-of-many selection → use Radio.Group (or SegmentedControl). A toggle with pressed state → use ToggleButton. Icon-only with no visible text → use IconButton.Destructive (the accessible name is required there at the type level). The action is not destructive → use Button, or Button.Neutral for one with no brand emphasis. Color is a weak carrier on its own, so a destructive action also names its consequence in the label.
 
 ## Anatomy
 
@@ -50,17 +50,8 @@ Use for an immediate action in the current context — submit/save/reset a form,
 - Lead with a verb, name the object ("Publish post", not "Submit")
 - Keep exactly one filled button per view; demote the rest to outline / text, so a view of three actions is three buttons at three appearances rather than three fills competing
 - Set `surface=inverse` for a button on a dark or brand-filled band, so its fill, ink, border and disabled treatment bind the inverse counterparts instead of losing contrast against the flipped ground
-- Place the icons the way the brand's `buttonIcons` setting says; `attached` (Attached to label, the default) keeps them beside the label with the group centered
-- Under `buttonIcons: edges` (Locked to edges), position each icon absolutely at the visual padding from its edge, pad that side by the padding + the icon + the gap, and center the label in the space left — a button with only a trailing icon has its label slightly left of center, and a long label still widens the button
-- Give every size a minimum width of its height × the brand's `buttonMinWidthMultiplier` (2.25 by default), rounded up to a multiple of 8px — 88, 104 and 128px at heights of 36, 44 and 56px — in both icon placements, so a short label never makes a stubby button
-- On a brand whose `buttonContentSize` is `smaller` (Small), give a medium button the small size's label style and icon size (`type.label.sm.emphasis`, `icon.size.xs`) at the medium height and padding; small and large buttons keep their own
-- On a brand whose `buttonLabelWeight` is `default` (Default), set every size's label in the `default` weight of its label style (`type.label.sm.default`, `type.label.md.default`, `type.label.lg.default`) instead of `emphasis`; with Small, a medium button takes `type.label.sm.default`
-- Underline the label of a button at appearance=text, at rest and in every state, disabled included, with its underlined label style (`type.label.sm.emphasis-link`, `type.label.md.emphasis-link`, `type.label.lg.emphasis-link`); the underline is fixed, not a brand setting
-- Never fill a button at appearance=text at rest; under the brand's `buttonTextHover` setting `text` (Text & icon only, the default), change only its label and icon colors on hover and pressed
-- On a brand whose `buttonTextHover` is `fill` (Fill), also give a button at appearance=text the overlay wash on hover and pressed, as outline buttons take it
 - Set inset=flush on a button at appearance=text that starts, ends or centers a row of content, so its label lines up with the content edge; give it `padding-inline: 0` and no `min-inline-size`, and, at medium and large sizes, extend its hit area to at least 44×44px with a transparent `::before` inset outward and centered on the label, so the target clears 44px while the box stays label-width; extend it the same way to at least 24×24px at small
-- Never fill a flush button on hover or pressed, whatever the brand's `buttonTextHover` is: with no padding the fill would hug the label; only its label and icon colors change
-- Use isInactive (focusable) for a control blocked by satisfiable state; reserve disabled for the irrelevant
+- Use isInactive for a control the user can still unblock, such as Submit on an unfinished form; it stays focusable and says why. Use disabled only when the control doesn't apply right now
 - Place it beside a neutral escape ("Cancel" / "Keep"), never alone; on a delete confirmation the safe choice is often the filled button and the destructive action sits at a lower appearance beside it
 
 ### Don't
@@ -93,7 +84,7 @@ Use for an immediate action in the current context — submit/save/reset a form,
 
 - **Enter:** none (present on mount)
 - **Exit:** none
-- **Reduced motion:** State transitions (background, border, shadow) run on motion.duration.fast with motion.easing-role.default. A subtle press (scale 0.98) on the same duration and curve gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.duration-reduced.fast, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.
+- **Reduced motion:** State transitions (background, border, shadow) run on the motion.preset.state preset. A subtle press (scale 0.98) runs on the motion.preset.press preset and gives tactile feedback. Under prefers-reduced-motion, resolve scale/translate to none but keep the color change, on motion.preset.state.duration-reduced, so the state stays perceivable; the pending spinner is functional and its busy state is carried by aria-busy regardless.
 
 ## Content guidelines
 
@@ -107,12 +98,22 @@ Verb-first, specific, sentence case, no terminal punctuation, ≤3 words to boun
 
 - **Built from:** `focus-ring`, `spinner`
 - **Instead, consider:** `icon-button-destructive`, `switch-row`
-- **Often used with:** `icon`, `button-group`, `popover`
+- **Often used with:** `icon`, `button-group`, `popover`, `menu`, `tooltip`
 - **Replaces:**
   - input[type=button\|submit]
   - `div[role=button]`
 
 ## Building it in code
+
+- Place the icons the way the brand's `buttonIcons` setting says; `attached` (Attached to label, the default) keeps them beside the label with the group centered
+- Under `buttonIcons: edges` (Locked to edges), position each icon absolutely at the visual padding from its edge, pad that side by the padding + the icon + the gap, and center the label in the space left — a button with only a trailing icon has its label slightly left of center, and a long label still widens the button
+- Give every size a minimum width of its height × the brand's `buttonMinWidthMultiplier` (2.25 by default), rounded up to a multiple of 8px — 88, 104 and 128px at heights of 36, 44 and 56px — in both icon placements, so a short label never makes a stubby button
+- On a brand whose `buttonContentSize` is `smaller` (Small), give a medium button the small size's label style and icon size (`type.label.sm.emphasis`, `icon.size.xs`) at the medium height and padding; small and large buttons keep their own
+- On a brand whose `buttonLabelWeight` is `default` (Default), set every size's label in the `default` weight of its label style (`type.label.sm.default`, `type.label.md.default`, `type.label.lg.default`) instead of `emphasis`; with Small, a medium button takes `type.label.sm.default`
+- Underline the label of a button at appearance=text, at rest and in every state, disabled included, with its underlined label style (`type.label.sm.emphasis-link`, `type.label.md.emphasis-link`, `type.label.lg.emphasis-link`); the underline is fixed, not a brand setting
+- Never fill a button at appearance=text at rest; under the brand's `buttonTextHover` setting `text` (Text & icon only, the default), change only its label and icon colors on hover and pressed
+- On a brand whose `buttonTextHover` is `fill` (Fill), also give a button at appearance=text the overlay wash on hover and pressed, as outline buttons take it
+- Never fill a flush button on hover or pressed, whatever the brand's `buttonTextHover` is: with no padding the fill would hug the label; only its label and icon colors change
 
 ### Props
 

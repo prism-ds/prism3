@@ -34,7 +34,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { applyOutlineInteraction, applyButtonLayout, applyCurrentIndicator, DEFAULT_BUTTON_LAYOUT, figmaAnatomySet, planComponentName, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, type AnatomyPlan, componentDefs, diffAnatomy, unclassifiedFields, fieldCoverage, type Divergence, type HostNode, type ReadPorts, componentSpec, specMaterialize, type ComponentSpec, figmaVarName, figmaTextStyleName, brandMaterializer, type ComponentDef, validateComponentDef } from '@prism3/engine/components';
+import { applyIconMap, applyOutlineInteraction, applyButtonLayout, applyCurrentIndicator, DEFAULT_BUTTON_LAYOUT, figmaAnatomySet, planComponentName, planBoundVars, planPaintVars, planTextStyles, planEffectStyles, type AnatomyPlan, componentDefs, diffAnatomy, unclassifiedFields, fieldCoverage, type Divergence, type HostNode, type ReadPorts, componentSpec, specMaterialize, type ComponentSpec, figmaVarName, figmaTextStyleName, brandMaterializer, type ComponentDef, validateComponentDef } from '@prism3/engine/components';
 import { buildFigmaColor, buildFigmaTextStyles, tailOf } from '@prism3/engine/figma';
 import { nbTheme } from '@prism3/engine/harness';
 import { sizeRefPx, type BrandInput } from '@prism3/engine';
@@ -42,7 +42,7 @@ import { applyComponentPlan } from './src/write-components';
 import { makeShim, varValue } from './component-shim';
 import { materializeForBrand, materializerFor } from './src/brand-def';
 import { EXAMPLE_BRANDS_JSON as exampleBrands } from '@prism3/engine';
-import { planTargets, prebuildDependencies } from './src/build-deps';
+import { planTargets, prebuildDependencies, SWAP_TARGET } from './src/build-deps';
 import { reactionMap } from './src/reactions';
 import { readSpecTag } from './src/spec-tag';
 import { snapshotMember } from './src/member-baseline';
@@ -55,10 +55,11 @@ const INVENTORY = process.argv.includes('--inventory');
  *  a clause with no subject and is reported as such rather than counted as coverage. */
 const EXERCISED: Record<string, number> = {};
 
-/** The FPO component the plugin nominates for every swap slot — the same constant
- *  `apps/plugin/src/main.ts` uses, restated here because a harness that builds a DIFFERENT plan from
- *  the one the product builds is measuring something nobody ships. */
-const SWAP_TARGET = 'FPO-default-icon';
+/** The FPO component the plugin nominates for every swap slot is `SWAP_TARGET` from `build-deps.ts`, the constant
+ *  `main.ts` passes, IMPORTED rather than restated (#3972): a harness that builds a DIFFERENT plan from the one the
+ *  product builds is measuring something nobody ships, and the restatement had drifted (`FPO-default-icon` against
+ *  the plugin's `icon/FPO-default-icon`). The import is safe for independence (docs/34): the name is an INPUT to both
+ *  sides, the plan and the shim's file, never derived from what this harness checks. */
 
 /**
  * The corpus: every def the engine PROJECTS into a Figma set.
@@ -129,7 +130,7 @@ const componentNamesOf = async (shim: unknown, root: unknown): Promise<Map<strin
  * built from the plan would map every id to the name the diff was hoping for, which is the whole
  * failure mode in one line.
  */
-const roundTrip = async (def: (typeof componentDefs)[number], extra: Partial<ShimOpts> = {}): Promise<{ plans: AnatomyPlan[]; divergences: Divergence[]; members: number; hostMembers: HostNode[]; set: HostNode | undefined; ports: ReadPorts }> => {
+const roundTrip = async (def: (typeof componentDefs)[number], extra: Partial<ShimOpts> = {}, nested: (d: ComponentDef) => ComponentDef = (d) => d): Promise<{ plans: AnatomyPlan[]; divergences: Divergence[]; members: number; hostMembers: HostNode[]; set: HostNode | undefined; ports: ReadPorts }> => {
   // NOMINATED, exactly as the real caller does (`apps/plugin/src/main.ts` — `SWAP_TARGET`). Building
   // the plan set without it is not a smaller version of the same build: the executor then reports
   // `swapTarget -> (none nominated; built as a placeholder frame)` and puts a FRAME where the plan
@@ -154,7 +155,9 @@ const roundTrip = async (def: (typeof componentDefs)[number], extra: Partial<Shi
   // a bare component of that name, which a plain-component lookup would find first.
   const shim = makeShim({ ...fullFor(overrides ? [...plans, ...ALL_PLANS()] : plans), ...(overrides ? { comps: [SWAP_TARGET], liveRoot: true } : {}), ...(marks || locks ? { liveComponents: true } : {}), page, ...extra });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- structural: the shim satisfies ComponentsApi
-  if (overrides) await prebuildDependencies(def, { defs: componentDefs, project: (d) => figmaAnatomySet(d, { swapTarget: SWAP_TARGET }), host: shim as any, build: (d) => applyComponentPlan(figmaAnatomySet(d, { swapTarget: SWAP_TARGET }), shim as any, { emitAsComponents: d.figmaProperties?.emitAsComponents }) });
+  // `nested` materializes each dependency as the plugin's own `project` does (`main.ts`, `materializeForBrand`): a brand's
+  // icon map reaches the icon set a mapped Counter nests (#3076). The identity everywhere else.
+  if (overrides) await prebuildDependencies(def, { defs: componentDefs, project: (d) => figmaAnatomySet(nested(d), { swapTarget: SWAP_TARGET }), host: shim as any, build: (d) => applyComponentPlan(figmaAnatomySet(nested(d), { swapTarget: SWAP_TARGET }), shim as any, { emitAsComponents: d.figmaProperties?.emitAsComponents }) });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- structural: the shim satisfies ComponentsApi
   await applyComponentPlan(plans, shim as any, {});
 
@@ -510,6 +513,14 @@ const PARTIAL = PROJECTED.flatMap((d) => { const m = applyCurrentIndicator(d, 'p
 // owner item), so without this row `slotSettings` and `slotPreferred` compare nothing. Test-only, as
 // `test-native-slots.ts` builds it: Tag with its dismiss cell a slot holding 1 to 2 children, preferring Badge, which
 // the file holds as a set.
+// …and every def the BRAND ICON MAP rewrites (#3076): the icon set built from the brand's art (a name of its own, `add`, and a
+// Prism3 name it redraws, `close`, with its fill rule), and each component that instances a mapped icon. Without these rows
+// a brand glyph never reaches an executor here. Test-only art: the brand's own is not in the repo.
+const ICON_MAP_BRAND = { map: { plus: 'add', 'plus-filled': 'add', minus: 'subtract', 'minus-filled': 'subtract', check: 'checkmark', 'close-filled': 'close' },
+  glyphs: { add: { path: 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z' }, subtract: { path: 'M4 11h16v2H4z' }, checkmark: { path: 'M9.5 15.6 5.4 11.5 4 12.9l5.5 5.5L20 7.9l-1.4-1.4z' },
+    close: { path: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z', fillRule: 'evenodd' as const } } };
+// The icon set itself is not renamed here: the projector knows it by its id. It is built under its own id below.
+const ICON_MAPPED = PROJECTED.flatMap((d) => { const m = applyIconMap(d, ICON_MAP_BRAND); return m === d || d.id === 'icon' ? [] : [{ ...m, id: `${d.id}@icon-map` }]; });
 const tagDef = PROJECTED.find((d) => d.id === 'tag')!;
 const SLOT_CONSTRAINED = [{ ...tagDef, id: 'tag@slot-constraints', anatomy: { ...tagDef.anatomy!, parts: { ...tagDef.anatomy!.parts,
   dismiss: { ...tagDef.anatomy!.parts.dismiss, contentSlot: true as const, slotSettings: { minChildren: 1, maxChildren: 2, allowPreferredValuesOnly: true }, preferred: ['badge'] } } } }];
@@ -523,12 +534,13 @@ const listDef = PROJECTED.find((d) => d.id === 'list')!;
 const SWAP_GLYPH = 'close';
 const SWAP_OVERRIDE = [{ ...listDef, id: 'list@swap-override', anatomy: { ...listDef.anatomy!, parts: { ...listDef.anatomy!.parts,
   item1: { ...listDef.anatomy!.parts.item1, overrides: { swaps: { icon: SWAP_GLYPH } } } } } }];
-for (const def of [...PROJECTED, ...TINTED, ...BUTTON_LAID, ...PARTIAL, ...SLOT_CONSTRAINED, ...SWAP_OVERRIDE]) {
+for (const def of [...PROJECTED, ...TINTED, ...BUTTON_LAID, ...PARTIAL, ...ICON_MAPPED, ...SLOT_CONSTRAINED, ...SWAP_OVERRIDE]) {
   try {
     // A slot that prefers a def it also nests (#2649's `items`, preferring the item it holds) resolves that def by key,
     // and the shim keys its components only with `identities` on, as a real file always does.
     const prefersNest = Object.values(def.anatomy?.parts ?? {}).some((p) => (p.preferred ?? []).length > 0);
-    const r = await roundTrip(def, SLOT_CONSTRAINED.includes(def as (typeof SLOT_CONSTRAINED)[number]) ? SLOT_FILE : prefersNest ? { identities: true } : {});
+    const r = await roundTrip(def, SLOT_CONSTRAINED.includes(def as (typeof SLOT_CONSTRAINED)[number]) ? SLOT_FILE : prefersNest ? { identities: true } : {},
+      ICON_MAPPED.includes(def as (typeof ICON_MAPPED)[number]) ? (d) => applyIconMap(d, ICON_MAP_BRAND) : undefined);
     inventory.push({ def: def.id, divergences: r.divergences, members: r.members, plans: r.plans.length });
     builtPages.push(r.page);
     // #3388 — the same members as Update file's verify reads them: through `snapshotMember`, never the live node.
@@ -565,8 +577,16 @@ ok(TINTED.length > 0 && washPaints > 0,
   ok(JSON.stringify(PARTIAL.map((d) => d.id)) === '["link@partial"]' && shares > 0 && rows.length === 1 && rows[0].members > 0 && rows[0].divergences.length === 0,
     `#3345 partial round-trip: the Partial-materialized Link is built and read back clean — ${JSON.stringify(PARTIAL.map((d) => d.id))}, ${shares} partial bars among its plans, ${rows[0]?.members ?? 0} members, ${rows[0]?.divergences.length ?? 'no'} divergences${rows[0]?.divergences.length ? ` (${JSON.stringify(rows[0].divergences.slice(0, 2))})` : ''}`);
 }
-ok(BUTTON_LAID.length === 6 && (EXERCISED.pin ?? 0) > 0 && (EXERCISED.paddingPx ?? 0) > 0 && (EXERCISED.minWidth ?? 0) > 0,
-  `#1667 the button-lever materializations round-trip too — ${BUTTON_LAID.length} def(s); ${EXERCISED.pin ?? 0} pinned icons (ABSOLUTE + edge constraint + inset), ${EXERCISED.paddingPx ?? 0} reserved paddings, ${EXERCISED.minWidth ?? 0} floors read back off the host`);
+// 8: button ×3 and, since #4353 (owner decision 3 A), toggle-button, each at edges and smaller.
+// WHICH DEFS, BY ID, NOT HOW MANY (#4510). This held `BUTTON_LAID.length === <n>`, raised by hand when a def joined the
+// button levers (#4353: 6 → 8). The expected ids are the authored surface baseline's `@button-edges` and
+// `@button-smaller` projections, which only `lint-component-surface.ts --accept` writes (docs/34: not derived from
+// `applyButtonLayout`, which builds BUTTON_LAID); a merge of two PRs keeps both keys.
+const LAID_RECORDED = Object.keys(JSON.parse(readFileSync(new URL('../../packages/engine/schema/component-surface.json', import.meta.url), 'utf8')).defs as Record<string, unknown>)
+  .flatMap((k) => { const m = /^(.+)@button-(edges|smaller)$/.exec(k); return m ? [`${m[1]}@${m[2]}`] : []; });
+const laidOff = [...LAID_RECORDED.filter((id) => !BUTTON_LAID.some((d) => d.id === id)), ...BUTTON_LAID.map((d) => d.id).filter((id) => !LAID_RECORDED.includes(id))];
+ok(LAID_RECORDED.length > 0 && !laidOff.length && (EXERCISED.pin ?? 0) > 0 && (EXERCISED.paddingPx ?? 0) > 0 && (EXERCISED.minWidth ?? 0) > 0,
+  `#1667 the button-lever materializations round-trip too — ${BUTTON_LAID.length} def(s), the ${LAID_RECORDED.length} the surface baseline records (off: ${JSON.stringify(laidOff)}); ${EXERCISED.pin ?? 0} pinned icons (ABSOLUTE + edge constraint + inset), ${EXERCISED.paddingPx ?? 0} reserved paddings, ${EXERCISED.minWidth ?? 0} floors read back off the host`);
 
 {
   const swapPlans = SWAP_OVERRIDE.flatMap((d) => figmaAnatomySet(d, { swapTarget: SWAP_TARGET }));
@@ -736,7 +756,7 @@ ok(inventory.length > 0 && inventory.some((i) => i.plans > 0), `the corpus produ
   // #3425 — THE COMPONENT-DEFS EXPORT'S BRAND MATERIALIZATION restates `materializerFor` too (`brandMaterializer`, the
   // engine must not import a surface). Held to it on every def for every example brand, for no brand, and for one brand
   // with every component setting off its default, so a lever added to one and not the other fails here by brand and def.
-  const offBrand = { ...(exampleBrands as Record<string, BrandInput>).prism3, id: 'off-defaults', controlShape: 'pill', fieldStyle: 'underline', searchFieldStyle: 'outline', tagStyle: 'underline', dialogTitleSize: 'small', bannerStyle: 'outlined', currentIndicator: 'full', density: 'compact', buttonIcons: 'edges', buttonContentSize: 'smaller', buttonMinWidthMultiplier: 3, buttonLabelWeight: 'default', buttonTextHover: 'fill' } as BrandInput;
+  const offBrand = { ...(exampleBrands as Record<string, BrandInput>).prism3, id: 'off-defaults', controlShape: 'pill', fieldStyle: 'underline', searchFieldStyle: 'outline', tagStyle: 'underline', dialogTitleSize: 'small', bannerStyle: 'outlined', currentIndicator: 'full', density: 'compact', buttonIcons: 'edges', buttonContentSize: 'smaller', buttonMinWidthMultiplier: 3, buttonLabelWeight: 'default', buttonTextHover: 'fill', icons: ICON_MAP_BRAND } as BrandInput;
   for (const [label, input] of [['no brand', null], ...Object.entries(exampleBrands as Record<string, BrandInput>), ['every setting off its default', offBrand]] as [string, BrandInput | null][]) {
     const engineSide = brandMaterializer(input);
     const pluginSide = materializerFor(input);
@@ -749,6 +769,22 @@ if (INVENTORY) {
   console.log(`\n📋 INVENTORY: ${clean.length}/${inventory.length} defs round-trip clean; ${dirty.length} diverge.`);
   console.log('   Inventory mode exits 0 by design — the gate mode below is what fails.');
   process.exit(failed ? 1 : 0);
+}
+
+// #3076 — THE ICON SET UNDER A BRAND ICON MAP, built under its own id (the projector knows the set by it): each mapped
+// Prism3 icon gone, each brand glyph built from the brand's art, a redrawn Prism3 name drawn with the brand's art and fill
+// rule, and every member reading back as planned. The art is typed above, never read from the plan (docs/34).
+{
+  const r = await roundTrip(applyIconMap(PROJECTED.find((d) => d.id === 'icon')!, ICON_MAP_BRAND));
+  const names = r.hostMembers.map((m) => String((m as { name?: unknown }).name ?? ''));
+  const vectorD = (n: string): string => {
+    const m = r.hostMembers.find((x) => String((x as { name?: unknown }).name) === n) as unknown as { findAll?: (f: (x: unknown) => boolean) => unknown[] } | undefined;
+    return JSON.stringify((m?.findAll?.((x) => (x as { type?: string }).type === 'VECTOR') ?? []).map((v) => (v as { vectorPaths?: unknown; _svg?: unknown }).vectorPaths ?? (v as { _svg?: unknown })._svg ?? null));
+  };
+  ok(r.divergences.length === 0, `#3076 the icon set under a brand map round-trips (${r.divergences.length} divergence(s))`);
+  ok(!names.some((n) => /^name=(plus|plus-filled|minus|minus-filled|check|close-filled)$/.test(n)), `#3076 the built icon set holds no mapped Prism3 icon (${names.filter((n) => /plus|minus|=check$|close-filled/.test(n)).join(', ')})`);
+  ok(['name=add', 'name=subtract', 'name=checkmark', 'name=close'].every((n) => names.includes(n)), '#3076 the built icon set holds each brand glyph and the redrawn close');
+  ok(vectorD('name=add').includes(ICON_MAP_BRAND.glyphs.add.path.slice(0, 12)), `#3076 icon/add is drawn from the brand's art (${vectorD('name=add').slice(0, 120)})`);
 }
 
 ok(dirty.length === 0, `every def round-trips: what the plan declares is what the host holds${dirty.length ? ` — ${dirty.map((d) => `${d.def} (${d.divergences.length})`).join(', ')}` : ''}`);
@@ -767,8 +803,8 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
 {
   // #2345 added the portrait 2:3, 3:4, 4:5 and the landscape 3:2 (owner direction 2026-10-07).
   const CONTRACT: Record<string, number> = { '2:3': 2 / 3, '3:4': 3 / 4, '4:5': 4 / 5, '1:1': 1, '4:3': 4 / 3, '3:2': 3 / 2, '16:9': 16 / 9 };
-  const def = componentDefs.find((d) => d.id === 'image-placeholder');
-  ok(!!def, 'aspect-lock: the image-placeholder def is registered and projects');
+  const def = componentDefs.find((d) => d.id === 'image');
+  ok(!!def, 'aspect-lock: the image def is registered and projects');
   if (def) {
     const plans = figmaAnatomySet(def, { swapTarget: SWAP_TARGET });
     const page: Page = { children: [] };
@@ -834,11 +870,11 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
       if (!b || b.overflowDirection !== 'VERTICAL') noScroll.push(`${String(m.name)} (${b ? `overflowDirection ${String(b.overflowDirection)}` : 'no body'})`);
     }
     // SCOPE FLOOR: every member of the set was read, so a dropped member is not a quieter pass.
-    ok(members.length === 24, `roundtrip/dialog body: every member was read (${members.length} of 24)`);
+    ok(members.length === 16, `roundtrip/dialog body: every member was read (${members.length} of 16, #3392 A)`);
     ok(noClip.length === 0, `roundtrip/dialog body clips: the body crops its overflow at every placement (Q3130.8 A)${noClip.length ? ` — ${noClip.join(', ')}` : ''}`);
     ok(noScroll.length === 0, `roundtrip/dialog body scrolls: the body scrolls vertically at every placement (Q3130.8 A)${noScroll.length ? ` — ${noScroll.join(', ')}` : ''}`);
     for (const placement of ['full', 'end'] as const) {
-      const m = members.find((x) => String(x.name) === `placement=${placement}, footer=inline, size=medium`);
+      const m = members.find((x) => String(x.name) === `placement=${placement}, footer=inline`);
       const b = m && bodyOf(m);
       if (!m || !b) { ok(false, `roundtrip/dialog body clips: the ${placement} member with an inline footer was built (scope floor)`); continue; }
       // 1,200px of content in the body, as #3163's long form: a FIXED frame a designer dropped into the slot.
@@ -1117,9 +1153,9 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
         }
       }
     }
-    // 48 accordion rules; 24 dialog header rules and 18 footer rules (none on the footer=none members).
-    ok(misses.length === 0 && seen === 90 && off.length === 0,
-      `#3476 nested divider as built: every Accordion and Dialog divider instances the built divider member at emphasis=subtle, whose rule strokes color/border/primary (owner Q72 B) (${seen} instances, want 90; ${misses.length} misses${off.length ? `; OFF: ${off.slice(0, 3).join(' | ')}` : ''})`);
+    // 48 accordion rules; 16 dialog header rules and 12 footer rules (none on the footer=none members; #3392 A).
+    ok(misses.length === 0 && seen === 76 && off.length === 0,
+      `#3476 nested divider as built: every Accordion and Dialog divider instances the built divider member at emphasis=subtle, whose rule strokes color/border/primary (owner Q72 B) (${seen} instances, want 76; ${misses.length} misses${off.length ? `; OFF: ${off.slice(0, 3).join(' | ')}` : ''})`);
   }
 
   // NON-VACUITY (docs/34) — the pre-fix state, reproduced explicitly: a built text node whose `textStyleId`
@@ -1687,24 +1723,22 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
   }
 }
 
-// ── #1424: THE WRAPPING LABEL, READ BACK OFF THE BUILT NODE — HOST-TRUTH ────────────────────────
+// ── #1424 → #4473: THE ROW LABEL HUGS, READ BACK OFF THE BUILT NODE — HOST-TRUTH ────────────────────────
 //
-// The row's label must FILL its main axis and WRAP (Prism 2's radio-button-row / checkbox-row), and the
-// control must stay FIXED so a wrapping label never shrinks or stretches it. The generic diff above already
-// checks each of these plan fields against the built node (plan-as-oracle: `layoutGrow`/`textAutoResize`
-// classified in `anatomy-readback.ts`), which catches an executor that fails to write them. What it CANNOT
-// catch is a def that silently STOPS wrapping — drop `wrap` and the plan no longer carries the fields, so
-// plan-vs-built still agrees on their absence. This block closes that with an oracle authored HERE and
-// nowhere else — the owner-decided fact that these two rows wrap — so a `wrap` removed from either def
-// diverges from this and fails BY NAME (docs/34). It builds through the shared shim exactly as the corpus
-// loop does, then reads each row's label and controlBox back off the host.
+// #1424 had the row's label FILL its main axis and WRAP; owner decision A on #4473 (2026-11-24) has the row hug its
+// label instead, as Switch.Row does, so a placed row is as wide as its content. The generic diff above checks the
+// plan's `layoutGrow`/`textAutoResize` against the built node, so it catches an executor that fails to write them, but
+// not a def that silently goes back to filling: the plan would carry the fields and the built node would agree. This
+// block's oracle is authored HERE, the owner's decision that these rows hug, so a `wrap` or `grow` restored to either
+// def reads back a growing column or a fixed-width label and fails BY NAME (docs/34). The control cell is unchanged:
+// it never grows and hugs its control above the label's line-box floor.
 {
-  const WRAPS = ['radio-row', 'checkbox-row'];
+  const HUGS = ['radio-row', 'checkbox-row'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recursive node walk over the shim tree
   const findByName = (n: any, name: string): any => (n?.name === name ? n : (n?.children ?? []).map((c: any) => findByName(c, name)).find(Boolean));
-  for (const id of WRAPS) {
+  for (const id of HUGS) {
     const def = componentDefs.find((d) => d.id === id);
-    ok(!!def, `#1424 host-truth: the ${id} def is registered and projects`);
+    ok(!!def, `#4473 host-truth: the ${id} def is registered and projects`);
     if (!def) continue;
     const plans = figmaAnatomySet(def, { swapTarget: SWAP_TARGET });
     const page: Page = { children: [] };
@@ -1717,16 +1751,15 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
     const controlBoxes = members.map((m) => findByName(m, 'controlCell'));
     // SCOPE FLOOR — a label was built into every member, or "they all wrap" is a statement about an empty set.
     ok(members.length > 0 && labels.every(Boolean),
-      `#1424 host-truth: ${id} builds a label into every member (${labels.filter(Boolean).length}/${members.length})`);
-    // THE LABEL FILLS AND WRAPS — read back off the built node (both facts, since either alone does not wrap). Since
-    // #3153 the label sits in the text column, which fills the row (layoutGrow 1), and the label stretches across the
-    // column (its cross axis) at a fixed width with auto height.
-    ok(labels.length > 0 && labels.every((l, i) => stacks[i]?.layoutGrow === 1 && l.layoutAlign === 'STRETCH' && l.textAutoResize === 'HEIGHT'),
-      `#1424 host-truth: every ${id} label reads back stretched across a growing text column with textAutoResize=HEIGHT — it fills the row and wraps (e.g. column layoutGrow=${String(stacks[0]?.layoutGrow)}, layoutAlign=${String(labels[0]?.layoutAlign)}, textAutoResize=${String(labels[0]?.textAutoResize)})`);
+      `#4473 host-truth: ${id} builds a label into every member (${labels.filter(Boolean).length}/${members.length})`);
+    // THE LABEL HUGS: its text column does not grow along the row, and the label neither stretches across the column
+    // nor keeps a fixed width (`WIDTH_AND_HEIGHT`, read as the absent default or written out).
+    ok(labels.length > 0 && labels.every((l, i) => stacks[i] && stacks[i].layoutGrow !== 1 && l.layoutAlign !== 'STRETCH' && (l.textAutoResize ?? 'WIDTH_AND_HEIGHT') === 'WIDTH_AND_HEIGHT'),
+      `#4473 host-truth: every ${id} label reads back hugging its text — the text column does not grow and the label is not stretched, textAutoResize=WIDTH_AND_HEIGHT (e.g. column layoutGrow=${String(stacks[0]?.layoutGrow)}, layoutAlign=${String(labels[0]?.layoutAlign)}, textAutoResize=${String(labels[0]?.textAutoResize)})`);
     // THE CONTROL CELL DOES NOT GROW along the row, so the wrapping label never shrinks or stretches it. Since #3153 it
     // hugs its control above the label's line-box floor (owner Q852), so its cross axis reads AUTO.
     ok(controlBoxes.length > 0 && controlBoxes.every((c) => c && c.layoutGrow !== 1 && c.counterAxisSizingMode === 'AUTO'),
-      `#1424 host-truth: every ${id} controlBox reads back not growing and hugging its control — layoutGrow≠1 (${String(controlBoxes[0]?.layoutGrow)}) and counterAxisSizingMode=AUTO (${String(controlBoxes[0]?.counterAxisSizingMode)})`);
+      `#4473 host-truth: every ${id} controlBox reads back not growing and hugging its control — layoutGrow≠1 (${String(controlBoxes[0]?.layoutGrow)}) and counterAxisSizingMode=AUTO (${String(controlBoxes[0]?.counterAxisSizingMode)})`);
   }
 }
 
@@ -2500,26 +2533,39 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
       ok(members.length > 0 && off.length === 0,
         `#2292 ${id} fills its column: on every member an unplaced field reads 320 (root and box), an instance set to FILL a ${COLUMN}px column has its input box, label and ${id === 'textarea' ? 'message row' : 'message'} at ${COLUMN}, in a ${NARROW}px column the box shrinks to ${NARROW} (#2266, Q99 B), and in a ${NARROWER}px column it holds its 120 floor (${members.length} members, ${off.length} off — ${off[0] ?? 'none'})`);
     }
-    // Q152.3 (Q99 B reaches the rows): checkbox-row and radio-row are built at 320 and shrink with their column to
-    // the same 120 floor. The row IS the root, so the instance's own width is the row's, and the label, which fills
-    // the row, is the row less its control box and one gap. Literals: 320, 505, 280, and 120 in a 100px column.
-    for (const id of ['checkbox-row', 'radio-row']) {
+    // #4473 (owner decision A, 2026-11-24): a placed Row HUGS ITS LABEL, and a parent can still stretch it. Found in a
+    // rebind rehearsal: a placed checkbox-row with a HUG override on its width stayed 320 wide, because the row was
+    // built FIXED at 320 so its filling label had a width to wrap in (#1424, Q152.3). Measured as a designer places one:
+    // the DEFAULT member's instance in an auto-layout column, its width set to HUG (a row's width is its primary axis:
+    // `primaryAxisSizingMode AUTO`, no stretch). The oracle is the label's own run, never a def or plan field: lengthen
+    // the label by EXTRA characters and the instance must grow by exactly EXTRA × 6px (the shim's advance), and the
+    // unplaced member must read narrower than the old 320. Then the stretch arm: the same instance set to FILL a 505px
+    // column is 505 wide (Figma's FILL on a column child, `layoutAlign STRETCH` plus a FIXED width), and 280 in a 280px
+    // one. Switch.Row already hugged; it is held to the same oracle so the three Rows stay one rule.
+    const EXTRA = 20;
+    for (const id of ['checkbox-row', 'radio-row', 'switch-row']) {
       const members = await setOf(id);
-      const off: string[] = [];
-      for (const m of members) {
-        const wide = placedAt(String(m.name), id, COLUMN);
-        const narrow = placedAt(String(m.name), id, NARROW);
-        const narrower = placedAt(String(m.name), id, NARROWER);
-        if (!wide || !narrow || !narrower) { off.push(`${m.name}: no instance`); continue; }
-        // A row's width is its MAIN axis, so FILL sets the instance's primary mode where a field's sets its counter.
-        for (const inst of [wide, narrow, narrower]) inst.primaryAxisSizingMode = 'FIXED';
-        const label = inside(wide, 'label');
-        const widths = [W(m), W(wide), W(narrow), W(narrower)];
-        if (!(widths[0] === 320 && widths[1] === COLUMN && widths[2] === NARROW && widths[3] === 120 && label > 320 && label < COLUMN))
-          off.push(`${m.name}: unplaced ${widths[0]}; in ${COLUMN}/${NARROW}/${NARROWER} columns ${widths.slice(1).join('/')}; label in ${COLUMN} ${label}`);
-      }
-      ok(members.length > 0 && off.length === 0,
-        `Q152.3 ${id} fills its column: on every member an unplaced row reads 320, an instance set to FILL a ${COLUMN}px column is ${COLUMN} wide with its label filling the rest, in a ${NARROW}px column it shrinks to ${NARROW}, and in a ${NARROWER}px column it holds its 120 floor (${members.length} members, ${off.length} off — ${off[0] ?? 'none'})`);
+      const m = members[0];
+      const label = find(m, 'label');
+      const hugged = placedAt(String(m?.name), id, COLUMN);
+      const wide = placedAt(String(m?.name), id, COLUMN);
+      const narrow = placedAt(String(m?.name), id, NARROW);
+      if (!m || !label || !hugged || !wide || !narrow) { ok(false, `#4473 ${id} hugs its label when placed: the default member, its label and three instances exist`); continue; }
+      // HUG: undo the stretch `placedAt` applies, as the properties panel's Hug does.
+      hugged.layoutAlign = 'INHERIT';
+      hugged.primaryAxisSizingMode = 'AUTO';
+      for (const inst of [wide, narrow]) inst.primaryAxisSizingMode = 'FIXED';
+      const was = String(label.characters);
+      const before = [W(m), W(hugged)];
+      label.characters = was + 'x'.repeat(EXTRA);
+      const after = [W(m), W(hugged)];
+      label.characters = was;
+      const restored = W(hugged);
+      const stretched = [W(wide), W(narrow)];
+      ok(before[0] < 320 && before[1] === before[0] && after[1] - before[1] === EXTRA * 6 && after[0] === after[1] && restored === before[1],
+        `#4473 ${id} hugs its label when placed: the default member reads ${before[0]} (under the old 320), a HUG instance is as wide as it, and ${EXTRA} more label characters widen the instance by exactly ${EXTRA * 6}px (got ${before[1]} → ${after[1]}, back to ${restored})`);
+      ok(stretched[0] === COLUMN && stretched[1] === NARROW,
+        `#4473 ${id} still stretches: an instance set to FILL a ${COLUMN}px column is ${COLUMN} wide and one in a ${NARROW}px column is ${NARROW} (got ${stretched.join('/')})`);
     }
     // Q155 A: checkbox-group and radio-group follow their rows. A group's root is a COLUMN, so FILL sets the instance's
     // counter mode (the fields' case), and every row inside spans what the group is given. Literals as above.
@@ -3330,6 +3376,22 @@ ok(dirty.length === 0, `every def round-trips: what the plan declares is what th
     `#3347 self-check: with the toggle's padding override cleared, the measured-floor shim reads the label row the real file did, ${MEASURED_UNFIXED} (got ${selfCheck})`);
   ok(members.length === 84 && off.length === 0,
     `#3347 password-field label row: on all ${members.length} members the row is the size's label line, small 18 / medium 21 / large 24, hugging, with the stretched Show button as tall as the row (Q380 A) (${off.length} off — ${off.slice(0, 3).join(' | ') || `measured ${JSON.stringify(seen)}`})`);
+}
+
+// #3972: THE ROUND TRIP PLANS WITH THE PRODUCT'S SWAP TARGET. Every swap part of every projected def nominates the name
+// the plugin nominates, `icon/FPO-default-icon`, typed here (`build-deps.ts`'s value; `test-write-components.ts` holds it
+// to the icon def's own names). Mutation: the harness's own restated `FPO-default-icon` back → `#3972 swap target`.
+{
+  const seen = new Map<string, number>();
+  const walk = (n: { swapTarget?: string; children?: unknown[] }): void => {
+    if (n.swapTarget) seen.set(n.swapTarget, (seen.get(n.swapTarget) ?? 0) + 1);
+    for (const c of (n.children ?? []) as { swapTarget?: string; children?: unknown[] }[]) walk(c);
+  };
+  for (const p of ALL_PLANS()) walk(p.root as never);
+  // Parts that swap to a fixed component (a spinner size, a glyph) name that component; the nominated FPO is the rest.
+  const fpo = [...seen].filter(([name]) => /FPO-default-icon/.test(name));
+  ok(fpo.length === 1 && fpo[0][0] === 'icon/FPO-default-icon' && fpo[0][1] > 0,
+    `#3972 swap target: every swap part the round trip plans for the FPO nominates icon/FPO-default-icon, as the plugin does (${JSON.stringify(fpo)})`);
 }
 
 console.log(failed ? `\n❌ ${failed} FAILED` : '\n✅ component round-trip: ALL PASS');

@@ -48,10 +48,7 @@ Use for a query that finds or filters: a site search, a search within a section,
 
 ### Do
 
-- Wrap a site or section search in a search landmark
 - Keep a label on every search field, visually hidden where the context makes it plain
-- Return focus to the input after the clear button empties it
-- Hide the browser's own cancel glyph, so the field shows one clear button
 
 ### Don't
 
@@ -105,6 +102,10 @@ Label = noun phrase, sentence case, no trailing colon, naming what is searched. 
 
 ## Building it in code
 
+- Wrap a site or section search in a search landmark
+- Return focus to the input after the clear button empties it
+- Hide the browser's own cancel glyph, so the field shows one clear button
+
 ### Props
 
 | Name | Type | Default | Required | Description |
@@ -115,7 +116,7 @@ Label = noun phrase, sentence case, no trailing colon, naming what is searched. 
 | `defaultValue` | string | — | no | Uncontrolled initial value. |
 | `onChange` | function | — | no | Change handler (also onBlur / onFocus). Also fires with an empty value when the clear button clears the field. |
 | `placeholder` | string | — | no | An example query only; vanishes on input. Never the label. |
-| `helpText` | string \| node | — | no | Persistent guidance (rendered as FieldMessage, default status), wired via aria-describedby. Off by default in most searches. |
+| `helpText` | string \| node | — | no | Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Off by default in most searches. |
 | `validation` | enum: 'default' \| 'error' \| 'warning' \| 'success' | `default` | no | The validation state, as on TextField: each non-default status swaps the input border and sets the nested message to the matching status; error also sets aria-invalid. A search rarely needs one; a query that is too short is one case. |
 | `validationMessage` | string \| node | — | no | The validation text shown at error / warning / success, added to aria-describedby. Say what is wrong and how to fix it (SC 3.3.3). |
 | `showMessage` | boolean | `false` | no | Whether the composed FieldMessage is shown. Off by default; turn it on to render the helper or validation message below the input. Never hides a message the field needs: turn it on wherever there is helper or validation text. |

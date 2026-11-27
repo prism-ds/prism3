@@ -36,6 +36,7 @@ import { claimMotion, motionBinding, readUncommitted, uniformRedline } from './e
 import { hitTargetFloor, pendingReplacement } from './residual';
 import { tree, TOKEN_ROOT, v, leaf, kebab, tracking, fmt, type Rule } from './tokens';
 import { fieldLabelCss, fieldMessageCss, passwordFieldCss, textFieldCss } from './fields';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const CSS_FILE = resolve(HERE, 'button.css');
@@ -397,7 +398,7 @@ export const engineImports = (): string[] => {
   return bad;
 };
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const out = outputs();
   const summary = out.filter(([, , n]) => n).map(([f, , n]) => `${f.slice(HERE.length + 1)} (${n} rules)`).join(', ');
   if (process.argv.includes('--check')) {

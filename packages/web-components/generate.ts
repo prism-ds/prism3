@@ -29,6 +29,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readUncommitted } from '../css/emission';
 import { FIELD_IDS, fieldSource } from './generate-fields';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ELEMENT_FILE = resolve(HERE, 'p3-button.js');
@@ -212,7 +213,7 @@ export const outputs = (): [string, string][] => [
   ...FIELD_IDS.map((id): [string, string] => [resolve(HERE, `p3-${id}.js`), fieldSource(id)]),
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const out = outputs();
   const names = out.map(([f]) => f.slice(HERE.length + 1)).join(', ');
   if (process.argv.includes('--check')) {

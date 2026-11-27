@@ -7,8 +7,9 @@ import { type OKLCH, type Role, type NbMeasured, type Theme, type PaletteBuild, 
 import { statusRamp, STATUS_DEFAULTS } from './theme-color';
 import { buildDims } from './theme-dims';
 import { buildMotion } from './theme-motion';
+import { resolvePatterns } from './motion-patterns';
 import { buildTypography, withLabelDefault } from './theme-type';
-import { buildShadow } from './theme-shadow';
+import { buildShadow, darkShadowSeed } from './theme-shadow';
 import { buildLayout } from './theme-layout';
 
 // ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ export const nbThemeFrom = (s: NbMeasured): Theme => {
     // ground, `foreground.primary`'s palette color in each mode, at 70%.
     glassRoles: { card: { role: 'foreground.primary', alpha: 70 } },
     radioDot: 70,
-    dims, motion: buildMotion(),
+    dims, motion: { ...buildMotion(), patterns: resolvePatterns() },
     // The label category always ships the `default` role (Q225 A, Q226 A), here as in every brand.
     // #3077 (owner decisions 2026-10-27): caption.md is 10px, and display, title, body, caption and label are pinned
     // to the `open` letter spacing (+1%) at every size; eyebrow keeps its nudge, one step in from `wider` (+2%).
@@ -84,7 +85,8 @@ export const nbThemeFrom = (s: NbMeasured): Theme => {
       trackingShift: { eyebrow: -1 },
       underline: { thickness: 0.05, offset: 0.25 },
     })),
-    shadow: buildShadow(s.neutralHue.hue, { tint: { amount: 0 } }),  // NB ships pure-black shadows
+    // NB ships pure-black shadows. hc-dark takes the reduced dark layers, as in every brand (#4131, owner decision A).
+    shadow: ((sh) => ({ ...sh, shadowByMode: { 'hc-dark': darkShadowSeed(sh) } }))(buildShadow(s.neutralHue.hue, { tint: { amount: 0 } })),
     // NB caps at 1920 + narrow 720. Its md margin is 44 (#3052, Q785 A). The 41px figure behind it is the
     // brand's desktop spec in its own two-mode layout, where md carries the 24-column, 16px-gutter grid:
     // whole-pixel 41px columns at 1440. It is not a property of this fixture's 5-breakpoint grid, where md

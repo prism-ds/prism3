@@ -1,9 +1,9 @@
-# Prism3 engine (prototype)
+# Prism3 engine
 
-A thin, dependency-free TypeScript prototype of the Prism3 generation engine.
+The dependency-free TypeScript generation engine of Prism3.
 It does two things:
 
-1. **Proves the color thesis against New Balance** — generates NB's ramps from
+1. **Proves the color thesis against the reference brand** — generates its ramps from
    the reverse-engineered schema and diffs them against the real hand-built
    tokens (`nb-regression.ts`).
 2. **Proves the white-label claim** — takes a brand input (primary + neutral +
@@ -14,8 +14,8 @@ It does two things:
    (`emit-dtcg.ts`, second theme `aurora`).
 
 This is not the production engine, and it is well past color-thesis-only: from a
-small per-brand input it generates a **complete token layer end-to-end** for two
-brands (NB + a synthetic violet brand) across every axis — color, semantic roles,
+small per-brand input it generates a **complete token layer end-to-end** for every
+brand in `out/` across every axis — color, semantic roles,
 dimension (space/radius/sizes), typography, shadow & elevation, motion, layout,
 opt-in gradients, and the mode-invariant primitives (border-width, focus,
 opacity/alpha) — emitted as
@@ -42,7 +42,7 @@ npx tsx packages/engine/cli.ts packages/engine/examples/harbor.design.md --out <
 npx tsx packages/engine/emit-levers.ts     # (re)emit schema/lever-manifest.json — the shared-control contract (plugin/playground/MCP)
 npx tsx packages/engine/emit-preview.ts    # (re)emit schema/preview-spec.json — the shared live-preview spec (plugin/playground)
 npx tsx packages/engine/emit-brandinput.ts # (re)emit schema/example-brands.json — validated boot brands for the browser hosts
-npx tsx packages/engine/emit-figma.ts      # (re)emit out/figma/<id>/ — the Figma import artifact (color axis; see docs/10 §7 for the emitter remit)
+npx tsx packages/engine/emit-figma.ts      # (re)emit out/figma/<id>/ — the Figma import artifact (every axis: a folder per collection; see docs/10 §7 for the emitter remit)
 ```
 
 The individual emitters above still work and are useful when iterating on one axis. But **prefer
@@ -112,7 +112,7 @@ ready line on stderr naming the six tools, then waits for JSON-RPC on stdin.
 that is the directory you launched `claude` from. Some desktop clients start servers in `/`, where
 the write fails; set the server's working directory in the client's config if it offers one. It
 refuses absolute paths and `..`. Use it instead of `theme_brand` with `include: ["tokens"]` when you
-want the files: a four-mode token tree is close to a megabyte.
+want the files: a four-mode token tree is roughly 440,000 characters in a tool result.
 
 What it doesn't do:
 - It doesn't write to Figma. That goes through the Figma plugin's agent link (`apps/plugin/README.md`).
@@ -128,7 +128,7 @@ What it doesn't do:
 - `nb-regression.ts` — diffs generated NB ramps against the real NB tokens (ΔE00 per step), checks the contrast contracts, writes `nb-regression-report.md`.
 - `emit-dtcg.ts` — emits a DTCG tree per theme (`out/<id>.tokens.json`), generates the per-mode semantic layer, validates every alias resolves, every mode contrast contract holds, and the BrandInput conforms to the schema; writes `modes-report.md` + the `.ai.json` sidecar. Also **exports the reusable core** (`buildTree` / `emitTheme` / `validateBrandInput`) behind an `isMain` guard, so the CLI is a thin entry point over it, not a second pipeline; the prism3, aurora and harbor themes are compiled from `examples/*.design.md`.
 - `design-md.ts` — the `design.md` parser (pure, no I/O): a dependency-free block-style YAML-subset parser (indentation nesting + `- ` block sequences + flow `{}`/`[]` leaves + scalar typing) → `BrandInput`, plus the frontmatter/prose split. Scoped to the `BrandInput` shape (owns YAML like `color.ts` owns the color math).
-- `cli.ts` — the CLI adapter (I/O shell): `tsx cli.ts <design.md> [--out <dir>] [--fidelity] [--component-specs]`. Auto-detects the dialect (a top-level flat `colors:` map = the standard dialect; otherwise engine-native) and routes to the right reader, then runs the same core: read → BrandInput → `validateBrandInput` → `brandTheme` → `emitTheme`. Exits non-zero on a schema violation, a broken alias, or a failed contrast contract.
+- `cli.ts` — the CLI adapter (I/O shell): `tsx cli.ts <design.md> [--out <dir>] [--fidelity] [--component-specs] [--shadcn] [--tailwind]`. `--shadcn` and `--tailwind` also write `shadcn/<id>.css`, `shadcn/<id>.registry-item.json` and `tailwind/<id>.theme.css`, from `web-themes.ts`, the projector regen runs. Auto-detects the dialect (a top-level flat `colors:` map = the standard dialect; otherwise engine-native) and routes to the right reader, then runs the same core: read → BrandInput → `validateBrandInput` → `brandTheme` → `emitTheme`. Exits non-zero on a schema violation, a broken alias, or a failed contrast contract.
 - `standard-design-md.ts` — reads the STANDARD brand-skills / google-labs `design.md` (flat `colors` hex map + structured type/dimension maps + an optional `x-prism3` levers block — a different shape from `design-md.ts`, which reads the engine's own `BrandInput` frontmatter) and converts it to a `BrandInput`: `standardToBrandInput` runs the classifier, derives the type families, and applies `x-prism3` (docs/07 §11).
 - `classify-colors.ts` — the color-role classifier: flat `colors:` → engine anchors by naming convention (`primary`→pinned, `secondary`/`tertiary`→brand palettes, `neutral-<step>`→derived hue/chroma, `success`/`warning`/`error`→`danger`→status; `info`/`white`/variants report-only).
 - `levers.ts` — the **lever manifest** (docs/08 §4): the presentation contract for the `BrandInput` knobs (group/label/description/control/default/ranges/enum options). **Pure — no `node:*`** (the plugin/playground/MCP bundle it into a browser/Figma sandbox). The Figma plugin, web playground, and MCP tool schema all render from it, so the surfaces stay in continuity. `test.ts` asserts it never drifts from `theme-schema.json` (keys resolve, enums + defaults match, every required field bar host-supplied `id` is a lever).
@@ -223,7 +223,7 @@ pressed/focused/selected), plus `on-fill`, `text`, `border`, and `overlay.*`
 washes — with `text.link.*` and `border.focus` as its dedicated ink/edge
 expressions, and the cross-cutting `disabled.*` family (not a per-family
 disabled state) covering the disabled case for any intent. Role keys nest
-(`interactive.primary.fill.hover`, `foreground.danger.pressed`, `inverse.text.primary`,
+(`interactive.primary.fill.hover`, `interactive.destructive.fill.pressed`, `inverse.text.primary`,
 `inverse.background.primary`).
 
 **Contrast is measured against the floor surface, not the pure extreme.** The
@@ -257,7 +257,7 @@ Two emit profiles prove the same engine serves both regression and product:
   (because violet is not red), and — because the brand named `accent` as its
   `actionPalette` — `interactive.primary.fill.rest` → `{prism.palette.accent.500}` while the
   brand hue lives at `foreground.brand` → `{prism.palette.primary.*}` and
-  `foreground.danger.default` → `{prism.palette.danger.*}`. Action, brand, and danger are
+  `foreground.danger` → `{prism.palette.danger.*}`. Action, brand, and danger are
   three distinct palettes: the white-label requirement, with action decoupled
   from brand.
 

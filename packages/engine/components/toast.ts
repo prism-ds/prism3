@@ -44,6 +44,7 @@
  * top-aligned. So the glyph is exactly centered on line one, and on a wrapped message it stays beside line one.
  */
 import { ComponentDef } from '../component-schema';
+import { motionOf } from '../motion-patterns';
 
 export const toast: ComponentDef = {
   id: 'toast',
@@ -253,7 +254,7 @@ export const toast: ComponentDef = {
         class: 'motion',
         disposition: 'refused',
         description:
-          'motion — enter: an 8px slide up and a fade on `motion.transition.enter` (`motion.duration.normal`, `motion.easing-role.enter`). Exit: a fade on `motion.transition.exit` (`motion.duration.fast`, `motion.easing-role.exit`). Under `prefers-reduced-motion`, the fade only, on `motion.duration-reduced.normal`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest.',
+          'motion — the `toast/enter` and `toast/exit` patterns. Enter: a slide up by `motion.distance.nudge` and a fade on `motion.preset.fade`. Exit: a fade on `motion.preset.fade.exit`. Under `prefers-reduced-motion`, the fade only, on `motion.preset.fade.duration-reduced` and `motion.preset.fade.exit.duration-reduced`. Both placements are anchored to the bottom, so the slide is upward in either reading direction and does not mirror. Figma shows the toast at rest.',
       },
       {
         class: 'right-to-left',
@@ -345,22 +346,20 @@ export const toast: ComponentDef = {
     planned: [],
   },
 
-  motion: {
-    enter: 'An 8px slide up and a fade (motion.transition.enter: motion.duration.normal, motion.easing-role.enter).',
-    exit: 'A fade (motion.transition.exit: motion.duration.fast, motion.easing-role.exit). A replacement plays the exit, then the enter.',
-    reduceMotion: 'Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal.',
-  },
+  // #2857 phase 2 (Q-PT2 A): the motion field names its patterns, and its prose is generated from them.
+  motion: motionOf(['toast/enter', 'toast/exit'], { exit: 'A replacement plays the exit, then the enter.' }),
 
   notes: {
     contested: [
-      'Decided: Q436 (a) (#2668): the close nests FlushIconButton.Neutral (Q386, as Dialog), not the proposal\'s IconButton.Neutral; FlushIconButton gains a `surface` axis (`default | inverse`, appended last, following IconButton\'s) so the glyph reads on the inverse card, with Counter and Dialog naming `surface: default` on their nests. Decided: Q367 (c): the action label stays the nested Button\'s text, as Dialog\'s footer, not a toast text property. Decided: Q532.1 A: the 8px gap between the message and the controls stays as built (the proposal leaves it open; the wireframe uses 8px).',
-      'Decided: Q3165.1 A (#3165): with the message at 14px, the card takes a floor at `size.md.height`, so a one-line toast with no action measures 44 at comfortable rather than 37; the alternatives were holding 40 with a 24px floor on the message row, or no floor.',
     ],
     unverified: [
       'That the nested Button and FlushIconButton.Neutral carry their prototype reactions into the toast\'s instances on the canvas, as they do inside Dialog.',
       'The live-region timing (one frame after the region exists) and NVDA\'s behavior, against current assistive technology.',
     ],
     evolution: [
+      // Moved from `contested` (#1716): each describes a decision already taken, so it is evolution.
+      'Decided: Q436 (a) (#2668): the close nests FlushIconButton.Neutral (Q386, as Dialog), not the proposal\'s IconButton.Neutral; FlushIconButton gains a `surface` axis (`default | inverse`, appended last, following IconButton\'s) so the glyph reads on the inverse card, with Counter and Dialog naming `surface: default` on their nests. Decided: Q367 (c): the action label stays the nested Button\'s text, as Dialog\'s footer, not a toast text property. Decided: Q532.1 A: the 8px gap between the message and the controls stays as built (the proposal leaves it open; the wireframe uses 8px).',
+      'Decided: Q3165.1 A (#3165): with the message at 14px, the card takes a floor at `size.md.height`, so a one-line toast with no action measures 44 at comfortable rather than 37; the alternatives were holding 40 with a 24px floor on the message row, or no floor.',
       'Owner decisions: the proposal and wireframe on #2668, every numbered call A (2026-10-16): toast for the user\'s own action and safe to miss, errors to a banner; intents neutral and success; no glyph on neutral; bottom center below 768px and the bottom inline-end corner from 768px; one at a time, the newest replacing; 6s with a 5s floor and pauses, no timer with an action; at most one action that also exists elsewhere; close on by default; the inverse surface; F6 in, Escape out; built at 360; named Toast with its aliases; the wording as drafted.',
       'Owner request (#3165, 2026-10-30): the message moves from `type.body.md` (16px) to `type.body.sm` (14px), after the option rows\' 14px label (#3153).',
       'The brief\'s severity set (info, success, warning, error, loading), its stacked toaster, its timeout bar and its swipe are not built: errors and warnings go to a banner (call 1 A), one toast shows at a time (call 5 A), and the rest is out of scope (the proposal\'s §11).',

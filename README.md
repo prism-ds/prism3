@@ -4,7 +4,7 @@ A design-tokens repository with two layers: a **legacy hand-built token set** an
 dependency-free **TypeScript generation engine** that reproduces it and generalizes to new
 brands. The engine is the active surface; the hand-built layer is its regression target.
 
-**Live dashboard — <https://prism3-ds.vercel.app/>** — the engine running client-side: edit a
+**Studio — <https://prism3-ds.vercel.app/>** — the web Studio, the engine running client-side: edit a
 brand's levers and watch the ramps, the component preview and the per-mode contrast contracts
 re-resolve.
 
@@ -19,9 +19,9 @@ re-resolve.
 | [`packages/engine/`](packages/engine/) | The **generation engine** — a brand is a small validated input that expands into a full token tree, AI metadata, and platform outputs (DTCG + Figma). Buildless and dependency-free; consumed by name as `@prism3/engine`. Start here for engine work. See [`packages/engine/README.md`](packages/engine/README.md). |
 | [`docs/`](docs/) | The **design record** — the numbered design docs (the architecture spec, the decisions log, the open questions) plus `superpowers/` working notes. |
 | [`reference/`](reference/) | The **legacy hand-built tokens** — Prism2 (`nbds.pds.*`) and New Balance, in two parallel formats (Figma variable export + DTCG). The engine's regression target, not a build output. |
-| [`apps/studio/`](apps/studio/) | The **theme studio** — a browser host over the engine's shared lever/preview contracts, deployed at the link above. See [`apps/studio/README.md`](apps/studio/README.md). |
+| [`apps/studio/`](apps/studio/) | **Studio** — the browser host over the engine's shared lever/preview contracts, deployed at the link above. See [`apps/studio/README.md`](apps/studio/README.md). |
 | [`apps/plugin/`](apps/plugin/) | The **Figma plugin** — the write host over the same engine core, split across Figma's two isolated contexts (main thread + UI iframe) with a typed message bridge between them. See [`apps/plugin/README.md`](apps/plugin/README.md). |
-| [`apps/tokenpress/`](apps/tokenpress/) | **TokenPress** — the Figma plugin that exports Figma Variables, Text Styles, and Effect Styles *out* to DTCG. It runs the opposite direction from the engine, and it ships publicly in the Figma Community. Ported in whole rather than rewritten; it still has its own emitter and shares no code with `packages/engine/`. See [`apps/tokenpress/README.md`](apps/tokenpress/README.md). |
+| [`apps/tokenpress/`](apps/tokenpress/) | **TokenPress** — the Figma plugin that exports a Figma file's variables, text styles, effect styles and gradient paint styles *out* to DTCG. It runs the opposite direction from the engine, and it ships publicly in the Figma Community. Ported in whole rather than rewritten; it still has its own emitter and shares no code with `packages/engine/`. See [`apps/tokenpress/README.md`](apps/tokenpress/README.md). |
 | [`apps/storybook/`](apps/storybook/) | **`@prism3/storybook`** — the arm 1 Storybook (#3408): each component as the custom element and as plain HTML/CSS, one story per state, on Storybook 10. See [`apps/storybook/README.md`](apps/storybook/README.md). |
 | [`packages/tokens/`](packages/tokens/) | The **consumability gate** — a stock Style Dictionary build over the emitted DTCG, kept deliberately naive so it answers whether a stranger could consume the output without code from us. It also builds the shippable token CSS a client installs (#3408). See [`packages/tokens/README.md`](packages/tokens/README.md). |
 | [`packages/css/`](packages/css/) | **`@prism3/css`** — components as plain HTML and CSS, for server-rendered platforms (#3408, arm 1 of the code POC). The CSS is generated from the engine's component emission and reads the token CSS from `packages/tokens`. The button so far. See [`packages/css/README.md`](packages/css/README.md). |

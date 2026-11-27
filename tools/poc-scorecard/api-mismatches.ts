@@ -24,6 +24,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readUncommitted } from '../../packages/css/emission';
+import { isEntry } from '@prism3/engine/harness';
 
 type Prop = { name: string };
 type Def = { def: { props?: Prop[] }; spec?: { nesting?: { exposes?: string[] }[] } };
@@ -62,7 +63,7 @@ export const mismatches = (defs: Record<string, Def>, manifest: Manifest): Resul
 export const unmeasurable = (r: Result, source: string): string | null =>
   r.compared.length ? null : `FAIL api mismatches: no element in ${source} matches a def (tags: ${r.unmatched.join(', ') || 'none'})`;
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname ?? '', 'api-mismatches.ts')) {
+if (isEntry(import.meta.url)) {
   const arg = (n: string) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
   const mf = arg('--manifest');
   if (!mf) { console.error('FAIL api mismatches: --manifest <custom-elements.json> is required'); process.exit(1); }

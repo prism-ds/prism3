@@ -241,6 +241,13 @@ jobs:
       # base's own number when nothing moved. Needs history: the job-level `fetch-depth: 0` above.
       - name: "CONTRACT_VERSION moved by the increment the surface needs, against the base (#2334)"
         run: npx tsx packages/engine/lint-contract-version.ts
+
+      # #1325 (owner decision Q-CC1 A): the component contract and the component schema, the token contract's
+      # pattern one layer over. COMPONENT_CONTRACT_VERSION answers for each def's names, props, values, states,
+      # variants and slots; COMPONENT_SCHEMA_VERSION for the shape of one published entry. The baseline,
+      # schema/component-contract.json, is not a regen artifact: only --accept writes it, after the bump.
+      - name: "Component contract and component schema (breaking-change gate, #1325)"
+        run: npx tsx packages/engine/component-contract.ts --check
       # #2637 — the agent reference, docs/public/reference/commands.json, still matches the code: every MCP
       # tool of both servers, every agent-link command and every CLI entry point, regenerated in memory from
       # the code (toolDefs, TOOLS, AGENT_COMMANDS/AgentArgs/parseCommand, each CLI's usage and argv reads)
@@ -275,6 +282,13 @@ jobs:
       # the prefix and the mode list are the oracle; none is read off the build.
       - name: Token package gate (the packed @prism3/tokens installs and defines the contract's names)
         run: npm run -w @prism3/tokens check:package
+
+      # #2997 gate 5 — the engine's Tailwind v4 theme, compiled by the stock Tailwind CLI pinned in packages/tokens
+      # against a typed fixture. A utility that does not compile fails `<utility> utility unresolved` by name; a dimension
+      # or font that computes to the wrong value, or a variable `.dark` does not set, fails naming it. Color values are
+      # gate 2's (the shadcn round trip reads this file too).
+      - name: The Tailwind v4 theme compiles in a stock Tailwind (#2997)
+        run: npm run -w @prism3/tokens check:shadcn
 
       # @prism3/css (#3408 S2, Q96 A): button.css and demo.html are GENERATED from the engine's emission
       # (out/components/specs.json + component-defs.json) by packages/css/generate.ts, and committed so a
@@ -885,8 +899,8 @@ jobs:
 
       # #3264, owner decision 3 — the designer guides (docs/public/guides/*.md) still describe the app. The guides
       # are the SUBJECT, the code the ORACLE: every **bold** UI label is a whole string literal (or HTML text) in
-      # apps/studio/src, apps/plugin/src or apps/tokenpress/src, comments not counted; every `<!-- src: path:line -->`
-      # names a git-tracked file and lines inside it, and the cited lines still hold one of the quoted strings, code
+      # apps/studio/src, apps/plugin/src or apps/tokenpress/src, comments not counted; every `<!-- src: path@"…".."…" -->`
+      # names a git-tracked file and lines in it by their text, never their numbers (#4455), and the cited lines still hold one of the quoted strings, code
       # spans or labels of the claim it backs; every "<n> component sets" equals componentDefs; and every guide the
       # index lists is read and cites something, each source tree yields literals.
       - name: The designer guides still describe the app (#3264)
@@ -975,10 +989,34 @@ jobs:
 
       # #1834 — a merge from main once dropped a suite's whole #1812 arm and every gate stayed green. Each
       # (suite, #NNNN) named in a string or template literal of a test suite is registered in the authored
-      # packages/engine/test-arms.txt; an arm gone from its suite fails by name, a new one fails until
-      # `--accept` adds it (sorted), and only a hand-deleted line retires one. Names, not execution: floors are #1066.
+      # packages/engine/test-arms/, one file per arm so concurrent PRs never conflict (#4455); an arm gone from its
+      # suite fails by name, a new one fails until `--accept` adds its file, and only a hand-deleted file retires one. Names, not execution: floors are #1066.
       - name: A registered test arm is still in its suite (#1834)
         run: npx tsx packages/engine/lint-test-arms.ts
+
+      # #4458, #4330 — two PRs that each raise a published format from N to N+1 merge with no conflict, and the merged
+      # tree publishes the union of both shapes as N+1. schema/format-history.json records one row per version with a
+      # hash of the schema's shape, appended by `--accept` only; a version recorded twice (DUPLICATE) or a shape that is
+      # not its version's (SHAPE) fails by name, so the two-PR merge conflicts on the record or fails here.
+      - name: One version of a published format names one shape (#4458)
+        run: npx tsx packages/engine/lint-format-history.ts
+
+      # #2997 gate 3 — shadcn/ui's theme variable names are an external contract. The role map's keys are held to the
+      # pinned set in schema/shadcn-vars.json both ways (UNMAPPED / UNPINNED by name), and the pin to SHADCN_MAP_VERSION;
+      # only `--accept` rewrites the pin, after a version raise.
+      - name: The shadcn map covers the pinned shadcn variable set (#2997)
+        run: npx tsx packages/engine/shadcn-vars.ts --check
+
+      # #2997 gate 4 — each shadcn variable whose job a Prism3 component contract binds (Button, Text Field, Select,
+      # Focus Ring) maps to that binding in the published contract export; every mapped role is guaranteed.
+      - name: The shadcn map follows the component contract (#2997)
+        run: npx tsx packages/engine/lint-shadcn-contract.ts
+
+      # #2996 — the spec supplement (out/specs/*.supplement.yaml) is keyed to Spectacular's own output for the same
+      # component. Against a hand-copied fixture of that output and the authored token contract (never the emitter),
+      # fails by arm when an element, prop, Figma name or $token path stops lining up, or a code name leaves the contract.
+      - name: The spec supplement lines up with Spectacular's output (#2996)
+        run: npx tsx packages/engine/lint-spec-supplement.ts
 
       # #1123 — the mutation battery for the CLAUDE.md-freshness SessionStart report (#1110), the one
       # `tools/` harness wired into CI. It is NAMED FOR THE DETECTOR, never for this tree, because
@@ -1121,6 +1159,14 @@ jobs:
       # The browser comes from the verdict step.
       - name: "A live styles.css rule is not removed without an accept (#2201)"
         run: npm run -w @prism3/studio lint:live-css
+
+      # #2997 gates 1 and 2 — the shadcn theme, rendered fresh and measured in Chromium (installed above): every typed
+      # ink-on-ground pair clears the higher of WCAG and the engine's own floor, and every oklch() parses back to the
+      # emitted 8-bit color. In this job because it is where the browser is.
+      - name: The shadcn theme clears its contrast floors in Chromium (#2997)
+        run: npx tsx packages/engine/lint-shadcn-contrast.ts
+      - name: Every shadcn oklch() is the emitted color, through Chromium (#2997)
+        run: npx tsx packages/engine/lint-shadcn-roundtrip.ts
 
       # The studio's DOM/interaction coverage (#767, deciding #333) — and the ONLY step in this
       # workflow that runs a browser. It loads every page in every mode across both corpus brands

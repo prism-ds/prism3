@@ -46,6 +46,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MARKER_CHECK, MARK_PROGRAM, TASK, buttonsAtFault, buttonsInspect, captureCommands, goldenHash, resetCommands, setupCommands, type Cmd, type Roles } from './figma-plan';
 import { RUN_FORMAT } from './score-figma';
+import { isEntry } from '../../packages/engine/entry-point';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SERVER = join(REPO, 'tools/figma-bridge/server.ts');
@@ -391,7 +392,7 @@ const rolesOf = (plant: any): Roles => {
 
 /* ── the CLI ────────────────────────────────────────────────────────────────────────────────────────── */
 
-const isMain = !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const [sub, ...argv] = process.argv.slice(2);
   const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -461,7 +462,7 @@ if (isMain) {
   const name = `F${arm}-${index}`;
   const dir = join(root, name);
   mkdirSync(dir, { recursive: true });
-  const cwd = mkdtempSync(join(tmpdir(), `p3-adherence-${name}-`));
+  const cwd = mkdtempSync(join(realpathSync(tmpdir()), `p3-adherence-${name}-`));
   const why = preflight(process.env, cwd);
   if (why) { say(`refusing to start: ${why}`); process.exit(1); }
   const calls = join(dir, 'calls.jsonl');

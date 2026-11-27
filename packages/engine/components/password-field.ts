@@ -44,7 +44,7 @@ export const passwordField: ComponentDef = withMirrors(makeTextField({
     { name: 'defaultValue', type: 'string', required: false, description: 'Uncontrolled initial value.' },
     { name: 'onChange', type: 'function', required: false, description: 'Change handler (also onBlur / onFocus).' },
     { name: 'placeholder', type: 'string', required: false, description: 'An example only; vanishes on input. The password rules belong in helper text or a list under the field, never here.' },
-    { name: 'helpText', type: 'string | node', required: false, description: 'Persistent guidance (rendered as FieldMessage, default status), wired via aria-describedby. State the rules for a new password here, before the user types.' },
+    { name: 'helpText', type: 'string | node', required: false, description: 'Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. State the rules for a new password here, before the user types.' },
     { name: 'validation', type: "enum: 'default' | 'error' | 'warning' | 'success'", values: ['default', 'error', 'warning', 'success'], default: 'default', required: false, description: 'The validation state, as on TextField: each non-default status swaps the input border and sets the nested message to the matching status; error also sets aria-invalid. The Show/Hide button never takes the status color.' },
     { name: 'validationMessage', type: 'string | node', required: false, description: 'The validation text shown at error / warning / success, added to aria-describedby. Say what is wrong and how to fix it (SC 3.3.3).' },
     { name: 'showMessage', type: 'boolean', default: false, required: false, description: 'Whether the composed FieldMessage is shown. Off by default; turn it on to render the helper or validation message. Never hides a message the field needs.' },
@@ -175,10 +175,12 @@ export const passwordField: ComponentDef = withMirrors(makeTextField({
   docs: {
     usage: 'Use for a password, a PIN typed as text, or any other secret a user types. The field nests FieldLabel and a Show/Hide button on the label row, the input box below, and FieldMessage under it. Set `autoComplete` to `current-password` on a sign-in form and `new-password` where the user sets one. Put the rules for a new password in helper text or a list under the field.',
     do: [
+      'State the rules for a new password before the user types',
+    ],
+    implementation: [
       'Set `autoComplete` to `current-password` or `new-password` on every password field',
       'Let the user paste, so a password manager can fill the field',
       'Return the field to hidden when its form submits',
-      'State the rules for a new password before the user types',
     ],
     dont: [
       'Use an eye icon inside the field instead of the Show/Hide button',

@@ -1,6 +1,6 @@
 {
   "name": "@prism3/tokenpress",
-  "version": "3.0.0",
+  "version": "3.0.3",
   "private": true,
   "type": "module",
   "description": "Export Figma Variables, Text Styles, and Effect Styles to DTCG/W3C-compliant JSON with intelligent composite token compilation (typography, shadows, transitions)",

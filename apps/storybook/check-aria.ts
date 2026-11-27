@@ -38,6 +38,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { at, context, dirsFor, DROPPED, main, open, require, result, stateOf, stories, type Dir, type Plant, type Story, type Result } from './a11y-harness.ts';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINE = resolve(HERE, 'aria-snapshots.json');
@@ -226,6 +227,6 @@ const MUTANTS = [
   },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   await main('aria', 'Each case\'s element and HTML forms build the same accessibility tree (ARIA snapshot plus descriptions), equal to the accepted aria-snapshots.json, with every HAS row present, left to right and right to left (the same tree in both).', run as never, ACCEPT ? [] : [...MUTANTS, ...DROPPED('aria')]);
 }

@@ -54,6 +54,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { makeShim, type Node, type Page } from './component-shim';
 import { materializeForBrand } from './src/brand-def';
+import { isEntry } from '@prism3/engine/harness';
 
 /** Every structural lever away from its default (`levers.ts`), on the engine's sparsest brand's colors. */
 export const LEVERS = {
@@ -228,7 +229,7 @@ export const measure = async (OLD: Exec, NEW: Exec, defs: readonly ComponentDef[
 
 // ---- the worker --------------------------------------------------------------------------------------------------
 const arg = (k: string): string | undefined => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : undefined; };
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname)) {
+if (isEntry(import.meta.url)) {
   const old = arg('--old'), outFile = arg('--out');
   if (!old || !outFile) { console.error('usage: reach-draw.ts --old <dir holding apps/plugin/src> [--defs a,b] --out <file>'); process.exit(2); }
   const want = arg('--defs')?.split(',').filter(Boolean);

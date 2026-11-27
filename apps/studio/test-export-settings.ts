@@ -20,7 +20,7 @@
  * from the real trees disagreeing (the top-level `$extensions` sibling, and camelCase's `padding-x-`
  * collision). If this file is ever given a hand-written tree "for speed", it stops being a check.
  */
-import {
+import { FORMAT_OPTION, FORMAT_DESC,
   ALL_SETTINGS, ALL_SOURCES, AVAILABLE_SOURCES, ARTIFACTS, DTCG_SETTINGS, DESIGN_MD_SETTINGS,
   SAMPLE_CRITERIA, defaultSettings, visibleSettings, projectDtcg, mergeFiles,
   fileNames, previewFiles, sampleLeaves, leavesOf, rootKeyOf, renameSegment, unrenameSegment,
@@ -28,7 +28,7 @@ import {
   sampleDefects, METADATA_OPTION, exportDtcg, exportFileNames, exportPreview, metadataDefects, groupMetaOf,
   type SettingDef, type SettingsState, type ExportSource,
 } from './src/export-settings';
-import { buildBase, stripExtensions } from '@prism3/engine';
+import { buildOverlaySet } from '@prism3/engine';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -90,6 +90,10 @@ console.log('\n=== 1. declarations ===');
 none(declarationDefects(), 'every setting declares a usable source, artifact, default and options');
 none(jargonDefects(), 'no label or description reads as an engine identifier');
 ok(ARTIFACTS.map((a) => a.id).join(',') === 'dtcg,design-md,component-specs', `three artifacts (${ARTIFACTS.map((a) => a.id).join(', ')}) — the third is the component specs (#3425); Style-Dictionary-native is not one (#720)`);
+// The format (the lane after #2997): an option of the tokens' artifact, the switcher staying three tabs (#3553 Q-UI11 A).
+ok(FORMAT_OPTION.artifact === 'dtcg' && FORMAT_OPTION.options.map((o) => o.value).join(',') === 'dtcg,shadcn,tailwind' && FORMAT_OPTION.def === 'dtcg',
+  `the tokens' format is design tokens by default, or a shadcn/ui or Tailwind theme (${FORMAT_OPTION.options.map((o) => o.value).join(', ')}; default ${FORMAT_OPTION.def})`);
+ok(Object.keys(FORMAT_DESC).sort().join(',') === 'shadcn,tailwind', 'each theme format has the description shown in place of the tokens\' when it is chosen');
 ok(ALL_SETTINGS.every((s) => s.artifact !== 'component-specs'), 'component specs carry no shape settings — the brand\'s component settings shape them (#3425)');
 ok(DTCG_SETTINGS.length === 4, `DTCG carries four shape settings (${DTCG_SETTINGS.map((s) => s.key).join(', ')})`);
 ok(DESIGN_MD_SETTINGS.length === 0, 'design.md carries no shape settings — each candidate #720 named fails its own rules');
@@ -307,9 +311,10 @@ for (const { id, tree } of corpus) {
 // wrapper (first key AND after its children), a top-level group (after its children) and a deep group
 // (both). The root wrapper's split keys, around descendants that carry their own, are the shape whose
 // `$`-keys the dotted inverse puts back in a different order (review of #2615): the check holds them
-// as a set. The expected side is the ENGINE's base projection of that fixture (`buildBase`, plus
-// `stripExtensions` for the default), serialized here: the engine path that writes `out/*.base.tokens.json`,
-// which runs no studio code, so a studio projection that drops or reorders a key cannot reach it.
+// as a set. The expected side is the ENGINE's base projection of that fixture (`buildOverlaySet`'s base, with and
+// without metadata), serialized here: the engine path that writes `out/*.base.tokens.json`, which runs no studio
+// code, so a studio projection that drops or reorders a key cannot reach it. (It was `buildBase` until #4123 moved
+// the DTCG 2025.10 value forms into the handoff, `buildOverlaySet`, after `buildBase`.)
 
 console.log('\n=== 7c. group metadata survives the export (#2446) ===');
 {
@@ -333,8 +338,8 @@ console.log('\n=== 7c. group metadata survives the export (#2446) ===');
     files.find((f) => f.name === 'fx.base.tokens.json')?.text;
   const on = base(exportDtcg(fixture, 'fx', defaultSettings(), true));
   const off = base(exportDtcg(fixture, 'fx', defaultSettings()));
-  ok(on === ser(buildBase(fixture)), 'nested, metadata on: the base file is the engine\'s base of the fixture byte for byte — every group $description and $extensions in place');
-  ok(off === ser(stripExtensions(buildBase(fixture))), 'nested, metadata off: the base file is the engine\'s consumer base byte for byte — group $description kept, $extensions removed');
+  ok(on === ser(buildOverlaySet(fixture, { metadata: true }).base), 'nested, metadata on: the base file is the engine\'s base of the fixture byte for byte — every group $description and $extensions in place');
+  ok(off === ser(buildOverlaySet(fixture).base), 'nested, metadata off: the base file is the engine\'s consumer base byte for byte — group $description kept, $extensions removed');
   ok(!!off && off.includes('"$description": "The root wrapper."') && off.includes(`"$description": "The ${deep} group."`), 'nested, metadata off: both group $description lines are in the download');
 
   // The dotted rule: a group's `$`-keys sit under the group's own dotted path, with no `$value`.

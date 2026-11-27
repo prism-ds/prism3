@@ -18160,6 +18160,17 @@
             }
           }
         },
+        "100": {
+          "$type": "duration",
+          "$value": "100ms",
+          "$description": "duration primitive — 100ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 100
+            }
+          }
+        },
         "130": {
           "$type": "duration",
           "$value": "130ms",
@@ -18182,6 +18193,17 @@
             }
           }
         },
+        "300": {
+          "$type": "duration",
+          "$value": "300ms",
+          "$description": "duration primitive — 300ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 300
+            }
+          }
+        },
         "390": {
           "$type": "duration",
           "$value": "390ms",
@@ -18190,6 +18212,28 @@
             "prism3": {
               "generated": true,
               "ms": 390
+            }
+          }
+        },
+        "400": {
+          "$type": "duration",
+          "$value": "400ms",
+          "$description": "duration primitive — 400ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 400
+            }
+          }
+        },
+        "500": {
+          "$type": "duration",
+          "$value": "500ms",
+          "$description": "duration primitive — 500ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 500
             }
           }
         },
@@ -18226,6 +18270,28 @@
             }
           }
         },
+        "1170": {
+          "$type": "duration",
+          "$value": "1170ms",
+          "$description": "duration primitive — 1170ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 1170
+            }
+          }
+        },
+        "1430": {
+          "$type": "duration",
+          "$value": "1430ms",
+          "$description": "duration primitive — 1430ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 1430
+            }
+          }
+        },
         "1600": {
           "$type": "duration",
           "$value": "1600ms",
@@ -18234,6 +18300,17 @@
             "prism3": {
               "generated": true,
               "ms": 1600
+            }
+          }
+        },
+        "1690": {
+          "$type": "duration",
+          "$value": "1690ms",
+          "$description": "duration primitive — 1690ms (literal; the semantic tier names the use)",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "ms": 1690
             }
           }
         },
@@ -18322,6 +18399,42 @@
             }
           }
         },
+        "long": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.1170}",
+          "$description": "motion duration long — 1170ms (tempo: relaxed)",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.1170",
+              "ms": 1170
+            }
+          }
+        },
+        "longer": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.1430}",
+          "$description": "motion duration longer — 1430ms (tempo: relaxed)",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.1430",
+              "ms": 1430
+            }
+          }
+        },
+        "longest": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.1690}",
+          "$description": "motion duration longest — 1690ms (tempo: relaxed)",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.1690",
+              "ms": 1690
+            }
+          }
+        },
         "spin": {
           "$type": "duration",
           "$value": "{hds.motion.duration-ms.800}",
@@ -18362,61 +18475,97 @@
         },
         "fast": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.50}",
-          "$description": "reduce-motion fast — 50ms",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion fast — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "hds.motion.duration-ms.50",
-              "ms": 50
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "normal": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion normal — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion normal — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "hds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "moderate": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion moderate — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion moderate — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "hds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "slow": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion slow — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion slow — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "hds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
         "slower": {
           "$type": "duration",
-          "$value": "{hds.motion.duration-ms.0}",
-          "$description": "reduce-motion slower — 0ms (eliminated — substitute a cross-fade)",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion slower — 100ms",
           "$extensions": {
             "prism3": {
               "role": "semantic",
-              "aliasOf": "hds.motion.duration-ms.0",
-              "ms": 0
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
+            }
+          }
+        },
+        "long": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion long — 100ms",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
+            }
+          }
+        },
+        "longer": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion longer — 100ms",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
+            }
+          }
+        },
+        "longest": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.100}",
+          "$description": "reduce-motion longest — 100ms",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.100",
+              "ms": 100
             }
           }
         },
@@ -18441,6 +18590,56 @@
               "role": "semantic",
               "aliasOf": "hds.motion.duration-ms.2600",
               "ms": 2600
+            }
+          }
+        }
+      },
+      "delay": {
+        "show": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.400}",
+          "$description": "delay show — 400ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.400",
+              "ms": 400
+            }
+          }
+        },
+        "min-show": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.500}",
+          "$description": "delay min-show — 500ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.500",
+              "ms": 500
+            }
+          }
+        },
+        "hide": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.300}",
+          "$description": "delay hide — 300ms a tooltip stays after the pointer leaves, so the pointer can move onto it; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.300",
+              "ms": 300
+            }
+          }
+        },
+        "skip": {
+          "$type": "duration",
+          "$value": "{hds.motion.duration-ms.300}",
+          "$description": "delay skip — 300ms after one tooltip closes in which the next shows at once, with no delay or animation; the same at every tempo",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.motion.duration-ms.300",
+              "ms": 300
             }
           }
         }
@@ -18625,62 +18824,1149 @@
               "customType": "spring"
             }
           }
+        },
+        "effects": {
+          "$type": "spring",
+          "$value": {
+            "damping": 1,
+            "stiffness": 1600
+          },
+          "$description": "spring effects — damping 1, stiffness 1600",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "spring"
+            }
+          }
         }
       },
-      "transition": {
-        "default": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.normal}",
-            "timingFunction": "{hds.motion.easing-role.default}",
-            "delay": "0ms"
-          },
-          "$description": "motion default — standard in-place transition (normal + standard)",
+      "spring-duration": {
+        "snappy": {
+          "$type": "duration",
+          "$value": "317ms",
+          "$description": "spring snappy settle time — 317ms, the time the snappy spring takes to settle on its target; play spring-easing snappy over it",
           "$extensions": {
             "prism3": {
-              "role": "composite"
+              "generated": true,
+              "ms": 317
             }
           }
         },
-        "enter": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.normal}",
-            "timingFunction": "{hds.motion.easing-role.enter}",
-            "delay": "0ms"
-          },
-          "$description": "motion enter — element settles in (normal + decelerate)",
+        "gentle": {
+          "$type": "duration",
+          "$value": "435ms",
+          "$description": "spring gentle settle time — 435ms, the time the gentle spring takes to settle on its target; play spring-easing gentle over it",
           "$extensions": {
             "prism3": {
-              "role": "composite"
+              "generated": true,
+              "ms": 435
             }
           }
         },
-        "exit": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.fast}",
-            "timingFunction": "{hds.motion.easing-role.exit}",
-            "delay": "0ms"
-          },
-          "$description": "motion exit — element accelerates out (fast + accelerate)",
+        "bouncy": {
+          "$type": "duration",
+          "$value": "360ms",
+          "$description": "spring bouncy settle time — 360ms, the time the bouncy spring takes to settle on its target; play spring-easing bouncy over it",
           "$extensions": {
             "prism3": {
-              "role": "composite"
+              "generated": true,
+              "ms": 360
             }
           }
         },
-        "emphasized": {
-          "$type": "transition",
-          "$value": {
-            "duration": "{hds.motion.duration.moderate}",
-            "timingFunction": "{hds.motion.easing-role.emphasized}",
-            "delay": "0ms"
-          },
-          "$description": "motion emphasized — expressive / hero moment (moderate + expressive)",
+        "effects": {
+          "$type": "duration",
+          "$value": "231ms",
+          "$description": "spring effects settle time — 231ms, the time the effects spring takes to settle on its target; play spring-easing effects over it",
           "$extensions": {
             "prism3": {
-              "role": "composite"
+              "generated": true,
+              "ms": 231
+            }
+          }
+        }
+      },
+      "spring-easing": {
+        "snappy": {
+          "$type": "linearEasing",
+          "$value": "linear(0, 0.008, 0.029, 0.061, 0.101, 0.145, 0.194, 0.245, 0.296, 0.348, 0.398, 0.447, 0.495, 0.54, 0.582, 0.622, 0.66, 0.694, 0.727, 0.756, 0.783, 0.808, 0.83, 0.851, 0.869, 0.885, 0.9, 0.913, 0.925, 0.936, 0.945, 0.953, 0.96, 0.966, 0.972, 0.976, 0.981, 0.984, 0.987, 0.99, 0.992, 0.994, 0.995, 0.997, 0.998, 0.999, 0.999, 1, 1, 1.001, 1.001, 1.001, 1.001, 1.001, 1.002, 1.002, 1.002, 1.001, 1.001, 1.001, 1.001, 1.001, 1.001, 1.001, 1)",
+          "$description": "spring snappy as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration snappy (317ms); the damping and stiffness stay in spring snappy",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "linearEasing"
+            }
+          }
+        },
+        "gentle": {
+          "$type": "linearEasing",
+          "$value": "linear(0, 0.005, 0.017, 0.037, 0.062, 0.091, 0.125, 0.161, 0.199, 0.239, 0.28, 0.321, 0.363, 0.404, 0.444, 0.483, 0.521, 0.558, 0.594, 0.628, 0.66, 0.69, 0.719, 0.747, 0.772, 0.796, 0.818, 0.839, 0.858, 0.875, 0.891, 0.906, 0.919, 0.932, 0.943, 0.953, 0.961, 0.969, 0.977, 0.983, 0.988, 0.993, 0.997, 1.001, 1.004, 1.007, 1.009, 1.011, 1.012, 1.013, 1.014, 1.015, 1.015, 1.015, 1.015, 1.015, 1.015, 1.015, 1.014, 1.014, 1.013, 1.013, 1.012, 1.011, 1.011, 1.01, 1.009, 1.009, 1.008, 1.008, 1.007, 1.007, 1.006, 1.006, 1.005, 1.005, 1.004, 1.004, 1.003, 1.003, 1.003, 1.002, 1.002, 1.002, 1.002, 1.001, 1.001, 1)",
+          "$description": "spring gentle as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration gentle (435ms); the damping and stiffness stay in spring gentle",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "linearEasing"
+            }
+          }
+        },
+        "bouncy": {
+          "$type": "linearEasing",
+          "$value": "linear(0, 0.009, 0.036, 0.075, 0.126, 0.185, 0.249, 0.317, 0.388, 0.458, 0.527, 0.595, 0.659, 0.719, 0.775, 0.827, 0.874, 0.915, 0.952, 0.984, 1.011, 1.034, 1.052, 1.067, 1.078, 1.086, 1.092, 1.094, 1.095, 1.093, 1.091, 1.087, 1.082, 1.076, 1.07, 1.063, 1.056, 1.05, 1.043, 1.037, 1.031, 1.025, 1.02, 1.015, 1.011, 1.007, 1.004, 1.001, 0.998, 0.996, 0.995, 0.993, 0.992, 0.992, 0.991, 0.991, 0.991, 0.991, 0.991, 0.992, 0.992, 0.993, 0.994, 0.994, 0.995, 0.995, 0.996, 0.997, 0.997, 0.998, 0.998, 0.999, 1)",
+          "$description": "spring bouncy as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration bouncy (360ms); the damping and stiffness stay in spring bouncy",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "linearEasing"
+            }
+          }
+        },
+        "effects": {
+          "$type": "linearEasing",
+          "$value": "linear(0, 0.016, 0.056, 0.111, 0.175, 0.243, 0.312, 0.38, 0.445, 0.506, 0.562, 0.614, 0.66, 0.703, 0.74, 0.774, 0.803, 0.83, 0.853, 0.873, 0.89, 0.905, 0.919, 0.93, 0.94, 0.949, 0.956, 0.963, 0.968, 0.973, 0.977, 0.98, 0.983, 0.986, 0.988, 0.99, 0.991, 0.993, 0.994, 0.995, 0.995, 0.996, 0.997, 0.997, 0.998, 0.998, 0.998, 0.999, 0.999, 1)",
+          "$description": "spring effects as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration effects (231ms); the damping and stiffness stay in spring effects",
+          "$extensions": {
+            "prism3": {
+              "generated": true,
+              "customType": "linearEasing"
+            }
+          }
+        }
+      },
+      "preset": {
+        "state": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.fast}",
+            "$description": "preset state duration — the fast step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.fast"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset state easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset state delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.fast}",
+            "$description": "preset state reduced duration — the fast step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.fast",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.state.duration}",
+              "timingFunction": "{hds.motion.preset.state.easing}",
+              "delay": "{hds.motion.preset.state.delay}"
+            },
+            "$description": "preset state — the fast step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "fade": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset fade duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.normal"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset fade easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset fade delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset fade reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.fade.duration}",
+              "timingFunction": "{hds.motion.preset.fade.easing}",
+              "delay": "{hds.motion.preset.fade.delay}"
+            },
+            "$description": "preset fade — the normal step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration.fast}",
+              "$description": "preset fade exit duration — the fast step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration.fast"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{hds.motion.easing-role.exit}",
+              "$description": "preset fade exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-ms.0}",
+              "$description": "preset fade exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-reduced.fast}",
+              "$description": "preset fade exit reduced duration — the fast step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-reduced.fast",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{hds.motion.preset.fade.exit.duration}",
+                "timingFunction": "{hds.motion.preset.fade.exit.easing}",
+                "delay": "{hds.motion.preset.fade.exit.delay}"
+              },
+              "$description": "preset fade exit — the fast step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "crossfade": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset crossfade duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.normal"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset crossfade easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset crossfade delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset crossfade reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.crossfade.duration}",
+              "timingFunction": "{hds.motion.preset.crossfade.easing}",
+              "delay": "{hds.motion.preset.crossfade.delay}"
+            },
+            "$description": "preset crossfade — the normal step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "move": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset move duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.normal"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset move easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset move delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset move reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.move.duration}",
+              "timingFunction": "{hds.motion.preset.move.easing}",
+              "delay": "{hds.motion.preset.move.delay}"
+            },
+            "$description": "preset move — the normal step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "reveal": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.slow}",
+            "$description": "preset reveal duration — the slow step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.slow"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset reveal easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset reveal delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.slow}",
+            "$description": "preset reveal reduced duration — the slow step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.slow",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.reveal.duration}",
+              "timingFunction": "{hds.motion.preset.reveal.easing}",
+              "delay": "{hds.motion.preset.reveal.delay}"
+            },
+            "$description": "preset reveal — the slow step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration.moderate}",
+              "$description": "preset reveal exit duration — the moderate step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration.moderate"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{hds.motion.easing-role.exit}",
+              "$description": "preset reveal exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-ms.0}",
+              "$description": "preset reveal exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-reduced.moderate}",
+              "$description": "preset reveal exit reduced duration — the moderate step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-reduced.moderate",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{hds.motion.preset.reveal.exit.duration}",
+                "timingFunction": "{hds.motion.preset.reveal.exit.easing}",
+                "delay": "{hds.motion.preset.reveal.exit.delay}"
+              },
+              "$description": "preset reveal exit — the moderate step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "draw": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.slow}",
+            "$description": "preset draw duration — the slow step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.slow"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset draw easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset draw delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.slow}",
+            "$description": "preset draw reduced duration — the slow step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.slow",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.draw.duration}",
+              "timingFunction": "{hds.motion.preset.draw.easing}",
+              "delay": "{hds.motion.preset.draw.delay}"
+            },
+            "$description": "preset draw — the slow step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "surface": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.moderate}",
+            "$description": "preset surface duration — the moderate step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.moderate"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset surface easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset surface delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.moderate}",
+            "$description": "preset surface reduced duration — the moderate step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.moderate",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.surface.duration}",
+              "timingFunction": "{hds.motion.preset.surface.easing}",
+              "delay": "{hds.motion.preset.surface.delay}"
+            },
+            "$description": "preset surface — the moderate step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration.normal}",
+              "$description": "preset surface exit duration — the normal step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration.normal"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{hds.motion.easing-role.exit}",
+              "$description": "preset surface exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-ms.0}",
+              "$description": "preset surface exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-reduced.normal}",
+              "$description": "preset surface exit reduced duration — the normal step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-reduced.normal",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{hds.motion.preset.surface.exit.duration}",
+                "timingFunction": "{hds.motion.preset.surface.exit.easing}",
+                "delay": "{hds.motion.preset.surface.exit.delay}"
+              },
+              "$description": "preset surface exit — the normal step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "expand": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.normal}",
+            "$description": "preset expand duration — the normal step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.normal"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset expand easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset expand delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.normal}",
+            "$description": "preset expand reduced duration — the normal step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.normal",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.expand.duration}",
+              "timingFunction": "{hds.motion.preset.expand.easing}",
+              "delay": "{hds.motion.preset.expand.delay}"
+            },
+            "$description": "preset expand — the normal step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "step": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.moderate}",
+            "$description": "preset step duration — the moderate step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.moderate"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset step easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset step delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.moderate}",
+            "$description": "preset step reduced duration — the moderate step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.moderate",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.step.duration}",
+              "timingFunction": "{hds.motion.preset.step.easing}",
+              "delay": "{hds.motion.preset.step.delay}"
+            },
+            "$description": "preset step — the moderate step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          }
+        },
+        "settle": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.slow}",
+            "$description": "preset settle duration — the slow step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.slow"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset settle easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset settle delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.slow}",
+            "$description": "preset settle reduced duration — the slow step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.slow",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.settle.duration}",
+              "timingFunction": "{hds.motion.preset.settle.easing}",
+              "delay": "{hds.motion.preset.settle.delay}"
+            },
+            "$description": "preset settle — the slow step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration.moderate}",
+              "$description": "preset settle exit duration — the moderate step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration.moderate"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{hds.motion.easing-role.exit}",
+              "$description": "preset settle exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-ms.0}",
+              "$description": "preset settle exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-reduced.moderate}",
+              "$description": "preset settle exit reduced duration — the moderate step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-reduced.moderate",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{hds.motion.preset.settle.exit.duration}",
+                "timingFunction": "{hds.motion.preset.settle.exit.easing}",
+                "delay": "{hds.motion.preset.settle.exit.delay}"
+              },
+              "$description": "preset settle exit — the moderate step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "pop": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.fast}",
+            "$description": "preset pop duration — the fast step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.fast"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.enter}",
+            "$description": "preset pop easing — the enter role (decelerate)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.enter"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset pop delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.fast}",
+            "$description": "preset pop reduced duration — the fast step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.fast",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.pop.duration}",
+              "timingFunction": "{hds.motion.preset.pop.easing}",
+              "delay": "{hds.motion.preset.pop.delay}"
+            },
+            "$description": "preset pop — the fast step on the enter role (decelerate), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
+            }
+          },
+          "exit": {
+            "duration": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration.instant}",
+              "$description": "preset pop exit duration — the instant step",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration.instant"
+                }
+              }
+            },
+            "easing": {
+              "$type": "cubicBezier",
+              "$value": "{hds.motion.easing-role.exit}",
+              "$description": "preset pop exit easing — the exit role (accelerate)",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.easing-role.exit"
+                }
+              }
+            },
+            "delay": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-ms.0}",
+              "$description": "preset pop exit delay — none, it starts at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-ms.0"
+                }
+              }
+            },
+            "duration-reduced": {
+              "$type": "duration",
+              "$value": "{hds.motion.duration-reduced.instant}",
+              "$description": "preset pop exit reduced duration — the instant step's reduced twin, derived from the duration",
+              "$extensions": {
+                "prism3": {
+                  "role": "preset",
+                  "aliasOf": "hds.motion.duration-reduced.instant",
+                  "derived": true
+                }
+              }
+            },
+            "transition": {
+              "$type": "transition",
+              "$value": {
+                "duration": "{hds.motion.preset.pop.exit.duration}",
+                "timingFunction": "{hds.motion.preset.pop.exit.easing}",
+                "delay": "{hds.motion.preset.pop.exit.delay}"
+              },
+              "$description": "preset pop exit — the instant step on the exit role (accelerate), at once",
+              "$extensions": {
+                "prism3": {
+                  "role": "composite"
+                }
+              }
+            }
+          }
+        },
+        "press": {
+          "duration": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration.instant}",
+            "$description": "preset press duration — the instant step",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration.instant"
+              }
+            }
+          },
+          "easing": {
+            "$type": "cubicBezier",
+            "$value": "{hds.motion.easing-role.default}",
+            "$description": "preset press easing — the default role (standard)",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.easing-role.default"
+              }
+            }
+          },
+          "delay": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-ms.0}",
+            "$description": "preset press delay — none, it starts at once",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-ms.0"
+              }
+            }
+          },
+          "duration-reduced": {
+            "$type": "duration",
+            "$value": "{hds.motion.duration-reduced.instant}",
+            "$description": "preset press reduced duration — the instant step's reduced twin, derived from the duration",
+            "$extensions": {
+              "prism3": {
+                "role": "preset",
+                "aliasOf": "hds.motion.duration-reduced.instant",
+                "derived": true
+              }
+            }
+          },
+          "transition": {
+            "$type": "transition",
+            "$value": {
+              "duration": "{hds.motion.preset.press.duration}",
+              "timingFunction": "{hds.motion.preset.press.easing}",
+              "delay": "{hds.motion.preset.press.delay}"
+            },
+            "$description": "preset press — the instant step on the default role (standard), at once",
+            "$extensions": {
+              "prism3": {
+                "role": "composite"
+              }
             }
           }
         }
@@ -18694,6 +19980,19 @@
             "role": "semantic",
             "aliasOf": "hds.motion.duration-ms.50",
             "ms": 50
+          }
+        }
+      },
+      "distance": {
+        "nudge": {
+          "$type": "dimension",
+          "$value": "{hds.space.100}",
+          "$description": "distance nudge — the small offset an element travels as it enters or leaves, such as a toast sliding in",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.space.100"
+            }
           }
         }
       }
@@ -21073,6 +22372,24 @@
                     "spread": "0px"
                   }
                 ]
+              },
+              "hc-dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a08",
+                    "offsetX": "0px",
+                    "offsetY": "1px",
+                    "blur": "2px",
+                    "spread": "0px"
+                  },
+                  {
+                    "color": "#0e0c0a05",
+                    "offsetX": "0px",
+                    "offsetY": "1px",
+                    "blur": "3px",
+                    "spread": "0px"
+                  }
+                ]
               }
             },
             "figma": {
@@ -21115,6 +22432,24 @@
             "layers": 2,
             "modes": {
               "dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a0a",
+                    "offsetX": "0px",
+                    "offsetY": "1px",
+                    "blur": "2px",
+                    "spread": "-1px"
+                  },
+                  {
+                    "color": "#0e0c0a08",
+                    "offsetX": "0px",
+                    "offsetY": "2px",
+                    "blur": "6px",
+                    "spread": "-1px"
+                  }
+                ]
+              },
+              "hc-dark": {
                 "$value": [
                   {
                     "color": "#0e0c0a0a",
@@ -21189,6 +22524,24 @@
                     "spread": "-3px"
                   }
                 ]
+              },
+              "hc-dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a0f",
+                    "offsetX": "0px",
+                    "offsetY": "2px",
+                    "blur": "4px",
+                    "spread": "-2px"
+                  },
+                  {
+                    "color": "#0e0c0a0a",
+                    "offsetX": "0px",
+                    "offsetY": "4px",
+                    "blur": "12px",
+                    "spread": "-3px"
+                  }
+                ]
               }
             },
             "figma": {
@@ -21231,6 +22584,24 @@
             "layers": 2,
             "modes": {
               "dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a12",
+                    "offsetX": "0px",
+                    "offsetY": "3px",
+                    "blur": "6px",
+                    "spread": "-3px"
+                  },
+                  {
+                    "color": "#0e0c0a0d",
+                    "offsetX": "0px",
+                    "offsetY": "8px",
+                    "blur": "20px",
+                    "spread": "-5px"
+                  }
+                ]
+              },
+              "hc-dark": {
                 "$value": [
                   {
                     "color": "#0e0c0a12",
@@ -21305,6 +22676,24 @@
                     "spread": "-8px"
                   }
                 ]
+              },
+              "hc-dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a17",
+                    "offsetX": "0px",
+                    "offsetY": "4px",
+                    "blur": "8px",
+                    "spread": "-4px"
+                  },
+                  {
+                    "color": "#0e0c0a12",
+                    "offsetX": "0px",
+                    "offsetY": "14px",
+                    "blur": "32px",
+                    "spread": "-8px"
+                  }
+                ]
               }
             },
             "figma": {
@@ -21363,6 +22752,24 @@
                     "spread": "-12px"
                   }
                 ]
+              },
+              "hc-dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a1c",
+                    "offsetX": "0px",
+                    "offsetY": "6px",
+                    "blur": "12px",
+                    "spread": "-6px"
+                  },
+                  {
+                    "color": "#0e0c0a17",
+                    "offsetX": "0px",
+                    "offsetY": "22px",
+                    "blur": "52px",
+                    "spread": "-12px"
+                  }
+                ]
               }
             },
             "figma": {
@@ -21399,6 +22806,18 @@
             "layers": 1,
             "modes": {
               "dark": {
+                "$value": [
+                  {
+                    "color": "#0e0c0a4d",
+                    "offsetX": "0px",
+                    "offsetY": "2px",
+                    "blur": "4px",
+                    "spread": "0px",
+                    "inset": true
+                  }
+                ]
+              },
+              "hc-dark": {
                 "$value": [
                   {
                     "color": "#0e0c0a4d",
@@ -21498,6 +22917,18 @@
               "role": "semantic",
               "aliasOf": "hds.core.dimension.40",
               "px": 40
+            }
+          }
+        },
+        "2xl": {
+          "$type": "dimension",
+          "$value": "{hds.core.dimension.64}",
+          "$description": "`icon.size.2xl` — 64px artboard (fixed grid; past the control ladder, an x-large avatar)",
+          "$extensions": {
+            "prism3": {
+              "role": "semantic",
+              "aliasOf": "hds.core.dimension.64",
+              "px": 64
             }
           }
         }
@@ -22196,7 +23627,7 @@
       "round": {
         "$type": "dimension",
         "$value": "{hds.core.dimension.128}",
-        "$description": "radius round — 128px (pill)",
+        "$description": "radius round — 128px (pill. For small fixed-size parts, such as a switch track, a radio or a badge count. A pill button binds `radius.capsule`)",
         "$extensions": {
           "prism3": {
             "role": "semantic",
@@ -22209,7 +23640,7 @@
       "capsule": {
         "$type": "dimension",
         "$value": "999px",
-        "$description": "radius capsule — 999px (off-grid literal)",
+        "$description": "radius capsule — 999px (off-grid literal. The pill a button binds under `controlShape: pill`, full at any height. Small fixed-size parts bind `radius.round`)",
         "$extensions": {
           "prism3": {
             "generated": true,
@@ -22788,7 +24219,7 @@
   "$extensions": {
     "generator": {
       "name": "Prism3 engine",
-      "version": "0.238.0",
+      "version": "0.240.0",
       "method": "OKLCH color + grid-derived dimension generation"
     },
     "prism3": {
@@ -22805,7 +24236,7 @@
         "action: the primary palette, by default — actionPalette is not set.",
         "danger: the brand's hue 27.",
         "dimensions: 4px grid, 8px spacing rhythm, 'comfortable' density (sets component sizes), radius scale 1 (base radius 4px).",
-        "motion: 'relaxed' tempo sets the durations; reduced-motion variants keep informational motion and set vestibular motion to 0.",
+        "motion: 'relaxed' tempo sets the durations; each reduced-motion twin is a short fade of at most 100ms.",
         "shadow: 6 steps (xs–2xl) of two layers each, plus a one-layer inset, softness 1; tinted to hue 65 at 0.15. Full shadows in light, reduced in dark, where surface lightness carries elevation.",
         "gradient: none — the brand declares no gradients, and none are added by default.",
         "layout: 5 breakpoints (sm 0, md 768, lg 1024, xl 1440, 2xl 1920); 12-column grid (4/8/12/12/12 by breakpoint); gutters 16/16/24/24/32px and margins 16/24/24/32/48px, from the spacing scale; containers max 1440px, narrow 720px.",

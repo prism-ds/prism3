@@ -32,20 +32,21 @@
  * Exit codes: 0 = clean; 1 = schema violation, a broken alias, or a failed mode
  * contrast contract (so it fails CI). Errors print a readable diagnosis.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { Theme, brandTheme } from './theme';
 import { parseDesignMd } from './design-md';
 import { parseStandardDesignMd, standardToBrandInput, isStandardDesignMd } from './standard-design-md';
 import { buildFidelityReport } from './fidelity';
-import { emitTheme, validateBrandInput } from './emit-dtcg';
+import { buildTree, emitTheme, fileInDir, validateBrandInput } from './emit-dtcg';
 import type { BrandInput } from './theme';
 import { componentDefsFileNames, exportComponentDefs, toSpecsComponents } from './component-defs-export';
 import { componentDefs } from './components/index';
 import { BUILD_IDENTITY } from './build-identity';
 import { overlayModes } from './emit-dtcg-overlay';
 import { contrast, hexToRgb } from './color';
+import { webThemeHandoff, shadcnFiles, tailwindFiles } from './web-themes';
 import type { ModeResult } from './modes';
 
 // #3698 R1: the build identity a live run stamps beside the engine version (`build-identity.ts`). `--committed` drops it:
@@ -58,12 +59,33 @@ const writeComponentSpecs = (input: BrandInput, resolvedOut: string) => {
   const doc = exportComponentDefs(componentDefs, { brand: input, build });
   const names = componentDefsFileNames(doc.brand!.id);
   const text = JSON.stringify(doc, null, 2) + '\n';
-  writeFileSync(resolve(resolvedOut, names.contracts), text);
-  writeFileSync(resolve(resolvedOut, names.defs), text);
-  writeFileSync(resolve(resolvedOut, names.specs), JSON.stringify(toSpecsComponents(doc), null, 2) + '\n');
-  console.log(`  [written] ${resolve(resolvedOut, names.contracts)}  (${Object.keys(doc.components).length} components)`);
-  console.log(`  [written] ${resolve(resolvedOut, names.defs)}  (the same file under its old name, for one release)`);
-  console.log(`  [written] ${resolve(resolvedOut, names.specs)}`);
+  // #4214: through the write guard `emitTheme` uses, all three checked before the first is written.
+  let at: { contracts: string; defs: string; specs: string };
+  try { at = { contracts: fileInDir(resolvedOut, names.contracts), defs: fileInDir(resolvedOut, names.defs), specs: fileInDir(resolvedOut, names.specs) }; }
+  catch (e) { return fail(`could not write the component specs for '${doc.brand!.id}' to ${resolvedOut}: ${(e as Error).message}`); }
+  writeFileSync(at.contracts, text);
+  writeFileSync(at.defs, text);
+  writeFileSync(at.specs, JSON.stringify(toSpecsComponents(doc), null, 2) + '\n');
+  console.log(`  [written] ${at.contracts}  (${Object.keys(doc.components).length} components)`);
+  console.log(`  [written] ${at.defs}  (the same file under its old name, for one release)`);
+  console.log(`  [written] ${at.specs}`);
+};
+
+/** `--shadcn` and `--tailwind` (the lane after #2997): the brand's shadcn/ui theme (`shadcn/<id>.css`, and the registry
+ *  item `shadcn/<id>.registry-item.json`) and its Tailwind v4 theme (`tailwind/<id>.theme.css`), at the paths regen
+ *  commits them, from `web-themes.ts`, the projector regen runs. Every path is checked before the first is written. */
+const writeWebThemes = (theme: Theme, resolvedOut: string, which: { shadcn: boolean; tailwind: boolean }) => {
+  const h = webThemeHandoff(buildTree(theme).tree, theme.id);
+  const files = [...(which.shadcn ? shadcnFiles(h) : []), ...(which.tailwind ? tailwindFiles(h) : [])];
+  const planned = files.map((f) => ({ dir: resolve(resolvedOut, dirname(f.path)), name: f.path.slice(f.path.lastIndexOf('/') + 1), text: f.text }));
+  try { for (const p of planned) fileInDir(p.dir, p.name); }
+  catch (e) { return fail(`could not write the web themes for '${theme.id}' to ${resolvedOut}: ${(e as Error).message}`); }
+  for (const p of planned) {
+    mkdirSync(p.dir, { recursive: true });
+    const target = fileInDir(p.dir, p.name);
+    writeFileSync(target, p.text);
+    console.log(`  [written] ${target}`);
+  }
 };
 
 const fail = (msg: string): never => {
@@ -112,8 +134,10 @@ const emitAndGate = (theme: Theme, resolvedOut: string, designPath: string, sour
   console.log(`  palettes: ${theme.palettes.map((p) => p.palette).join(', ')} (danger ← ${theme.roleToPalette.danger})`);
   console.log(`  aliases: ${stats.resolved}/${stats.aliases} resolve | mode contracts: ${stats.modePass}/${stats.modeChecks} pass`);
   // #4153: every file `emitTheme` writes, not two of them: the full tree, the sidecar, and the base + per-mode overlay
-  // set that a multi-mode build reads (skills/prism3-build-ui rule 3).
-  for (const name of [`${theme.id}.tokens.json`, `${theme.id}.ai.json`, `${theme.id}.base.tokens.json`,
+  // set that a multi-mode build reads (skills/prism3-build-ui rule 3), the web base beside it (#4155), and the CSS-only
+  // source the ship build reads (#3510).
+  for (const name of [`${theme.id}.tokens.json`, `${theme.id}.ai.json`, `${theme.id}.base.tokens.json`, `${theme.id}.web.base.tokens.json`,
+    `${theme.id}.css-only.json`,
     ...overlayModes(emitted.tree).map((m) => `${theme.id}.${m}.overlay.tokens.json`)]) console.log(`  [written] ${resolve(resolvedOut, name)}`);
   const broken = stats.broken.length > 0;
   const contractsFail = stats.modePass < stats.modeChecks;
@@ -136,6 +160,7 @@ const main = () => {
   let outDir: string | undefined;
   let fidelity = false;
   let componentSpecs = false;
+  const webThemes = { shadcn: false, tailwind: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out' || a === '-o') {
@@ -148,9 +173,11 @@ const main = () => {
     }
     else if (a === '--fidelity') fidelity = true;
     else if (a === '--component-specs') componentSpecs = true;
+    else if (a === '--shadcn') webThemes.shadcn = true;
+    else if (a === '--tailwind') webThemes.tailwind = true;
     else if (a === '--committed') build = undefined;
     else if (a === '--help' || a === '-h') {
-      console.log('Usage: tsx cli.ts <design.md> [--out <dir>] [--fidelity] [--component-specs] [--committed]\n\n  <design.md>   a brand brief with YAML frontmatter — engine-native (examples/*.design.md)\n                OR a standard brand-skills / google-labs design.md (flat colors + x-prism3)\n  --out <dir>   output directory (default: engine/out) for <id>.tokens.json + <id>.ai.json, and the same tokens as\n                <id>.base.tokens.json + one <id>.<mode>.overlay.tokens.json per mode beyond the base\n  --fidelity    (standard dialect) also write <id>-fidelity-report.md — the observed-vs-generated diff\n  --component-specs  also write <id>.component-contracts.json + <id>.component-defs.specs.json — every component\n                contract with this brand\'s component settings resolved, and the same as a Specs components set\n                (and <id>.component-defs.json, the same contracts under their old name, for one release)\n  --committed   stamp the engine version only, never the build identity: for an artifact the repo commits (regen)');
+      console.log('Usage: tsx cli.ts <design.md> [--out <dir>] [--fidelity] [--component-specs] [--shadcn] [--tailwind] [--committed]\n\n  <design.md>   a brand brief with YAML frontmatter — engine-native (examples/*.design.md)\n                OR a standard brand-skills / google-labs design.md (flat colors + x-prism3)\n  --out <dir>   output directory (default: engine/out) for <id>.tokens.json + <id>.ai.json, and the same tokens as\n                <id>.base.tokens.json + one <id>.<mode>.overlay.tokens.json per mode beyond the base, and\n                <id>.css-only.json, each spring as a CSS linear() curve for the shippable token CSS\n  --fidelity    (standard dialect) also write <id>-fidelity-report.md — the observed-vs-generated diff\n  --component-specs  also write <id>.component-contracts.json + <id>.component-defs.specs.json — every component\n                contract with this brand\'s component settings resolved, and the same as a Specs components set\n                (and <id>.component-defs.json, the same contracts under their old name, for one release)\n  --shadcn      also write shadcn/<id>.css (the shadcn/ui theme\'s light and dark variables) and\n                shadcn/<id>.registry-item.json (the registry item a shadcn/ui project installs)\n  --tailwind    also write tailwind/<id>.theme.css, the brand as a Tailwind v4 theme\n  --committed   stamp the engine version only, never the build identity: for an artifact the repo commits (regen)');
       process.exit(0);
     }
     else if (a.startsWith('-')) fail(`unknown flag: ${a}`);
@@ -165,7 +192,12 @@ const main = () => {
   // ---- read ----
   let text: string;
   try { text = readFileSync(resolve(process.cwd(), designPath!), 'utf8'); }
-  catch { return fail(`cannot read design file: ${designPath}`); }
+  // #4200 A (DRAFT): the cause, not just the path. A missing file is the common case and gets the next step.
+  catch (e) {
+    return fail((e as NodeJS.ErrnoException).code === 'ENOENT'
+      ? `cannot read ${designPath}: no such file. Pass the path to a design.md, such as packages/engine/examples/harbor.design.md`
+      : `cannot read ${designPath}: ${(e as Error).message}`);
+  }
 
   // ---- detect dialect: a top-level flat `colors:` map is the standard dialect ----
   let std;
@@ -182,34 +214,40 @@ const main = () => {
     catch (e) { return fail(`could not classify '${std.name}' (standard dialect): ${(e as Error).message}`); }
     const { input, classification, xApplied, xWarnings } = classified;
     console.log(`[standard] '${std.name}' → id '${input.id}' — ${Object.keys(std.colors).length} colours, ${Object.keys(std.typography).length} type tokens; x-prism3: ${xApplied.length ? xApplied.join(', ') : 'none (defaults)'}`);
-    // #2678 (Q-XP1 A): an x-prism3 key the dialect does not read is named here, and the file keeps compiling.
+    // #2678 (Q-XP1 A): an x-prism3 key the dialect does not read is named here, and so is a typography face no category
+    // reads (#4137); the file keeps compiling.
     for (const w of xWarnings) console.log(`  ⚠ ${w}`);
     validateOrExit(input, designPath!);
     let theme: Theme;
     try { theme = brandTheme(input); }
-    catch (e) { return fail(`brandTheme failed for '${input.id}': ${(e as Error).message}`); }
+    catch (e) { return fail(`the engine refused '${input.id}': ${(e as Error).message}`); }   // #4200 B: no internal function name (DRAFT)
     const stats = emitAndGate(theme, resolvedOut, designPath!, 'standard');
     if (fidelity) {
       const { md, anchorDe } = buildFidelityReport(std, classification, input, theme, stats, xApplied);
-      const reportPath = resolve(resolvedOut, `${theme.id}-fidelity-report.md`);
+      let reportPath: string;
+      try { reportPath = fileInDir(resolvedOut, `${theme.id}-fidelity-report.md`); }   // #4214: the write guard
+      catch (e) { return fail(`could not write the fidelity report for '${theme.id}' to ${resolvedOut}: ${(e as Error).message}`); }
       writeFileSync(reportPath, md);
       console.log(`  [written] ${reportPath}  (anchor ΔE00 ${anchorDe.toFixed(2)})`);
     }
     if (componentSpecs) writeComponentSpecs(input, resolvedOut);
+    if (webThemes.shadcn || webThemes.tailwind) writeWebThemes(theme, resolvedOut, webThemes);
     return;
   }
 
   // ---- ENGINE-NATIVE dialect ----
-  if (fidelity) console.error('  (note: --fidelity applies to the standard dialect only; ignored for an engine-native brief)');
+  // #4200 E (DRAFT): voice standard §2 bans "note"; say what happened and why.
+  if (fidelity) console.error('  --fidelity ignored — it diffs a standard-dialect brief, and this one is engine-native');
   let input;
   try { input = parseDesignMd(text).input; }
   catch (e) { return fail(`parse error in ${designPath}: ${(e as Error).message}`); }
   validateOrExit(input, designPath!);
   let theme: Theme;
   try { theme = brandTheme(input); }
-  catch (e) { return fail(`brandTheme failed for '${(input as any).id}': ${(e as Error).message}`); }
+  catch (e) { return fail(`the engine refused '${(input as any).id}': ${(e as Error).message}`); }   // #4200 B (DRAFT)
   emitAndGate(theme, resolvedOut, designPath!, 'engine-native');
   if (componentSpecs) writeComponentSpecs(input as BrandInput, resolvedOut);
+  if (webThemes.shadcn || webThemes.tailwind) writeWebThemes(theme, resolvedOut, webThemes);
 };
 
 main();

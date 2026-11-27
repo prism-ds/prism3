@@ -52,7 +52,7 @@
  * defs a recipe governs.
  *
  * WHAT IT CANNOT SEE, stated so it is not trusted past it: a rule that names a real token for the wrong
- * job (`motion.transition.enter` on an exit). The names are checked; the judgment is the reviewer's.
+ * job (`motion.preset.fade` on an exit). The names are checked; the judgment is the reviewer's.
  * Half 3 reads only a reduced role tagged with its direction; an untagged one is not ordered by it.
  *
  * Mutations, each failing by name (recorded in the PR): `200ms` in the skill → DURATION LITERAL;
@@ -85,6 +85,11 @@ const SHAPES: { kind: string; re: RegExp; what: string }[] = [
   { kind: 'CURVE LITERAL', re: /\b(?:cubic-bezier|steps|linear)\s*\(/g, what: 'a CSS timing function' },
   { kind: 'CURVE LITERAL', re: /(?<![\w-])ease(?:-in-out|-in|-out)?(?![\w-])/g, what: 'a CSS easing keyword' },
   { kind: 'CURVE LITERAL', re: /(?<![\w-])step-(?:start|end)(?![\w-])/g, what: 'a CSS step keyword' },
+  // The bare `linear` keyword (#3592), only where it is a timing function: after a duration (`200ms linear`), inside a
+  // `transition`/`animation`/`*-timing-function` declaration, or as an `easing`/`ease` value. Not after a `.`, so
+  // `motion.easing.linear` stays a token name, and not as a word in prose or a list of shape names (`linear`,
+  // `standard`, … in the skill's easing row), where it names a curve rather than spelling one.
+  { kind: 'CURVE LITERAL', re: /(?:(?<![\w.])(?:\d+(?:\.\d+)?|\.\d+)\s?m?s\s+|(?:timing-function|transition|animation)\s*:[^;\n`]*?(?<![\w.-])|\beas(?:e|ing)\s*[:=]\s*['"])linear(?![\w(-])/gi, what: 'the CSS linear keyword' },
   { kind: 'CURVE LITERAL', re: new RegExp(String.raw`[\[(]\s*${NUM}\s*,\s*${NUM}\s*,\s*${NUM}\s*,\s*${NUM}\s*[\])]`, 'g'), what: 'a four-number curve' },
   { kind: 'SPRING LITERAL', re: new RegExp(String.raw`\b(?:damping|stiffness|mass|bounce|velocity)(?:\s+ratio)?(?:\s+of)?\s*[:=]?\s*${NUM}\b`, 'gi'), what: 'a spring constant' },
   { kind: 'PRIMITIVE STEP', re: /(?<![\w.-])motion\.duration-ms\.[a-z0-9*-]+/g, what: 'a duration primitive, which is a number spelled as a path' },
@@ -153,13 +158,25 @@ export const reducedMs = (doc: Record<string, unknown>): Map<string, number> => 
     }
     throw new Error(`unreadable duration ${JSON.stringify(v)}`);
   };
-  const fam = ((doc[root] as Record<string, Record<string, unknown>>).motion?.['duration-reduced'] ?? {}) as Record<string, { $value?: unknown }>;
-  return new Map(Object.entries(fam).filter(([k, v]) => !k.startsWith('$') && v && '$value' in v).map(([k, v]) => [k, ms(v.$value)]));
+  const motion = (doc[root] as Record<string, Record<string, unknown>>).motion ?? {};
+  const fam = (motion['duration-reduced'] ?? {}) as Record<string, { $value?: unknown }>;
+  const out = new Map(Object.entries(fam).filter(([k, v]) => !k.startsWith('$') && v && '$value' in v).map(([k, v]) => [k, ms(v.$value)]));
+  // #2857 phase 2: a preset's own reduced duration, and its exit half's, read as `preset.<name>` and `preset.<name>.exit`.
+  type Half = { 'duration-reduced'?: { $value?: unknown }; exit?: Half };
+  for (const [name, p] of Object.entries((motion.preset ?? {}) as Record<string, Half>)) {
+    if (name.startsWith('$')) continue;
+    if (p?.['duration-reduced'] && '$value' in p['duration-reduced']) out.set(`preset.${name}`, ms(p['duration-reduced'].$value));
+    if (p?.exit?.['duration-reduced'] && '$value' in p.exit['duration-reduced']) out.set(`preset.${name}.exit`, ms(p.exit['duration-reduced'].$value));
+  }
+  return out;
 };
 
 const ENTER_WORDS = 'entering|opening|arriving';
 const EXIT_WORDS = 'leaving|closing|exiting';
-const TAGGED = new RegExp(String.raw`\x60motion\.duration-reduced\.([a-z0-9-]+)\x60\s+(${ENTER_WORDS}|${EXIT_WORDS}|both ways|both directions)\b`, 'gi');
+const TAGGED = new RegExp(String.raw`\x60motion\.(?:duration-reduced\.([a-z0-9-]+)|preset\.([a-z0-9-]+(?:\.exit)?)\.duration-reduced)\x60\s+(${ENTER_WORDS}|${EXIT_WORDS}|both ways|both directions)\b`, 'gi');
+/** A reduced duration's token name from its key: `normal` → `motion.duration-reduced.normal`, `preset.fade.exit` →
+ *  `motion.preset.fade.exit.duration-reduced`. */
+const reducedName = (key: string): string => (key.startsWith('preset.') ? `motion.${key}.duration-reduced` : `motion.duration-reduced.${key}`);
 
 /** Half 3 over one file's text. Each `**Reduced:**` paragraph's direction-tagged reduced roles are paired,
  *  and the exit's milliseconds compared with the entrance's in every brand. Shared by the run and the self-check. */
@@ -171,10 +188,11 @@ export const scanReducedOrder = (text: string, file: string, brands: Map<string,
     const para = m[0];
     const enter: string[] = [], exit: string[] = [];
     for (const t of para.matchAll(TAGGED)) {
-      const dir = t[2].toLowerCase();
-      if (dir.startsWith('both')) { enter.push(t[1]); exit.push(t[1]); }
-      else if (new RegExp(`^(?:${ENTER_WORDS})$`).test(dir)) enter.push(t[1]);
-      else exit.push(t[1]);
+      const key = t[1] ?? `preset.${t[2]}`;
+      const dir = t[3].toLowerCase();
+      if (dir.startsWith('both')) { enter.push(key); exit.push(key); }
+      else if (new RegExp(`^(?:${ENTER_WORDS})$`).test(dir)) enter.push(key);
+      else exit.push(key);
     }
     const line = lineOf(text, m.index!);
     if (enter.length && !exit.length) findings.push({ file, kind: 'REDUCED ORDER UNREAD', text: `a reduced entrance on ${enter.join(', ')} with no tagged exit`, line });
@@ -184,10 +202,10 @@ export const scanReducedOrder = (text: string, file: string, brands: Map<string,
       const longer: string[] = [];
       for (const [b, roles] of brands) {
         const a = roles.get(en), z = roles.get(ex);
-        if (a === undefined || z === undefined) { findings.push({ file, kind: 'REDUCED ORDER UNREAD', text: `${b} emits no motion.duration-reduced.${a === undefined ? en : ex}`, line }); continue; }
+        if (a === undefined || z === undefined) { findings.push({ file, kind: 'REDUCED ORDER UNREAD', text: `${b} emits no ${reducedName(a === undefined ? en : ex)}`, line }); continue; }
         if (z > a) longer.push(`${b} ${z} > ${a}ms`);
       }
-      if (longer.length) findings.push({ file, kind: 'REDUCED EXIT LONGER', text: `exits on motion.duration-reduced.${ex}, enters on motion.duration-reduced.${en}: ${longer.join('; ')}`, line });
+      if (longer.length) findings.push({ file, kind: 'REDUCED EXIT LONGER', text: `exits on ${reducedName(ex)}, enters on ${reducedName(en)}: ${longer.join('; ')}`, line });
     }
   }
   return { findings, paragraphs, pairs };
@@ -206,15 +224,19 @@ export const RECIPE_DEFS: Record<string, readonly string[]> = {
   Progress: ['progress'],
   // The controls themselves. A row or a group carries its nested control's motion and describes it in passing, so its
   // prose is not held here.
-  'Selection controls': ['checkbox-control', 'radio-control', 'switch-control', 'segmented-control-segment', 'segmented-control'],
+  'Selection controls': ['checkbox-control', 'radio-control'],
+  // #2857 phase 2: these two travel on `motion.preset.move` (Q-PT5 A), so they have a recipe of their own.
+  'Switch and segmented control': ['switch-control', 'segmented-control-segment', 'segmented-control'],
 };
-const REDUCED_ROLE = /motion\.duration-reduced\.([a-z0-9-]+)/g;
+/** A reduced duration named either way: a role's twin (`motion.duration-reduced.normal`, read as `normal`) or a preset's
+ *  own (`motion.preset.surface.exit.duration-reduced`, read as `preset.surface.exit`, #2857 phase 2). */
+const REDUCED_ROLE = /motion\.(?:duration-reduced\.([a-z0-9-]+)|preset\.([a-z0-9-]+(?:\.exit)?)\.duration-reduced)/g;
 /** Words that delete the motion outright. A recipe that keeps a fade (R7: substitute, don't delete) is contradicted
  *  by any of them. "At once" is not here: the recipes themselves change a height or an underline at once. */
 const DELETES = /\binstant(?:ly)?\b|\bno transition\b|\bwith no animation\b|\bwithout a transition\b/i;
 /** A fade named in any form: fade, fades, faded, fading. */
 const FADES = /\bfad(?:e|es|ed|ing)\b/i;
-const rolesIn = (text: string): string[] => [...new Set([...text.matchAll(REDUCED_ROLE)].map((m) => m[1]))].sort();
+const rolesIn = (text: string): string[] => [...new Set([...text.matchAll(REDUCED_ROLE)].map((m) => m[1] ?? `preset.${m[2]}`))].sort();
 
 /** The `**Reduced:**` paragraph of each `### <recipe>` section, by recipe name. */
 export const recipeReduced = (skill: string): Map<string, string> => {
@@ -296,6 +318,9 @@ const selfCheck = (): string[] => {
     ['a delay of 150MS', 'DURATION LITERAL'],
     ['animation-timing-function: step-end', 'CURVE LITERAL'],
     ['step-start then hold', 'CURVE LITERAL'],
+    ['transition: transform 200ms linear', 'CURVE LITERAL'],
+    ['animation-timing-function: linear;', 'CURVE LITERAL'],
+    ["{ easing: 'linear' }", 'CURVE LITERAL'],
     ['waits 1.5 s', 'DURATION LITERAL'],
     ['after two seconds', 'DURATION LITERAL'],
     ['for 300 milliseconds', 'DURATION LITERAL'],
@@ -308,9 +333,11 @@ const selfCheck = (): string[] => {
     ['bind `motion.duration-ms.200`', 'PRIMITIVE STEP'],
   ];
   for (const [sample, kind] of fires) if (!kinds(sample).includes(kind)) bad.push(`${kind} no longer fires on "${sample}"`);
-  const clean = 'R11 starts `motion.stagger` apart on `motion.transition.enter`; WCAG 2.2.2; a 44px target; the easing role decelerates; #3484.';
+  const clean = 'R11 starts `motion.stagger` apart on `motion.preset.fade`; WCAG 2.2.2; a 44px target; the easing role decelerates; #3484.';
   // Dotted versions stay out of the leading-dot arm (#3564): neither half of `v1.2s` is a duration.
-  const noise = [...scanLiterals(clean, 'fixture'), ...scanLiterals('since v1.2s and 0.238.5s builds', 'fixture')];
+  // #3592: `linear` as a token name, in the skill's list of shape names, and as an English word stays clean.
+  const linearNames = 'spin on `motion.easing.linear`; | `motion.easing.*` | `linear`, `standard`, `decelerate` |; a linear bar fills; linear-progress';
+  const noise = [...scanLiterals(clean, 'fixture'), ...scanLiterals('since v1.2s and 0.238.5s builds', 'fixture'), ...scanLiterals(linearNames, 'fixture')];
   if (noise.length) bad.push(`the clean sample fires: ${noise.map((f) => `${f.kind} "${f.text}"`).join(', ')}`);
 
   const brands = new Map([['a', new Set(['motion', 'motion.easing-role', 'motion.easing-role.enter'])], ['b', new Set(['motion', 'motion.easing-role', 'motion.easing-role.enter'])]]);
@@ -330,6 +357,13 @@ const selfCheck = (): string[] => {
   const doc = { $schema: 'x', z: { motion: { 'duration-ms': { 50: { $value: '50ms' }, 100: { $value: { value: 0.1, unit: 's' } } }, 'duration-reduced': { normal: { $value: '{z.motion.duration-ms.50}' }, fast: { $value: '{z.motion.duration-ms.100}' } } } } };
   const ms = reducedMs(doc);
   if (ms.get('normal') !== 50 || ms.get('fast') !== 100) bad.push(`reducedMs does not follow aliases to the primitive (read ${JSON.stringify([...ms])})`);
+  // #2857 phase 2: a preset's own reduced duration, and its exit half's, are read and ordered like a role's twin.
+  const pdoc = { z: { motion: { 'duration-reduced': {}, preset: { fade: { 'duration-reduced': { $value: '80ms' }, exit: { 'duration-reduced': { $value: '100ms' } } } } } } };
+  const pms = reducedMs(pdoc);
+  if (pms.get('preset.fade') !== 80 || pms.get('preset.fade.exit') !== 100) bad.push(`reducedMs does not read a preset's reduced durations (read ${JSON.stringify([...pms])})`);
+  const pinv = scanReducedOrder('**Reduced:** fades on `motion.preset.fade.duration-reduced` arriving and\n`motion.preset.fade.exit.duration-reduced` leaving.', 'fixture', new Map([['a', pms]]));
+  if (!pinv.findings.some((f) => f.kind === 'REDUCED EXIT LONGER' && f.text.includes('motion.preset.fade.exit.duration-reduced'))) bad.push('REDUCED EXIT LONGER no longer fires on a preset exit half that outlasts its entrance');
+  if (rolesIn('on motion.preset.surface.exit.duration-reduced and motion.duration-reduced.fast').join() !== 'fast,preset.surface.exit') bad.push('rolesIn does not read a preset\'s reduced duration');
 
   const para = '**Reduced:** fades only, on `motion.duration-reduced.normal` both ways. The height changes at once.';
   const agree = { id: 'x', motion: { reduceMotion: 'Under prefers-reduced-motion it fades only, on motion.duration-reduced.normal both ways, and the height changes at once.' } };

@@ -51,7 +51,6 @@ Use inside Tabs only. A tab names one panel of related content; selecting it sho
 
 - Keep labels short, parallel nouns
 - Use nouns, not verbs ("Activity", not "View activity")
-- Let the tab list set selected from its value
 
 ### Don't
 
@@ -77,9 +76,9 @@ Use inside Tabs only. A tab names one panel of related content; selecting it sho
 
 ### Motion
 
-- **Enter:** None. On selection the underline slides from the previous tab to this one, on motion.transition.default.
+- **Enter:** None. On selection the underline slides from the previous tab to this one, on motion.preset.move.
 - **Exit:** None.
-- **Reduced motion:** Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.duration-reduced.fast.
+- **Reduced motion:** Under prefers-reduced-motion the underline snaps to the selected tab, and the incoming panel fades in on motion.preset.crossfade.duration-reduced.
 
 ## Content guidelines
 
@@ -95,6 +94,8 @@ One or two words, a noun, sentence case.
   - a styled button that shows and hides a div with no tab semantics
 
 ## Building it in code
+
+- Let the tab list set selected from its value
 
 ### Props
 

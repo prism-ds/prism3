@@ -21,11 +21,15 @@
  * its fill counted from the def reached (`done + 1`) → `agent/work`; the read after open winning over it → `order/agent`;
  * `agentHeard` not clearing on `agent-finished` (#3210 review, M-C) → `agent/cleared`.
  *
+ * #4476 mutations, each failing by name: `still` ignoring `throttled` → `still/throttled`; `withThrottleNote` adding the
+ * note whatever it is told → `note/line`.
+ *
  * Mutations, each failing by name: the silence test dropped (`still` always null) → `still/after 3 s`; the fill counted
  * from the set being written (`done + 1`) → `run/fill`; the check given a count → `run/check`; `rowState` reading every
  * seen set Updated → `rows/updating`; `stripVerdict` reading a stop the person asked for as a failure → `verdict/stopped`.
  */
-import { agentHeard, elapsed, heard, rowState, startStripRun, stepEnded, stripVerdict, stripView, withReading, type StripRun } from './src/state/status-strip';
+import { agentHeard, elapsed, heard, rowState, startStripRun, stepEnded, stripVerdict, stripView, withReading, withThrottleNote, type StripRun } from './src/state/status-strip';
+import { startUpdate, stepDone } from './src/state/update-file';
 
 let failed = 0;
 let executed = 0;
@@ -73,6 +77,17 @@ r = withReading(r, { run: 'update', phase: 'work', item: 'checkbox', done: 4, to
   ok(early.kind === 'running' && early.still === null, 'still/after 3 s: not at 2.999 s');
   const back = stripView({ read: null, run: heard(r, T0 + 44_000), step, verdict: null, now: T0 + 44_500, nameOf });
   ok(back.kind === 'running' && back.still === null, 'still/heard: a message from the run clears it');
+  // #4476: a run the host reads as throttled says so in place of "Still working on…", at once and to the run's end; a
+  // reading without the flag does not take it back. Mutation: `still` ignoring `throttled` → `still/throttled` fails.
+  const NOTE = 'Figma slows plugins while its window is hidden — keep it visible to finish sooner.';
+  const slow = withReading(r, { run: 'update', phase: 'work', item: 'checkbox', done: 4, total: 12, throttled: true }, T0 + 41_000);
+  const t1 = stripView({ read: null, run: slow, step, verdict: null, now: T0 + 41_100, nameOf });
+  const t2 = stripView({ read: null, run: withReading(slow, { run: 'update', phase: 'work', item: 'tag', done: 5, total: 12 }, T0 + 42_000), step, verdict: null, now: T0 + 42_100, nameOf });
+  const t3 = stripView({ read: null, run: heard(r, T0 + 41_000, true), step, verdict: null, now: T0 + 41_100, nameOf });
+  ok(t1.kind === 'running' && t1.still === NOTE && t2.kind === 'running' && t2.still === NOTE && t3.kind === 'running' && t3.still === NOTE,
+    `still/throttled: the note at once, kept by a later reading, and from a build's or style guide's reading (${J([t1, t2, t3].map((v) => (v.kind === 'running' ? v.still : null)))})`);
+  ok(withThrottleNote('Drawing table 29 of 45…', true) === `Drawing table 29 of 45… · ${NOTE}` && withThrottleNote('Building variants…', false) === 'Building variants…' && withThrottleNote('Building variants…', undefined) === 'Building variants…',
+    `note/line: the Build set and Style guides line carries the note only when throttled (${J([withThrottleNote('Drawing table 29 of 45…', true), withThrottleNote('Building variants…', false)])})`);
   const stopping = stripView({ read: null, run: r, step: { ...step, stopping: true }, verdict: null, now: T0 + 41_500, nameOf });
   ok(stopping.kind === 'running' && stopping.stop.label === 'Stopping after Checkbox…' && stopping.stop.disabled, `stop/asked: "Stopping after Checkbox…", off (${stopping.kind === 'running' ? J(stopping.stop) : ''})`);
   ok(rowState(r, 'button') === 'updated' && rowState(r, 'checkbox') === 'updating' && rowState(r, 'tag') === null,
@@ -125,6 +140,19 @@ r = withReading(r, { run: 'update', phase: 'work', item: 'checkbox', done: 4, to
     ok(J(v) === J({ tone: 'warn', what: 'File updated', n: '1:35', sub: '47 sets updated, Style guides drawn. Updated 47 sets · 2 to check. Details in Activity.' }),
       `verdict/update warn: a run whose update left sets to check ends "File updated" as a warning (${J(v)})`);
   }
+  // #4067: the owner's run of 2026-11-18. The in-place pass wrote the members of 6 sets (its progress, 6 of 6), and the
+  // run wrote to 37 sets in all, the rest only their usage panels; the line said "6 sets updated" beside the verdict's
+  // count. It now reads the verdict's own count, carried by the step (`stepDone`'s `sets`). Literal. Mutation: the line
+  // reading the progress again → `verdict/update count`.
+  {
+    let u: StripRun = startStripRun(T0);
+    u = stepEnded(withReading(u, { run: 'update', phase: 'finish', item: null, done: 6, total: 6 }, T0 + 1), T0 + 2);
+    const run = stepDone(startUpdate(['update'], []), false, '⚠ Updated 37 sets · 1 to check', true, 37);
+    ok(run.results[0]?.sets === 37, `verdict/update sets: the step keeps the verdict's count (${J(run.results[0])})`);
+    const v = stripVerdict({ results: run.results, steps: ['update'], stopped: false, run: u, now: T0 + 95_000, nameOf });
+    ok(J(v) === J({ tone: 'warn', what: '37 sets updated', n: '1:35', sub: 'Updated 37 sets · 1 to check. Details in Activity.' }),
+      `verdict/update count: the line gives the verdict's 37, never the pass's 6 (${J(v)})`);
+  }
   // #3308 Q3308.4, the owner's copy decision (2026-11-02): the cover step's verdict reads "Cover page drawn", true with
   // Documentation's cover off too, when the step draws About this library alone.
   const first = stripVerdict({ results: [{ step: 'setup', ok: true, headline: '✓' }, { step: 'theme', ok: true, headline: '✓' }, { step: 'cover', ok: true, headline: '✓' }], steps: ['setup', 'theme', 'cover'], stopped: false, run: startStripRun(T0), now: T0 + 75_000, nameOf });
@@ -148,14 +176,14 @@ r = withReading(r, { run: 'update', phase: 'work', item: 'checkbox', done: 4, to
 {
   const at = (agent: Parameters<typeof stripView>[0]['agent'], read: { done: number; total: number } | null = null) => stripView({ read, agent, run: null, step: null, verdict: null, now: T0, nameOf });
   const c = at({ run: 'capture', phase: 'check', done: 0, total: 60 });
-  ok(J(c) === J({ kind: 'reading', what: 'Recording the sets as built…', n: null, fill: null, sub: 'An agent runs this. Details in Activity.' }),
+  ok(J(c) === J({ kind: 'reading', what: 'Saving what was built…', n: null, fill: null, sub: 'An agent runs this. Details in Activity.' }),
     `agent/check: while it reads the file, its Activity words, no count, indeterminate (${J(c)})`);
   const w = at({ run: 'adopt', phase: 'work', done: 15, total: 60 });
-  ok(J(w) === J({ kind: 'reading', what: 'Adopting members…', n: '16 of 60', fill: 0.25, sub: 'An agent runs this. Details in Activity.' }),
-    `agent/work: "Adopting members…", "16 of 60", the bar by defs done (${J(w)})`);
+  ok(J(w) === J({ kind: 'reading', what: 'Updating variants…', n: '16 of 60', fill: 0.25, sub: 'An agent runs this. Details in Activity.' }),
+    `agent/work: "Updating variants…" (#4193), "16 of 60", the bar by defs done (${J(w)})`);
   const f = at({ run: 'capture', phase: 'finish', done: 60, total: 60 });
   ok(f.kind === 'reading' && f.n === '60 of 60' && f.fill === 1, `agent/finish: every def done, the bar full (${J(f)})`);
-  ok(at({ run: 'capture', phase: 'work', done: 3, total: 60 }, { done: 10, total: 60 }).kind === 'reading' && (at({ run: 'capture', phase: 'work', done: 3, total: 60 }, { done: 10, total: 60 }) as { what: string }).what === 'Recording the sets as built…',
+  ok(at({ run: 'capture', phase: 'work', done: 3, total: 60 }, { done: 10, total: 60 }).kind === 'reading' && (at({ run: 'capture', phase: 'work', done: 3, total: 60 }, { done: 10, total: 60 }) as { what: string }).what === 'Saving what was built…',
     'order/agent: an agent\'s run wins over the read after open');
   ok(stripView({ read: null, agent: { run: 'adopt', phase: 'work', done: 1, total: 2 }, run: r, step, verdict: null, now: T0, nameOf }).kind === 'running', 'order/agent-run: a panel run wins over an agent\'s');
   ok(at(null).kind === 'idle', 'agent/none: no agent run, no read, no verdict: the strip is hidden');

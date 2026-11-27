@@ -28,16 +28,21 @@
  * separable steps.
  */
 import { BrandInput } from './theme';
+import { copyBaseSurfaces, withOwnSurfaces } from './custom-surfaces';
 
 export type DesignMd = { input: BrandInput; prose: string };
 
 // --- scalar typing: bare YAML scalar string → typed JS value ------------------
-// A double-quoted scalar takes YAML's escapes the serializer writes, `\\` and `\"` (#3876), and `\n` and `\r` (#3984):
-// without decoding them, each export → import added a backslash before every quote in a brand name, and a line break
-// in one ended the frontmatter line. Any other backslash is kept as written. A single-quoted scalar has no escapes here.
+// A double-quoted scalar takes the YAML escapes the serializer writes: `\\` and `\"` (#3876), `\n` and `\r` (#3984),
+// and for any other control character `\t` or `\uXXXX` (#4213). Without decoding them, each export → import added a
+// backslash before every quote in a brand name, and a line break in one ended the frontmatter line. Any other
+// backslash is kept as written. A single-quoted scalar has no escapes here.
+const ESCAPES: Record<string, string> = { '"': '"', '\\': '\\', n: '\n', r: '\r', t: '\t' };
 const unquote = (s: string): string => {
   const t = s.trim();
-  if (t.length >= 2 && t[0] === '"' && t[t.length - 1] === '"') return t.slice(1, -1).replace(/\\(["\\nr])/g, (_, c: string) => (c === 'n' ? '\n' : c === 'r' ? '\r' : c));
+  if (t.length >= 2 && t[0] === '"' && t[t.length - 1] === '"') {
+    return t.slice(1, -1).replace(/\\(["\\nrt]|u[0-9a-fA-F]{4})/g, (_, e: string) => e[0] === 'u' ? String.fromCharCode(parseInt(e.slice(1), 16)) : ESCAPES[e]!);
+  }
   if (t.length >= 2 && t[0] === "'" && t[t.length - 1] === "'") return t.slice(1, -1);
   return t;
 };
@@ -57,10 +62,20 @@ const typeScalar = (raw: string): unknown => {
   return t;
 };
 
+// #4119: a mapping key that names an object's prototype machinery. Stored with `o[key] = …`, `__proto__` runs the
+// prototype setter instead of making a key, so its values vanish from the schema check and from what the designer
+// wrote, with no error. Refused loudly, the same way L-08 refuses a duplicate key. Wording is DRAFT.
+const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const refuseProtoKey = (key: string, src?: number): void => {
+  if (PROTO_KEYS.has(key)) {
+    throw new Error(`design.md: key '${key}'${src ? ` at line ${src}` : ''} is not allowed: it names a JavaScript object's prototype, so its values would be dropped without a word. Rename or remove it.`);
+  }
+};
+
 // --- flow parser: `{ ... }` / `[ ... ]` one-liner leaves ----------------------
 // A small recursive-descent parser for inline flow collections with unquoted keys
 // and unquoted scalar values (the natural, compact YAML leaf form).
-const parseFlow = (src: string): unknown => {
+const parseFlow = (src: string, line?: number): unknown => {
   let i = 0;
   const ws = () => { while (i < src.length && /\s/.test(src.charAt(i))) i++; };
   const scanBare = (stops: string): string => {           // scalar until a structural char
@@ -90,6 +105,7 @@ const parseFlow = (src: string): unknown => {
     while (i < src.length) {
       ws();
       const key = unquote(scanBare(':'));                // unquote trims the raw text; a quoted key keeps its own spaces (#3984)
+      refuseProtoKey(key, line);
       i++;                                                 // skip ':'
       o[key] = value();
       ws();
@@ -113,9 +129,9 @@ const parseFlow = (src: string): unknown => {
   return value();
 };
 
-const parseScalarOrFlow = (s: string): unknown => {
+const parseScalarOrFlow = (s: string, line?: number): unknown => {
   const t = s.trim();
-  return t[0] === '{' || t[0] === '[' ? parseFlow(t) : typeScalar(t);
+  return t[0] === '{' || t[0] === '[' ? parseFlow(t, line) : typeScalar(t);
 };
 
 // --- comment stripping: drop `#` comments outside quotes and flow brackets -----
@@ -170,10 +186,11 @@ const parseBlock = (lines: Line[]): Record<string, unknown> => {
       // L-08: a duplicate key at the same level silently last-wins in plain object
       // assignment — a designer who pastes two `primary:` blocks would lose one without
       // warning. Fail loud instead (mirrors the misindent guard below).
+      refuseProtoKey(key, cur.src);
       if (seen.has(key)) throw new Error(`design.md: duplicate key '${key}' at line ${cur.src ?? '?'} — a repeated key silently overwrites the earlier one; remove one.`);
       seen.add(key);
       pos++;
-      if (rest !== '') { o[key] = parseScalarOrFlow(rest); continue; }
+      if (rest !== '') { o[key] = parseScalarOrFlow(rest, cur.src); continue; }
       // Empty value → nested block on the following deeper lines. A block sequence
       // may sit at the key's own indent (common YAML) or deeper; a nested mapping
       // must be strictly deeper.
@@ -203,7 +220,7 @@ const parseBlock = (lines: Line[]): Record<string, unknown> => {
         if (next && next.indent > indent) a.push(block(next.indent));
         else a.push(null);
       } else {
-        a.push(parseScalarOrFlow(after));
+        a.push(parseScalarOrFlow(after, cur.src));
         pos++;
       }
     }
@@ -239,6 +256,10 @@ export const parseYamlSubset = (src: string): Record<string, unknown> => {
  * trailing prose, compile the frontmatter to a `BrandInput`. Throws with a clear
  * message if the frontmatter fence is missing (an unfenced file is a mistake, not
  * an empty brand). The returned `input` is NOT yet schema-validated.
+ *
+ * #1946 5b C: a custom mode with no `surfaces.<name>` is from a file written before #1946 (the export always writes
+ * the key), so it is given a copy of its base's surfaces, as a saved v2 brand is (`copyBaseSurfaces`). A key that is
+ * present is taken as it is.
  */
 export const parseDesignMd = (text: string): DesignMd => {
   const nl = text.indexOf('\n');
@@ -255,7 +276,7 @@ export const parseDesignMd = (text: string): DesignMd => {
   if (closeIdx < 0) throw new Error("design.md frontmatter is not closed with a '---' line");
   const fm = restLines.slice(0, closeIdx).join('\n');
   const prose = restLines.slice(closeIdx + 1).join('\n').trim();
-  return { input: parseYamlSubset(fm) as unknown as BrandInput, prose };
+  return { input: copyBaseSurfaces(parseYamlSubset(fm) as unknown as BrandInput), prose };
 };
 
 // --- serialize: BrandInput → design.md (the inverse of parseDesignMd) ----------
@@ -265,11 +286,14 @@ export const parseDesignMd = (text: string): DesignMd => {
 // (e.g. no `root`) stays omitted, preserving the exact round-trip. Prose, if given,
 // follows the closing fence. Pairs with `parseDesignMd` for the E2E export leg.
 const bareOk = (s: string): boolean =>
-  s.length > 0 && s.trim() === s && !/[,{}[\]:#"'\n\r]/.test(s) &&
+  s.length > 0 && s.trim() === s && !/[,{}[\]:#"'\u0000-\u001f\u007f]/.test(s) &&
   !/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s) && !['true', 'false', 'null', '~'].includes(s);
-// Double-quoted with the escapes `unquote` decodes, backslash first (#3876), so a typed `\n` stays text; a line break
-// is written as `\n` (and a carriage return as `\r`), so the value stays on its one frontmatter line (#3984).
-const dq = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
+// Double-quoted with the escapes `unquote` decodes, backslash first (#3876), so a typed `\n` stays text. A line break
+// is written as `\n` and a carriage return as `\r`, so the value stays on its one frontmatter line (#3984); any other
+// control character is escaped too, as `\t` or `\uXXXX` (#4213).
+const CTRL: Record<string, string> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+const dq = (s: string): string =>
+  `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\u0000-\u001f\u007f]/g, (c) => CTRL[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}"`;
 const serScalar = (v: unknown): string => {
   if (v === null) return 'null';
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
@@ -288,9 +312,11 @@ const serValue = (v: unknown): string => {
   return serScalar(v);
 };
 
-/** Serialize a `BrandInput` to `design.md` text (frontmatter + optional prose). */
+/** Serialize a `BrandInput` to `design.md` text (frontmatter + optional prose). #1946 5b C: every custom mode is
+ *  written with its own `surfaces.<name>` (`{}` where it has none), so `parseDesignMd` can tell this file from one
+ *  written before #1946, which has no such key. */
 export const toDesignMd = (input: BrandInput, prose = ''): string => {
-  const fm = Object.entries(input as Record<string, unknown>)
+  const fm = Object.entries(withOwnSurfaces(input) as Record<string, unknown>)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k}: ${serValue(v)}`);
   const body = prose.trim();

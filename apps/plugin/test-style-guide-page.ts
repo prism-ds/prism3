@@ -26,6 +26,9 @@
  *   · cancel: `style-guide-cancel` mid-run stops after the table being drawn, and the verdict says how far it got
  *     (mutation: the `style-guide-cancel` case does not set the stop → cancel fails)
  *   · cancel/idle: a cancel with nothing running does not stop the next run
+ *
+ * #4476: a run hands the thread back only once 50 ms of work has run (`handBack`, `pace.ts`), so `cancel` steps the clock
+ * 60 ms a call: each table is then past the budget and the run holds after it, as it would over a real file.
  */
 let failed = 0;
 let executed = 0;
@@ -137,7 +140,7 @@ section('catalog — what the page is told before a run');
     { id: 'C:more', name: 'more', modes: ['Value'], items: [{ name: 'more/fade/50', table: 2, value: '#000000 · 50%' }, { name: 'more/opacity/50', table: 3, value: '50%' }, { name: 'more/breakpoint/md', table: -1, value: '768px' }] },
     { id: 'text-styles', name: 'Text styles', modes: [], textStyles: true, items: [{ name: 'body/md', table: 4, value: '' }] },
   ]), `catalog/request: each collection's variables with their table (-1 for the later-phase breakpoint) and default-mode value, then the text styles (${JSON.stringify(c?.collections?.map((x: any) => x.items))})`);
-  ok(c?.setUp === true && JSON.stringify(c?.notes) === JSON.stringify(['No saved brand in this file, so the contrast column reads "—" — Apply theme saves one', 'Not drawn until a later phase: 1 breakpoint variable']),
+  ok(c?.setUp === true && JSON.stringify(c?.notes) === JSON.stringify(['No saved brand in this file, so the contrast column reads "—". Run Update file with Theme ticked to save one.', 'Not drawn until a later phase: 1 breakpoint variable']),
     `catalog/request: set up, and the planner's notes for an unfiltered run (${JSON.stringify(c?.notes)})`);
 
   const setUpWith = async (sets: boolean | 'swatch' | 'text', pages: string[]): Promise<unknown> => {
@@ -202,12 +205,18 @@ section('cancel — stop after the table being drawn (owner decision P7)');
 {
   file.sets = true; file.pages = ['Cover'];
   posted.length = 0;
+  // #4476: the run hands the thread back only once `PACE_MS` (50 ms) of work has run since it last did, and this shim's
+  // tables cost nothing. So the clock steps 60 ms a call for the run, and every table is past the budget, as a real one is.
+  const realNow = Date.now;
+  let t = realNow();
+  Date.now = () => (t += 60);
   await toMain({ type: 'style-guide', options: {} });
   // The run holds at the yield after each table: once after the first, and after one step, after the second.
   await step();
   const before = ofType('style-guide-table').map((m) => `${m.index}:${m.status}`);
   await toMain({ type: 'style-guide-cancel' });
   await release();
+  Date.now = realNow;
   const after = ofType('style-guide-table').map((m) => `${m.index}:${m.status}`);
   const res = ofType('style-guide-result');
   ok(JSON.stringify(after) === JSON.stringify(['0:drawing', '0:failed', '1:drawing', '1:failed']) && res.length === 1

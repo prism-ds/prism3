@@ -44,6 +44,13 @@ role fits, don't invent one (rule 1) and don't bind a primitive (rule 2). A plai
 built from tokens is covered by "or token covers the need" and is fine; a stand-in for a missing
 component is not.
 
+A component's token bindings are in its contract, not in the catalog. Get them resolved for your
+brand with `npx tsx packages/engine/cli.ts <brief> --out <dir> --component-specs`, which writes
+`<brand>.component-contracts.json`, or with the MCP tool `export_theme`, adding `componentSpecs` to
+`include`. The committed `<id>.md` pages beside the catalog are drawn at the default brand settings,
+and a brand's settings change bindings: with `controlShape: pill` a Button binds `radius.capsule`,
+not `radius.md`, and with `fieldStyle: underline` a field draws one line with no side padding.
+
 When the brief asks for something the system doesn't have:
 
 1. **Leave it out.** Don't approximate it with other components, a native control or custom markup.
@@ -52,13 +59,13 @@ When the brief asks for something the system doesn't have:
    substitute; the report doesn't make it acceptable.
 3. **Build everything else as asked.** One gap doesn't stop the rest of the work.
 
-**A worked negative: a tooltip.** The brief asks for an icon button with a tooltip that explains it.
-The component catalog has `icon-button`; `tooltip` appears only in its `planned` list. Tempting: a
-positioned `div` that shows on hover, styled with `background.primary` and a shadow. Wrong: it has no
-keyboard or touch trigger, no dismissal and no measured contrast, so it fails every user who doesn't
-hover with a mouse. Build the icon button with its accessible name, leave the tooltip out, and write in the
-report: "Not built: the tooltip on the settings button. Prism3 has no tooltip component yet (it is
-planned), so I left it out rather than build a stand-in."
+**A worked negative: a split-button.** The brief asks for a Save button with a menu of save options: save as
+draft, save and close. The component catalog has `button`; `split-button` appears only in its `planned` list.
+Tempting: a button joined to an arrow that opens a positioned list of `div`s on click, styled with
+`background.primary` and a shadow. Wrong: it has no menu role, no arrow-key movement, no Escape dismissal and no
+measured contrast, so it fails every keyboard and screen reader user. Build the Save button with its label, leave
+the menu out, and write in the report: "Not built: the save options menu on the Save button. Prism3 has no split
+button component yet (it is planned), so I left it out rather than build a stand-in."
 
 ## The four layers (reach for the right one)
 
@@ -86,8 +93,8 @@ Binding a raw primitive throws all of that away and is the #1 source of drift.
 *Exception:* `opacity.*`, `shadow.*`, the easing shapes (`motion.easing.*`) and the springs
 (`motion.spring.*`) are consumable directly — their semantic layer is thin (the `.ai.json` marks
 them `consume: "Consumable …"`). Reach for a shape or a spring only where no motion role fits: the
-motion roles (`motion.duration.*`, `motion.easing-role.*`, `motion.transition.*`) are the semantic
-layer. A duration step (`motion.duration-ms.*`) is not consumable: bind a `motion.duration.*` role,
+motion presets (`motion.preset.*`) and roles (`motion.duration.*`, `motion.easing-role.*`) are the
+semantic layer; `prism3-motion` says which to bind. A duration step (`motion.duration-ms.*`) is not consumable: bind a `motion.duration.*` role,
 or its `motion.duration-reduced.*` twin.
 For how things move (which duration, easing role, spring or transition each change takes, and what
 reduced motion substitutes), read `prism3-motion`.
@@ -223,7 +230,7 @@ or role in the third column instead.
 | **Dashed or dotted lines** as decoration | Prism3 draws every rule solid; even the focus ring is solid (`focus.ring.style`), because a dashed line breaks up at small sizes. A dash reads as a state, such as a drop target or an empty slot, so a decorative one signals something that isn't there. | Space first: a `space.*` step between groups. When space alone leaves the grouping unclear, a Divider: a solid 1px rule in `border.secondary`, or `border.primary` when it's subtle. |
 | **A label on everything**: an eyebrow over every heading, a caption under every value, a badge on every row | When every item is labeled, none stands out, and each label is one more string a screen reader reads aloud. | Let the heading and the layout do the grouping. Use `type.eyebrow.*` once per section at most, and a Badge only for a status the user needs. A form field keeps its field label: that one is required. |
 | **A gradient nobody asked for** | A brand's gradient tokens, where it ships any, are for brand and marketing surfaces, and no text promise holds on them: each one's `avoid_when` names the worst ratio measured across it. On a product screen a gradient adds a contrast question with no answer. | A solid surface role: `background.primary`, or `foreground.brand` for a brand moment. Use a gradient only where the brief asks for one, and read its `avoid_when` first. |
-| **One radius on every corner** | Prism3 sets the radius per part, and the difference carries meaning: a status Badge is `radius.sm` so it never reads as a Tag, a Tag is `radius.round`, and a Button is `radius.md`. One radius everywhere erases that difference. | Take each component's radius from its spec. For a new surface, use the radius of the nearest Prism3 part. |
+| **One radius on every corner** | Prism3 sets the radius per part, and the difference carries meaning: a status Badge is `radius.sm` so it never reads as a Tag, a Tag is `radius.round`, and a Button is `radius.md` at the default settings. One radius everywhere erases that difference. | Take each component's radius from your brand's component contract ("Say what you can't build", above), not from the default-brand pages. For a new surface, use the radius of the nearest Prism3 part. |
 | **An icon beside every heading, button and row** | An icon helps when it is faster to read than the word, or when it tells two things apart (each Banner tone has its own glyph shape). Everywhere else it competes with the text, and a decorative icon is hidden from assistive technology, so it adds nothing there. | An Icon only where it carries meaning, at an `icon.size.*` step and in `icon.primary` or `icon.secondary`. An Icon button with an accessible name when the icon is the whole control. |
 | **Status color as decoration**: green for good news, a brand fill on a tip | The status roles (`foreground.success`, `text.danger` and the rest) mean a status. Spent on decoration, they stop meaning anything, and the next real error looks like decoration. | The neutral roles (`text.primary`, `background.secondary`) for content that carries no status. A status role only for a status, with a glyph or text beside the color. |
 | **Opacity to quiet text**, such as `opacity: 0.6` on a label | Opacity mixes the text with whatever is behind it, so its ratio changes with every surface and every mode, and no contract covers the result. | `text.secondary`, or `text.tertiary` for large text and non-essential text. Each is measured on its `sits_on` surfaces in every mode. |
@@ -243,10 +250,55 @@ Only pair colors where a real contrast contract applies — a **decorative** bor
 3:1 UI edge. A **disabled** label is not exempt: score it as `ui` (3:1). If a pair fails on the floor surface or nearer the page, you reached for the wrong role — the
 system has a role that passes there (that's what the generation-time contracts guarantee). Below
 the floor there is no promise: move the content to a shallower surface, or move the brand's floor.
+A filled control's hover and pressed label is the other exception. Each `interactive.<intent>.on-fill`
+is promised only on `interactive.<intent>.fill.rest` (read its `sits_on`), and by current policy the
+hover and pressed fills may fall below 4.5:1 under it. For the `primary` and `destructive` intents
+they do, in dark mode on every shipped brand (#1626). Don't score those pairs as failures, and don't
+swap the ink.
 
 Then reread the brief against what you built. Each thing it asks for is either built from a Prism3
 component and its tokens, or named in your report as not built ("Say what you can't build", above).
 Nothing is in between.
+
+## End every build with a ledger
+
+End every build with a short ledger under four headings: **Used**, **Composed**, **Invented** and
+**Unsure**. It closes your report, after the self-check and after anything you named as not built. A
+reviewer reads it to tell a faithful build from one that filled gaps, without reading the code first.
+
+- **Used:** each Prism3 component you placed, by its catalog `id`, and each token role you bound, by
+  name (`text.primary`, `interactive.primary.fill.rest`).
+- **Composed:** each piece you built from Prism3 components and token roles because no single component
+  is that piece, such as a settings row from `text.primary`, `text.secondary` and a `switch-row`. This is the
+  plain layout or surface "Say what you can't build" allows. A stand-in for a missing component is not
+  composed: leave it out and name it, as that section says.
+- **Invented:** anything that is not a Prism3 component or role, with the reason. The rules above leave
+  this empty in a faithful build, so each entry here is a departure for the reviewer to decide on.
+- **Unsure:** each choice you are not sure of, with what would settle it. A role you picked between two
+  candidates goes here, with both names.
+
+Write **none** under a heading that has nothing, so a short ledger reads as complete rather than cut off.
+
+**A worked ledger: a sign-in form.** The brief asks for a card holding an email field, a password field, a
+Sign in button and a "Forgot password?" link. The component catalog has no `card`: it appears only in other
+components' `planned` lists. So the card is left out and named, and everything else is built from Prism3's own
+components and tokens.
+
+The report names the card first, as "Say what you can't build" asks: "Not built: the card around the form. Prism3
+has no card component yet (it is planned), so I left it out rather than build a stand-in from a surface, a border
+and a radius." Then the ledger closes it:
+
+> **Used:** `text-field`, `password-field`, `button` (`appearance="filled"`), `link`; `background.primary`,
+> `space.400`.
+>
+> **Composed:** the sign-in layout: a column of the `text-field`, the `password-field`, the `button` and the `link`,
+> `space.400` apart, on the page's `background.primary`. Every piece in it is a Prism3 component, and the column adds
+> only the spacing between them.
+>
+> **Invented:** none.
+>
+> **Unsure:** the gap between the fields and the button. I used `space.400`; `space.300` also fits the
+> brief's mockup. A designer's spacing call settles it.
 
 ## Two worked edges (where the raw name isn't enough)
 
@@ -321,6 +373,14 @@ rule 3 builds from, its metadata sidecar (`<brand>.ai.json`) and its Figma files
 directory (the host must grant file access), then apply everything above. The names are the
 ones `packages/engine/cli.ts --out <dir>` writes. `theme_brand` returns only the contract results and notes unless you
 ask for the tree with `include`, and the tree is too large to read through a tool result.
+**List, then get, before you compose.** Call `list_components` for every component's id, name, summary and
+status, then `get_component` with the `id` of each one you place. It returns the component's props with their
+allowed values and defaults, its parts with the tokens each may bind, when to use it and when not (`whenToUse`,
+`avoidWhen`) and its partners. Pass the same `brand` you gave `theme_brand`, and the token names and values come back
+resolved for that brand. Build from that answer, not from what a component of the same name usually does elsewhere.
+A component `list_components` does not return does not exist yet: leave it out and name it ("Say what you can't
+build", above).
+
 When you finish, `score_consumption` runs the self-check above for you: it flags invented
 names and raw primitives, and scores each `{fg, bg, kind}` pair in every mode. The skill and
 the MCP compose: the MCP gives you the *data*, this skill is the *discipline* for using it.

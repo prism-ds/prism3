@@ -46,6 +46,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEGACY_BUTTON, LEGACY_RATING, PROTECTED_ROLES, OUT_OF_SCOPE_ROLES, canonicalComponents, canonicalVariables, buttonsAtFault, buttonsInspect, canonicalButtons, goldenHash, type Roles } from './figma-plan';
+import { isEntry } from '../../packages/engine/entry-point';
 
 export const RUN_FORMAT = 'prism3-adherence-figma-run/1';
 
@@ -393,7 +394,7 @@ export const render = (scores: Score[]): string => {
   return lines.join('\n');
 };
 
-const isMain = !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const argv = process.argv.slice(2);
   const target = argv.find((a) => !a.startsWith('--'));

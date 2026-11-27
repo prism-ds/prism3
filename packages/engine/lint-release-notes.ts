@@ -85,7 +85,7 @@
  *   M17 `carriedMain` not returning null for `main` → the PR-to-main case reads its folds from `origin/main`.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -172,7 +172,7 @@ const recordsAt = async (at: string | null): Promise<Recs> => {
   let ledger: Recs['ledger'] = [];
   const src = fileAt(at, 'packages/engine/component-renames.ts');
   if (src) {
-    const d = mkdtempSync(join(tmpdir(), 'p3-lint-release-'));
+    const d = mkdtempSync(join(realpathSync(tmpdir()), 'p3-lint-release-'));
     try { const f = join(d, 'ledger.ts'); writeFileSync(f, src); ledger = [...(((await import(pathToFileURL(f).href)) as { COMPONENT_RENAMES?: Recs['ledger'] }).COMPONENT_RENAMES ?? [])]; }
     finally { rmSync(d, { recursive: true, force: true }); }
   }

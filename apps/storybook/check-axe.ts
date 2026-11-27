@@ -23,6 +23,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { at, context, dirsFor, DROPPED, main, open, require, result, stories, type Plant, type Story, type Result } from './a11y-harness.ts';
+import { isEntry } from '@prism3/engine/harness';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 const THEMES = ['light', 'dark'] as const;
@@ -124,6 +125,6 @@ const MUTANTS = [
   },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   await main('axe', 'Every story, in light and dark, left to right and right to left, has no axe violation and nothing left for review (WCAG 2.0–2.2 A and AA).', run as never, [...MUTANTS, ...DROPPED('axe')]);
 }

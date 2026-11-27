@@ -73,6 +73,7 @@ import { materializeForBrand } from './src/brand-def';
 import { prebuildDependencies, missingDependencies, DependencyBuildError, SWAP_TARGET as PLUGIN_SWAP_TARGET, labelAfterBuilds } from './src/build-deps';
 import { applyComponentPlan, CHUNK, partialWriteOf, buildReportJson, REF_BACKOFF_MS } from './src/write-components';
 import { refsNote } from './src/apply-summary';
+import { searchComponents } from './src/component-search';
 import { partialWriteHeadline, partialWriteNote, componentHeadline, staleNote } from './src/apply-summary';
 import type { ComponentApplyOptions, ComponentProgress, BuildReport } from './src/write-components';
 
@@ -598,7 +599,7 @@ const beforeStamps = beforeNodes.map(stampOf);
 const rStale = await run(laterGrid, { ...fullFor(laterGrid), page: stalePage });
 
 ok(rStale.stale === 21 && rStale.skipped === 0 && rStale.added === 0,
-  `every member built from an earlier plan is counted STALE and NOT as a skip (stale=${rStale.stale}, skipped=${rStale.skipped}, added=${rStale.added})`);
+  `every member built by an earlier version of Prism3 is counted STALE and NOT as a skip (stale=${rStale.stale}, skipped=${rStale.skipped}, added=${rStale.added})`);
 ok(rStale.misses.filter((m) => m.includes('-> STALE')).length === 21 && !rStale.misses.some((m) => m.includes('ALREADY PRESENT')),
   `...and each one is NAMED, with nothing reported as already present (${rStale.misses.length} misses; ${rStale.misses[0]})`);
 ok(rStale.misses.every((m) => !m.includes('-> STALE') || (/built by engine [^,]+, plan [0-9a-f]{16}/.test(m) && /this build plans [0-9a-f]{16}/.test(m))),
@@ -619,8 +620,8 @@ ok(rStale.misses.length !== rStale.skipped,
 ok(componentHeadline(rStale.added, rStale.skipped, rStale.misses.length - rStale.skipped - rStale.stale, rStale.stale) === '⚠ 21 stale',
   `the pill says so too, rather than '✓ already built' (${componentHeadline(rStale.added, rStale.skipped, rStale.misses.length - rStale.skipped - rStale.stale, rStale.stale)})`);
 const note = staleNote(rStale.stale, ENGINE_VERSION);
-ok(note !== null && note.includes('orphan') && note.includes('id'),
-  'and the note gives the REASON in the same clause as the remedy, so declining the rebuild does not read as the tool failing');
+ok(note !== null && note.includes('kept, so placed instances stay linked') && note.includes('Run Update file'),
+  '#4185 and the note gives the REASON in the same clause as the outcome, then the remedy, Update file, so declining the rebuild does not read as the tool failing');
 
 // (3) AN UNSTAMPED MEMBER READS AS STALE. This is not an edge case — it is every set in every file
 // written before this lands, and it is also the paste-payload route, which builds members without ever
@@ -2620,7 +2621,7 @@ ok(fmRun.properties.filter((p) => p.indexOf('TEXT') >= 0).length === 1,
     { def: 'tag', part: 'closeGlyph', icon: 'icon/close', size: 'icon/size/{size-1}' },
     { def: 'select', part: 'chevronGlyph', icon: 'icon/chevron-down', size: 'icon/size/sm' },
     { def: 'textarea', part: 'gripGlyph', icon: 'icon/resize-grip', size: 'icon/size/xs' },
-    { def: 'image-placeholder', part: 'markerGlyph', icon: 'icon/image', px: 180 },
+    { def: 'image', part: 'markerGlyph', icon: 'icon/image', px: 180 },
   ];
   const RUNG: Record<string, string> = { small: 'sm', medium: 'md', large: 'lg' };
   const RUNG_BELOW: Record<string, string> = { small: 'xs', medium: 'sm', large: 'md' };
@@ -2689,7 +2690,7 @@ ok(fmRun.properties.filter((p) => p.indexOf('TEXT') >= 0).length === 1,
 const rControl = await run(grid, { ...full(), page: { children: [] } });
 const boundField = Object.keys(grid[0].root.bound)[0];
 ok(!!boundField && rControl.misses.every((m) => m.indexOf('REFUSED') < 0),
-  `#982 control: the unrefusing host reports no REFUSED miss, and the plan binds a field to refuse (${boundField})`);
+  `#982 control: the unrefusing host reports no REFUSED miss, and Prism3 binds a field to refuse (${boundField})`);
 
 // A refused PROPERTY is a miss, and ONLY that miss: exactly one line per member for the refused field, all
 // of them REFUSED. A second line for the field (`DISCARDED` from a refused binding pushed to `wrote`, or
@@ -2751,12 +2752,10 @@ await refusedStructure('combineAsVariants', { combine: true });
 // `parent` each parked node actually ended up with. The two derivations are then asserted to AGREE — a
 // marking that reported 648 parked while parenting 3 is the failure this arrangement exists to catch.
 //
-// AND WHAT THIS HARNESS CANNOT SEE, stated because it is the reason no existing gate caught the litter in
-// the first place: `mkNode` never appends to `page`, so a node created here is not on the shim's page the
-// way it is on Figma's. The page-parenting premise is measured in the standalone instrument
-// (`measure-913.ts`, attached to the filed issue), not here. The consequence shows up below — after a
-// refused `combineAsVariants` the shim's page array still lists the members it re-parented — so the
-// re-parenting is read off `node.parent`, which the shim does model, rather than off the page.
+// WHAT THIS HARNESS COULD NOT SEE until #971: a node created here was not on the shim's page the way it is on
+// Figma's, so no gate could read what a throw left on the canvas. The shim now parents each created node to the page
+// and takes it off when it is placed; the #971 arms after this block read the page itself. The arms below still read
+// the re-parenting off `node.parent` and the frame, which they always could.
 
 // ---- REGIME 1: the small one, and the ORDINARY client failure -------------------------------
 // A host that refuses a STRUCTURE call (`createText`; since #982 the missing-typeface case is a property miss
@@ -2893,6 +2892,45 @@ const earlyFacts = partialWriteOf(earlyErr);
 ok(earlyErr !== null && (earlyFacts === null || earlyFacts.loose === 0),
   `#913 the same holds when it is the HOST that refused the first node (${earlyFacts === null ? 'no facts' : earlyFacts.loose + ' loose'})`);
 ok(nothingPage.children.length === 0, `#913 ...and nothing was put on that page either (${nothingPage.children.length})`);
+
+// ---- #971: THE SHIM PARENTS A CREATED NODE TO THE PAGE, AS THE HOST DOES ------------------------
+// Figma puts a node on the current page the moment `createFrame` / `createText` / `createNodeFromSvg` /
+// `createInstance` returns it. The shim did not, so what a throw left on the canvas was not expressible here: every
+// #913 arm above reads the trail's frame, never the page. THE PREMISE first, on a fresh shim: each create lands on the
+// page with the page as its parent, and appending it anywhere takes it off. THEN THE PAGE ITSELF after a run whose
+// combine and marking were both refused: the members are loose on it, read off the page alone, and they number what
+// the plans asked for (that arm held before #971 too: the executor itself puts each member on its page before the
+// combine, so it pins the page read rather than the change). Mutations: `created` not pushing onto the page →
+// `#971 created on the page`; the set's `appendChild` keeping a page parent → `test-reactions.ts`'s `replaced/apply`;
+// `combineAsVariants` not detaching its members → `#971 combined off the page` and `#971 combined out of a frame`.
+{
+  const pg: Page = { children: [] };
+  const api = makeShim({ ...full(), page: pg }) as unknown as { createFrame(): Node; createText(): Node; createNodeFromSvg(s: string): Node; currentPage: unknown };
+  const made = [api.createFrame(), api.createText(), api.createNodeFromSvg('<svg width="4" height="4"><path d="M0 0L4 4"/></svg>')];
+  ok(made.every((n) => pg.children.includes(n) && n.parent === api.currentPage),
+    `#971 created on the page: a created frame, text and SVG import sit on the current page, parented to it (${pg.children.length} on the page)`);
+  (made[0].appendChild as (c: Node) => void)(made[1]);
+  ok(!pg.children.includes(made[1]) && made[1].parent === made[0] && pg.children.length === 2,
+    `#971 ...and a node appended into a frame leaves the page (${pg.children.length} on the page)`);
+  const looseOnPage = cannotMarkPage.children.filter((c) => c.type === 'COMPONENT');
+  ok(looseOnPage.length === grid.length && new Set(looseOnPage.map((c) => String(c.name))).size === grid.length,
+    `#971 left on the page: a run whose combine and marking were refused leaves the ${grid.length} members loose on the page itself, read off the page (${looseOnPage.length} components on it)`);
+  // THE COMBINE TAKES ITS MEMBERS OFF THE PAGE (#971's control row: "1 (the set)"). A clean build on a fresh page
+  // leaves exactly one top-level node, the set, holding every member the plans asked for, each parented to it and
+  // none of them also loose beside it. Expected from the plans (`grid.length`), read off the page alone.
+  const top = cleanPage.children;
+  const set = top[0];
+  ok(top.length === 1 && set.type === 'COMPONENT_SET' && (set.children as Node[]).length === grid.length
+      && (set.children as Node[]).every((m) => m.parent === set && !top.includes(m)),
+    `#971 combined off the page: a clean build leaves exactly one top-level node, the set, with its ${grid.length} members inside it and none loose (${top.length} on the page: ${JSON.stringify(top.map((c) => c.type))})`);
+  // ...and off any other parent: a member that sits in a frame when it is combined leaves that frame for the set.
+  const holder = api.createFrame();
+  const member = api.createFrame();
+  (holder.appendChild as (c: Node) => void)(member);
+  const combined = (api as unknown as { combineAsVariants(m: Node[], p: unknown): Node }).combineAsVariants([member], api.currentPage);
+  ok(!(holder.children as Node[]).includes(member) && member.parent === combined && !pg.children.includes(member),
+    `#971 combined out of a frame: a member combined from inside a frame leaves it for the set (${(holder.children as Node[]).length} left in the frame)`);
+}
 
 // =============================================================================================
 // #1011 — THE SELECTION CONTROL'S BOX, READ OFF THE NODE THE EXECUTOR BUILT
@@ -3950,6 +3988,91 @@ ok(setPage.children.length === 1 && setPage.children[0].type === 'COMPONENT_SET'
     `#1623 emitAsComponents: every one of the ${icPlans.length} icon components carries the summary (${undescribed.length} without)`);
 
   ok(/description:\s*target\.summary/.test(mainSrc), "#1623 main.ts passes the def's summary as the build's description");
+
+  // #2865 (owner decision A): every write records itself, in shared plugin data `prism3`/`description` (typed here), and
+  // a description that still equals its record is Prism3's, so a later build replaces it. Mutations: the record not
+  // written → `#2865 recorded`; an existing set's description written only while empty, as before → `#2865 stale replaced`.
+  const recOf = (n: Record<string, unknown> | undefined): string => (n?.getSharedPluginData as ((a: string, b: string) => string) | undefined)?.('prism3', 'description') ?? '';
+  ok(recOf(setOf(pgA)) === fm.summary && pgC.children.every((c) => recOf(c as Record<string, unknown>) === ic.summary),
+    `#2865 recorded: a fresh set and each emitted component record the description they were given (${JSON.stringify(recOf(setOf(pgA)))})`);
+  const pgD: Page = { children: [] };
+  await run(fmPlans, { ...fmVars, page: pgD }, { description: 'An earlier summary.' });
+  await run(fmPlans, { ...fmVars, page: pgD }, { description: fm.summary });
+  ok(setOf(pgD)?.description === fm.summary && recOf(setOf(pgD)) === fm.summary,
+    `#2865 stale replaced: a set whose description is still Prism3's earlier one takes the new summary on the next build ("${setOf(pgD)?.description}")`);
+
+  // DECISION A IS SCOPED TO A SET PRISM3 BUILT (#2865 review should-fix 1): a description with no record is Prism3's only
+  // there. A set none of whose members carries a stamp (`memberStamp`, typed here) is the designer's, and so is its
+  // description. The control: the same unrecorded description on a set whose members keep their stamps is replaced.
+  // Mutation: the executor's `setBuiltByUs` dropped → `#2865 hand-made set kept`.
+  const DESIGNER = 'A designer wrote this.';
+  const unrecorded = async (clearStamps: boolean): Promise<{ desc: unknown; stamps: string[] }> => {
+    const pg: Page = { children: [] };
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    const set = setOf(pg)!;
+    const kids = (set.children ?? []) as Record<string, unknown>[];
+    const put = (n: Record<string, unknown>, k: string, v: string): void => (n.setSharedPluginData as (a: string, b: string, c: string) => void)('prism3', k, v);
+    if (clearStamps) for (const c of kids) put(c, 'memberStamp', '');
+    set.description = DESIGNER;
+    put(set, 'description', '');
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    return { desc: setOf(pg)?.description, stamps: kids.map((c) => (c.getSharedPluginData as (a: string, b: string) => string)('prism3', 'memberStamp')) };
+  };
+  const built = await unrecorded(false);
+  ok(built.desc === fm.summary, `#2865 unrecorded on a built set: a description with no record on a set Prism3 stamped takes the summary ("${built.desc}")`);
+  const hand = await unrecorded(true);
+  ok(hand.desc === DESIGNER && hand.stamps.length > 0 && hand.stamps.every((x) => x === ''),
+    `#2865 hand-made set kept: a set with no stamped member keeps its description on a build, record or not ("${hand.desc}"; stamps ${JSON.stringify(hand.stamps)})`);
+
+  // #2865 delta review should-fix 1: a build that adds a member to a hand-made set stamps it, so the next build reads the
+  // set as built. The designer's unrecorded description is marked theirs on the first build and kept on the second.
+  // Mutation: the `DESCRIPTION_THEIRS` mark not written → `#2865 hand-made set kept twice`.
+  {
+    const pg: Page = { children: [] };
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    const set = setOf(pg)!;
+    const kids = (set.children ?? []) as Record<string, unknown>[];
+    const put = (n: Record<string, unknown>, k: string, v: string): void => (n.setSharedPluginData as (a: string, b: string, c: string) => void)('prism3', k, v);
+    for (const c of kids) put(c, 'memberStamp', '');
+    (kids[kids.length - 1].remove as () => void)();
+    set.description = DESIGNER;
+    put(set, 'description', '');
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    const d1 = setOf(pg)?.description;
+    const st = ((setOf(pg)!.children ?? []) as Record<string, unknown>[]).map((c) => ((c.getSharedPluginData as (a: string, b: string) => string)('prism3', 'memberStamp') ? 'S' : '-')).join('');
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    const d2 = setOf(pg)?.description;
+    ok(d1 === DESIGNER && st.includes('S') && d2 === DESIGNER,
+      `#2865 hand-made set kept twice: a designer's description on a set Prism3 never built survives the build that adds a member, and the one after (${JSON.stringify({ d1, st, d2 })})`);
+  }
+
+  // #2865 delta review should-fix 2: an EMPTY description on a set with no stamped member is still filled, as #1623 did
+  // on main. It has no designer text to protect. Mutation: the empty-fill term dropped → `#1623 empty filled on a hand-made set`.
+  {
+    const pg: Page = { children: [] };
+    await run(fmPlans, { ...fmVars, page: pg });
+    const set = setOf(pg)!;
+    for (const c of (set.children ?? []) as Record<string, unknown>[]) (c.setSharedPluginData as (a: string, b: string, c: string) => void)('prism3', 'memberStamp', '');
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    ok(setOf(pg)?.description === fm.summary && recOf(setOf(pg)) === fm.summary,
+      `#1623 empty filled on a hand-made set: a set with no stamped member and no description takes the summary, recorded ("${setOf(pg)?.description}")`);
+  }
+
+  // #2865 delta review nit: the designer mark is for a set Prism3 never built. A stamped set whose unrecorded description
+  // meets a build with no `description` option keeps no mark, so a later build still reads that description as Prism3's.
+  // Mutation: `!setBuiltByUs &&` dropped from the mark's guard → `#2865 built set not marked theirs`.
+  {
+    const pg: Page = { children: [] };
+    await run(fmPlans, { ...fmVars, page: pg }, { description: fm.summary });
+    const set = setOf(pg)!;
+    set.description = 'An earlier summary.';
+    (set.setSharedPluginData as (a: string, b: string, c: string) => void)('prism3', 'description', '');
+    await run(fmPlans, { ...fmVars, page: pg });
+    const stamped = ((setOf(pg)!.children ?? []) as Record<string, unknown>[]).some((c) => !!(c.getSharedPluginData as (a: string, b: string) => string)('prism3', 'memberStamp'));
+    const rec = recOf(setOf(pg));
+    ok(stamped && rec !== '\u0001theirs',
+      `#2865 built set not marked theirs: a build with no description into a set Prism3 stamped leaves its unrecorded description unmarked (record ${JSON.stringify(rec)}; stamped ${stamped})`);
+  }
 }
 
 // ---- #1611: THE FOOTPRINT HOLDS ACROSS RUNTIME AXES, NOT AUTHORING AXES --------------------
@@ -5113,6 +5236,81 @@ ok(setPage.children.length === 1 && setPage.children[0].type === 'COMPONENT_SET'
     `#1796 ...and the swap property is not created from either (${swProp[0] ?? 'NO MISS'})`);
 }
 
+// #3828 — THE OTHER TWO READERS OF A NAME TWO PLAIN COMPONENTS HOLD (the #1796 policy)
+// =============================================================================================
+// A nest override's swap value (Dialog's close takes `icon/close`) and the icon re-run's existing-member lookup read
+// `compByName`, which keeps the last of several. Now neither picks by document order: the override is named in the
+// shared AMBIGUOUS words and the instance keeps its default; an emitted component's name held twice is named, and no
+// third is added. THE ORACLE is the host: the instance's own property value, and the page's components by name.
+// Mutations: the override's resolver back on `compByName` → `#3828 override`; the emit loop's check dropped →
+// `#3828 icon re-run`.
+{
+  const dg = figmaAnatomySet(byId('dialog')!);
+  const dgFull = fullFor(dg);
+  const props = { 'flush-icon-button-neutral': { 'swap icon#9:1': { type: 'INSTANCE_SWAP', defaultValue: 'icon/more-horizontal' } } };
+  const overrideMisses = (r: { misses: string[] }): string[] => [...new Set(r.misses.filter((m) => m.includes('.nestOverrides -> swap icon')))];
+  const once = await run(dg, { ...dgFull, comps: [...new Set([...(dgFull.comps ?? []), 'icon/close', 'icon/more-horizontal'])], componentProps: props, page: { children: [] } });
+  ok(overrideMisses(once).length === 0, `#3828 reachable: with one icon/close the close's swap override applies with no miss (${overrideMisses(once)[0] ?? 'none'})`);
+  const twoPage: Page = { children: [] };
+  const two = await run(dg, { ...dgFull, comps: [...new Set([...(dgFull.comps ?? []), 'icon/close', 'icon/more-horizontal']), 'icon/close'], componentProps: props, page: twoPage });
+  const m = overrideMisses(two);
+  ok(m.length > 0 && m.every((x) => x.endsWith('.nestOverrides -> swap icon (icon/close: found more than one COMPONENT of that name; neither is used. Rename or remove one, then rebuild; the nested instance keeps its default)')),
+    `#3828 override: a swap value two plain components hold is named, and neither is set (${m[0] ?? 'NO MISS'})`);
+
+  const ic = figmaAnatomySet(byId('icon')!);
+  const icPage: Page = { children: [] };
+  const icOpts: ShimOpts = { ...fullFor(ic), comps: [...(fullFor(ic).comps ?? []), 'icon/check', 'icon/check'], page: icPage };
+  const r = await run(ic, icOpts, { emitAsComponents: true });
+  const named = (n: string): number => icPage.children.filter((c) => c.type === 'COMPONENT' && c.name === n).length;
+  ok(r.misses.includes('member icon/check -> AMBIGUOUS (found more than one COMPONENT of that name; neither is used. Rename or remove one, then rebuild)') && named('icon/check') === 0 && named('icon/close') === 1,
+    `#3828 icon re-run: an emitted name two plain components hold is named, and no third is added (${r.misses.filter((x) => x.includes('icon/check'))[0] ?? 'NO MISS'}; ${named('icon/check')} built on the page)`);
+}
+
+// #4160 (owner decision C) — THE EXECUTOR'S WHOLE-FILE SEARCHES
+// =============================================================================================
+// A build searched the whole file for components twice to set up, then twice more for EVERY slot property that names a
+// preferred def. Now the slot loop's pair runs once per build, and every component search runs with Figma skipping
+// hidden instance children (`searchComponents`, `component-search.ts`). THE ORACLE is the host: a counting host whose
+// `root.findAllWithCriteria` records each call and the flag as it stood. List, its `items` slot cloned under a second
+// name so the plan carries two preferred SLOT properties. Mutations: the slot searches back inside the loop →
+// `#4160 searched once`; a search unwrapped → `#4160 flag`; the flag left on → `#4160 flag restored`.
+{
+  const listPlans = figmaAnatomySet(byId('list')!).map((pl) => {
+    const q = JSON.parse(JSON.stringify(pl)) as AnatomyPlan;
+    const visit = (n: { name: string; slotPreferred?: unknown; children?: unknown[] }): boolean => {
+      const kids = (n.children ?? []) as { name: string; slotPreferred?: unknown; children?: unknown[] }[];
+      const at = kids.findIndex((k) => !!k.slotPreferred);
+      if (at >= 0) { kids.splice(at + 1, 0, { ...JSON.parse(JSON.stringify(kids[at])), name: `${kids[at].name}2` }); return true; }
+      return kids.some(visit);
+    };
+    visit(q.root as never);
+    return q;
+  });
+  const slots = (planSetProperties(listPlans) as { type: string; preferred?: string[] }[]).filter((x) => x.type === 'SLOT' && x.preferred?.length);
+  const calls: { types: string; skip: unknown }[] = [];
+  const g = globalThis as { figma?: { skipInvisibleInstanceChildren?: boolean } };
+  const before = g.figma;
+  const flagAfter: unknown[] = [];
+  g.figma = { skipInvisibleInstanceChildren: false };
+  try {
+    const shim = makeShim({ ...fullFor(listPlans), page: { children: [] }, looseHost: '#4160 counts the build\'s root.findAllWithCriteria calls' }) as unknown as { root: { findAllWithCriteria: (c: { types: string[] }) => unknown[] } };
+    const real = shim.root.findAllWithCriteria.bind(shim.root);
+    shim.root.findAllWithCriteria = (c) => { calls.push({ types: c.types.join(), skip: g.figma?.skipInvisibleInstanceChildren }); return real(c); };
+    await applyComponentPlan(listPlans, shim as never);
+    flagAfter.push(g.figma?.skipInvisibleInstanceChildren);
+    try { searchComponents(['COMPONENT'], () => { throw new Error('#4160 a search that throws'); }); } catch { /* the throw is the point */ }
+    flagAfter.push(g.figma?.skipInvisibleInstanceChildren);
+  } finally { g.figma = before; }
+  ok(slots.length === 2 && calls.length === 4,
+    `#4160 searched once: a build whose plan carries ${slots.length} preferred slot properties searches the whole file 4 times, 2 to set up and 2 for all its slots (${calls.length}: ${JSON.stringify(calls.map((x) => x.types))})`);
+  ok(calls.length > 0 && calls.every((x) => x.skip === true),
+    `#4160 flag: every component search runs with hidden instance children skipped (${JSON.stringify(calls.map((x) => x.skip))})`);
+  // The flag is put back: left on, reading a hidden layer inside an instance throws, and the hand-edit pass reads those.
+  // Mutation: `searchComponents`'s `finally` emptied → `#4160 flag restored`.
+  ok(JSON.stringify(flagAfter) === '[false,false]',
+    `#4160 flag restored: after the build, and after a search that throws, hidden instance children are read again (${JSON.stringify(flagAfter)})`);
+}
+
 // ---- #1750: a new set lands beside the page's content, never on top of it ------------------------------
 // Live: every set built onto `↳ Buttons` landed at (0,0) and covered the one before it. Every position below
 // is a literal. The one number the shim decides — the `button` set's measured box — is pinned first as a
@@ -5474,8 +5672,8 @@ ok(setPage.children.length === 1 && setPage.children[0].type === 'COMPONENT_SET'
   };
   for (const [size, want] of [[undefined, 'label/lg/emphasis'], ['medium', 'label/md/emphasis'], ['small', 'label/sm/emphasis']] as const) {
     const got = await titles(size ? { ...aurora, dialogTitleSize: size } as BrandInput : aurora);
-    ok(got.read === 24 && JSON.stringify(got.styles) === JSON.stringify([want]) && got.misses.length === 0,
-      `#2958 dialog title reads back: at ${size ?? 'unset (Large)'}, all ${got.read} of 24 members bind the title to ${want}, a style the brand emits (${got.styles.join(', ')}; misses: ${got.misses.slice(0, 2).join('; ') || 'none'})`);
+    ok(got.read === 16 && JSON.stringify(got.styles) === JSON.stringify([want]) && got.misses.length === 0,
+      `#2958 dialog title reads back: at ${size ?? 'unset (Large)'}, all ${got.read} of 16 members (#3392 A) bind the title to ${want}, a style the brand emits (${got.styles.join(', ')}; misses: ${got.misses.slice(0, 2).join('; ') || 'none'})`);
   }
 }
 

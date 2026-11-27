@@ -137,7 +137,10 @@ export const tag: ComponentDef = {
   id: 'tag',
   name: 'Tag',
   aliases: ['chip', 'filter-tag', 'filter-chip', 'input-tag', 'input-chip', 'removable-tag', 'dismissible-tag', 'selectable-tag', 'choice-chip', 'interaction-tag', 'checkable-tag', 'facet'],
-  category: 'foundations',
+  // Not the brief's `foundations`: the owner moved Tag out of it to match the Figma file, which places it under
+  // Components beside Badge (#2092 A, 2026-11-18). `form` is the DRAFT value, held for the owner in the PR; `test.ts`
+  // admits the departure from the brief by name (`OWNER_CATEGORY`).
+  category: 'form',
   status: 'draft',
   summary: 'An interactive token a user toggles or removes. A static label is a badge.',
   description:
@@ -564,10 +567,12 @@ export const tag: ComponentDef = {
     usage: 'Use a tag for something a user acts on in place. Use a select tag for a lightweight filter or choice the user toggles; use a dismissible tag for an applied filter they can remove, or a recipient or keyword entered into a field. Put tags in a group with at least 8px between them, and let the group own selection, arrow-key movement and focus after removal. If nobody acts on it, it is a badge; if it runs an action, it is a button.',
     do: [
       'Name the remove control "Remove" followed by the label',
-      'Move focus to the next tag after a removal, else the previous one, else the group',
       'Keep the check mark on a selected tag unless the tint and outline already read clearly in context',
       'Keep at least 8px between tags in a group',
       'Let a long label wrap, so the full text stays visible',
+    ],
+    implementation: [
+      'Move focus to the next tag after a removal, else the previous one, else the group',
     ],
     dont: [
       'Use a tag for a status nobody can act on. That is a badge.',
@@ -584,7 +589,8 @@ export const tag: ComponentDef = {
     primaryPurpose: 'Render a small interactive token the user toggles or removes in place.',
     whenToUse: 'Inline filters toggled on and off (select), applied filters the user can remove, or recipients or keywords entered into a field (dismissible), usually in a group.',
     avoidWhen: 'Nobody can act on it (use Badge), it runs an action (use Button), or it is a structured choice in a form submission (use Checkbox.Group or Radio.Group).',
-    commonPartners: ['tag-group', 'badge', 'icon', 'checkbox-group', 'radio-group', 'popover'],
+    // `avatar` (#4110) moved here from `planned` when it was built: a recipient tag can lead with one.
+    commonPartners: ['tag-group', 'badge', 'icon', 'checkbox-group', 'radio-group', 'avatar', 'popover'],
     triggerKeywords: ['tag', 'chip', 'filter tag', 'filter chip', 'input tag', 'input chip', 'removable tag', 'dismissible tag', 'selectable tag', 'select tag', 'choice chip', 'facet', 'applied filter', 'recipient token'],
     generationPriority: 3,
   },
@@ -592,8 +598,8 @@ export const tag: ComponentDef = {
   composition: {
     // Exactly what the anatomy nests: the ring (an `absolute`). The × is a glyph of the tag's own, not a nest.
     composesWith: ['focus-ring'],
-    alternativeTo: ['badge', 'button', 'checkbox-group', 'radio-group'],
-    planned: ['combobox', 'toggle-button', 'avatar'],
+    alternativeTo: ['badge', 'button', 'checkbox-group', 'radio-group', 'toggle-button'],
+    planned: ['combobox'],
     replacesPatterns: ['a removable token list built as a listbox', 'a clickable div styled as a pill', 'a bare × glyph with no accessible name'],
   },
 

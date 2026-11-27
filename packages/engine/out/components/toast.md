@@ -78,9 +78,10 @@ Use a Toast to confirm something the user did, when the page already shows the c
 
 ### Motion
 
-- **Enter:** An 8px slide up and a fade (motion.transition.enter: motion.duration.normal, motion.easing-role.enter).
-- **Exit:** A fade (motion.transition.exit: motion.duration.fast, motion.easing-role.exit). A replacement plays the exit, then the enter.
-- **Reduced motion:** Under prefers-reduced-motion, the fade only, with no slide, at motion.duration-reduced.normal.
+- **Patterns:** `toast/enter`, `toast/exit`
+- **Enter:** The toast fades in and slides up by motion.distance.nudge on motion.preset.fade.
+- **Exit:** The toast fades out on motion.preset.fade.exit. A replacement plays the exit, then the enter.
+- **Reduced motion:** Under prefers-reduced-motion, the toast fades in on motion.preset.fade.duration-reduced, with no slide. The toast fades out on motion.preset.fade.exit.duration-reduced.
 
 ## Content guidelines
 

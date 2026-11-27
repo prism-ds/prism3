@@ -64,9 +64,11 @@ const ALLOWED_HOSTS = ALLOWED.map((d) => new URL(d).host);
 const REFERENCE_ONLY: Record<string, string> = {
   'www.w3.org': 'the SVG and XHTML namespace URIs, an identifier and never fetched',
   'openfontlicense.org': "the embedded chrome fonts' license line, in a comment",
-  'github.com': 'license and source lines in comments, and Report a problem\'s prefilled issue form (#2069), opened in the browser by `figma.openExternal`, never fetched by the plugin',
+  'github.com': 'license and source lines in comments, Report a problem\'s prefilled issue form (#2069), opened in the browser by `figma.openExternal`, and the README link written into the exported shadcn/ui registry item; never fetched by the plugin',
   'tabler.io': "the icon set's license line, in a comment",
   'prism3-ds.vercel.app': 'the docs site, opened in the browser by `figma.openExternal`, never fetched by the plugin',
+  // The shadcn/ui theme export (the lane after #2997): its registry item names its JSON schema, as every registry item does.
+  'ui.shadcn.com': 'the `$schema` URL written into the exported shadcn/ui registry item, an identifier the file carries, never fetched',
 };
 
 type Pattern = { name: string; re: RegExp; positive: string; negative: string };

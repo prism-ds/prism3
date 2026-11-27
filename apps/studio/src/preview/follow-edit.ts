@@ -32,7 +32,7 @@
  * EASED, ON THE STUDIO'S OWN MOTION TOKENS (QA-B9, QA-B17). `scrollTo({ behavior: 'smooth' })` takes neither a
  * duration nor a curve, so the scroll is stepped here, one position per animation frame, along the chrome's
  * default transition: `--p3-scroll-dur` and `--p3-scroll-ease`, which `chrome.css` sets on the two panes from
- * `--p3-transition-dur` and `--p3-transition-ease` (the default theme's `motion.transition.default`, its duration and
+ * `--p3-transition-dur` and `--p3-transition-ease` (the default theme's `motion.preset.move.transition`, its duration and
  * timing function, read from the one composite so the two cannot drift apart). A value this cannot read
  * jumps, rather than inventing a curve of its own. The jump links scroll the same way (`scrollToStart`).
  *
@@ -225,8 +225,10 @@ export const PREVIEW_HEADING: Readonly<Record<string, string>> = {
   // preview's Font families, which keeps its title.
   'Typeface library': 'Font families',
   'Font family for each text type': 'Font families',
-  // Type (S6.3): the limits change the scale, so they reveal the preview's Scale section (scope §3).
-  'Scale limits': 'Scale',
+  // Type (#3079): the cards hold each text type's sizes, so they reveal the preview's Scale section; Every text type
+  // holds the weights behind each name and the links, so it reveals Weights and styles.
+  'Text types': 'Scale',
+  'Every text type': 'Weights and styles',
   // Shape (S7, owner decision D1 A): the base radius moves every radius size, so it reveals the preview's Radius.
   'Base radius': 'Radius',
 };

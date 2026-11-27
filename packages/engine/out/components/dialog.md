@@ -17,7 +17,7 @@ A modal panel over the page for a short task or a decision the user makes before
 
 ## Anatomy
 
-Shown on the default member: placement `center`, size `medium`, footer `inline`.
+Shown on the default member: placement `center`, footer `inline`.
 
 1. **Panel** — The panel: the surface, its shadow and its corners. It pads the top and bottom; the header, body and footer pad their own sides, so a divider runs edge to edge.
 2. **Header** — The header: the title and description, then the close button at the end edge.
@@ -39,7 +39,6 @@ Shown on the default member: placement `center`, size `medium`, footer `inline`.
 | Axis | Values | Changes | Description |
 | --- | --- | --- | --- |
 | `placement` | `center`, `bottom`, `full`, `end` | once, when authored | Where the panel sits. center on every screen by default; bottom (a bottom sheet) and full (full screen) are for small screens; end (a side sheet) runs the full height of the screen at the end edge, the right in left-to-right text. Set per breakpoint; nothing switches automatically. |
-| `size` | `medium`, `small`, `large` | once, when authored | The width of a centered panel: 400, 560 or 720px. On a small screen a centered panel is as wide as the screen less its margins. Bottom and full panels are full width, and an end panel is 480px wide, so all three ignore it. |
 | `footer` | `inline`, `stacked`, `fill`, `none` | once, when authored | How the actions are laid out. inline is a row at the end edge; stacked is full-width buttons, the main action on top; fill is a row whose buttons share the width equally, the main action last; none is for a dialog whose body holds its own actions. |
 
 ## Usage guidelines
@@ -55,7 +54,6 @@ Use a Dialog when the user must make a decision or finish a short task before go
 - Put the main action last in an inline or fill footer (Cancel, then Save), and on top when stacked
 - Use the fill footer for two buttons that share the width, such as Clear all and Apply, and stacked for long labels
 - Let only the body scroll, and keep the footer in view
-- Return focus to the control that opened the dialog
 
 ### Don't
 
@@ -91,9 +89,10 @@ Use a Dialog when the user must make a decision or finish a short task before go
 
 ### Motion
 
-- **Enter:** A centered panel fades in and scales up a little; a bottom sheet and a full-screen dialog slide up from the bottom edge; an end panel slides in from the end edge (motion.duration.moderate, motion.easing-role.enter). The backdrop fades in.
-- **Exit:** The reverse, on motion.easing-role.exit.
-- **Reduced motion:** Under prefers-reduced-motion every placement and the backdrop fade only, with no slide and no scale, on motion.duration-reduced.normal to open and to close. A fade is not movement, and it keeps the cue that a layer opened or closed.
+- **Patterns:** `dialog/enter`, `dialog/exit`, `dialog/bottom/enter`, `dialog/bottom/exit`, `dialog/end/enter`, `dialog/end/exit`
+- **Enter:** For a centered dialog, the scrim fades in and the panel fades in and scales up from 96% on motion.preset.surface; the content fades in on motion.preset.fade. For a bottom sheet or a full-screen dialog, the scrim fades in and the panel slides up from the bottom edge on motion.preset.surface; the content fades in on motion.preset.fade. For an end panel, the scrim fades in and the panel slides in from the end edge on motion.preset.surface.
+- **Exit:** For a centered dialog, the scrim fades out and the panel fades out and scales down to 96% on motion.preset.surface.exit; the content fades out on motion.preset.fade.exit. For a bottom sheet or a full-screen dialog, the scrim fades out and the panel slides back down on motion.preset.surface.exit; the content fades out on motion.preset.fade.exit. For an end panel, the scrim fades out and the panel slides back out on motion.preset.surface.exit.
+- **Reduced motion:** Under prefers-reduced-motion, for a centered dialog opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, with no scale; the content fades in on motion.preset.fade.duration-reduced. For a centered dialog closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, with no scale; the content fades out on motion.preset.fade.exit.duration-reduced. For a bottom sheet or a full-screen dialog opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, instead of sliding; the content fades in on motion.preset.fade.duration-reduced. For a bottom sheet or a full-screen dialog closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, instead of sliding; the content fades out on motion.preset.fade.exit.duration-reduced. For an end panel opening, the scrim fades in on motion.preset.surface.duration-reduced; the panel fades in on motion.preset.surface.duration-reduced, instead of sliding. For an end panel closing, the scrim fades out on motion.preset.surface.exit.duration-reduced; the panel fades out on motion.preset.surface.exit.duration-reduced, instead of sliding. A fade is not movement, and it keeps the cue that a layer opened or closed.
 
 ## Content guidelines
 
@@ -113,6 +112,8 @@ Titles are specific and in sentence case. Body text is short and states the cons
 
 ## Building it in code
 
+- Return focus to the control that opened the dialog
+
 ### Props
 
 | Name | Type | Default | Required | Description |
@@ -126,12 +127,12 @@ Titles are specific and in sentence case. Body text is short and states the cons
 | `actions` | slot of `button` or `button-destructive` or `button-neutral`, 1 to 3 | — | no | The footer buttons, one to three Button elements, laid out by a Button group. Inline and fill, the main action last (Cancel, then Save); stacked, the main action first. Fill suits two. Name each by what it does. |
 | `role` | enum: 'dialog' \| 'alertdialog' | `dialog` | no | dialog for a task or form. alertdialog for a confirmation that interrupts and needs an answer: it hides the close button, a backdrop click does not close it, and focus starts on the least destructive action. |
 | `placement` | enum: 'center' \| 'bottom' \| 'full' \| 'end' | `center` | no | Where the panel sits. center on every screen by default; bottom (a bottom sheet) and full (full screen) are for small screens; end (a side sheet) runs the full height of the screen at the end edge, the right in left-to-right text. Set per breakpoint; nothing switches automatically. |
-| `size` | enum: 'small' \| 'medium' \| 'large' | `medium` | no | The width of a centered panel: 400, 560 or 720px. On a small screen a centered panel is as wide as the screen less its margins. Bottom and full panels are full width, and an end panel is 480px wide, so all three ignore it. |
+| `size` | enum: 'small' \| 'medium' \| 'large' | `medium` | no | The width of a centered panel. The recommended widths are 400px (small), 560px (medium, the default) and 720px (large); in a design file the designer sets the width. On a small screen a centered panel is as wide as the screen less its margins. Bottom and full panels are full width, and an end panel is 480px wide, so all three ignore it. |
 | `footer` | enum: 'inline' \| 'stacked' \| 'fill' \| 'none' | `inline` | no | How the actions are laid out. inline is a row at the end edge; stacked is full-width buttons, the main action on top; fill is a row whose buttons share the width equally, the main action last; none is for a dialog whose body holds its own actions. |
 
 ## Specs
 
-Generated from the plan that builds the design-file component: 24 members. Values are token names; a px value appears only where the build writes a number.
+Generated from the plan that builds the design-file component: 16 members. Values are token names; a px value appears only where the build writes a number.
 
 ### Anatomy
 
@@ -156,9 +157,9 @@ Generated from the plan that builds the design-file component: 24 members. Value
 
 Padding reads top / right / bottom / left when its sides differ.
 
-Keyed by `size`, `placement`.
+Keyed by `placement`.
 
-**size=medium, placement=center**
+**placement=center**
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -168,27 +169,7 @@ Keyed by `size`, `placement`.
 | `panel/body` | `space.0` / `space.300` / `space.0` / `space.300` | — | — | — | — | — |
 | `panel/footer` | `space.0` / `space.300` / `space.0` / `space.300` | — | — | — | — | — |
 
-**size=small, placement=center**
-
-| Part | Padding | Gap | Height | Width | Min width | Other |
-| --- | --- | --- | --- | --- | --- | --- |
-| `panel` | `space.300` / `space.0` / `space.300` / `space.0` | `space.200` | — | — | — | build width 400px (literal); radius `radius.2xl` |
-| `panel/header` | `space.0` / `space.300` / `space.0` / `space.300` | `space.200` | — | — | — | — |
-| `panel/header/titleBox` | — | `space.100` | — | — | — | — |
-| `panel/body` | `space.0` / `space.300` / `space.0` / `space.300` | — | — | — | — | — |
-| `panel/footer` | `space.0` / `space.300` / `space.0` / `space.300` | — | — | — | — | — |
-
-**size=large, placement=center**
-
-| Part | Padding | Gap | Height | Width | Min width | Other |
-| --- | --- | --- | --- | --- | --- | --- |
-| `panel` | `space.300` / `space.0` / `space.300` / `space.0` | `space.200` | — | — | — | build width 720px (literal); radius `radius.2xl` |
-| `panel/header` | `space.0` / `space.300` / `space.0` / `space.300` | `space.200` | — | — | — | — |
-| `panel/header/titleBox` | — | `space.100` | — | — | — | — |
-| `panel/body` | `space.0` / `space.300` / `space.0` / `space.300` | — | — | — | — | — |
-| `panel/footer` | `space.0` / `space.300` / `space.0` / `space.300` | — | — | — | — | — |
-
-**size=medium, placement=bottom**
+**placement=bottom**
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -198,7 +179,7 @@ Keyed by `size`, `placement`.
 | `panel/body` | `space.0` / `space.200` / `space.0` / `space.200` | — | — | — | — | — |
 | `panel/footer` | `space.0` / `space.200` / `space.0` / `space.200` | — | — | — | — | — |
 
-**size=medium, placement=full**
+**placement=full**
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -208,7 +189,7 @@ Keyed by `size`, `placement`.
 | `panel/body` | `space.0` / `space.200` / `space.0` / `space.200` | — | — | — | — | — |
 | `panel/footer` | `space.0` / `space.200` / `space.0` / `space.200` | — | — | — | — | — |
 
-**size=medium, placement=end**
+**placement=end**
 
 | Part | Padding | Gap | Height | Width | Min width | Other |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -220,19 +201,13 @@ Keyed by `size`, `placement`.
 
 ### Type
 
-Keyed by `size`.
+Keyed by nothing: one row covers every member.
 
 | Members | Part | Text style |
 | --- | --- | --- |
-| size=medium | `panel/header/titleBox/title` | `type.label.lg.emphasis` |
-| size=medium | `panel/header/titleBox/description` | `type.body.md.default` |
-| size=medium | `panel/body/placeholder` | `type.body.md.default` |
-| size=small | `panel/header/titleBox/title` | `type.label.lg.emphasis` |
-| size=small | `panel/header/titleBox/description` | `type.body.md.default` |
-| size=small | `panel/body/placeholder` | `type.body.md.default` |
-| size=large | `panel/header/titleBox/title` | `type.label.lg.emphasis` |
-| size=large | `panel/header/titleBox/description` | `type.body.md.default` |
-| size=large | `panel/body/placeholder` | `type.body.md.default` |
+| every member | `panel/header/titleBox/title` | `type.label.lg.emphasis` |
+| every member | `panel/header/titleBox/description` | `type.body.md.default` |
+| every member | `panel/body/placeholder` | `type.body.md.default` |
 
 ### Color
 

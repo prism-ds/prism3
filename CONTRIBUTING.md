@@ -275,6 +275,14 @@ npx tsx packages/engine/lint-contract-version.ts    # CONTRACT_VERSION against t
                                                     # no base ref; first parent on main's push run
                                                     # (`comparison-base.ts`, replayed by
                                                     # `lint-push-base.ts` below)
+npx tsx packages/engine/component-contract.ts --check
+                                                    # the component contract and the component
+                                                    # schema (#1325): each def's names, props,
+                                                    # defaults, values, states, variants and slots
+                                                    # (COMPONENT_CONTRACT_VERSION), and the shape of
+                                                    # one published entry (COMPONENT_SCHEMA_VERSION),
+                                                    # against a baseline only --accept writes, after
+                                                    # the bump the diff needs (docs/30)
 npx tsx packages/engine/emit-agent-reference.ts --check
                                                     # docs/public/reference/commands.json matches the
                                                     # code (#2637): every MCP tool of both servers, every
@@ -1287,15 +1295,20 @@ npx tsx packages/engine/lint-guide-claims.ts        # the designer guides still 
                                                     # span is a whole string literal or HTML text in
                                                     # apps/{studio,plugin,tokenpress}/src, comments not
                                                     # counted; an italic part is a placeholder matched to
-                                                    # a template's ${…}. CITE: every src: path:line is
-                                                    # git-tracked and in range, and the cited lines hold
-                                                    # one of the claim's quotes, code spans or labels.
+                                                    # a template's ${…}. CITE: every src: citation is
+                                                    # git-tracked, and the cited lines hold one of the
+                                                    # claim's quotes, code spans or labels. MARKER
+                                                    # (#4455): a citation names its lines by text,
+                                                    # path@"first".."last", never by line number, so a
+                                                    # PR that inserts lines above it leaves it alone; a
+                                                    # marker gone, or held twice, fails by name.
+                                                    # --convert rewrites a line-number citation.
                                                     # COUNT: "<n> component sets" equals componentDefs.
                                                     # SCOPE: every guide index.md lists is read and cites
                                                     # something; each source tree yields literals.
                                                     # FINGERPRINT (#3417): a claim that quotes nothing
-                                                    # cites path:a-b#<8 hex>, the SHA-256 of the cited
-                                                    # lines, so a shift fails by name. --stamp adds a
+                                                    # carries #<8 hex>, the SHA-256 of the cited lines,
+                                                    # so a change to them fails by name. --stamp adds a
                                                     # missing one and never rewrites one.
                                                     # ORDER (#3519): a list of **bold** labels joined by
                                                     # commas and "and" holds the order its cited lines
@@ -1379,9 +1392,40 @@ npx tsx packages/engine/lint-control-shape-reach.ts # Control shape reaches what
                                                     # no family or corner the typed claim does not hold.
 npx tsx packages/engine/lint-test-arms.ts           # a registered test arm is still in its suite (#1834):
                                                     # each (suite, #NNNN) in a test's string literals is
-                                                    # held to the authored test-arms.txt. A merge that
-                                                    # drops an arm fails ARM GONE by name; a new arm
-                                                    # fails UNREGISTERED until --accept adds it (sorted).
+                                                    # held to the authored test-arms/ registry, one file
+                                                    # per arm so concurrent PRs never conflict (#4455). A
+                                                    # merge that drops an arm fails ARM GONE by name; a
+                                                    # new arm fails UNREGISTERED until --accept adds its
+                                                    # file.
+npx tsx packages/engine/lint-format-history.ts      # one version of a published format names one shape
+                                                    # (#4458, #4330): schema/format-history.json holds a
+                                                    # row per version with a hash of its JSON schema's
+                                                    # shape. Two PRs raising one format to the same number
+                                                    # conflict on the record; kept both, DUPLICATE; kept
+                                                    # one, SHAPE. A raise: bump the constant and the $id,
+                                                    # then --accept --note "<what it adds>" (appends).
+npx tsx packages/engine/shadcn-vars.ts --check      # the shadcn map covers the pinned shadcn variable set
+                                                    # (#2997): every pinned name mapped, every extra
+                                                    # declared, the map version equal to the pin's; only
+                                                    # --accept moves the pin, after a version raise, and
+                                                    # the pin is held to the base's pin from git (a name
+                                                    # added needs MINOR, dropped MAJOR). Per target.
+npx tsx packages/engine/lint-shadcn-contract.ts     # the shadcn map follows the component contract (#2997):
+                                                    # each anchored variable maps to the role Button, Text
+                                                    # Field, Select or Focus Ring binds; every row anchored
+                                                    # or declared unanchored; every mapped role guaranteed.
+npx tsx packages/engine/lint-shadcn-contrast.ts     # the shadcn theme clears its contrast floors (#2997),
+                                                    # measured in Chromium on the emitted CSS: a typed pair
+                                                    # list, each floor the higher of WCAG and the engine's
+                                                    # own min. Needs Chromium (CI: the studio job).
+npx tsx packages/engine/lint-shadcn-roundtrip.ts    # every shadcn oklch() lands on its emitted 8-bit color
+                                                    # (#2997), parsed by Chromium, against the full tree;
+                                                    # every Tailwind shadow layer on the brand's shadow
+                                                    # in that mode (#4355).
+npx tsx packages/engine/lint-spec-supplement.ts     # the spec supplement lines up with Spectacular (#2996):
+                                                    # each element, prop and Figma name against a hand-
+                                                    # copied fixture of Spectacular's own output, each
+                                                    # $token path mapped, each code name in the contract.
 ```
 
 CI (`.github/workflows/ci.yml`) also runs the web and plugin gates below **on every PR but one
@@ -1738,8 +1782,8 @@ npm run test:readback-parity -w @prism3/plugin # #2351 gap 2 (offline): the plug
                                           # (ADDED / REMOVED / RETYPED / VALUE / DESCRIPTION), each count
                                           # asserted at 0; the one tolerance is half an 8-bit step inside
                                           # a color. Grid and gradient styles, which no exporter reads,
-                                          # are compared as written; the tinted wash TokenPress cannot
-                                          # read is carved out as a bijection (#2365). Run after the
+                                          # are compared as written; each tinted wash is also held to
+                                          # the emission's own color at its opacity (#2365). Run after the
                                           # exporter gate above, which holds the emission's export to
                                           # the engine's DTCG.
 npm run check:consumability -w @prism3/tokens  # a STOCK Style Dictionary over EVERY emitted brand —
@@ -1769,6 +1813,12 @@ npm run check:package -w @prism3/tokens       # #3408 S1, docs/35 §9.3: the SHI
                                           # mode, read from out/prism3.tokens.json, which the
                                           # build never reads. [OWN FILE] (#3877): each per-mode
                                           # file (prism3/<mode>.css) runs the same arms itself
+npm run check:shadcn -w @prism3/tokens        # #2997 gate 5: the engine's Tailwind v4 theme, compiled
+                                          # by the stock Tailwind CLI pinned in this package against
+                                          # a typed fixture (bg-primary, text-muted-foreground,
+                                          # outline-ring, shadow-md, rounded-lg, p-2, font-sans);
+                                          # each utility resolves to the brand's own value, and
+                                          # each color and shadow is set in :root and .dark.
 npm run check:generated -w @prism3/css      # #3408 S2, Q96 A: button.css and demo.html are what
                                           # packages/css/generate.ts writes from the emission
                                           # (specs.json + component-defs.json); both are committed
@@ -1825,11 +1875,15 @@ npm run check:a11y -w @prism3/storybook    # needs Chromium; run AFTER the Story
 npx tsx packages/engine/lint-us-english.ts # run AFTER the web AND plugin builds — its scope is both
                                           # built bundles: apps/studio/dist/*.js and, since #937,
                                           # apps/plugin/dist (main.js + ui.html), where the component
-                                          # defs' description/note/aria prose actually ships
+                                          # defs' description/note/aria prose actually ships.
+                                          # Both prose gates also read packages/engine/changes/*.md
+                                          # (Q181 A, #3574), so a note is clean before it merges; a
+                                          # release page's carried notes ("In detail") are then the
+                                          # dated record, like CHANGELOG.md, and are not re-read
 npx tsx packages/engine/lint-voice.ts      # voice-standard.md §2 banned-phrase list (#617) — sibling to lint-us-english.ts, same reason it runs here.
-                                          # NOT the same scope any more: it still has the
-                                          # apps/plugin/dist hole #937 closed above (3 violations
-                                          # measured in main.js), filed as #948 not folded in
+                                          # Same bundle scope since #948: it reads
+                                          # apps/plugin/dist (main.js + ui.html) too, the hole
+                                          # #937 closed above for the US-English gate
 sh tools/claude-md-freshness/mutations.sh  # the mutation battery for the CLAUDE.md-freshness
                                           # SessionStart hook (#1110), wired into CI as #1123 — the
                                           # one tools/ battery that is a gate. NAMED FOR THE

@@ -45,7 +45,7 @@ import {
   BORDER_ROWS, FIELD_ROWS, FILL_ROWS, FOCUS_ROLES, floorAutoFollows, floorAutoLabel, floorAutoShortLabel, FOREGROUND_ROWS, ICON_ROWS, PAIR_ICONS_CONFIRM, TEXT_ROWS, addGradient, addStop, bandOf, bandPalettes, editGradient, gradStopHex,
   iconOverrideCount, iconsPaired, lockedTo, overrideOf, pageKeyOf, pageSteps, pairIcons, paletteOf, readGradients, removeGradient, removeStop, renameGradient, rolesIn,
   setBandPalette, setBandStep, setCenter, setGradientsOn, setRowOverride, setStopPalette, setStopPosition, setStopStep,
-  SCRIM_ROLE, SURFACE_TOKENS, brandScrimStrength, setScrimStrength, clearFloorReset, floorResetNotice, setInverseTier, setSurfaceBase, setSurfaceFloor, setSurfaceTier, floorGroundSteps, floorGroups, stepHex, stepOfPath, stepsOf, surfaceSourceOf, tierOf, unpairIcons, washReadOf,
+  SCRIM_ROLE, SURFACE_TOKENS, brandScrimStrength, setScrimStrength, brandInteractiveGround, setInteractiveGround, clearFloorReset, floorResetNotice, setInverseTier, setSurfaceBase, setSurfaceFloor, setSurfaceTier, floorGroundSteps, floorGroups, stepHex, stepOfPath, stepsOf, surfaceSourceOf, tierOf, unpairIcons, washReadOf,
   type FillRow, type InverseTier, type PageTier,
 } from '../state/fills-input';
 import { floorNoneText } from '../state/floor-refusal';
@@ -137,7 +137,7 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
       label: 'Background fills',
       desc: 'The page, its tiers and the inverse fill for the mode the preview shows.',
     });
-    const { source: m, editable } = surfaceSourceOf(currentMode);
+    const { source: m, family, editable } = surfaceSourceOf(currentMode);
     const roles = rolesIn(m);
     const cur = brandState.surfaces?.[m];
     const nPal = theme.roleToPalette.neutral;
@@ -230,7 +230,7 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     };
     const grp = hook(h('div', 'p3-modegroup'), 'surfaces-group');
     grp.dataset.mode = m;
-    if (!isDerived(currentMode)) grp.append(editable ? editingLine() : subLine('Custom modes seed their surfaces from their base mode.'));
+    if (!isDerived(currentMode)) grp.append(editable ? editingLine() : subLine('Custom modes keep the surfaces they were given when they were made.'));
 
     // ── Default (BG1 A, approved copy: the section title already says "background fills") ──
     const def = hook(h('div', 'p3-fillrows'), 'surface-default-rows');
@@ -238,7 +238,7 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     // Primary (QA-B3: "Page" was its name; it is `background.primary`): white, black, or a neutral step, in the step
     // picker (Q45). No Auto: an unset base reads as the mode's default. A pick writes the key exactly as the Page
     // control wrote it (`setSurfaceBase`).
-    const baseKey = pageKeyOf(cur?.base ?? (m === 'dark' ? 'black' : 'white'));
+    const baseKey = pageKeyOf(cur?.base ?? (family === 'dark' ? 'black' : 'white'));
     def.append(surfRow({
       key: 'surface:base', id: 'p3-surf-base', hk: 'surface-base-pick', label: 'Primary', token: SURFACE_TOKENS.base, rowRole: SURFACE_TOKENS.base,
       hex: roles[SURFACE_TOKENS.base]?.hex ?? '#ffffff', now: baseKey === 'white' ? 'White' : baseKey === 'black' ? 'Black' : `${nPal} ${baseKey}`,
@@ -366,6 +366,18 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     const box = hook(h('div', 'p3-fillrows'), 'scrim-rows');
     box.append(b.el, raised.el);
     return [{ el: box, said: '', key: 'scrim-rows' }, item, raised];
+  };
+
+  /** #3339 (owner C): the darkest ground the brand's controls may sit on, `interactiveGround`, as two chips under the
+   *  contrast floor it narrows. Marked advanced in the manifest. The label, option names and description are DRAFTS. */
+  const controlGround = (): Item[] => {
+    const b = leverBlock('interactiveGround', { group: true });
+    const L = leverOf('interactiveGround');
+    const opts = (L?.options ?? []).map((o) => ({ v: String(o.value) as ReturnType<typeof brandInteractiveGround>, l: o.label }));
+    const c = choice(L?.label ?? 'Controls sit on', 'interactive-ground-choice', opts, (v) => edit('interactiveGround', () => setInteractiveGround(v)));
+    c.set(brandInteractiveGround());
+    b.ctl.append(c.el);
+    return [{ el: b.el, said: `${b.said} controls interactive ground page floor`, key: 'interactiveGround', block: b }];
   };
 
   /** #3093: the panel over the scrim, `foreground.raised`, read-only: a fill row's swatch, name and role, and in place
@@ -744,7 +756,7 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
       const n = iconOverrideCount();
       if (confirmPair && n && !isDerived(currentMode)) {
         note.append(inlineConfirm('icons-pair-confirm', {
-          title: PAIR_ICONS_CONFIRM.title, body: [PAIR_ICONS_CONFIRM.body(n)], action: PAIR_ICONS_CONFIRM.action,
+          title: PAIR_ICONS_CONFIRM.title, body: [PAIR_ICONS_CONFIRM.body(n)], action: PAIR_ICONS_CONFIRM.action(n),
           onConfirm: () => { confirmPair = false; edit('icons', () => pairIcons()); },
           onCancel: () => { confirmPair = false; render(); },
           back: () => root.querySelector<HTMLElement>('[data-p3="icons-pair"], [data-p3="icons-unpair"]'),
@@ -850,8 +862,8 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
           });
         }
         const is = selectField(`p3-g-interp-${gi}`, `${g.name} interpolation`, 'gradient-interpolation', (v) => edit('gradients', () => editGradient(gi, (gg) => { gg.interpolation = v as 'oklch' | 'srgb'; })));
-        is.set([{ v: 'oklch', l: 'OKLCH' }, { v: 'srgb', l: 'sRGB' }], g.interpolation ?? 'oklch');
-        set.append(field('Interpolation', `p3-g-interp-${gi}`, is.el));
+        is.set([{ v: 'oklch', l: 'Even (OKLCH)' }, { v: 'srgb', l: 'Standard (sRGB)' }], g.interpolation ?? 'oklch');
+        set.append(field('Blend', `p3-g-interp-${gi}`, is.el));
         const stops = h('div', 'p3-list');
         stops.append(h('span', 'p3-field-label', 'Stops'));
         g.stops.forEach((st, si) => {
@@ -906,7 +918,7 @@ export const mountFillsLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     return [{ el: b.el, said: `${b.said} stops`, key: 'gradients', block: b }];
   };
 
-  const ROWS: Record<string, () => Item[]> = { surfaces, scrim, glass, foreground, fills, text, border, icon, fields, gradients };
+  const ROWS: Record<string, () => Item[]> = { surfaces, controlGround, scrim, glass, foreground, fills, text, border, icon, fields, gradients };
 
   // ── the page ──────────────────────────────────────────────────────────────────────────────────
   const section = (s: Section, i: number): { el: HTMLElement; items: Item[] } => {

@@ -10,7 +10,7 @@ export { fieldMessage } from './components/field-message';
 export { densitySpacingKeys, validateComponentDef } from './component-schema';
 export type { ComponentDef, PartDef, PartOfKind } from './component-schema';
 export {
-  CANVAS_FURNITURE, DEFAULT_BUTTON_LAYOUT, DEFAULT_WEIGHT_AVAILABILITY,
+  CANVAS_FURNITURE, DEFAULT_BUTTON_LAYOUT, DEFAULT_WEIGHT_AVAILABILITY, ICON_PLACEHOLDER,
   SWAP_NO_PROPERTY, SWAP_PLACEHOLDER, applyBannerStyle,
   applyButtonLayout, applyControlShape, applyCurrentIndicator, applyDialogTitleSize, applyFieldStyle,
   applyMinWidthRatio, applyNestItemPrefers, applyNestOverrides, applyOutlineInteraction, applySpacingDensity,
@@ -20,6 +20,9 @@ export {
   planSetLayout, planSetProperties, planStamp, planTextStyles, planToPluginJs, resolveNestMember, swapMissAdvice,
 } from './anatomy-figma';
 export type { AnatomyPlan, ButtonLayout, FigmaNodePlan, SwapFound, WeightAvailability } from './anatomy-figma';
+export { applyIconMap, brandIconNames, iconMapErrors, mappedIcon } from './icon-map';
+export { iconArtDuplicates } from './icon-art';
+export type { BrandGlyph, BrandIcons } from './icon-map';
 export { diffAnatomy, fieldCoverage, unclassifiedFields } from './anatomy-readback';
 export type { Divergence, HostNode, ReadPorts } from './anatomy-readback';
 export { componentSpec, specMaterialize } from './component-specs';

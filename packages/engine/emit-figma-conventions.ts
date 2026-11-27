@@ -60,6 +60,7 @@ import { ABOUT_NS, ABOUT_KEY, ABOUT_NAME } from '../../apps/plugin/src/about-fra
 import { COVER_NS, COVER_KEY, COVER_PART_KEY, COVER_NAME, LOGO_NAME, GROUND_VARIABLE, NAME_INK_VARIABLE, TEXT_INK_VARIABLE } from '../../apps/plugin/src/cover-frame';
 import { DOC_BLOCK_SET, DOC_BLOCK_TYPES, DOC_BLOCK_SIZES, TOP_PADDING, BOTTOM_PADDING, CAPTION, SPECIMEN } from '../../apps/plugin/src/doc-block';
 import { DOC_PANEL_NS, DOC_PANEL_KEY } from '../../apps/plugin/src/doc-panel';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..');
@@ -143,7 +144,7 @@ const component = (d: (typeof componentDefs)[number]) => {
     variantProperties: variantProperties(plans.map(planComponentName)),
     properties: props.filter((p) => p.type !== 'SLOT').map((p) => ({ name: p.name, type: p.type, ...(p.type === 'INSTANCE_SWAP' ? { swapTarget: p.swapTarget } : {}) })),
     ...(codeOnlyAxes.length || codeOnlyStates.length ? { codeOnly: { ...(codeOnlyAxes.length ? { axes: codeOnlyAxes } : {}), ...(codeOnlyStates.length ? { states: codeOnlyStates } : {}) } } : {}),
-    doc: `https://github.com/adamforrester/prism3/blob/main/packages/engine/out/components/${d.id}.md`,
+    doc: `https://github.com/prism-ds/prism3/blob/main/packages/engine/out/components/${d.id}.md`,
   };
 };
 
@@ -330,7 +331,7 @@ export const diffByName = (committed: unknown, fresh: unknown): string[] => {
   return out;
 };
 
-const isMain = process.argv[1] ? resolve(process.argv[1]) === fileURLToPath(import.meta.url) : false;
+const isMain = isEntry(import.meta.url);
 if (isMain) {
   const target = join(repo, CONVENTIONS);
   let fresh: string;

@@ -10,14 +10,24 @@
  *   NO CUSTOM CODE. No preprocessors, no custom transforms, no custom formats. Stock Style Dictionary v5,
  *   standard config options only.
  *
- * What it builds: the house brand, `prism3`, from the conforming projection the engine emits
- * (`prism3.base.tokens.json` plus one `prism3.<mode>.overlay.tokens.json` per theme mode), one stock
+ * What it builds: the house brand, `prism3`, from the projection the engine emits for the web
+ * (`prism3.web.base.tokens.json` plus one `prism3.<mode>.overlay.tokens.json` per theme mode), one stock
  * Style Dictionary run per mode — the shape the consumer build already proves. The base run (the light
  * defaults) writes under `:root, [data-theme="light"]`; each mode writes under `[data-theme="<mode>"]`. Names keep stock Style
  * Dictionary's root prefix, `--pds3-…` (Q98 A): no `prefix` option, no rename.
  *
+ * A third source rides in every run: `prism3.css-only.json`, the custom-typed leaves whose value is already CSS
+ * (each spring's `linear()` curve, #3510). DTCG has no type for them, so the projection leaves them out (#642);
+ * this build is the one reader that can use them, and it does so with no transform.
+ *
  *   dist/prism3/<mode>.css   one file per mode, straight out of Style Dictionary
  *   dist/prism3.css          those files joined in order (`:root` first), so one import carries every mode
+ *
+ * The base is the WEB flavor (#4155, owner decision B): the conforming base with each typeface's fallback stack
+ * as its DTCG array `$value`, so `--pds3-core-font-typeface-inter` reads `Inter, system-ui, …, sans-serif` and a
+ * face that fails to load falls back to its kind rather than the browser default. Stock Style Dictionary writes
+ * the array as a comma list. The platform-neutral base (`prism3.base.tokens.json`) stays single-family for every
+ * other platform, and typefaces don't vary by mode, so the overlays are the shared ones.
  *
  * THE SYSTEM-PREFERENCE BLOCK (#4140, owner decision A). `dark.css` carries a second rule: the dark values again,
  * nested by stock `css/variables` under `@media (prefers-color-scheme: dark)` on `:root:not([data-theme])`, so a page
@@ -30,10 +40,16 @@
  * `check-package.mjs` asserts the promised ones by name.
  */
 import StyleDictionary from 'style-dictionary';
-import { readdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** #4583: is this file the one node was started with? Real paths on both sides, so a symlinked path (macOS's /var
+ *  and /tmp) cannot make a direct run skip its check. The engine's `isEntry` (entry-point.ts), inline for plain node. */
+function isEntry() {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT_ROOT = resolve(here, '../engine/out');
@@ -65,8 +81,12 @@ export const discoverModes = () => [
 const runMode = async (mode, buildPath, selector, showFileHeader = true) => {
   const sd = new StyleDictionary({
     source: [
-      resolve(OUT_ROOT, `${BRAND}.base.tokens.json`),
+      resolve(OUT_ROOT, `${BRAND}.web.base.tokens.json`),
       ...(mode === 'base' ? [] : [resolve(OUT_ROOT, `${BRAND}.${mode}.overlay.tokens.json`)]),
+      // The CSS-only source (#3510): each spring's `linear()` curve, which DTCG has no type for, so the
+      // conforming projection above omits it. Stock Style Dictionary has no transform for its type and writes the
+      // string as it stands. Every mode reads it, so every block defines the names; none of them varies by mode.
+      resolve(OUT_ROOT, `${BRAND}.css-only.json`),
     ],
     usesDtcg: true,
     // The overlay overriding the base is the mechanism working; SD reports each override as a collision.
@@ -92,7 +112,7 @@ const buildMode = async (mode, systemDir) => {
 
 export const buildShip = async () => {
   rmSync(DIST, { recursive: true, force: true });
-  const systemDir = mkdtempSync(join(tmpdir(), 'prism3-ship-system-'));
+  const systemDir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-ship-system-'));
   const files = [];
   try {
     for (const mode of discoverModes()) files.push(await buildMode(mode, systemDir));
@@ -103,6 +123,6 @@ export const buildShip = async () => {
   return resolve(DIST, `${BRAND}.css`);
 };
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isEntry()) {
   console.error(`built ${await buildShip()}`);
 }

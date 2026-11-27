@@ -15,11 +15,13 @@
 import { bandPhrase } from './figma-description';
 import { RGB, contrast, floorRatio, hex, hexToRgb, emittedAlpha } from './color';
 import { Step } from './ramp';
-import { Theme, ShadowStep, ShadowLayer, ResolvedGradient, FacePin, ResolvedUnderline, typefaceSlug, lineHeightStepKey, letterSpacingStepKey, CORE_TIER, SPIN_ROLE, SWEEP_ROLE, BODY_XS_DESCRIPTION, gridGapLink } from './theme';
-import { SizeStep, ControlSizeStep, controlRadius, AAA_TARGET_PX } from './scale';
+import { Theme, ShadowStep, ShadowLayer, ResolvedGradient, FacePin, ResolvedUnderline, typefaceSlug, lineHeightStepKey, letterSpacingStepKey, CORE_TIER, SPIN_ROLE, SWEEP_ROLE, BODY_XS_DESCRIPTION, gridGapLink, type MotionBrandOnly } from './theme';
+import type { MotionPresetHalf } from './theme-motion';
+import { SizeStep, ControlSizeStep, controlRadius, AAA_TARGET_PX, ICON_PAIRED } from './scale';
 import { resolveAllModes, ModeResult, OPACITY_STEPS } from './modes';
 import { orderedRoleKeys } from './color-order';
 import { ENGINE_VERSION } from './version';
+import { springSettleMs, springLinearEasing } from './spring';
 
 /** A value the caller has established is present (a key just walked, a list known non-empty); a named throw,
  *  not a silent `undefined` (#1182, `noUncheckedIndexedAccess`). */
@@ -53,7 +55,7 @@ const ROW_LABEL_RUNG: Record<string, string> = { sm: 'xs', md: 'sm', lg: 'md' };
 // tier + a shadow step, composed at the component layer (see docs/06). The shadow
 // ramp + the tonal foreground ladder carry it; no parallel `elevation.*` tokens.
 
-type Token = { $type: 'color' | 'dimension' | 'number' | 'strokeStyle' | 'duration' | 'cubicBezier' | 'transition' | 'spring' | 'fontFamily' | 'fontWeight' | 'typography' | 'shadow' | 'gradient'; $value: string | number | number[] | string[] | Record<string, unknown> | Record<string, unknown>[]; $description: string; $extensions: { prism3: Record<string, unknown> } };
+type Token = { $type: 'color' | 'dimension' | 'number' | 'strokeStyle' | 'duration' | 'cubicBezier' | 'transition' | 'springTransition' | 'spring' | 'linearEasing' | 'distanceDuration' | 'gesture' | 'fontFamily' | 'fontWeight' | 'typography' | 'shadow' | 'gradient'; $value: string | number | number[] | string[] | Record<string, unknown> | Record<string, unknown>[]; $description: string; $extensions: { prism3: Record<string, unknown> } };
 
 // ---- colour leaves ----
 const primitiveLeaf = (theme: Theme, paletteDesc: string, s: Step, isAnchor: boolean, ramp: Step[], hueSource?: 'brand' | 'default'): Token => {
@@ -117,10 +119,43 @@ const springLeaf = (p: { damping: number; stiffness: number }, description: stri
   // stiffness/damping/mass) is inherently a per-platform step.
   $extensions: { prism3: { generated: true, customType: 'spring' } },
 });
-// Composite (DTCG transition): bundles duration + easing by intent.
-const transitionLeaf = (durPath: string, easePath: string, description: string): Token => ({
-  $type: 'transition', $value: { duration: `{${durPath}}`, timingFunction: `{${easePath}}`, delay: '0ms' },
-  $description: description, $extensions: { prism3: { role: 'composite' } },
+// A spring as CSS can play it (#3510, Q-SP1 E): its `linear()` curve and the time it takes to settle, both from
+// `spring.ts`, which G5 (#3485) shares so Figma's paired duration is the same number. The duration is a DTCG
+// `duration` and reaches the conforming projection like any other. The curve is not: DTCG has no type for a
+// `linear()` function (a `cubicBezier` value must be four numbers), so it is another INTENTIONAL custom type,
+// omitted from the projection (#642) and carried to the token CSS by the CSS-only source (`emit-dtcg-overlay.ts`).
+const springEasingLeaf = (css: string, description: string): Token => ({
+  $type: 'linearEasing', $value: css, $description: description,
+  $extensions: { prism3: { generated: true, customType: 'linearEasing' } },
+});
+// The brand-only motion group (#2857, Q-MP7 option 3 item 3): a brand's true one-offs, outside the guaranteed
+// contract. Each leaf is a CUSTOM type, as `spring` is: DTCG has no type for a spring, a duration that scales with
+// distance, or gesture physics, so the conforming projection omits them (#642) and they live in the full tree only.
+// `brandOnly: true` marks the group's leaves, so a reader can tell them from the engine's own springs.
+const BRAND_ONLY_TYPE = { spring: 'spring', distance: 'distanceDuration', gesture: 'gesture' } as const;
+const brandOnlyLeaf = (name: string, v: MotionBrandOnly): Token => {
+  const { kind, ...value } = v;
+  const what = kind === 'spring' ? 'a spring' : kind === 'distance' ? 'a duration that scales with the distance moved' : 'gesture physics';
+  return {
+    $type: BRAND_ONLY_TYPE[kind], $value: value as Record<string, unknown>,
+    $description: `brand-only motion ${name} — ${what}, set by this brand and outside the guaranteed names`,
+    $extensions: { prism3: { brandOnly: true, customType: BRAND_ONLY_TYPE[kind] } },
+  };
+};
+// THE PRESET TIER (#2857, Q-MS1 A, Q-MS8 A): each slot is an alias, never a number (Q-MS2 A), so a preset holds no
+// value of its own and a brand's timing snaps to the shared scale. `aliasOf` names the target, as on every semantic.
+const presetSlot = (type: Token['$type'], target: string, description: string, extra: Record<string, unknown> = {}): Token => ({
+  $type: type, $value: `{${target}}`, $description: description,
+  $extensions: { prism3: { role: 'preset', aliasOf: target, ...extra, ...(type === 'linearEasing' ? { customType: 'linearEasing' } : {}) } },
+});
+// A preset's composite, `motion.preset.<name>.transition`: a DTCG `transition` over the preset's own slots. A preset
+// eased by a spring cannot be one, because DTCG's `timingFunction` is a cubic Bézier and a spring is not, so its
+// composite is the custom type `springTransition`, omitted from the conforming projection like a spring (#642).
+const presetComposite = (base: string, spring: boolean, description: string): Token => ({
+  $type: spring ? 'springTransition' : 'transition',
+  $value: { duration: `{${base}.duration}`, timingFunction: `{${base}.easing}`, delay: `{${base}.delay}` },
+  $description: description,
+  $extensions: { prism3: { role: 'composite', ...(spring ? { customType: 'springTransition' } : {}) } },
 });
 
 /** The glass treatment's background-blur radius in px (#2869, Q464 A; the source comp's 32px). One value for
@@ -194,7 +229,7 @@ const gradientCss = (g: ResolvedGradient, fmt: 'rgb' | 'hex'): string => {
   if (g.kind === 'radial') return `radial-gradient(${g.shape} at ${round3(g.center[0] * 100)}% ${round3(g.center[1] * 100)}%${space}, ${stopList})`;
   return `linear-gradient(${g.angle}deg${space}, ${stopList})`;
 };
-const gradientLeaf = (g: ResolvedGradient, fmt: 'rgb' | 'hex'): Token => {
+const gradientLeaf = (g: ResolvedGradient, fmt: 'rgb' | 'hex', byMode: Record<string, ResolvedGradient> = {}): Token => {
   const paintType = g.kind === 'radial' ? 'GRADIENT_RADIAL' : 'GRADIENT_LINEAR';
   const geom = g.kind === 'radial' ? { center: g.center, shape: g.shape } : { angle: g.angle };
   // #2422: each ink is judged on its OWN measured worst case. The old free-text note tested
@@ -208,6 +243,12 @@ const gradientLeaf = (g: ResolvedGradient, fmt: 'rgb' | 'hex'): Token => {
     $description: `gradient ${g.name} — ${g.kind}${g.kind === 'linear' ? ` ${g.angle}°` : ` (${g.shape})`}, ${g.stops.length} stops, ${g.interpolation} interpolation — brand gradient (opt-in)`,
     $extensions: { prism3: { generated: true, role: 'composite', kind: g.kind, ...geom, interpolation: g.interpolation,
       css: gradientCss(g, fmt),
+      // A mode whose palette swap moves a stop (#1729) carries its own stops, wrapped in `$value` like every
+      // mode entry (#708) so the overlay projection carries it. Absent for every gradient no swap touches.
+      ...(Object.keys(byMode).length ? { modes: Object.fromEntries(Object.entries(byMode).map(([m, mg]) =>
+        [m, { $value: mg.stops.map((s) => ({ color: `{${s.aliasOf}}`, position: round3(s.position) })), css: gradientCss(mg, fmt),
+          a11y: { worstOnWhite: floorRatio(mg.worstOnWhite), worstOnBlack: floorRatio(mg.worstOnBlack), floor: TEXT_ON_GRADIENT_FLOOR,
+            clears: { white: mg.worstOnWhite >= TEXT_ON_GRADIENT_FLOOR, black: mg.worstOnBlack >= TEXT_ON_GRADIENT_FLOOR } } }])) } : {}),
       a11y: { worstOnWhite: wOnW, worstOnBlack: wOnB, floor: TEXT_ON_GRADIENT_FLOOR, clears },
       figma: { kind: 'paint-style', styleType: 'PAINT', paintType, binds: ['gradientStops[].color'], baked: ['type', g.kind === 'radial' ? 'center/shape' : 'angle', 'positions'],
         sampledStops: g.sampled, requires: 'plugin-api', interpolation: 'srgb' } } },
@@ -551,7 +592,31 @@ export const aliasFaults = (tree: any): { aliases: { path: string; ref: string; 
   return { aliases, faults };
 };
 
-export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats: Stats } => {
+type BuiltTree = { tree: any; modes: ModeResult[]; stats: Stats };
+
+/** #4230: ONE TREE PER THEME, WHILE A CALLER ASKS FOR IT. Each Figma emitter starts from `buildTree(theme)`, so the
+ *  plugin's Apply Theme (`themePlans`, seven plans over one theme) built the same tree about nine times: 129 ms of its
+ *  158 ms. Inside `withSharedTree(f)`, a theme's tree is built once and handed to every caller; outside it nothing is
+ *  kept, so a caller that changes the tree it was given (a test plants a fault in it) changes no one else's. Scoped,
+ *  not global, for that reason: the cache holds only for the synchronous run of `f`. `treeBuilds` counts the builds,
+ *  so a test can hold the sharing by a number rather than a timing. */
+let shared: WeakMap<Theme, BuiltTree> | null = null;
+let builds = 0;
+export const treeBuilds = (): number => builds;
+export const withSharedTree = <T>(f: () => T): T => {
+  const was = shared;
+  shared ??= new WeakMap();
+  try { return f(); } finally { shared = was; }
+};
+export const buildTree = (theme: Theme): BuiltTree => {
+  if (!shared) return buildTreeOnce(theme);
+  let t = shared.get(theme);
+  if (!t) shared.set(theme, t = buildTreeOnce(theme));
+  return t;
+};
+
+const buildTreeOnce = (theme: Theme): BuiltTree => {
+  builds++;
   const root = theme.root;
 
   // ---- colour primitives (the reference tier) → `palette.*` ----
@@ -749,10 +814,17 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
   const radius: Record<string, Token> = {};
   const wireframe = theme.modes.includes('wireframe');
   const radiusByMode = theme.dims.radiusByMode ?? {};
+  // #4161 (owner decision A): the two pill rungs say which one a pill control binds, so `round` is not read as a circle
+  // and neither is picked for the other's job (scale.ts `radiusScale` has why there are two).
+  const PILL_USE: Record<string, string> = {
+    round: '. For small fixed-size parts, such as a switch track, a radio or a badge count. A pill button binds `radius.capsule`',
+    capsule: '. The pill a button binds under `controlShape: pill`, full at any height. Small fixed-size parts bind `radius.round`',
+  };
   for (const r of theme.dims.radius) {
+    const use = PILL_USE[r.name] ?? '';
     const leaf = gridSet.has(r.px)
-      ? dimAlias(`${root}.${CORE_TIER}.dimension.${r.px}`, `radius ${r.name} — ${r.px}px${r.pill ? ' (pill)' : ''}`, { px: r.px, radiusScale: theme.dims.radiusScaleValue })
-      : dimLeaf(r.px, `radius ${r.name} — ${r.px}px (off-grid literal)`);
+      ? dimAlias(`${root}.${CORE_TIER}.dimension.${r.px}`, `radius ${r.name} — ${r.px}px${r.pill ? ` (pill${use})` : ''}`, { px: r.px, radiusScale: theme.dims.radiusScaleValue })
+      : dimLeaf(r.px, `radius ${r.name} — ${r.px}px (off-grid literal${use})`);
     const modeOverrides: Record<string, unknown> = {};
     if (wireframe && r.px !== 0)
       modeOverrides.wireframe = { $value: `{${root}.${CORE_TIER}.dimension.0}`, px: 0 };
@@ -834,7 +906,7 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
   const iconSize: Record<string, Token> = {};
   for (const ic of theme.dims.icons) {
     iconSize[ic.name] = gridSet.has(ic.px)
-      ? dimAlias(`${root}.${CORE_TIER}.dimension.${ic.px}`, `icon.size.${ic.name} — ${ic.px}px artboard (fixed grid; pairs with size.${ic.name})`, { px: ic.px })
+      ? dimAlias(`${root}.${CORE_TIER}.dimension.${ic.px}`, `icon.size.${ic.name} — ${ic.px}px artboard (fixed grid; ${ICON_PAIRED.includes(ic.name) ? `pairs with size.${ic.name}` : 'past the control ladder, an x-large avatar'})`, { px: ic.px })
       // Unreachable while buildDims feeds icon px into the grid; kept so a future grid change
       // degrades to a literal rather than emitting a dangling alias.
       : dimLeaf(ic.px, `icon.size.${ic.name} — ${ic.px}px artboard (fixed grid)`);
@@ -1085,8 +1157,8 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
   // ---- motion axis — generated from the `tempo` personality lever ----
   // Duration / reduce-motion / stagger are MODE-VARYING primitives (Phase D — same seam as radius): a
   // customizable mode may run a different tempo, re-derived by buildMotion. Light stays the canonical
-  // `$value`; a mode whose ms differs attaches `$extensions.prism3.modes.<mode>`. Composites
-  // (motion.transition.*) reference duration by alias, so they inherit per-mode. Absent ⇒ byte-identical.
+  // `$value`; a mode whose ms differs attaches `$extensions.prism3.modes.<mode>`. Presets
+  // (motion.preset.*) reference duration by alias, so they inherit per-mode. Absent ⇒ byte-identical.
   const m = theme.motion;
   const motionByMode = m.motionByMode ?? {};
   // ---- motion: primitive ms tier + semantics that alias it (#296) --------------------------------
@@ -1115,8 +1187,15 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
   };
   collect(m);
   for (const mm of Object.values(motionByMode)) collect(mm);
+  // The delays (G6 B) and what a preset's slots alias directly: a preset that starts at once aliases the 0ms
+  // primitive, and a spring preset's reduced fade aliases the ms value `min(settle, 100ms)`.
+  for (const v of Object.values(m.delay)) msValues.add(v);
+  for (const pr of m.presets) for (const h of pr.exit ? [pr, pr.exit] : [pr]) {
+    if (h.delay === null) msValues.add(0);
+    if ('ms' in h.reduced) msValues.add(h.reduced.ms);
+  }
 
-  const motion: Record<string, any> = { 'duration-ms': {}, duration: {}, 'duration-reduced': {}, easing: {}, 'easing-role': {}, spring: {}, transition: {} };
+  const motion: Record<string, any> = { 'duration-ms': {}, duration: {}, 'duration-reduced': {}, delay: {}, easing: {}, 'easing-role': {}, spring: {}, 'spring-duration': {}, 'spring-easing': {}, preset: {} };
   for (const v of [...msValues].sort((a, b) => a - b))
     motion['duration-ms'][String(v)] = durLeaf(v, `duration primitive — ${v}ms (literal; the semantic tier names the use)`);
 
@@ -1138,8 +1217,18 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
 
   for (const [k, v] of Object.entries(m.duration)) motion.duration[k] = durSemantic(v as number, k === SPIN_ROLE ? `motion duration spin — ${v}ms per full turn of a spinner, linear, the same at every tempo` : k === SWEEP_ROLE ? `motion duration sweep — ${v}ms per pass of an indeterminate progress bar's segment across its track, the same at every tempo` : `motion duration ${k} — ${v}ms (tempo: ${m.tempo})`, (mm) => mm.duration[k]);
   for (const [k, v] of Object.entries(m.durationReduced)) motion['duration-reduced'][k] = durSemantic(v as number, k === SPIN_ROLE ? `reduce-motion spin — ${v}ms per full turn: a slow turn, kept rather than removed, because the spinner is how a sighted user sees work continuing` : k === SWEEP_ROLE ? `reduce-motion sweep — ${v}ms per pass: a slow sweep, kept rather than removed, because the moving segment is how a sighted user sees the work continuing` : `reduce-motion ${k} — ${v}ms${v === 0 ? ' (eliminated — substitute a cross-fade)' : ''}`, (mm) => mm.durationReduced[k]);
-  for (const [k, v] of Object.entries(m.easing)) motion.easing[k] = bezierLeaf(v, `easing ${k}${EASING_NOTE[k] ? ` — ${EASING_NOTE[k]}` : ''}`);
+  // The delays (G6 B): each aliases its ms primitive and is the same at every tempo, so no mode re-points it.
+  for (const [k, v] of Object.entries(m.delay)) motion.delay[k] = durSemantic(v, k === 'show' ? `delay show — ${v}ms before a tooltip or a busy indicator shows, so a fast result shows nothing; the same at every tempo` : k === 'min-show' ? `delay min-show — ${v}ms, the least time a shown busy indicator stays, so it does not flash; the same at every tempo` : k === 'hide' ? `delay hide — ${v}ms a tooltip stays after the pointer leaves, so the pointer can move onto it; the same at every tempo` : k === 'skip' ? `delay skip — ${v}ms after one tooltip closes in which the next shows at once, with no delay or animation; the same at every tempo` : `delay ${k} — ${v}ms`, () => undefined);
+  for (const [k, v] of Object.entries(m.easing))
+    motion.easing[k] = m.brandCurves.includes(k)
+      ? { ...bezierLeaf(v, `easing ${k} — the brand's own curve, a primitive a role or a preset may use`), $extensions: { prism3: { generated: true, brandCurve: true } } }
+      : bezierLeaf(v, `easing ${k}${EASING_NOTE[k] ? ` — ${EASING_NOTE[k]}` : ''}`);
   for (const [k, v] of Object.entries(m.spring)) motion.spring[k] = springLeaf(v, `spring ${k} — damping ${v.damping}, stiffness ${v.stiffness}`);
+  for (const [k, v] of Object.entries(m.spring)) {
+    const ms = springSettleMs(v);
+    motion['spring-duration'][k] = durLeaf(ms, `spring ${k} settle time — ${ms}ms, the time the ${k} spring takes to settle on its target; play spring-easing ${k} over it`);
+    motion['spring-easing'][k] = springEasingLeaf(springLinearEasing(v), `spring ${k} as a CSS linear() curve, sampled at most every 5ms — play it over spring-duration ${k} (${ms}ms); the damping and stiffness stay in spring ${k}`);
+  }
   // The ROLE tier (#522) — `easing-role.<role> → {motion.easing.<curve>}`. It exists so a mode can
   // re-point an intent at a different curve without redefining the curve, exactly as
   // `font.weight-role.*` lets a mode move `strong` without touching `font.weight.700`. Every per-mode
@@ -1159,14 +1248,47 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
     if (Object.keys(modeOverrides).length) (leaf.$extensions.prism3 as Record<string, unknown>).modes = modeOverrides;
     motion['easing-role'][r.role] = leaf;
   }
-  // Transitions now name the ROLE, not the curve, so a per-mode re-point reaches every consumer of
-  // `motion.transition.*` for free — the same way they already inherit per-mode duration.
-  // The description names the curve the ROLE resolves to (#2062), not the transition's fixed default: with
-  // `motionPersonality.easingRoles.default: 'calm'`, `transition.default` aliases a role that draws `calm`, and
-  // saying `standard` named a curve the token does not use. A mode's own re-point is on the easing-role leaf.
-  const roleCurve = new Map(m.easingRoles.map((r) => [r.role, r.curve]));
-  for (const t of m.transitions) motion.transition[t.name] = transitionLeaf(`${root}.motion.duration.${t.duration}`, `${root}.motion.easing-role.${t.name}`, `motion ${t.name} — ${t.desc} (${t.duration} + ${roleCurve.get(t.name) ?? t.easing})`);
   motion.stagger = durSemantic(m.stagger, `stagger standard — ${m.stagger}ms between siblings`, (mm) => mm.stagger);
+  // A small offset an element travels as it enters or leaves (Q-MP6 A): 8px, on the space ramp, so it follows the
+  // dimension grid. A pattern sets any other distance on its own track.
+  motion.distance = {
+    nudge: {
+      $type: 'dimension', $value: `{${root}.space.100}`,
+      $description: 'distance nudge — the small offset an element travels as it enters or leaves, such as a toast sliding in',
+      $extensions: { prism3: { role: 'semantic', aliasOf: `${root}.space.100` } },
+    } as Token,
+  };
+  // THE PRESETS (#2857, Q-MS1 A, Q-MS8 A): `motion.preset.<name>.{duration,easing,delay,duration-reduced}`, each an
+  // alias into a role, a curve, a spring or a primitive, plus the composite at `motion.preset.<name>.transition`.
+  // A role edit reaches every slot still on its default, and a brand re-points only the slots it needs.
+  const roleCurveOf = new Map(m.easingRoles.map((r) => [r.role, r.curve]));
+  const mp = `${root}.motion`;
+  // An arriving preset's closing half (#2857, Q-PT3 A) is the same five aliases one level down, at
+  // `motion.preset.<name>.exit.*`: one step shorter on the `exit` role by default, re-pointed like any slot.
+  const half = (base: string, label: string, h: MotionPresetHalf): Record<string, Token> => {
+    const spring = 'spring' in h.easing;
+    const dTarget = 'step' in h.duration ? `${mp}.duration.${h.duration.step}` : `${mp}.spring-duration.${h.duration.spring}`;
+    const eTarget = 'role' in h.easing ? `${mp}.easing-role.${h.easing.role}` : 'curve' in h.easing ? `${mp}.easing.${h.easing.curve}` : `${mp}.spring-easing.${h.easing.spring}`;
+    const delayTarget = h.delay === null ? msPath(0) : `${mp}.delay.${h.delay}`;
+    const rTarget = 'step' in h.reduced ? `${mp}.duration-reduced.${h.reduced.step}` : msPath(h.reduced.ms);
+    const durSays = 'step' in h.duration ? `the ${h.duration.step} step` : `the ${h.duration.spring} spring's settle time`;
+    const easeSays = 'role' in h.easing ? `the ${h.easing.role} role (${roleCurveOf.get(h.easing.role)})` : 'curve' in h.easing ? `the ${h.easing.curve} curve` : `the ${h.easing.spring} spring`;
+    return {
+      duration: presetSlot('duration', dTarget, `${label} duration — ${durSays}`),
+      easing: presetSlot(spring ? 'linearEasing' : 'cubicBezier', eTarget, `${label} easing — ${easeSays}`),
+      delay: presetSlot('duration', delayTarget, `${label} delay — ${h.delay === null ? 'none, it starts at once' : `the ${h.delay} delay`}`),
+      'duration-reduced': presetSlot('duration', rTarget, `${label} reduced duration — ${'step' in h.reduced ? `the ${h.reduced.step} step's reduced twin` : `a ${h.reduced.ms}ms fade, the short fade a spring becomes`}, derived from the duration`, { derived: true }),
+      transition: presetComposite(base, spring, `${label} — ${durSays} on ${easeSays}, ${h.delay === null ? 'at once' : `after the ${h.delay} delay`}`),
+    };
+  };
+  for (const pr of m.presets) {
+    const base = `${mp}.preset.${pr.preset}`;
+    motion.preset[pr.preset] = half(base, `preset ${pr.preset}`, pr);
+    if (pr.exit) motion.preset[pr.preset].exit = half(`${base}.exit`, `preset ${pr.preset} exit`, pr.exit);
+  }
+  // The brand-only group (#2857): emitted only for a brand that sets one, so no corpus member emits it and it is in
+  // neither the guaranteed nor the brand-dependent list (`token-contract.ts`).
+  if (m.brandOnly) motion.brand = Object.fromEntries(Object.entries(m.brandOnly).map(([name, v]) => [name, brandOnlyLeaf(name, v)]));
 
   // ---- typography axis — primitive tier (Phase 1) ----
   // Curated rem size ladder (brand-invariant, not ratio-derived); numeric weight
@@ -1201,7 +1323,10 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
       const mf = fams.find((x) => x.group === f.group);
       if (!mf || stackKey(mf.stack) === stackKey(f.stack)) continue;   // same stack -> no diff -> no override
       const mslug = typefaceSlug(must(mf.stack[0], `${mf.group}'s first family in ${mode}`));
-      modeOverrides[mode] = { $value: `{${root}.${CORE_TIER}.font.typeface.${mslug}}`, aliasOf: `${root}.${CORE_TIER}.font.typeface.${mslug}`, face: mf.stack[0] };
+      modeOverrides[mode] = { $value: `{${root}.${CORE_TIER}.font.typeface.${mslug}}`, aliasOf: `${root}.${CORE_TIER}.font.typeface.${mslug}`, face: mf.stack[0],
+        // The mode's own prose (#1729): the overlay carries a mode entry's `description` in place of light's, which
+        // named light's face and so misdescribed every per-mode family.
+        description: `font family \u2014 ${f.group} \u2192 ${mf.stack[0]}` };
     }
     if (Object.keys(modeOverrides).length) leaf.$extensions.prism3.modes = modeOverrides;
     family[f.group] = leaf;
@@ -1347,7 +1472,9 @@ export const buildTree = (theme: Theme): { tree: any; modes: ModeResult[]; stats
 
   // ---- gradient axis (brand-opt-in; empty for brands that declare none) ----
   const gradient: Record<string, Token> = {};
-  for (const g of theme.gradient.gradients) gradient[g.name] = gradientLeaf(g, theme.colorFormat);
+  for (const g of theme.gradient.gradients)
+    gradient[g.name] = gradientLeaf(g, theme.colorFormat, Object.fromEntries(Object.entries(theme.gradient.gradientsByMode ?? {})
+      .flatMap(([m, gs]) => gs.filter((mg) => mg.name === g.name && mg.stops.some((st, i) => st.aliasOf !== g.stops[i]?.aliasOf)).map((mg) => [m, mg] as const))));
 
   // ---- layout axis: breakpoints + responsive grid + containers ----
   // Breakpoints = min-width floors; grid columns/gutter/margin per breakpoint

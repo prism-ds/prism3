@@ -28,8 +28,10 @@ export const weightsByFaceSection = (ty: Theme['typography'], mode: string, copy
   wsec.dataset.sgSection = 'weights-by-face';   // the shared-section marker (`kit.ts`'s header)
   const faces: Array<{ name: string; stack: string; roles: string[] }> = [];
   const addFace = (stackArr: string[] | undefined, cat: string): void => {
-    if (!stackArr?.length) return;
-    const name = stackArr[0].replace(/["']/g, '').trim();
+    if (!stackArr) return;
+    const first = stackArr[0];
+    if (first === undefined) return;
+    const name = first.replace(/["']/g, '').trim();
     const found = faces.find((f) => f.name.toLowerCase() === name.toLowerCase());
     if (found) { if (!found.roles.includes(cat)) found.roles.push(cat); return; }
     faces.push({ name, stack: stackArr.join(', '), roles: [cat] });
@@ -130,5 +132,5 @@ export const applyUnderline = (n: HTMLElement, u: Theme['typography']['underline
 };
 /** The underline in words. DRAFT (owner Q2 A). */
 export const underlineWords = (u: Theme['typography']['underline']): string =>
-  u.thickness === 'auto' && u.offset === 'auto' ? 'Auto: the font sets the underline.'
+  u.thickness === 'auto' && u.offset === 'auto' ? 'Auto · the font sets the underline.'
     : `Thickness ${u.thickness === 'auto' ? 'auto' : `${u.thickness}%`}, offset ${u.offset === 'auto' ? 'auto' : `${u.offset}%`} of the font size.`;

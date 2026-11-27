@@ -63,6 +63,11 @@ accepts('component-update-result with a malformed publish description', { type: 
 // #3711 (Q-UF3 A): an applied update that went through every set says so; anything but `true` reads false.
 accepts('component-update-result that completed with sets to check', { type: 'component-update-result', ok: false, completed: true, headline: '⚠ Updated 47 sets · 2 to check', summary: 's', lines: ['s'] },
   { kind: 'component-update-result', ok: false, headline: '⚠ Updated 47 sets · 2 to check', summary: 's', lines: ['s'], publish: null, causes: null, completed: true });
+// #4067: the applied update's count of sets written to, the run line's number; a value that is not a count is dropped.
+accepts('component-update-result with its sets count', { type: 'component-update-result', ok: false, completed: true, headline: '⚠ Updated 37 sets · 1 to check', summary: 's', lines: ['s'], sets: 37 },
+  { kind: 'component-update-result', ok: false, headline: '⚠ Updated 37 sets · 1 to check', summary: 's', lines: ['s'], publish: null, causes: null, completed: true, sets: 37 });
+accepts('component-update-result with a malformed sets count', { type: 'component-update-result', ok: true, headline: 'h', summary: 's', sets: '37' },
+  { kind: 'component-update-result', ok: true, headline: 'h', summary: 's', lines: null, publish: null, causes: null, completed: false });
 accepts('component-update-result with a malformed completed', { type: 'component-update-result', ok: false, completed: 'yes', headline: '✗ x', summary: 's' },
   { kind: 'component-update-result', ok: false, headline: '✗ x', summary: 's', lines: null, publish: null, causes: null, completed: false });
 accepts('component-result that stopped before the set', { type: 'component-result', ok: false, completed: false, headline: '✗ unknown def', summary: 's' },
@@ -112,14 +117,24 @@ accepts('style-guide-result without a headline', { type: 'style-guide-result', o
   { kind: 'style-guide-result', ok: true, headline: '✓ style guide written', summary: 't' , lines: null, retired: [] });
 // #3189: an agent's Capture baseline and Adopt readings reach the strip; an unknown run is dropped.
 accepts('run-progress from Capture baseline', { type: 'run-progress', run: 'capture', phase: 'work', item: 'button', done: 2, total: 60 },
-  { kind: 'run-progress', run: 'capture', phase: 'work', item: 'button', done: 2, total: 60 });
+  { kind: 'run-progress', run: 'capture', phase: 'work', item: 'button', done: 2, total: 60, throttled: false });
 accepts('run-progress from Adopt', { type: 'run-progress', run: 'adopt', phase: 'check', item: null, done: 0, total: 60 },
-  { kind: 'run-progress', run: 'adopt', phase: 'check', item: null, done: 0, total: 60 });
+  { kind: 'run-progress', run: 'adopt', phase: 'check', item: null, done: 0, total: 60, throttled: false });
 drops('run-progress from an unknown run', wire({ type: 'run-progress', run: 'paint', phase: 'work', item: null, done: 0, total: 1 }));
 accepts('component-progress', { type: 'component-progress', phase: 'wire', done: 3.7, total: 10, chunkMs: 41 },
-  { kind: 'component-progress', phase: 'wire', done: 3, total: 10, chunkMs: 41 });
+  { kind: 'component-progress', phase: 'wire', done: 3, total: 10, chunkMs: 41, throttled: false });
 accepts('style-guide-progress', { type: 'style-guide-progress', done: 6.4, total: 22, tableMs: 900 },
-  { kind: 'style-guide-progress', done: 6, total: 22 });
+  { kind: 'style-guide-progress', done: 6, total: 22, throttled: false });
+// #4476: `throttled` is carried only as the host's literal `true`; anything else is not throttled. Mutation: the adapter
+// dropping the field (or coercing it) → these three `throttled` arms fail by name.
+accepts('component-progress, throttled', { type: 'component-progress', phase: 'build', done: 3, total: 10, chunkMs: 41, throttled: true },
+  { kind: 'component-progress', phase: 'build', done: 3, total: 10, chunkMs: 41, throttled: true });
+accepts('style-guide-progress, throttled', { type: 'style-guide-progress', done: 28, total: 45, tableMs: 900, throttled: true },
+  { kind: 'style-guide-progress', done: 28, total: 45, throttled: true });
+accepts('run-progress, throttled', { type: 'run-progress', run: 'update', phase: 'work', item: 'button', done: 2, total: 9, throttled: true },
+  { kind: 'run-progress', run: 'update', phase: 'work', item: 'button', done: 2, total: 9, throttled: true });
+accepts('style-guide-progress, throttled as a word, not throttled', { type: 'style-guide-progress', done: 1, total: 2, tableMs: 1, throttled: 'yes' },
+  { kind: 'style-guide-progress', done: 1, total: 2, throttled: false });
 accepts('agent-progress (a style guide\'s table reading)', { type: 'agent-progress', id: 'a1', progress: { at: 't', phase: 'table', done: 6, total: 22, chunkMs: 900 } },
   { kind: 'agent-progress', id: 'a1', phase: 'table', done: 6, total: 22 });
 accepts('prune-result (preview)', { type: 'prune-result', ok: true, applied: false, count: 5, summary: 'r' },
@@ -245,6 +260,15 @@ accepts('style-guide-result with a malformed stopped leaves it off', { type: 'st
     accepts(`update-check whose changes hold ${label} leaves them off`, { type: 'update-check', previewHash: 'H', missing: [], refused: [], sets: [{ ...base, changes: bad }] },
       { kind: 'update-check', previewHash: 'H', missing: [], sets: [base], error: null });
   }
+  // #4481: the changes' split by kind crosses when each part is a count and the parts add up to the set's count; else
+  // the split alone is left off, the changes kept, so the summary never states a split the host didn't send. Literals.
+  const K = { breaks: 0, retired: 2, leaves: 0 };
+  accepts('update-check with the changes split by kind', { type: 'update-check', previewHash: 'H', missing: [], refused: [], sets: [{ ...base, changes: { ...CH, kinds: K } }] },
+    { kind: 'update-check', previewHash: 'H', missing: [], sets: [{ ...base, changes: { ...CH, kinds: K } }], error: null });
+  for (const [label, bad] of [['parts that don\'t add up', { breaks: 1, retired: 2, leaves: 0 }], ['a part not a number', { ...K, leaves: '0' }], ['a part missing', { breaks: 0, retired: 2 }], ['no object', 'x']] as const) {
+    accepts(`update-check whose split holds ${label} leaves the split off`, { type: 'update-check', previewHash: 'H', missing: [], refused: [], sets: [{ ...base, changes: { ...CH, kinds: bad } }] },
+      { kind: 'update-check', previewHash: 'H', missing: [], sets: [{ ...base, changes: CH }], error: null });
+  }
   // #3302: the check's progress: its counts, the set being checked now, and the one just checked; a count of the wrong
   // type, or more done than in all, drops the reading, and a set that does not read as one is left off it.
   // #3713: a blocked set carries its reasons; a set not blocked carries none, and a reason of the wrong type is left off.
@@ -291,6 +315,13 @@ accepts('file-due with the add queue', { type: 'file-due', seq: 2, present: [], 
   { kind: 'file-due', seq: 2, present: [], theme: false, error: null, due: {}, queued: [] });
 accepts('add-queue, the answer to a queue write', { type: 'add-queue', queued: ['tag'] }, { kind: 'add-queue', queued: ['tag'], error: null });
 drops('the panel\'s own add-queue request, which carries no queue', wire({ type: 'add-queue', ids: ['tag'], on: true }));
+// #3119: whether the file holds a set. Only `inFile: true` reads as in the file, so the drawer never offers a set it
+// cannot show; an answer with no set is dropped. Mutation `m.inFile === true` → `m.inFile !== false` (`write-adapter.ts`)
+// fails `accepts set-in-file with a non-boolean inFile reads as not in the file`, by name.
+accepts('set-in-file true', { type: 'set-in-file', def: 'badge', inFile: true }, { kind: 'set-in-file', def: 'badge', inFile: true });
+accepts('set-in-file false', { type: 'set-in-file', def: 'badge', inFile: false }, { kind: 'set-in-file', def: 'badge', inFile: false });
+accepts('set-in-file with a non-boolean inFile reads as not in the file', { type: 'set-in-file', def: 'badge', inFile: 'yes' }, { kind: 'set-in-file', def: 'badge', inFile: false });
+drops('set-in-file that names no set', wire({ type: 'set-in-file', inFile: true }));
 
 console.log(`\n${executed - failed}/${executed} passed`);
 if (failed) process.exit(1);

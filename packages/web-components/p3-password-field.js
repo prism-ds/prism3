@@ -73,7 +73,7 @@ export class P3PasswordField extends LitElement {
     this.onChange = undefined;
     /** An example only; vanishes on input. The password rules belong in helper text or a list under the field, never here. @type {string | undefined} */
     this.placeholder = undefined;
-    /** Persistent guidance (rendered as FieldMessage, default status), wired via aria-describedby. State the rules for a new password here, before the user types. @type {string | undefined} */
+    /** Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. State the rules for a new password here, before the user types. @type {string | undefined} */
     this.helpText = undefined;
     /** The validation state, as on TextField: each non-default status swaps the input border and sets the nested message to the matching status; error also sets aria-invalid. The Show/Hide button never takes the status color. @type {'default' | 'error' | 'warning' | 'success'} */
     this.validation = "default";

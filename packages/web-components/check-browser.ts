@@ -26,6 +26,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundle, ELEMENT_SOURCE } from './bundle';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -247,7 +248,7 @@ const MUTANTS = [
   { name: 'the default type changed to submit', source: swap('this.type = "button";', 'this.type = "submit";', 'type'), mustName: /rest: the default type submitted the form/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const browser = await chromium.launch();
   let fail = 0;
   try {

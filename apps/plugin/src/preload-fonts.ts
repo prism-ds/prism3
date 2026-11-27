@@ -39,7 +39,7 @@
  * harness drives it with a shim; the real `figma` structurally satisfies it.
  */
 import type { TextStylePlan, VarCollectionPlan } from '@prism3/engine/figma';
-import { resolveFontStyle } from './write-text-styles';
+import { normStyle, resolveFontStyle } from './write-text-styles';
 import type { FontName } from './write-text-styles';
 
 /** The minimal `figma` font + text-style surface the preload needs. */
@@ -147,10 +147,10 @@ export const facesToPreload = (
  * face is looked up. Two candidates that resolve to one face load it once; if that load fails, each
  * named candidate among them is still reported, whichever candidate made the attempt.
  *
- * The verdict's "N font styles name-resolved" stays the text-style pass's count alone. It counts STYLES
- * whose baked name was corrected; this resolves candidate FACES (file and crossed pairs included, and a
- * theme face the text-style pass will resolve again), so adding the two would count one correction twice
- * in a unit the sentence does not name.
+ * The verdict's "N font style names matched to the installed font" (#4185) stays the text-style pass's
+ * count alone. It counts STYLES whose baked name was corrected; this resolves candidate FACES (file and
+ * crossed pairs included, and a theme face the text-style pass will resolve again), so adding the two would
+ * count one correction twice in a unit the sentence does not name.
  */
 export const preloadFonts = async (
   plan: TextStylePlan,
@@ -189,6 +189,15 @@ export const availableStylesByFamily = async (
   }
 };
 
+/** The text plan's cut → family pairing (`fontStyleVar` → `fontFamilyVar`), each pair once: all `resolveCutPlan` reads
+ *  of the text plan. The agent paste's font step carries this instead of the whole text plan (#3861). */
+export const cutPairsOf = (text: TextStylePlan): [string, string][] => {
+  const out = new Map<string, string>();
+  for (const r of text) if (r.fontStyleVar && r.fontFamilyVar) out.set(r.fontStyleVar, r.fontFamilyVar);
+  return [...out];
+};
+const isPairs = (t: TextStylePlan | readonly (readonly [string, string])[]): t is readonly (readonly [string, string])[] => Array.isArray(t[0]);
+
 /**
  * THE CUT VARIABLES, IN EACH FAMILY'S OWN SPELLING, BEFORE THE VARIABLE STAGE WRITES THEM (#1728).
  *
@@ -200,19 +209,19 @@ export const availableStylesByFamily = async (
  * name parse), with the same `resolveFontStyle` the text-style stage uses, so the two cannot disagree.
  *
  * Leaves a value as planned when there is no host list, when either row aliases in that mode, when the family is not
- * on this host, or when the family lacks the weight under every spelling. That last one is a real miss: the preload
- * and the text-style stage report it, and the guess stays rather than a substitute face (#237). The text-style stage's
+ * on this host, or when the family lacks the weight under every spelling. In Apply Theme that last case no longer
+ * reaches here: `fillMissingWeights` (#4474) has already written the nearest weight in its place. On the agent paste
+ * path, which does not fill, it is still a miss the preload and the text-style stage report. The text-style stage's
  * reconcile stays as the second reader, for a value this pass could not see. Pure; returns new plans and the count of
  * values it changed.
  */
 export const resolveCutPlan = (
   plans: readonly VarCollectionPlan[],
-  text: TextStylePlan,
+  text: TextStylePlan | readonly (readonly [string, string])[],
   stylesByFamily: ReadonlyMap<string, readonly string[]> | undefined,
 ): { plans: VarCollectionPlan[]; resolved: number } => {
   if (!stylesByFamily) return { plans: [...plans], resolved: 0 };
-  const familyVarOf = new Map<string, string>();
-  for (const r of text) if (r.fontStyleVar && r.fontFamilyVar) familyVarOf.set(r.fontStyleVar, r.fontFamilyVar);
+  const familyVarOf = new Map<string, string>(isPairs(text) ? text : cutPairsOf(text));
   const rowOf = new Map(plans.flatMap((p) => p.rows.map((r) => [r.name, { plan: p, row: r }] as const)));
   let resolved = 0;
   const out = plans.map((p) => ({
@@ -304,4 +313,109 @@ export const loadPreloadCandidates = async (
   }
 
   return { loaded, brandLoaded: brandFaces.size, attempted, unavailable, crossedMisses, byOrigin };
+};
+
+/* ---- #4474: A WEIGHT THE FAMILY LACKS, WARNED BEFORE THE WRITE AND FILLED BY THE NEAREST ONE ----------------------
+ *
+ * `resolveFontStyle` answers "is this weight here under some spelling?". When it is not (a family with no Semi Bold,
+ * asked for 600), every text style on that weight was skipped mid-apply, one by one, and the reason reached the report
+ * only as a count of skipped styles. Owner decision A on #4474 (2026-11-24) replaces that skip, the posture #237 chose:
+ * before any write, name the missing face and point at the weight setting, then write the nearest weight the family has,
+ * so no style is skipped. Only a weight the family lacks under EVERY spelling falls back: a spelling difference is still
+ * `resolveFontStyle`'s, and a cut that is not a plain weight (a width cut such as `Light Condensed`) has no nearest and
+ * keeps the old skip. */
+
+/** Normalized weight words → the numeric weight (CSS's names, plus the synonyms `resolveFontStyle` treats as one). */
+const WEIGHT_OF: Record<string, number> = {
+  thin: 100, hairline: 100, extralight: 200, ultralight: 200, light: 300, regular: 400, normal: 400,
+  medium: 500, semibold: 600, demibold: 600, demi: 600, bold: 700, extrabold: 800, ultrabold: 800, black: 900, heavy: 900,
+};
+
+/** A style name as a plain weight: `Semi Bold Italic` → 600, italic. `Italic` alone is Regular Italic. `undefined` for
+ *  anything else (a width cut, a named display cut): those have no place on the weight axis to be near. */
+export const styleWeightOf = (style: string): { weight: number; italic: boolean } | undefined => {
+  let n = normStyle(style);
+  const italic = n.endsWith('italic');
+  if (italic) n = n.slice(0, -'italic'.length);
+  if (!n) return italic ? { weight: 400, italic } : undefined;
+  const weight = WEIGHT_OF[n];
+  return weight === undefined ? undefined : { weight, italic };
+};
+
+/**
+ * The family's style nearest in weight to `desired`, of the same italic-ness, or `undefined` when `desired` is not a
+ * plain weight or the family has no plain weight of that italic-ness. Distance is the numeric weight; a tie goes the
+ * way CSS font matching goes — lighter below 400, heavier from 400 up — so a missing 600 between 500 and 700 takes 700.
+ */
+export const nearestWeightStyle = (available: readonly string[], desired: string): string | undefined => {
+  const want = styleWeightOf(desired);
+  if (!want) return undefined;
+  let best: { style: string; weight: number } | undefined;
+  for (const style of available) {
+    const w = styleWeightOf(style);
+    if (!w || w.italic !== want.italic) continue;
+    if (!best) { best = { style, weight: w.weight }; continue; }
+    const d = Math.abs(w.weight - want.weight), bd = Math.abs(best.weight - want.weight);
+    const towards = want.weight < 400 ? w.weight < best.weight : w.weight > best.weight;
+    if (d < bd || (d === bd && towards)) best = { style, weight: w.weight };
+  }
+  return best?.style;
+};
+
+/** One missing face and what stands in for it: `asked` as the plan named it, `used` as the family spells it, and how
+ *  many text styles take it. */
+export type WeightFallback = { family: string; asked: string; used: string; styles: number };
+
+/**
+ * THE PLANS WITH EVERY MISSING WEIGHT FILLED BY THE NEAREST ONE (#4474), worked out before the first write so the
+ * warning can come first and no stage meets a face it cannot load. Rewrites the text plan's `fontStyle` and each cut
+ * variable's literal per mode, where the family (the row's own, or the mode's, read through the text plan's cut →
+ * family pairing as `resolveCutPlan` reads it) lacks the weight under every spelling. Everything else is returned as
+ * given. No host list, no change: without it there is nothing to be near. Pure.
+ */
+export const fillMissingWeights = (
+  text: TextStylePlan,
+  plans: readonly VarCollectionPlan[],
+  stylesByFamily: ReadonlyMap<string, readonly string[]> | undefined,
+): { text: TextStylePlan; plans: VarCollectionPlan[]; fallbacks: WeightFallback[] } => {
+  if (!stylesByFamily) return { text, plans: [...plans], fallbacks: [] };
+  const found = new Map<string, WeightFallback>();
+  const stand = (family: string, asked: string): string | undefined => {
+    const avail = stylesByFamily.get(family);
+    if (!avail || resolveFontStyle(avail, asked)) return undefined;
+    const used = nearestWeightStyle(avail, asked);
+    if (!used) return undefined;
+    const k = `${family}|${asked}`;
+    if (!found.has(k)) found.set(k, { family, asked, used, styles: 0 });
+    return used;
+  };
+  const outText = text.map((row) => {
+    const used = stand(row.fontFamilyPrimary, row.fontStyle);
+    if (!used) return row;
+    found.get(`${row.fontFamilyPrimary}|${row.fontStyle}`)!.styles++;
+    return { ...row, fontStyle: used };
+  });
+  const familyVarOf = new Map<string, string>(cutPairsOf(text));
+  const rowOf = new Map(plans.flatMap((p) => p.rows.map((r) => [r.name, { plan: p, row: r }] as const)));
+  const outPlans = plans.map((p) => ({
+    ...p,
+    rows: p.rows.map((row) => {
+      const famName = familyVarOf.get(row.name);
+      const fam = famName ? rowOf.get(famName) : undefined;
+      if (!fam || row.resolvedType !== 'STRING') return row;
+      let moved = false;
+      const valuesByMode = row.valuesByMode.map((cut, i) => {
+        if (typeof cut !== 'string' || row.aliasByMode[i]) return cut;
+        const j = fam.plan.modes.indexOf(p.modes[i]);
+        const family = j < 0 ? undefined : fam.row.valuesByMode[j];
+        if (typeof family !== 'string' || fam.row.aliasByMode[j]) return cut;
+        const used = stand(family, cut);
+        if (!used) return cut;
+        moved = true;
+        return used;
+      });
+      return moved ? { ...row, valuesByMode } : row;
+    }),
+  }));
+  return { text: outText, plans: outPlans, fallbacks: [...found.values()] };
 };

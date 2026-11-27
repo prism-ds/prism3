@@ -169,6 +169,9 @@ const INTERACTIVE: Record<string, Binding> = {
   'icon-button': { key: (s) => `size.${s}.side`, why: 'the square icon-button side' },
   'icon-button-destructive': { key: (s) => `size.${s}.side`, why: 'the square icon-button side' },
   'icon-button-neutral': { key: (s) => `size.${s}.side`, why: 'the square icon-button side' },
+  // #4112 — the toggle pair: Button's box height and IconButton's square side.
+  'toggle-button': { key: (s) => `size.${s}.height`, why: 'the button box height, Button\'s' },
+  'toggle-icon-button': { key: (s) => `size.${s}.side`, why: 'the square side, IconButton\'s' },
   // The two single-line fields are sized since #2266; each size binds the floor (`size.md.min-height`) or above.
   'text-field': { key: (s) => `size.${s}.height`, why: 'the field control height — size.md.min-height, the interactive floor, at small and medium (#1437, #2266 Q6)' },
   // #2317: the Password field is TextField's box, from the same factory, so it binds the same height rung.
@@ -197,6 +200,8 @@ const INTERACTIVE: Record<string, Binding> = {
   // #2669: the control row around the track is the click-to-jump target, on the interactive floor `size.md.min-height`
   // at every size (owner Q550 e: the size axis moves the thumb and the track, never the row). Each thumb is its own
   // code-side target below (CODE_SIDE_TARGETS).
+  // #4007: the whole menu row is the target, on the interactive floor at its one size.
+  'menu-item': { key: () => 'min-height', why: 'the menu row\'s min-height floor, the whole row being the target', single: true },
   'slider': { key: () => 'control-height', why: 'the control row around the track, the click-to-jump target, the same at every size' },
 };
 
@@ -259,7 +264,8 @@ const flushRuleGap = (codeOnly: readonly string[]): string[] => {
 // The flush icon button's box IS its glyph (20 or 24px, no padding), so no emitted token is its target: the owner's
 // rule is a hit area of at least 44×44 in CODE at every size, through an invisible extension, and Figma draws the
 // glyph square only. So, as for FLUSH_MEMBERS, this gate requires the def to STATE it, twice: in `codeOnly` (the
-// maintainer record) and in the shipped `docs.do` (the page an implementer reads, which `codeOnly` never reaches).
+// maintainer record) and in the shipped `docs.implementation` (the page an implementer reads, which `codeOnly` never
+// reaches; `docs.do` until #2778 moved the build rules to their own list).
 // Each listed def is also measured BELOW the floor at every size on comfortable, so a box later grown to 44 makes the
 // entry stale by name rather than leaving a code-side claim on a control that no longer needs one. The phrases are
 // literals here, never read off the def (docs/34): deleting either sentence from the def fails this gate by name.
@@ -345,14 +351,19 @@ const EXCLUDED: Record<string, string> = {
   'banner': 'a message in the page flow, never itself a pointer target: its one text action is a Button (Button.Neutral when the file has it) and its dismiss a FlushIconButton.Neutral, each measured under its own name (#2579, Q533.1)',
   'button-group': 'a layout of one to three Buttons, never itself a pointer target: each Button is measured under its own name (#2661)',
   'dialog': 'a modal panel, never itself a pointer target: its close button and footer buttons are a FlushIconButton.Neutral and Buttons, each measured under its own name (#2609, Q385 A)',
+  'menu': 'a panel of Menu.Items, never itself a pointer target: each item is measured under its own name (#4007)',
+  'menu-group': 'a heading over Menu.Items, never itself a pointer target: each item is measured under its own name (#4007)',
   'popover': 'a non-modal panel, never itself a pointer target: its close button and footer buttons are a FlushIconButton.Neutral and Buttons, each measured under its own name (#4008)',
   'toast': 'a status message over the page, never itself a pointer target: its action and close button are a Button and a FlushIconButton.Neutral, each measured under its own name; the small close button\'s 44×44 hit area is extended in code, as IconButton records (#2668)',
+  'tooltip': 'a label shown on hover and focus, never itself a pointer target: it takes no focus and holds nothing interactive, and its trigger is measured under its own name (#4009)',
   'list': 'a read list of text items, never interactive and never focusable; a link inside an item is its own control (#2319)',
   'list-item': 'one item of a read list, never interactive and never focusable; a link inside it is its own control (#2319)',
   '_accordion-indicator': 'a decorative glyph inside an Accordion header; the tap target is the header row, gated as accordion',
-  'image-placeholder': 'an empty-state media frame, not an interactive control',
+  'image': 'a media frame, not an interactive control; an image that is a link takes the link\'s target',
   'progress': 'a progress bar or ring shows system work and is never interactive (#2670) — a retry after an error is the host\'s own control, placed beside it, which is gated',
+  'skeleton': 'a decorative loading placeholder hidden from assistive technology, never interactive; nothing in it takes a pointer or focus',
   'spinner': 'a decorative loading indicator on the icon ladder, never interactive — the tap target is the host control it sits in (a pending button), which is gated',
+  'avatar': 'a picture of who something belongs to, never interactive (#4110): an avatar that opens a menu sits inside a Button or IconButton, whose target is gated',
   'badge': 'a static marker, never interactive (owner decision, 2026-09-27) — a count or dot on an icon button relies on the host\'s target, which is gated',
   'checkbox-control': 'a nested-only atom — the tap target is the labeled row (checkbox-row), gated here',
   'radio-control': 'a nested-only atom — the tap target is the labeled row (radio-row), gated here',
@@ -376,6 +387,10 @@ const EXCLUDED: Record<string, string> = {
   // #3345: neither is a control of its own. The targets are the nested Links (one text line each, code-side 24px, stated
   // under `link`), the current page's link included: it stays a link.
   'page-nav': 'a navigation container — its targets are the nested items\' Links, each a control of its own',
+  // #3055: neither is a control of its own. The target is a complete step's nested Link (one text line, code-side 24px,
+  // stated under `link`); no other step is focusable.
+  'steps': 'a navigation container — its targets are the nested steps\' Links, each a control of its own',
+  'step-item': 'one step of a Steps indicator — its one target is a complete step\'s nested Link (one text line, code-side 24px, as `link`); no other step is focusable',
   'page-nav-item': 'one page in a page navigation — its target is the nested Link (one text line, code-side 24px, as `link`), the current page\'s included',
   'textarea': 'a multi-line field whose height is rows/auto-grow (fluid); it binds no single-line height, so there is no fixed hit-target dimension to measure',
 };
@@ -749,8 +764,8 @@ for (const [id, target] of Object.entries(CODE_SIDE_TARGETS)) {
   }
   const ruleMiss = ruleGap(codeOnlyText(def.anatomy?.codeOnly), CODE_SIDE_RULE);
   if (ruleMiss.length) failures.push(`${id}: no codeOnly entry states the code-side hit area (missing: ${ruleMiss.join(', ')}) — its box is below the floor by design, so the rule is the only target it has. State that the hit area is at least 44×44px at every size in code, through a ::before inset outward and centered on the glyph (owner Q283.3 A, #2457).`);
-  const docMiss = ruleGap(def.docs?.do ?? [], CODE_SIDE_DOC);
-  if (docMiss.length) failures.push(`${id}: the shipped docs.do does not tell the implementer to extend the hit area (missing: ${docMiss.join(', ')}) — codeOnly never ships, so without this the code docs lose the only 44×44 target the control has. Keep a docs.do entry: "Extend its hit area in code to at least 44×44px at every size, with a transparent ::before inset outward…" (owner Q283.3 A, #2457).`);
+  const docMiss = ruleGap(def.docs?.implementation ?? [], CODE_SIDE_DOC);
+  if (docMiss.length) failures.push(`${id}: the shipped docs.implementation does not tell the implementer to extend the hit area (missing: ${docMiss.join(', ')}) — codeOnly never ships, so without this the code docs lose the only 44×44 target the control has. Keep a docs.implementation entry: "Extend its hit area in code to at least 44×44px at every size, with a transparent ::before inset outward…" (owner Q283.3 A, #2457).`);
 }
 
 // ── FLUSH NESTS (#2427): every code-side nest listed, and each listed pair 44px apart center to center ──────────

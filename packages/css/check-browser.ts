@@ -23,11 +23,11 @@
  *    name `data-theme="light"` or, on a dark OS, it shows dark tokens and only a light-scheme run can't see it.
  *
  * 6. MOTION (Q146 A, #4375). A forced state is read once its transition has finished, never mid-flight. The button's
- *    fill and border, and its label's ink, transition on `motion.duration.fast` with `motion.easing-role.default`, and
- *    the press (`:active`) scales it by 0.98 (Q-PS1 A, this file's own literal) on the same duration and curve. An
- *    inert button (disabled, inactive, pending) never scales. Under `prefers-reduced-motion: reduce` the colors
- *    transition on `motion.duration-reduced.fast` and the press resolves to none. The house brand resolves both
- *    durations to the same value, so which one is bound is held by `check-parity.ts`'s sentinels; this holds the values.
+ *    fill and border, and its label's ink, transition on the `motion.preset.state` preset, and the press (`:active`)
+ *    scales it by 0.98 (Q-PS1 A, this file's own literal) on the `motion.preset.press` preset (#2857). An inert button
+ *    (disabled, inactive, pending) never scales. Under `prefers-reduced-motion: reduce` the colors transition on
+ *    `motion.preset.state.duration-reduced` and the press resolves to none. Which token is bound is held by
+ *    `check-parity.ts`'s sentinels; this holds the values.
  *
  * SELF-TEST: seven mutants, each must fail by name — the label tracking rebound, a rest fill rebound to the hover
  * token, a ring drawn on any `:focus` (so a mouse click shows it), the medium hit target shrunk to 24px, the
@@ -39,6 +39,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildOracle } from '../../tools/agent-adherence/score-code';
 import { TOKEN_TREE, TOKEN_BASE, TOKEN_OVERLAYS, COMPONENTS } from '../../tools/agent-adherence/oracle';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -208,15 +209,20 @@ export const run = async (browser: any, extraCss = '', colorScheme: 'light' | 'd
     const rm = reduce ? 'under reduced motion: ' : '';
     for (const [theme, mode] of Object.entries(THEMES)) {
       const rest = `[data-demo="${theme}/default/filled/default/medium/rest"]`;
-      const dur = await normTime(resolved(mode, reduce ? 'motion.duration-reduced.fast' : 'motion.duration.fast'));
-      const crv = await normEase(ease(mode, 'motion.easing-role.default'));
+      const STATE_DUR = reduce ? 'motion.preset.state.duration-reduced' : 'motion.preset.state.duration';
+      const dur = await normTime(resolved(mode, STATE_DUR));
+      const crv = await normEase(ease(mode, 'motion.preset.state.easing'));
       for (const [part, prop] of [['', 'background-color'], ['', 'border-color'], ['.p3-button__label', 'color']]) {
         const t = await transitionOf(rest, part, prop);
         const what = `${rm}${theme} filled rest${part ? ` ${part}` : ''} ${prop}`;
-        ok(!!t && t.duration === dur && t.easing === crv, `${what} transitions ${t ? `over ${t.duration} on ${t.easing}` : 'not at all'}, ${reduce ? 'motion.duration-reduced.fast' : 'motion.duration.fast'} and motion.easing-role.default resolve to ${dur} and ${crv}`);
+        ok(!!t && t.duration === dur && t.easing === crv, `${what} transitions ${t ? `over ${t.duration} on ${t.easing}` : 'not at all'}, ${STATE_DUR} and motion.preset.state.easing resolve to ${dur} and ${crv}`);
       }
       const tf = await transitionOf(rest, '', 'transform');
-      if (!reduce) ok(!!tf && tf.duration === dur && tf.easing === crv, `${theme} filled rest transform (the press) transitions ${tf ? `over ${tf.duration} on ${tf.easing}` : 'not at all'}, motion.duration.fast and motion.easing-role.default resolve to ${dur} and ${crv}`);
+      if (!reduce) {
+        const pdur = await normTime(resolved(mode, 'motion.preset.press.duration'));
+        const pcrv = await normEase(ease(mode, 'motion.preset.press.easing'));
+        ok(!!tf && tf.duration === pdur && tf.easing === pcrv, `${theme} filled rest transform (the press) transitions ${tf ? `over ${tf.duration} on ${tf.easing}` : 'not at all'}, motion.preset.press.duration and motion.preset.press.easing resolve to ${pdur} and ${pcrv}`);
+      }
       const scale = (q: string) => page.evaluate((sel: string) => getComputedStyle(document.querySelector(sel)!).transform, q);
       const want = reduce ? 'none' : `matrix(${PRESS_SCALE}, 0, 0, ${PRESS_SCALE}, 0, 0)`;
       for (const st of ['rest', 'disabled', 'inactive', 'pending']) {
@@ -267,7 +273,7 @@ const MUTANTS: { name: string; css: string; mustName: RegExp }[] = [
     mustName: /default\/filled\/default\/medium\/rest background-color is .*color\.interactive\.primary\.fill\.rest/ },
   { name: 'the transitions removed',
     css: '.p3-button, .p3-button > * { transition: none !important; }',
-    mustName: /light filled rest background-color transitions not at all, motion\.duration\.fast/ },
+    mustName: /light filled rest background-color transitions not at all, motion\.preset\.state\.duration and/ },
   { name: 'the press kept under reduced motion',
     css: '@media (prefers-reduced-motion: reduce) { .p3-button:active:not(:disabled, [aria-disabled="true"]) { transform: scale(0.98) !important; } }',
     mustName: /under reduced motion: light filled :active transform is matrix\(0\.98, 0, 0, 0\.98, 0, 0\), the press resolves to none/ },
@@ -279,7 +285,7 @@ const MUTANTS: { name: string; css: string; mustName: RegExp }[] = [
     mustName: /mouse focus: a click should focus the button and show no ring/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   if (!existsSync(TOKENS_CSS)) { console.error('FAIL browser: no token CSS. Run first: npm run -w @prism3/tokens build'); process.exit(1); }
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();

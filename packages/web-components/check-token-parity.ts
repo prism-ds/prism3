@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { bundle, sourceOf } from './bundle';
 import { runParity as runButton, MARKUP, type Form as ButtonForm } from '../css/check-parity';
 import { runParity as runFields, isFilled, CONTRACTS as FIELD_CONTRACTS, type Form as FieldForm } from '../css/check-parity-fields';
+import { isEntry } from './entry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CSS_DIR = resolve(HERE, '../css');
@@ -106,7 +107,7 @@ const MUTANTS: { name: string; src: () => Sources; mustName: RegExp }[] = [
     src: () => ({ ...SOURCES, 'text-field': swap(SOURCES['text-field'], /^if \(!customElements\.get\('p3-text-field'\)\).*$/m, '', 'text-field define') }), mustName: /^text-field status=error .*\(no probe root\)/ },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { chromium } = createRequire(import.meta.url)('playwright');
   const browser = await chromium.launch();
   let bad = 0;

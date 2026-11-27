@@ -38,6 +38,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { at, context, DIRS, dirsFor, DROPPED, main, open, result, stateOf, stories, type Dir, type Plant, type Story, type Result } from './a11y-harness.ts';
+import { isEntry } from '@prism3/engine/harness';
 
 const NAME: Record<string, string> = { pending: 'Saving', 'with-visuals': 'Add item' };
 const LABEL: Record<string, string> = { 'text-field': 'Email address', 'password-field': 'Password' };
@@ -255,6 +256,6 @@ const MUTANTS = [
   },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   await main('keyboard', 'Tab order (every story, both forms agreeing), Space and Enter on the button, the Show/Hide toggle by keyboard, and focus-visible on keyboard only, left to right and right to left.', run as never, [...MUTANTS, ...DROPPED('keyboard')]);
 }

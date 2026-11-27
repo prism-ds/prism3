@@ -27,6 +27,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { resolve } from 'node:path';
 import { ROWS, ARMS, CARD_ARMS, type Measure } from './measures';
 import { mismatches, unmeasurable, type Manifest } from './api-mismatches';
+import { isEntry } from '@prism3/engine/harness';
 
 const HERE = import.meta.dirname ?? '';
 const ROOT = resolve(HERE, '../..');
@@ -192,7 +193,7 @@ export const SELF: { name: string; check: () => string | null }[] = [
     return gaps.length || stray.length ? `unaccounted: ${gaps.map((x) => x.id).join(', ')}; not a row: ${stray.join(', ')}` : null; } },
 ];
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(HERE, 'scorecard.ts')) {
+if (isEntry(import.meta.url)) {
   const arg = (n: string) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
   if (process.argv.includes('--self-test')) {
     let bad = 0;

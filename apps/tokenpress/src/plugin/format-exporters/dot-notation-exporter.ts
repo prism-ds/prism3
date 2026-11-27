@@ -11,6 +11,7 @@ import {
   sanitizeTokenName,
   sanitizeFileName as sanitizeFileNameShared,
 } from '../../utils/token-name-utils';
+import { ComposedColor, hasAlpha, isComposedColor } from '../../types/figma-guards';
 
 /**
  * Input data for dot notation export
@@ -115,15 +116,88 @@ export class DotNotationExporter implements FormatExporter {
         : 'unknown';
 
       // Resolve the actual value
-      const resolvedValue = this.resolveAliasValue(aliasValue, variableMap, modeId);
+      const resolvedValue = this.resolveComposedColor(
+        this.resolveAliasValue(aliasValue, variableMap, modeId),
+        variableMap,
+        modeId
+      );
       const formattedValue = this.formatValue(resolvedValue, variable.resolvedType);
 
       return `${dotPath}: "{${aliasPath}}" -> ${formattedValue}`;
     }
 
+    // A color at an opacity (prism3 #4475): written as its reference and its opacity, then the color it resolves to at
+    // that alpha, as an alias line is. Read as a plain color, it wrote `rgb(NaN, NaN, NaN)`.
+    if (isComposedColor(rawValue)) {
+      const formattedValue = this.formatValue(
+        this.resolveComposedColor(rawValue, variableMap, modeId),
+        variable.resolvedType
+      );
+      return `${dotPath}: "${this.describeComposedColor(rawValue, variableMap, nameCase)}" -> ${formattedValue}`;
+    }
+
     // Regular value
     const formattedValue = this.formatValue(rawValue, variable.resolvedType);
     return `${dotPath}: ${formattedValue}`;
+  }
+
+  /**
+   * A composed color (`{ color, opacity }`, the opacity a percent) resolved to the RGBA a designer sees: the color's
+   * alpha multiplied by the opacity. Any other value is returned as it is; a half that does not resolve gives null.
+   *
+   * The color half may alias ANOTHER composed color (prism3 #4478): Figma lets its alias target any COLOR variable,
+   * whose value may itself be composed. That inner wash resolves its own halves in the mode it was read in, and the
+   * outer opacity multiplies its alpha. Depth-limited, as the alias walk is.
+   */
+  private resolveComposedColor(
+    value: unknown,
+    variableMap: Map<string, Variable>,
+    modeId: string,
+    depth: number = 0
+  ): unknown {
+    if (!isComposedColor(value)) {
+      return value;
+    }
+    if (depth >= 10) {
+      return null;
+    }
+    let color: unknown = value.color;
+    if (this.isVariableAlias(value.color)) {
+      const at = this.resolveAliasValueAt(value.color, variableMap, modeId);
+      color = isComposedColor(at.value)
+        ? this.resolveComposedColor(at.value, variableMap, at.modeId, depth + 1)
+        : at.value;
+    }
+    const percent = this.isVariableAlias(value.opacity)
+      ? this.resolveAliasValue(value.opacity, variableMap, modeId)
+      : value.opacity;
+    if (
+      typeof color !== 'object' ||
+      color === null ||
+      !('r' in color) ||
+      typeof percent !== 'number'
+    ) {
+      return null;
+    }
+    const rgb = color as RGB | RGBA;
+    return { r: rgb.r, g: rgb.g, b: rgb.b, a: (hasAlpha(rgb) ? rgb.a : 1) * (percent / 100) };
+  }
+
+  /** A composed color's two halves as written: `{color.path} @ 30%`, either half an alias or a literal. */
+  private describeComposedColor(
+    value: ComposedColor,
+    variableMap: Map<string, Variable>,
+    nameCase?: TokenNameCase
+  ): string {
+    const ref = (alias: VariableAlias): string => {
+      const target = variableMap.get(alias.id);
+      return `{${target ? this.convertToDotNotation(target.name, nameCase) : 'unknown'}}`;
+    };
+    const color = this.isVariableAlias(value.color)
+      ? ref(value.color)
+      : this.formatValue(value.color, 'COLOR').slice(1, -1);
+    const opacity = this.isVariableAlias(value.opacity) ? ref(value.opacity) : `${value.opacity}%`;
+    return `${color} @ ${opacity}`;
   }
 
   /**
@@ -218,31 +292,44 @@ export class DotNotationExporter implements FormatExporter {
   private resolveAliasValue(
     alias: VariableAlias,
     variableMap: Map<string, Variable>,
+    preferredModeId: string
+  ): unknown {
+    return this.resolveAliasValueAt(alias, variableMap, preferredModeId).value;
+  }
+
+  /**
+   * `resolveAliasValue`, also reporting the mode the value was read in: the preferred mode, or the last variable's
+   * first mode when the preferred one is not its own (prism3 #4478), so a composed value resolves its halves there.
+   */
+  private resolveAliasValueAt(
+    alias: VariableAlias,
+    variableMap: Map<string, Variable>,
     preferredModeId: string,
     depth: number = 0
-  ): unknown {
+  ): { value: unknown; modeId: string } {
     // Prevent infinite loops
     if (depth > 10) {
-      return null;
+      return { value: null, modeId: preferredModeId };
     }
 
     const targetVariable = variableMap.get(alias.id);
     if (!targetVariable) {
-      return null;
+      return { value: null, modeId: preferredModeId };
     }
 
     // Try to get value for the preferred mode, or fall back to first mode
+    let readModeId = preferredModeId;
     let value = targetVariable.valuesByMode[preferredModeId];
     if (value === undefined) {
-      const firstModeId = Object.keys(targetVariable.valuesByMode)[0];
-      value = targetVariable.valuesByMode[firstModeId];
+      readModeId = Object.keys(targetVariable.valuesByMode)[0];
+      value = targetVariable.valuesByMode[readModeId];
     }
 
     if (this.isVariableAlias(value)) {
-      return this.resolveAliasValue(value, variableMap, preferredModeId, depth + 1);
+      return this.resolveAliasValueAt(value, variableMap, preferredModeId, depth + 1);
     }
 
-    return value;
+    return { value: value, modeId: readModeId };
   }
 
   /**

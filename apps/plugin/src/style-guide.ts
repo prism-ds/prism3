@@ -38,7 +38,7 @@
  * numerically.
  */
 import { contrast, composite, formatRatio, type RGB } from '@prism3/engine';
-import { STYLE_GUIDE_GROUPS, styleGuideGroup, styleGuideGroupOf } from '@prism3/engine/figma';
+import { STYLE_GUIDE_GROUPS, animationGuideOnlyRows, animationReducedWords, styleGuideGroup, styleGuideGroupOf } from '@prism3/engine/figma';
 import { SECTION_HEADER_SET, isTemplateSet } from './file-components';
 import { HEADER_VARIANT } from './page-header';
 import { FORMER_TABLE_PAGES, TAXONOMY, allLeaves, leafPageName, movesClause } from './file-taxonomy';
@@ -98,6 +98,9 @@ export interface SgPaintStyle { id: string; name: string; description?: string; 
 export interface SgLayoutGrid { pattern: string; count?: number; gutterSize?: number; offset?: number; color?: { r: number; g: number; b: number; a: number } }
 /** A local grid style (#3171), as `getLocalGridStylesAsync` returns it. */
 export interface SgGridStyle { id: string; name: string; description?: string; layoutGrids: readonly SgLayoutGrid[] }
+/** A local custom animation style (#2857 motion phase 3), as `getLocalCustomAnimationStylesAsync` returns it: its entries
+ *  by the name of the Figma animation each was added from. */
+export interface SgAnimationStyle { id: string; name: string; description?: string; entries: readonly string[]; notCarried?: readonly string[] }
 export interface SgCatalog {
   collections: readonly SgCollection[];
   variables: readonly SgVariable[];
@@ -105,6 +108,7 @@ export interface SgCatalog {
   effectStyles?: readonly SgEffectStyle[];
   paintStyles?: readonly SgPaintStyle[];
   gridStyles?: readonly SgGridStyle[];
+  animationStyles?: readonly SgAnimationStyle[];
 }
 
 /** The engine's contrast contract, per mode: `resolveAllModes(theme)` satisfies it structurally. */
@@ -121,7 +125,7 @@ import type { SwatchType, StyleGuideOptions, ValueFormat, StyleGuideCatalog, Sty
  *  `shadow` and `gradient` (#2353 batch 2a), its effect styles and its gradient paint styles; and `grid` (#3171), its grid
  *  styles with the layout variables they copy. Everything else is named in the result as a later phase. Matched in any
  *  case. */
-export const PHASE_TYPES = ['color', 'dimension', 'borderWidth', 'opacity', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'typography', 'shadow', 'gradient', 'grid'] as const;
+export const PHASE_TYPES = ['color', 'dimension', 'borderWidth', 'opacity', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'typography', 'shadow', 'gradient', 'grid', 'animation'] as const;
 /** The font-variable kinds, each its own table (proposed, owner to confirm: one table per kind). */
 export const FONT_KINDS = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing'] as const;
 export type FontKind = (typeof FONT_KINDS)[number];
@@ -199,6 +203,9 @@ export type SgSpecimen =
   /** A fill swatch filled with the paint style (#2353 batch 2a): the `type=default` member filling its cell edge to edge,
    *  as a color's fill swatch does, its fill the style. */
   | { kind: 'gradient' }
+  /** A card playing the animation style (#2857 motion phase 3): the swatches set's type=default member, the style applied
+   *  to it, so it previews what the style plays; a pattern with no style draws the card alone. */
+  | { kind: 'animation' }
   /** A grid style drawn at 1:8 (#3171, Q3171.2 A): a frame `frame` px wide, its `columns` columns `gutter` apart inside a
    *  `margin` either side, as the style lays them out, and the content cap shaded where the frame is wider than `cap`.
    *  Plain frames, redrawn on rerun, as the value text is. */
@@ -302,6 +309,10 @@ const sentence = (s: string): string => {
   const w = s.replace(/[-_]/g, ' ');
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
+/** A table's title from its family or palette name: sentence case, except that a one-letter word is a letter's name
+ *  and keeps its capital, so the palette `brand-b-primary` reads "Brand B primary", as the Studio names the mode
+ *  "Brand B" (#1729, owner decision 2026-11-19). */
+const titleOf = (s: string): string => sentence(s).replace(/(^| )([a-z])(?= |$)/g, (_, sp: string, c: string) => sp + c.toUpperCase());
 
 const pct = (a: number): string => `${Math.round(a * 100)}%`;
 const hex2 = (n: number): string => Math.round(n * 255).toString(16).padStart(2, '0').toUpperCase();
@@ -418,7 +429,7 @@ export const planStyleGuide = (catalog: SgCatalog, contract: SgContract | null, 
   const contractByMode = new Map((contract ?? []).map((m) => [m.mode.toLowerCase(), m.roles]));
   const roleKeys = new Set<string>();
   for (const m of contract ?? []) for (const k of Object.keys(m.roles)) roleKeys.add(k);
-  if (!contract && wantColor) notes.push('No saved brand in this file, so the contrast column reads "—" — Apply theme saves one');
+  if (!contract && wantColor) notes.push('No saved brand in this file, so the contrast column reads "—". Run Update file with Theme ticked to save one.');
   // Every variable some other variable aliases, in any mode — the fact a primitive table's header states.
   const referenced = new Set<string>();
   for (const v of catalog.variables) for (const val of Object.values(v.valuesByMode)) { const a = aliasId(val); if (a) referenced.add(a); }
@@ -472,7 +483,7 @@ export const planStyleGuide = (catalog: SgCatalog, contract: SgContract | null, 
       // since both roots draw the same families onto the same page.
       // An inverse family is "Inverse text": its own title, apart from "Text" (the tables filter matches a title).
       const family = !primitive && g.includes('/') ? g.split('/').join(' ') : g.split('/').pop()!;
-      const title = g !== '' ? `${sentence(family)}${multiRoot ? ` — ${root}` : ''}`
+      const title = g !== '' ? `${titleOf(family)}${multiRoot ? ` — ${root}` : ''}`
         : groupsInRoot(root) === 1 ? `${sentence(col.name)}${multiRoot ? ` — ${root}` : ''}`
         : `${sentence(col.name)} — ${multiRoot ? `${root} base` : 'base'}`;
 
@@ -569,6 +580,7 @@ export const planStyleGuide = (catalog: SgCatalog, contract: SgContract | null, 
   if (wantTypes.includes('shadow') && !wantCollections) tables.push(...planEffectStyles(catalog, options, format));
   if (wantTypes.includes('gradient') && !wantCollections) tables.push(...planGradientStyles(catalog, ix, options, format));
   if (wantTypes.includes('grid') && !wantCollections) tables.push(...planGridTable(catalog, ix, options));
+  if (wantTypes.includes('animation') && !wantCollections) tables.push(...planAnimationStyles(catalog, options));
   // PHASE 2 TITLES ARE UNIQUE (proposed, owner to confirm): two collections can both hold a font-size table (`core`
   // and `type-sets`), so a title two phase-2 tables share names its collection, "Font size (core)". The tables filter
   // matches a title, so a shared one would draw both. Color titles are phase 1's and unchanged.
@@ -1128,6 +1140,60 @@ const planGradientStyles = (catalog: SgCatalog, ix: Index, options: StyleGuideOp
   }];
 };
 
+/** The pseudo-collection the animation table's key names (#2857 motion phase 3): styles belong to no collection. */
+export const ANIMATION_STYLES_ID = 'animation-styles';
+/** Every pattern is a folder holding its `default` and `reduced` styles (Q-PT20 as revised 2026-11-26). */
+const DEFAULT_LEAF = / \/ default$/;
+const listOf = (xs: readonly string[]): string => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/**
+ * THE ANIMATION-STYLE TABLE (#2857 motion phase 3, Q-PT22 A): one row per animation style the file holds, its reduced
+ * sibling in the same row, then one row per pattern that is style-guide only (hover and press until a style can carry a
+ * fill color, Q-PT18 A). The specimen is a card playing the style. DRAFT copy, for the owner: the title, the column
+ * names "Plays" and "Reduced", "Style guide only", and "—".
+ */
+const planAnimationStyles = (catalog: SgCatalog, options: StyleGuideOptions): SgTable[] => {
+  const all = catalog.animationStyles ?? [];
+  if (!all.length) return [];
+  const byName = new Map(all.map((s) => [s.name, s] as const));
+  // A row is a folder: its default style is the specimen, and its reduced sibling's words sit in the same row.
+  const styles = all.filter((s) => DEFAULT_LEAF.test(s.name)).map((s) => ({ ...s, folder: s.name.replace(DEFAULT_LEAF, '') }));
+  const guide = animationGuideOnlyRows().filter((g) => !byName.has(`${g.name} / default`));
+  const prefix = commonPrefix([...styles.map((s) => s.folder), ...guide.map((g) => g.name)].map((n) => n.split(' / ').slice(0, -1)));
+  const row = (id: string, name: string, plays: string, reduced: string, description: string): SgRow => {
+    const token = name.split(' / ').slice(prefix.length).join(' / ');
+    return {
+      variableId: id, name, token, tokenCell: tokenCellOf(options, name, token), label: humanizeName(name.split(' / ').slice(prefix.length), prefix[prefix.length - 1]),
+      description, display: 'default', specimen: { kind: 'animation' },
+      cells: [{ modeId: STYLE_SPECIMEN.modeId, modeName: STYLE_SPECIMEN.name, value: plays, alias: null, raw: JSON.stringify([id, plays]), groundId: null, contrast: null }],
+      extra: [{ value: plays, alias: null, always: true }, { value: reduced, alias: null, always: true }],
+    };
+  };
+  const rows: SgRow[] = [
+    // A style's Plays cell says what it doesn't carry yet (#4608 review, finding 3), and a folder with no reduced style
+    // says what reduced motion does to its element (the owner's decision of 2026-11-26 on #4608). DRAFT copy.
+    ...styles.map((s) => {
+      const plays = `${s.entries.join(' · ') || '—'}${s.notCarried?.length ? ` (not carried yet: ${listOf(s.notCarried)})` : ''}`;
+      const reduced = byName.get(`${s.folder} / reduced`)?.description || animationReducedWords(s.folder) || '—';
+      return row(s.id, s.folder, plays, reduced, s.description ?? '');
+    }),
+    ...guide.map((g) => row('', g.name, 'Style guide only', g.reduced, g.description)),
+  ];
+  const n = styles.length;
+  return [{
+    key: `animation|${ANIMATION_STYLES_ID}|${prefix.join(' / ')}`,
+    type: 'animation',
+    kind: 'semantic',
+    page: SEMANTIC_PAGE,
+    collectionId: ANIMATION_STYLES_ID,
+    title: 'Animation styles',
+    description: `${n} animation style${n === 1 ? '' : 's'} in this file`,
+    modes: [STYLE_SPECIMEN],
+    columns: ['Token', STYLE_SPECIMEN.name, 'Plays', 'Reduced', ...(options.description === false ? [] : ['Description'])],
+    rows,
+  }];
+};
+
 /** The pseudo-collection the Grids table's key names (#3171): grid styles belong to no collection. */
 export const GRID_STYLES_ID = 'grid-styles';
 /** The scale a grid specimen is drawn at (Q3171.2 A), and its height. */
@@ -1401,7 +1467,7 @@ export interface SgNode extends CellNode {
   getPluginData?(key: string): string;
   setExplicitVariableModeForCollection?(collection: unknown, modeId: string): void;
   setProperties?(props: Record<string, string | boolean>): void;
-  getStyledTextSegments?(fields: ('fontName' | 'fontSize' | 'fontWeight' | 'textStyleId')[]): readonly { fontName: unknown }[];
+  getStyledTextSegments?(fields: ('fontName' | 'fontSize' | 'fontWeight' | 'textStyleId' | 'boundVariables' | 'textStyleOverrides')[]): readonly { fontName: unknown }[];
   getMainComponentAsync?(): Promise<unknown>;
   remove?(): void;
   /** Phase 2: bind a node property (a bar's `width`, a corner, a text's `fontSize`) to a variable. */
@@ -1411,6 +1477,8 @@ export interface SgNode extends CellNode {
   textStyleId?: unknown;
   /** #2353 batch 2a: apply an effect style or a fill (paint) style to a node (the dynamic-page forms). */
   setEffectStyleIdAsync?(id: string): Promise<void>;
+  /** Applies an animation style to the node (#2857 motion phase 3), where this Figma has Motion. */
+  applyAnimationStyle?(styleId: string, data?: { type: 'CUSTOM' }): string;
   setFillStyleIdAsync?(id: string): Promise<void>;
   effectStyleId?: unknown;
   fillStyleId?: unknown;
@@ -1446,6 +1514,8 @@ export interface StyleGuideApi {
   /** #3171: the file's local grid styles, in the file's order. Optional: without it, the Grids table reads the layout
    *  variables alone. */
   getLocalGridStylesAsync?(): Promise<readonly unknown[]>;
+  /** The file's custom animation styles (#2857 motion phase 3), where this Figma has them. */
+  getLocalCustomAnimationStylesAsync?(): Promise<readonly unknown[]>;
   /** The fonts the host has, for the face a family specimen is set in (#2371). Optional: without it, the faces the
    *  file's text styles use and the cell's own style are tried. */
   listAvailableFontsAsync?(): Promise<ReadonlyArray<{ fontName: { family: string; style: string } }>>;
@@ -1556,13 +1626,14 @@ export const CELLS_PER_YIELD = 28;
  *  Every variable, not only COLOR: phase 2 reads FLOAT and STRING ones (the #146 lesson — a type-filtered fetch
  *  misses the font family and size variables). The effect and paint styles too (#2353 batch 2a), when asked for. */
 export const readCatalog = async (vars: StyleGuideApi['variables'], textStyles?: () => Promise<readonly unknown[]>,
-  styles: { effect?: () => Promise<readonly unknown[]>; paint?: () => Promise<readonly unknown[]>; grid?: () => Promise<readonly unknown[]> } = {}): Promise<{ catalog: SgCatalog; collectionById: Map<string, unknown>; variableById: Map<string, unknown> }> => {
+  styles: { effect?: () => Promise<readonly unknown[]>; paint?: () => Promise<readonly unknown[]>; grid?: () => Promise<readonly unknown[]>; animation?: () => Promise<readonly unknown[]> } = {}): Promise<{ catalog: SgCatalog; collectionById: Map<string, unknown>; variableById: Map<string, unknown> }> => {
   const cols = (await vars.getLocalVariableCollectionsAsync()) as readonly (SgCollection & { id: string })[];
   const vs = (await vars.getLocalVariablesAsync()) as readonly SgVariable[];
   const ts = (textStyles ? await textStyles() : []) as readonly SgTextStyle[];
   const es = (styles.effect ? await styles.effect() : []) as readonly SgEffectStyle[];
   const ps = (styles.paint ? await styles.paint() : []) as readonly SgPaintStyle[];
   const gs = (styles.grid ? await styles.grid() : []) as readonly SgGridStyle[];
+  const as = (styles.animation ? await styles.animation() : []) as readonly { id: string; name: string; description?: string; animationEntries?: readonly { name: string }[]; getSharedPluginData?(ns: string, key: string): string }[];
   const catalog: SgCatalog = {
     collections: cols.map((c) => ({ id: c.id, name: c.name, modes: c.modes.map((m) => ({ modeId: m.modeId, name: m.name })), defaultModeId: c.defaultModeId })),
     variables: vs.map((v) => ({ id: v.id, name: v.name, variableCollectionId: v.variableCollectionId, resolvedType: v.resolvedType, description: v.description, valuesByMode: v.valuesByMode, scopes: v.scopes ? [...v.scopes] : undefined })),
@@ -1582,6 +1653,12 @@ export const readCatalog = async (vars: StyleGuideApi['variables'], textStyles?:
       id: t.id, name: t.name, description: t.description,
       layoutGrids: (t.layoutGrids ?? []).map((g) => ({ pattern: g.pattern, count: g.count, gutterSize: g.gutterSize, offset: g.offset, color: g.color })),
     })),
+    animationStyles: as.map((t) => {
+      // What the style doesn't carry yet, as the animation writer stamps it (#4608 review, finding 3).
+      let notCarried: string[] = [];
+      try { const raw = t.getSharedPluginData?.('prism3', 'animation-not-carried'); if (raw) notCarried = JSON.parse(raw) as string[]; } catch { /* unreadable: none said */ }
+      return { id: t.id, name: t.name, description: t.description, entries: (t.animationEntries ?? []).map((e) => e.name), ...(notCarried.length ? { notCarried } : {}) };
+    }),
   };
   return { catalog, collectionById: new Map(cols.map((c) => [c.id, c])), variableById: new Map(vs.map((v) => [v.id, v])) };
 };
@@ -1666,6 +1743,19 @@ const AT_KEY = 'prism3-style-guide-at';
 /** What a table held when the generator last wrote it (`fingerprintOf`) — a superseded table that still matches
  *  is deleted, one that does not was edited by hand and is kept. */
 const PRINT_KEY = 'prism3-style-guide-print';
+/**
+ * THE TABLE'S PRINT, SECOND FORM (#4482). The first form (no prefix) read each text's resolved font, size and weight. A
+ * Text styles table draws its specimens in the file's text styles, and a Font family table binds its specimens' family
+ * to the variable; a theme that changes a family re-resolves both, so a superseded table nobody touched read as edited
+ * and was kept, offered for removal by hand. The second form reads a styled text as its style and the overrides listed
+ * over it, and a bound font field as its variable (`fingerprintOf`'s `bindings` and `overrides`). A print in the first
+ * form is still compared in that form: untouched, it matches until the theme's fonts change, and then reads as edited,
+ * as it did, since nothing recorded the old font. A table carries the second form from its next draw.
+ */
+const TABLE_PRINT_V2 = '2:';
+const tablePrint = async (wrap: SgNode): Promise<string> => `${TABLE_PRINT_V2}${await fingerprintOf(wrap, { bindings: true, overrides: true, measured: true })}`;
+const tablePrintMatches = async (wrap: SgNode, print: string): Promise<boolean> =>
+  !!print && (print.startsWith(TABLE_PRINT_V2) ? (await tablePrint(wrap)) === print : (await fingerprintOf(wrap)) === print);
 /** `<page id>|<frame id>`: where the generator wrote the table, and the frame it wrote. Plugin data travels with a
  *  duplicate and the id does not, so the frame id tells the generator's own frame from a designer's copy of it; the
  *  page id tells a table left on its page from one moved to another page at the same x and y. */
@@ -1714,7 +1804,7 @@ export const categoryOfKey = (key: string): string => {
 };
 /** Rows in this order down a page; a later phase's category after them, by name. The effect and gradient styles (#2353
  *  batch 2a) each start a row of their own after the text styles'. Owner-approved (Q272 A). */
-const CATEGORY_ORDER = ['color', 'dimension', 'font', 'typography', 'shadow', 'gradient', 'grid'];
+const CATEGORY_ORDER = ['color', 'dimension', 'font', 'typography', 'shadow', 'gradient', 'grid', 'animation'];
 const categoryRank = (cat: string): number => { const i = CATEGORY_ORDER.indexOf(cat); return i < 0 ? CATEGORY_ORDER.length : i; };
 /** The radius swatch's four corners, each bound to the radius variable. */
 const RADIUS_CORNERS = ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'] as const;
@@ -1802,6 +1892,145 @@ const FINGERPRINT_FIELDS = [
 const FONT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as const;
 
 /**
+ * A TEXT'S TYPE BY WHAT IT IS BOUND TO (#4470), for a print taken with `bindings`. A text in a text style reads as that
+ * style's id, never the font, size or weight the style resolves to: the file's text styles bind their family to a font
+ * variable, so a theme that changes the display or title family re-resolves every styled text's `fontName`, and a print
+ * that read it called every panel with a styled text edited by hand (35 usage panels on the template, 2026-11-22). A
+ * text in no style reads its font, size and weight, each field bound to a variable as that variable's id. A run of
+ * several styles (a code span drawn in the code style, #3552) reads each segment the same way.
+ *
+ * What a designer does still moves it: a font, size or weight set by hand on a styled text detaches the style, so the
+ * text then reads by its values; a different style reads a different id; a value typed over a variable reads the value.
+ */
+type FontRead = { fontName?: unknown; fontSize?: unknown; fontWeight?: unknown; textStyleId?: unknown; boundVariables?: unknown; textStyleOverrides?: unknown };
+const BOUND_FONT = { family: 'fontFamily', style: 'fontStyle', size: 'fontSize', weight: 'fontWeight' } as const;
+// A TextNode lists a bound text field as an array of aliases (`VariableAlias[]`); a styled segment's `boundVariables`
+// holds one alias. Read both: an array as every alias's id, in order.
+const boundOf = (bv: unknown, k: string): string | null => {
+  const b = bv && typeof bv === 'object' ? (bv as Record<string, unknown>)[k] : undefined;
+  const idOf = (a: unknown): unknown => (a && typeof a === 'object' ? (a as { id?: unknown }).id : undefined);
+  const ids = (Array.isArray(b) ? b.map(idOf) : [idOf(b)]).filter((id): id is string => typeof id === 'string' && id !== '');
+  return ids.length ? ids.join(',') : null;
+};
+/** The overrides a segment lists over its text style (`SEMANTIC_WEIGHT`, `SEMANTIC_ITALIC`, …), sorted; '' when none. */
+const overridesOf = (v: unknown): string => (Array.isArray(v)
+  ? v.map((o) => (o && typeof o === 'object' ? String((o as { type?: unknown }).type) : String(o))).sort().join(',') : '');
+const typeByBinding = (t: FontRead, overrides = false): string => {
+  if (typeof t.textStyleId === 'string' && t.textStyleId) {
+    const over = overrides ? overridesOf(t.textStyleOverrides) : '';
+    return over ? `style:${t.textStyleId}+${over}` : `style:${t.textStyleId}`;
+  }
+  const bv = t.boundVariables;
+  const f = (t.fontName && typeof t.fontName === 'object' ? t.fontName : {}) as { family?: unknown; style?: unknown };
+  const at = (k: keyof typeof BOUND_FONT, v: unknown): unknown => { const id = boundOf(bv, BOUND_FONT[k]); return id ? `@${id}` : v; };
+  const font = typeof t.fontName === 'object' && t.fontName ? { family: at('family', f.family), style: at('style', f.style) } : t.fontName;
+  return stable([font, at('size', t.fontSize), at('weight', t.fontWeight)]);
+};
+const SEGMENT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as const;
+/**
+ * THE OVERRIDES OVER A STYLE (#4482, review B1 of #4486), read when `overrides` is asked for. A bold or italic set over a
+ * whole styled line (Cmd+B, Cmd+I) keeps the text style and lists the override on its segments (`textStyleOverrides`,
+ * `SEMANTIC_WEIGHT` / `SEMANTIC_ITALIC`), so a styled text read by its style id alone would not see it. With `overrides`,
+ * a styled text also reads the overrides each run lists. A host that cannot list them has the run's resolved face read
+ * instead: a family change leaves the face, and a face that moves reads as an edit, the safe direction.
+ */
+const overrideKey = (n: SgNode): string => {
+  let segs: unknown;
+  try { segs = n.getStyledTextSegments?.(['textStyleOverrides']); } catch { segs = undefined; }
+  if (!Array.isArray(segs)) { const f = read(n, 'fontName') as { style?: unknown } | null | undefined; return `face:${String(f?.style)}`; }
+  return segs.map((s) => { const q = (s ?? {}) as { start?: unknown; end?: unknown; textStyleOverrides?: unknown }; const o = overridesOf(q.textStyleOverrides); return o ? `${String(q.start)}-${String(q.end)}:${o}` : ''; })
+    .filter(Boolean).join(';');
+};
+const boundTypeKey = (n: SgNode, overrides = false): string => {
+  const own: FontRead = { fontName: read(n, 'fontName'), fontSize: read(n, 'fontSize'), fontWeight: read(n, 'fontWeight'), textStyleId: read(n, 'textStyleId'), boundVariables: read(n, 'boundVariables') };
+  if (![own.fontName, own.fontSize, own.fontWeight, own.textStyleId].some((v) => typeof v === 'symbol')) {
+    const key = typeByBinding(own);
+    const over = overrides && typeof own.textStyleId === 'string' && own.textStyleId ? overrideKey(n) : '';
+    return over ? `${key}+${over}` : key;
+  }
+  // Mixed: each run as its own, with its bindings (and, asked, its overrides) where the host can list them.
+  const extra = overrides ? (['boundVariables', 'textStyleOverrides'] as const) : (['boundVariables'] as const);
+  let segs: readonly unknown[] | undefined;
+  try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS, ...extra]); } catch { segs = undefined; }
+  if (!segs) { try { segs = n.getStyledTextSegments?.([...SEGMENT_FIELDS]); } catch { segs = undefined; } }
+  if (!Array.isArray(segs)) return 'mixed';
+  return segs.map((s) => { const q = (s ?? {}) as FontRead & { start?: unknown; end?: unknown }; return `${String(q.start)}-${String(q.end)}:${typeByBinding(q, overrides)}`; }).join(';');
+};
+
+/**
+ * A SIZE MEASURED FROM A FONT (#4482, review B1 of #4568), read when a print asks for `measured`. A text whose font
+ * follows a text style or a bound font field is re-measured when the theme moves that font: Figma sets a hugging text's
+ * width, and an AUTO line height's height, from the font it resolves to. Every size measured from it moves with it: a
+ * frame that hugs it, a grid cell that fills the track it sits in (the track takes its widest cell), the grid that hugs
+ * its tracks, the table that hugs its grid. Those sizes are the host's to measure, not a designer's, so they are left
+ * out. Any other size stays, a hugging one too: a spacing bar hugs its bound padding, and a moved value still moves it
+ * (section 21). A text in no style and with no bound font field keeps its size: nothing a theme moves re-measures it.
+ */
+const FONT_BINDINGS = ['fontFamily', 'fontStyle', 'fontWeight', 'fontSize', 'lineHeight', 'letterSpacing'] as const;
+const followsFont = (n: SgNode): boolean => {
+  const style = read(n, 'textStyleId');
+  if (typeof style === 'symbol' || (typeof style === 'string' && !!style)) return true;
+  return FONT_BINDINGS.some((k) => !!boundOf(read(n, 'boundVariables'), k));
+};
+type Axis = 'w' | 'h';
+/** Whether a node's size on an axis is measured from what it holds (hugs) or from its track or parent (fills). */
+const sizingOf = (n: SgNode, axis: Axis): 'HUG' | 'FILL' | 'FIXED' => {
+  const v = read(n, axis === 'w' ? 'layoutSizingHorizontal' : 'layoutSizingVertical');
+  if (v === 'HUG' || v === 'FILL') return v;
+  if (v !== undefined) return 'FIXED';
+  // A host or frame that leaves the sizing unset hugs by its auto layout's axis modes.
+  const mode = read(n, 'layoutMode');
+  const along = (axis === 'w') === (mode === 'HORIZONTAL');
+  const auto = read(n, along ? 'primaryAxisSizingMode' : 'counterAxisSizingMode') === 'AUTO';
+  return (mode === 'HORIZONTAL' || mode === 'VERTICAL') && auto ? 'HUG' : 'FIXED';
+};
+/** The print's reading of which sizes are measured from a font, one node and axis at a time, each worked out once. */
+const fontMeasure = (): ((n: SgNode, axis: Axis) => boolean) => {
+  const memo = new Map<SgNode, { w?: boolean; h?: boolean }>();
+  const kids = (n: SgNode): SgNode[] => ((n.children ?? []) as SgNode[]).filter((k) => k.visible !== false && read(k, 'layoutPositioning') !== 'ABSOLUTE');
+  // What a node offers its parent on an axis: a text its font-set size; a frame what it holds, unless FIXED.
+  const content = (n: SgNode, axis: Axis): boolean => {
+    if (n.type === 'TEXT') {
+      const fit = read(n, 'textAutoResize');
+      return followsFont(n) && (fit === 'WIDTH_AND_HEIGHT' || (axis === 'h' && fit === 'HEIGHT'));
+    }
+    return sizingOf(n, axis) !== 'FIXED' && kids(n).some((k) => content(k, axis));
+  };
+  const measured = (n: SgNode, axis: Axis): boolean => {
+    const m = memo.get(n) ?? {};
+    if (m[axis] !== undefined) return m[axis]!;
+    memo.set(n, m);
+    m[axis] = false; // a cycle reads as not measured: the size stays, the safe direction
+    let out: boolean;
+    if (n.type === 'TEXT') out = content(n, axis);
+    else {
+      const sz = sizingOf(n, axis), p = n.parent as SgNode | null | undefined;
+      if (sz === 'HUG') out = kids(n).some((k) => content(k, axis));
+      else if (sz === 'FILL' && p && read(p, 'layoutMode') === 'GRID') {
+        const at = axis === 'w' ? gridColOf : gridRowOf;
+        out = kids(p).some((k) => at(k) === at(n) && content(k, axis));
+      } else if (sz === 'FILL' && p) out = measured(p, axis);
+      else out = false;
+    }
+    m[axis] = out;
+    return out;
+  };
+  return measured;
+};
+/**
+ * WHAT A MEASURED SIZE IS MEASURED FROM, read in its place. A size left out still moved with a hand edit to what it is
+ * measured from, so those inputs are read instead: the sizing modes (a frame dragged to a width reads FIXED), a text's
+ * resize, the grid's gaps and its tracks (a FIXED track by its value, a HUG one by its type alone, since the host
+ * measures it), the wrap and its spacing, and the bounds.
+ */
+const MEASURED_FROM = ['layoutSizingHorizontal', 'layoutSizingVertical', 'textAutoResize', 'gridRowGap', 'gridColumnGap',
+  'layoutWrap', 'counterAxisSpacing', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const;
+const tracksOf = (v: unknown): string => (Array.isArray(v)
+  ? v.map((t) => { const q = (t ?? {}) as { type?: unknown; value?: unknown }; return q.type === 'HUG' ? 'HUG' : `${String(q.type)}:${String(q.value)}`; }).join(',') : '');
+const measuredFrom = (n: SgNode): string =>
+  [...MEASURED_FROM.map((k) => stable(read(n, k))), tracksOf(read(n, 'gridColumnSizes')), tracksOf(read(n, 'gridRowSizes'))].join('|');
+
+/**
  * THE FINGERPRINT of a table: what a designer would change, read off the frame. Every node in it, in order (its
  * children and their order), each with its type, name, visibility, size, text, fills and strokes (a bound paint by
  * its variable's id), pinned modes, `FINGERPRINT_FIELDS`, its text font, and for an instance its main component and
@@ -1812,33 +2041,44 @@ const FONT_FIELDS = ['fontName', 'fontSize', 'fontWeight', 'textStyleId'] as con
  * cell component that reaches every instance) reads as an edit, and the table is kept. That is the safe direction,
  * since the other one deletes a designer's work. Async because an instance's main component is read with
  * `getMainComponentAsync` under dynamic-page.
+ *
+ * `bindings` (#4470) reads each text's type by what it is bound to (`boundTypeKey`) instead of the values it resolves
+ * to. Off by default: every print recorded before it (the style guide's tables, the About frame, a usage panel's fourth
+ * form) was taken over the resolved values, and is still compared the way it was taken. `overrides` (#4482) also reads,
+ * with `bindings`, the overrides a styled text lists over its style (`overrideKey`); a table's print asks for it.
+ * `measured` (#4482, review B1 of #4568) leaves out each size the host measures from a font (`fontMeasure`) and reads
+ * what it is measured from instead (`measuredFrom`); a table's print asks for it, a usage panel's does not.
  */
-export const fingerprintOf = async (wrap: SgNode): Promise<string> => {
+export const fingerprintOf = async (wrap: SgNode, opts: { bindings?: boolean; overrides?: boolean; measured?: boolean } = {}): Promise<string> => {
   const parts: string[] = [];
   // A TITLE CELL IS NOT AN EDIT (owner decision 15): a designer renames rows there, so a table with a title column
   // leaves the title column out (its cells and its "Name" header, which fills the column), and with it the widths that follow the title column's width: the table's own, its
   // grid's and its header's (all hug or fill to the grid). A table without a title column reads exactly as before,
   // so a fingerprint recorded before the title cell still matches.
   const titled = !!wrap.findOne?.((n) => !!(n as SgNode).getPluginData?.(NAME_CELL_KEY));
+  const fromFont = opts.measured ? fontMeasure() : null;
   const walk = async (n: SgNode, depth: number, inHeader = false): Promise<void> => {
     if (titled && n.getPluginData?.(NAME_CELL_KEY)) return;
     const part = n.getPluginData?.(PART_KEY);
     const header = inHeader || part === 'header';
-    const w = titled && (depth === 0 || part === 'table' || header) ? '' : Math.round(n.width ?? 0);
+    const axes = { w: !!fromFont?.(n, 'w'), h: !!fromFont?.(n, 'h') };
+    const w = axes.w || (titled && (depth === 0 || part === 'table' || header)) ? '' : Math.round(n.width ?? 0);
+    const h = axes.h ? '' : Math.round(n.height ?? 0);
     const modes = n.explicitVariableModes && typeof n.explicitVariableModes === 'object'
       ? Object.entries(n.explicitVariableModes as Record<string, unknown>).map(([k, v]) => `${k}=${String(v)}`).sort().join(',') : '';
     const fields = FINGERPRINT_FIELDS.map((k) => stable(read(n, k)));
     // A text set in more than one font reads `figma.mixed` on these; its segments carry each run's font instead.
     const font = FONT_FIELDS.map((k) => read(n, k));
-    const fontKey = font.some((v) => typeof v === 'symbol')
+    const fontKey = opts.bindings ? boundTypeKey(n, !!opts.overrides) : font.some((v) => typeof v === 'symbol')
       ? stable(n.getStyledTextSegments?.([...FONT_FIELDS]) ?? 'mixed') : stable(font);
     let main = '';
     if (n.type === 'INSTANCE') {
       const m = (n.getMainComponentAsync ? await n.getMainComponentAsync().catch(() => null) : read(n, 'mainComponent')) as { id?: unknown } | null | undefined;
       main = `${String(m?.id ?? '')}:${stable(read(n, 'componentProperties'))}`;
     }
-    parts.push([depth, n.type, n.name, n.visible === false ? 'hidden' : '', w, Math.round(n.height ?? 0),
-      typeof n.characters === 'string' ? n.characters : '', paintsKey(n.fills), paintsKey(n.strokes), modes, ...fields, fontKey, main].join('\u241f'));
+    parts.push([depth, n.type, n.name, n.visible === false ? 'hidden' : '', w, h,
+      typeof n.characters === 'string' ? n.characters : '', paintsKey(n.fills), paintsKey(n.strokes), modes, ...fields, fontKey, main,
+      ...(opts.measured ? [measuredFrom(n)] : [])].join('\u241f'));
     for (const c of (n.children ?? []) as SgNode[]) await walk(c, depth + 1, header);
   };
   await walk(wrap, 0);
@@ -2059,6 +2299,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
     effect: api.getLocalEffectStylesAsync ? () => api.getLocalEffectStylesAsync!() : undefined,
     paint: api.getLocalPaintStylesAsync ? () => api.getLocalPaintStylesAsync!() : undefined,
     grid: api.getLocalGridStylesAsync ? () => api.getLocalGridStylesAsync!() : undefined,
+    animation: api.getLocalCustomAnimationStylesAsync ? () => api.getLocalCustomAnimationStylesAsync!() : undefined,
   });
   const plan = planStyleGuide(catalog, contract, options);
   const misses: string[] = [];
@@ -2808,6 +3049,26 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
         place(box, r, c);
         return;
       }
+      if (spec.kind === 'animation') {
+        // AN ANIMATION STYLE'S SPECIMEN (#2857 motion phase 3): the swatches set's type=default member, painted the cell's
+        // white, its own layers hidden, with the style applied, so it plays what the style plays. A style-guide-only row
+        // (no style) draws the card alone. A Figma with no Motion keeps the card, and the miss is named.
+        const v = variantOf(swatches, { type: 'default' }, 'type=default');
+        if (!v?.createInstance) { missAt(noLayer, 'type=default', where); return; }
+        const inst = v.createInstance() as SgNode;
+        for (const k of (inst.children ?? []) as SgNode[]) k.visible = false;
+        inst.fills = CELL_FILL;
+        if (row.variableId) {
+          let bound = false;
+          try { if (inst.applyAnimationStyle) { inst.applyAnimationStyle(row.variableId, { type: 'CUSTOM' }); bound = true; } } catch { /* named below */ }
+          if (!bound) missAt(unboundSpec, 'animation-style', where);
+        }
+        const box = cellBox(true);
+        box.appendChild?.(inst);
+        keepSize({ inst, w: num(v.width), h: num(v.height) });
+        place(box, r, c);
+        return;
+      }
       if (spec.kind === 'effect' || spec.kind === 'gradient') {
         // A STYLE'S SPECIMEN (#2353 batch 2a) is the swatches set's type=default member with the style applied, so it
         // stays bound to the style and follows an edit to it. Its own layers are hidden, as a fill swatch's are.
@@ -2954,7 +3215,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
     wrap.setPluginData?.(ROWS_KEY, JSON.stringify(after));
     // Stamped last, once the table holds everything this run writes: the frame it was written on, and what it holds.
     wrap.setPluginData?.(MARK_KEY, `${String(page.id)}|${String(wrap.id)}`);
-    wrap.setPluginData?.(PRINT_KEY, await fingerprintOf(wrap));
+    wrap.setPluginData?.(PRINT_KEY, await tablePrint(wrap));
     out.push(created
       ? { key: t.key, title: t.title, page: t.page, status: 'created', rows: t.rows.length }
       : { key: t.key, title: t.title, page: t.page, status: 'updated', rows: t.rows.length, diff: diffRows(was, after) });
@@ -3036,14 +3297,14 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
     if (inGroup) {
       const top = topOf(f, p);
       if (!top || top === f || String(top.id) !== inGroup || bar < 0 || mark.slice(0, bar) !== String(p.id)) return 'moved';
-      return (await fingerprintOf(f)) === print ? 'unedited' : 'edited';
+      return (await tablePrintMatches(f, print)) ? 'unedited' : 'edited';
     }
     const parent = f.parent as { id?: unknown } | null | undefined;
     if (!parent || (parent !== p && (p.id === undefined || parent.id !== p.id))) return 'moved';
     if (bar < 0 || mark.slice(0, bar) !== String(p.id)) return 'moved';
     const at = recordOf(f);
     if (!at || !near(num(f.x), at.x) || !near(num(f.y), at.y)) return 'moved';
-    return (await fingerprintOf(f)) === print ? 'unedited' : 'edited';
+    return (await tablePrintMatches(f, print)) ? 'unedited' : 'edited';
   };
   // A REMOVED TABLE'S SUBTREE IS NEVER READ AGAIN (#2704). `framesOn` is gathered before the loop and holds every frame
   // on the page, the frames inside each table too (its grid, its cells, its header instance's sublayers). The host
@@ -3098,7 +3359,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
       const k = f.getPluginData?.(TABLE_KEY) || '';
       return !!k && !everyKey.has(k) && newCols.has(k.split('|')[1]);
     }).map((f) => String(f.name));
-    if (left.length) notes.push(`${left.join(', ')} ${left.length === 1 ? 'stays' : 'stay'} in place: the generator no longer draws ${left.length === 1 ? 'it' : 'them'}, and a run filtered to named tables deletes nothing. The next run without a Tables filter decides whether to delete ${left.length === 1 ? 'it' : 'them'}`);
+    if (left.length) notes.push(`${left.join(', ')} ${left.length === 1 ? 'stays' : 'stay'} in place: Prism3 no longer draws ${left.length === 1 ? 'it' : 'them'}, and a run filtered to named tables deletes nothing. The next run without a Tables filter decides whether to delete ${left.length === 1 ? 'it' : 'them'}`);
   }
 
   // INVERSE COLORS IS ITS OWN GROUP (owner decision, 2026-10-19, superseding the second row of #2801 and Q412 A of
@@ -3525,7 +3786,7 @@ export const runStyleGuide = async (api: StyleGuideApi, contract: SgContract | n
   for (const [variant, n] of unboundIn) misses.push(`${n} ${n === 1 ? 'swatch' : 'swatches'} in ${variant} have no layer that takes a fill, so they show the component's own color`);
   // Q272 A (#2353): an effect or gradient style's miss names the style in plain words ("15 effect styles are not bound
   // to their style"), never the internal kind key. The older kinds' wording is approved and stays as it was.
-  const plainStyle: Readonly<Record<string, string>> = { 'effect-style': 'effect style', 'gradient-style': 'gradient style' };
+  const plainStyle: Readonly<Record<string, string>> = { 'effect-style': 'effect style', 'gradient-style': 'gradient style', 'animation-style': 'animation style' };
   for (const [what, ws] of unboundSpec) { const n = ws.length; misses.push(`${n} ${plainStyle[what] ?? `${what} specimen`}${plural(n, ' is', 's are')} not bound to ${plural(n, 'its', 'their')} ${what.endsWith('-style') ? 'style' : 'variable'}, so ${plural(n, 'it shows', 'they show')} the cell component's own value (${placesOf(ws)})`); }
   for (const [what, ws] of unsized) { const n = ws.length; misses.push(`${n} ${what} spacing specimen${plural(n, ' is', 's are')} not sized to ${plural(n, 'its', 'their')} value: bound by ${plural(n, 'its', 'their')} left padding, the layer did not take the value's width (${placesOf(ws)})`); }
   // THE OWNER'S FIXED-WIDTH CELLS: said ONCE for the run, in the terms of the fix, not once per specimen.
@@ -3556,6 +3817,7 @@ export const removeRetiredTables = async (api: StyleGuideApi, contract: SgContra
     effect: api.getLocalEffectStylesAsync ? () => api.getLocalEffectStylesAsync!() : undefined,
     paint: api.getLocalPaintStylesAsync ? () => api.getLocalPaintStylesAsync!() : undefined,
     grid: api.getLocalGridStylesAsync ? () => api.getLocalGridStylesAsync!() : undefined,
+    animation: api.getLocalCustomAnimationStylesAsync ? () => api.getLocalCustomAnimationStylesAsync!() : undefined,
   });
   const plan = planStyleGuide(catalog, contract, {});
   const planned = new Set(plan.tables.map((t) => t.key));
@@ -3633,7 +3895,7 @@ export const styleGuideSummary = (r: StyleGuideResult): { ok: boolean; headline:
   // reason each was kept; a table from before the fingerprint apart, with what to do about it. Wording proposed,
   // owner to confirm (docs/45 §8).
   const list = (xs: readonly string[]): string => (xs.length > 3 ? `${xs.slice(0, 3).join(', ')} and ${xs.length - 3} more` : xs.join(', '));
-  const noLonger = (n: number): string => `${n} table${n === 1 ? '' : 's'} the generator no longer draws ${n === 1 ? 'was' : 'were'}`;
+  const noLonger = (n: number): string => `${n} table${n === 1 ? '' : 's'} Prism3 no longer draws ${n === 1 ? 'was' : 'were'}`;
   if (r.deleted.length) parts.push(`${noLonger(r.deleted.length)} deleted, unedited: ${list(r.deleted)}`);
   // The groups (#2801): what this run drew, took over and removed, by title.
   const groupsOf = (n: number): string => `${n} group${n === 1 ? '' : 's'}`;
@@ -3656,11 +3918,11 @@ export const styleGuideSummary = (r: StyleGuideResult): { ok: boolean; headline:
   const unrecorded = r.kept.filter((k) => k.reason === 'unrecorded').map((k) => k.name);
   if (unrecorded.length) {
     const one = unrecorded.length === 1;
-    parts.push(`${noLonger(unrecorded.length)} left in place — drawn before edits were tracked, so the generator never deletes ${one ? 'it' : 'them'}; delete ${one ? 'it' : 'them'} by hand if no longer needed: ${list(unrecorded)}`);
+    parts.push(`${noLonger(unrecorded.length)} left in place — drawn before edits were tracked, so Prism3 never deletes ${one ? 'it' : 'them'}; delete ${one ? 'it' : 'them'} by hand if no longer needed: ${list(unrecorded)}`);
   }
   // THE CLEANUP OFFER (Q412 A): said in the run's result; the page asks before it removes anything.
   const offered = r.retired?.length ?? 0;
-  if (offered) parts.push(`${tables(offered)} the generator no longer draws can be removed on the Style guides page, once you confirm`);
+  if (offered) parts.push(`${tables(offered)} Prism3 no longer draws can be removed on the Style guides page, once you confirm`);
   parts.push(...r.notes, ...r.misses);
   const drawn = made.length + upd.length;
   // A partial run is not a pass: a skipped table is a page the designer expected and does not have, and an
@@ -3693,7 +3955,7 @@ export const isSetUp = (root: StyleGuideApi['root']): boolean => {
  *  are a kind each, as the text styles are. */
 const KIND_OF_TYPE = (type: string): StyleGuideKind =>
   type === 'color' ? 'color' : type === 'dimension' || type === 'borderWidth' || type === 'opacity' ? 'dimension' : type === 'typography' ? 'text'
-    : type === 'shadow' ? 'effect' : type === 'gradient' ? 'gradient' : type === 'grid' ? 'grid' : 'font';
+    : type === 'shadow' ? 'effect' : type === 'gradient' ? 'gradient' : type === 'grid' ? 'grid' : type === 'animation' ? 'animation' : 'font';
 /** The variable kinds whose number is a length, printed in px in the tree. */
 const LENGTH_KINDS: ReadonlySet<VarKind> = new Set<VarKind>(['spacing', 'size', 'radius', 'scale', 'fontSize', 'lineHeight', 'letterSpacing',
   'paragraphSpacing', 'paragraphIndent', 'borderWidth', 'iconSize', 'breakpoint', 'grid', 'container']);

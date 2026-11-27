@@ -53,7 +53,9 @@ export const leverBlock = (key: string, opts: { label?: string; group?: boolean;
   // manifest description, so its page hands one in (concept v6's words) or shows no info button. A page may
   // also hand one in over a manifest lever's (Surfaces & fills' Background fills, S4c): the Studio's words
   // for that page, while the engine's description stays what MCP, the manifest and the emission read.
-  const desc = opts.desc ?? L?.description ?? '';
+  // #4193 decision 1: the ⓘ shows the lever's short `tip` (≤ 90 characters) where it has one; search still reads the
+  // full description, through `manifestWords` below.
+  const desc = opts.desc ?? L?.tip ?? L?.description ?? '';
   const el = hook(h(opts.group ? 'fieldset' : 'div', 'p3-lever'), leverHook(key));
   el.id = `p3-lv-${slug(key)}`;
   const head = h(opts.group ? 'legend' : 'div', 'p3-lever-head');
@@ -230,6 +232,15 @@ export const infoTip = (id: string, label: string, text: string): { button: HTML
   tip.id = id;
   tip.hidden = true;
   button.onclick = () => { const open = tip.hidden; tip.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
+  // Escape closes an open tip and keeps focus on the ⓘ, as every other opener in the chrome does (#4225). Only while
+  // open, and it stops there, so an enclosing dialog's Escape waits for the next press.
+  button.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || tip.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tip.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  });
   return { button, tip };
 };
 
@@ -287,17 +298,22 @@ export const onCommitted = (el: HTMLInputElement, commit: (value: string) => voi
  * frame, and holds the store's persist from the first `input` until the control is released, so a drag stores once.
  * The release (`change`, `pointerup`, `pointercancel`, `blur`, or `QUIET_MS` with no `input`) runs a value still waiting first. The control's own
  * readout (`aria-valuetext`) stays the caller's to write at once.
+ * While a pointer is pressed on the control, `QUIET_MS` does not release it (#2641): a drag that pauses, or one frame
+ * that runs long under load, released the hold mid-gesture, and the pointer's release then wrote a second time. The
+ * pointer's own release ends that drag.
  */
-/** How long a held control may sit with no `input` before its value is stored anyway. */
+/** How long a held control may sit with no `input` before its value is stored anyway (not while a pointer is pressed). */
 const QUIET_MS = 400;
 export const perFrame = <T>(el: HTMLElement, run: (v: T) => void): ((v: T) => void) => {
   let raf = 0;
   let next: T;
   let held = false;
   let quiet = 0;
+  let pressed = false;
   const flush = (): void => { if (raf) { cancelAnimationFrame(raf); raf = 0; run(next); } };
-  const release = (): void => { clearTimeout(quiet); flush(); if (held) { held = false; releasePersist(); } };
+  const release = (): void => { pressed = false; clearTimeout(quiet); flush(); if (held) { held = false; releasePersist(); } };
   for (const t of ['change', 'pointerup', 'pointercancel', 'blur']) el.addEventListener(t, release);
+  el.addEventListener('pointerdown', () => { pressed = true; });
   return (v) => {
     next = v;
     if (!held) {
@@ -309,7 +325,7 @@ export const perFrame = <T>(el: HTMLElement, run: (v: T) => void): ((v: T) => vo
     if (!raf) raf = requestAnimationFrame(() => { raf = 0; run(next); if (!el.isConnected) release(); });
     // And a value set with no release at all (an `input` and nothing after it) is stored once things go quiet.
     clearTimeout(quiet);
-    quiet = window.setTimeout(release, QUIET_MS);
+    if (!pressed) quiet = window.setTimeout(release, QUIET_MS);
   };
 };
 /** A page's edit (#2487 B5: four pages carried this body word for word): note which key moved, write, note the edit
@@ -406,9 +422,14 @@ export const colorField = (id: string, label: string, role: string, onPick: (hex
   };
 };
 
+/** #4190 V4 A: the advanced fold's button, with its noun: "Show 4 advanced settings", "Hide 1 advanced setting". One
+ *  string for every page's fold, so the pages cannot drift apart. */
+export const advancedLabel = (open: boolean, n: number): string => `${open ? 'Hide' : 'Show'} ${n} advanced setting${n === 1 ? '' : 's'}`;
+
 /** The readout a slider shows: its value, unit and the named stop it sits on (the manifest's stops). */
 export const sliderReadout = (L: Lever, v: number): string => {
-  const unit = L.unit ? (L.unit === '°' ? '°' : ` ${L.unit}`) : '';
+  // #4189: a length reads "1440px", the form every other px value in Studio uses; other units keep their space.
+  const unit = L.unit ? (L.unit === '°' || L.unit === 'px' ? L.unit : ` ${L.unit}`) : '';
   const dp = String(L.step ?? 1).includes('.') ? String(L.step).split('.')[1].length : 0;
   const stop = Object.entries(L.stops ?? {}).find(([, x]) => Math.abs(x - v) < (L.step ?? 1e-6) / 2)?.[0];
   return `${Number(v).toFixed(dp)}${unit}${stop ? ` · ${stop}` : ''}`;

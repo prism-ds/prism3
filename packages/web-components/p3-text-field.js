@@ -66,7 +66,7 @@ export class P3TextField extends LitElement {
     this.type = "text";
     /** An example only ("name@example.com"); vanishes on input; nothing load-bearing lives here. @type {string | undefined} */
     this.placeholder = undefined;
-    /** Persistent guidance (rendered as FieldMessage, default status); wired via aria-describedby. Show the format before failure. @type {string | undefined} */
+    /** Helper text, read by assistive tech through aria-describedby. Shown under the field as a FieldMessage in its default status. Show the format before failure. @type {string | undefined} */
     this.helpText = undefined;
     /** The validation state. Each non-default status swaps the input border to its own boundary (border-only — error → danger, warning → warning, success → success) and sets the nested message to the matching status; default is neutral. error also sets aria-invalid. The values align with FieldMessage's status axis, so this drives the nested message directly. @type {'default' | 'error' | 'warning' | 'success'} */
     this.validation = "default";

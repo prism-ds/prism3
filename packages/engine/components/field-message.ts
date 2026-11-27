@@ -443,6 +443,8 @@ export const fieldMessage: ComponentDef = {
     do: [
       'Show the format/constraint in the default status before the user can fail',
       'Pair the status with an icon so it is never color-only',
+    ],
+    implementation: [
       'Let the host own `aria-describedby` + `aria-invalid`; keep this node presentational',
     ],
     dont: [
@@ -469,10 +471,10 @@ export const fieldMessage: ComponentDef = {
     // Nests nothing (#1700): its status glyphs are vector parts drawn from the glyph set, not nested `icon`
     // instances. The hosts that nest it are in `ai.commonPartners`.
     composesWith: [],
-    alternativeTo: ['toast', 'banner'],
+    alternativeTo: ['toast', 'banner', 'tooltip'],
     // `inline-message` — the brief's name for the SECTION-level message, the one this field-scoped part is
     // not (brief §1).
-    planned: ['number-field', 'tooltip', 'inline-message'],
+    planned: ['number-field', 'inline-message'],
   },
 
   // Brief §8. The risk is layout shift, not the animation.

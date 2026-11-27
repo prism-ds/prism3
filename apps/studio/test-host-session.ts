@@ -42,13 +42,13 @@ const ok = (cond: boolean, label: string): void => {
 };
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 /** A session as plain data, with the Map spelled out, so two sessions compare by value. */
-const plain = (s: HostSession): unknown => ({ ...s, hostFontStyles: [...s.hostFontStyles], hostFontStyleNames: [...s.hostFontStyleNames], setBuilds: [...s.setBuilds], handEdits: [...s.handEdits] });
+const plain = (s: HostSession): unknown => ({ ...s, hostFontStyles: [...s.hostFontStyles], hostFontStyleNames: [...s.hostFontStyleNames], setBuilds: [...s.setBuilds], setInFile: [...s.setInFile], handEdits: [...s.handEdits] });
 
 /** Every kind the UI's handler receives, written out here rather than read from the code under test. */
 const KINDS = [
   'apply-result', 'component-result', 'component-update-result', 'file-setup-result', 'style-guide-result', 'component-progress', 'style-guide-progress',
   'prune-result', 'seed-info', 'restore-input', 'restore-input-empty', 'restore-input-reading', 'restore-input-library', 'restore-input-error', 'font-list', 'doc-settings', 'file-sets',
-  'hand-edits', 'hand-edits-done', 'update-check', 'update-check-progress', 'file-due', 'add-queue', 'updates-off', 'panels-clean-result',
+  'hand-edits', 'hand-edits-done', 'update-check', 'update-check-progress', 'file-due', 'add-queue', 'updates-off', 'set-in-file', 'panels-clean-result',
   'agent-started', 'agent-progress', 'agent-finished', 'refused',
   'style-guide-catalog', 'style-guide-tables', 'style-guide-table', 'style-guide-cleanup-result',
 ] as const;
@@ -68,7 +68,7 @@ ok(typeof (globalThis as { document?: unknown }).document === 'undefined', 'prem
 const init = initialHostSession();
 ok(same(plain(init), {
   seedOutcome: null, inputRecovered: false, restoreError: null, applyState: null, collisions: null, collisionsChosen: null, componentState: null, componentUpdate: null, componentLatest: null, specsState: null, overrideState: null,
-  fileSetupState: null, styleGuideState: null, componentProgress: null, styleGuideProgress: null, styleGuideCatalog: null, styleGuideRun: null, styleGuideRetired: [], styleGuideCleanup: null, componentDef: null, setBuilds: [], pruneBusy: false, prunePreview: null,
+  fileSetupState: null, styleGuideState: null, componentProgress: null, styleGuideProgress: null, styleGuideCatalog: null, styleGuideRun: null, styleGuideRetired: [], styleGuideCleanup: null, componentDef: null, setBuilds: [], componentSet: null, setInFile: [], pruneBusy: false, prunePreview: null,
   pruneVerdict: null, openDetail: null, hostFonts: [], hostFontStyles: [], hostFontStyleNames: [], agentRun: null, refused: null, docSettings: null, fileSets: null, liveDue: null, panelsClean: { busy: false, count: null, verdict: null }, addQueue: null, updatesOffError: null,
   handEdits: [], handPass: 'idle', updateCheck: null, updateProgress: null,
 }), 'initial session: every slot empty');
@@ -104,6 +104,12 @@ for (const c of verdictCases) {
   const prog = step(pending, { kind: 'component-progress', phase: 'build', done: 24, total: 648, chunkMs: 90 });
   ok(same(prog.next.componentProgress, { phase: 'build', done: 24, total: 648 }), 'component-progress: records phase, done and total while pending');
   ok(same(prog.topics, ['host:progress']), 'component-progress: invalidates host:progress only (a text swap, no re-render)');
+  // #4476: a throttled reading is kept on the slot the progress line reads; the style guide's the same. Mutation: the
+  // reducer dropping `throttled` → `component-progress/throttled` and `style-guide-progress/throttled` fail.
+  const slow = step(pending, { kind: 'component-progress', phase: 'build', done: 24, total: 648, chunkMs: 90, throttled: true });
+  ok(slow.next.componentProgress?.throttled === true, `component-progress/throttled: a throttled reading is kept for the progress line (${JSON.stringify(slow.next.componentProgress)})`);
+  const sg = step({ ...init, styleGuideState: 'pending' }, { kind: 'style-guide-progress', done: 28, total: 45, throttled: true });
+  ok(sg.next.styleGuideProgress?.throttled === true, `style-guide-progress/throttled: a throttled reading is kept for the progress line (${JSON.stringify(sg.next.styleGuideProgress)})`);
   const verdict = step(prog.next, { kind: 'component-result', ok: true, completed: true, headline: '✓ built 648', summary: 'all good' });
   ok(same(verdict.next.componentState, { ok: true, headline: '✓ built 648', summary: 'all good' }),
     '#870 replay: the verdict lands in componentState, the slot the Components page reads');
@@ -170,6 +176,16 @@ for (const c of verdictCases) {
   ok(unnamed.next.setBuilds.size === 0, `#2087: an agent's build that names no set records nothing (${JSON.stringify([...unnamed.next.setBuilds])})`);
   const update = step(step(init, { kind: 'agent-started', id: 'u1', cmd: 'update-components', def: 'tag' }).next, { kind: 'component-result', ok: true, completed: true, headline: '✓', summary: 'x' });
   ok(update.next.setBuilds.size === 0, `#2087: only a build-components run is attributed, not another components command (${JSON.stringify([...update.next.setBuilds])})`);
+  // #3119: the verdict says which set it was about (the panel's own build, or an agent's that named one), for the
+  // drawer's "Show the set in Figma"; one that names no set offers none.
+  ok(issues.next.componentSet === 'badge' && byAgent.next.componentSet === 'button' && unnamed.next.componentSet === null,
+    `#3119: a build verdict records the set it was about: the panel's badge, the agent's button, none for an unnamed agent build (${issues.next.componentSet}, ${byAgent.next.componentSet}, ${unnamed.next.componentSet})`);
+  // #3119: the main thread's word on whether the file holds a set, kept per set, the latest winning; it repaints the drawer.
+  const said = step(issues.next, { kind: 'set-in-file', def: 'badge', inFile: true });
+  ok(said.next.setInFile.get('badge') === true && same(said.topics, ['host']), `#3119: set-in-file records badge as in the file and repaints the drawer ('host') (${JSON.stringify([...said.next.setInFile])}, ${JSON.stringify(said.topics)})`);
+  const gone = step(step(said.next, { kind: 'set-in-file', def: 'tag', inFile: true }).next, { kind: 'set-in-file', def: 'badge', inFile: false });
+  ok(same([...gone.next.setInFile], [['badge', false], ['tag', true]]), `#3119: a later set-in-file replaces that set's word and keeps the others' (${JSON.stringify([...gone.next.setInFile])})`);
+  ok(gone.next.componentSet === 'badge' && gone.next.componentState === issues.next.componentState, '#3119: set-in-file leaves the verdict and its set as they were');
   // The panel's request declined behind an agent's run: no build of its own is coming, so it forgets the set.
   const declined = step({ ...agentRun, componentState: 'pending', componentDef: 'tag' }, { kind: 'refused', code: 'busy', cmd: 'build-components', agent: false, message: 'busy' });
   ok(declined.next.componentDef === null && declined.next.componentState === null, 'G9: a declined panel build forgets the set it posted');
@@ -529,6 +545,29 @@ ok(refuses, 'premise: the engine refuses an empty object as a BrandInput');
   ok(after.next === pa.next, '#3302: a reading that lands after the answer changes nothing');
 }
 for (const k of KINDS) ok(exercised.has(k), `coverage: ${k} was exercised`);
+
+// #3760: while one write holds the file, a request for another is declined, and the status line (the drawer's live
+// region) named the ASKED write: "Set up file already running; …" while Theme ran and the row read the host's words,
+// "Theme is already running". The line keeps the owner's sentence (2026-10-02) and names the write holding the file,
+// carried from the wire's `held` by the reducer. The row's words are the plugin's own `busyMessage`, so the two are held
+// to the same title. Mutations: the reducer dropping `held` → `#3760 the reducer carries the write holding the file`;
+// `refusedLine` back to `r.op` → `#3760 the status line names the write holding the file`; the refused branch not calling
+// it → `#3760 the drawer's refused branch announces refusedLine`.
+{
+  const { refusedLine } = await import('./src/shell/activity');
+  const { busyMessage } = await import('../plugin/src/run-guard');
+  const r = step(init, { kind: 'refused', code: 'busy', cmd: 'file-setup', agent: false, message: busyMessage('apply-theme'), held: 'apply-theme' }).next.refused;
+  ok(!!r && r.op === 'filesetup' && r.held === 'apply', `#3760 the reducer carries the write holding the file (${JSON.stringify(r)})`);
+  const said = r ? refusedLine(r) : '';
+  ok(said === 'Apply theme already running; the second request was declined.' && busyMessage('apply-theme').startsWith('Apply theme is already running'),
+    `#3760 the status line names the write holding the file, as the row does (${JSON.stringify(said)}; row ${JSON.stringify(busyMessage('apply-theme'))})`);
+  const old = step(init, { kind: 'refused', code: 'busy', cmd: 'file-setup', agent: false, message: 'x' }).next.refused;
+  ok(!!old && old.held === undefined && refusedLine(old) === 'Set up file already running; the second request was declined.',
+    '#3760 with no holder named (an older host), the status line names the write asked for');
+  const src = (await import('node:fs')).readFileSync(new URL('./src/shell/activity.ts', import.meta.url), 'utf8');
+  ok(/rec\.history = \[\{ ok: true, verdict: 'Refused'[^\n]*\n\s*live\.textContent = refusedLine\(r\);/.test(src),
+    '#3760 the drawer\'s refused branch announces refusedLine');
+}
 
 console.log(`\n${executed - failed}/${executed} passed`);
 if (failed) process.exit(1);

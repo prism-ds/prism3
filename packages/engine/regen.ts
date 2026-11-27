@@ -18,10 +18,11 @@
 // exactly "does the committed `out/` match the committed sources".
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isEntry } from './entry-point';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, 'out');
@@ -37,6 +38,10 @@ const STEPS: Step[] = [
   { label: 'emit-dtcg      (nb · prism3 · aurora · harbor)', args: ['packages/engine/emit-dtcg.ts'] },
   { label: 'nb-regression  (regression report)', args: ['packages/engine/nb-regression.ts'] },
   { label: 'cli            (wendys + fidelity)', args: ['packages/engine/cli.ts', 'packages/engine/examples/wendys.design.md', '--out', 'packages/engine/out', '--fidelity', '--committed'] },
+  // #2997 PR 4 (Q2997.5 B) — the shadcn/ui theme and the Tailwind v4 theme, projected from the handoff files the two
+  // steps above write (emit-dtcg for four brands, cli for wendys), so they come after both.
+  { label: 'emit-shadcn    (out/shadcn/**)', args: ['packages/engine/emit-shadcn.ts'] },
+  { label: 'emit-tailwind  (out/tailwind/**)', args: ['packages/engine/emit-tailwind.ts'] },
   { label: 'emit-figma     (out/figma/**)', args: ['packages/engine/emit-figma.ts'] },
   { label: 'emit-levers    (lever-manifest)', args: ['packages/engine/emit-levers.ts'] },
   { label: 'emit-preview   (preview-spec)', args: ['packages/engine/emit-preview.ts'] },
@@ -49,6 +54,9 @@ const STEPS: Step[] = [
   // #2647 — the Figma conventions file. Reads the def registry, the plugin's taxonomy and the Figma emitter in memory, so
   // it has no ordering dependency either.
   { label: 'emit-figma-conventions (docs/public/reference/figma-conventions.json)', args: ['packages/engine/emit-figma-conventions.ts'] },
+  // #2996 — the spec supplement (out/specs/**): Prism3's additions to Spectacular's spec for its own components. Reads the
+  // def registry and the house brand's Figma emitter in memory, so it has no ordering dependency.
+  { label: 'emit-spec-supplement (out/specs/**)', args: ['packages/engine/emit-spec-supplement.ts'] },
   // #2651 — the analysis reports. Last, because the token report reads `out/prism3.tokens.json`, which emit-dtcg writes.
   { label: 'emit-analysis-reports (docs/public/reports/**)', args: ['packages/engine/emit-analysis-reports.ts'] },
 ];
@@ -67,7 +75,7 @@ export const ON_DEMAND_OUT = ['tokens.html'];
 // them instead, so CI (no copy) and a laptop (stale or fresh copy) scan the same bytes. Returns the rendered
 // files, or an error the caller reports as blindness; the temp dir is removed when the process exits.
 export const renderOnDemand = (): { files: string[] } | { error: string } => {
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-on-demand-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-on-demand-'));
   process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
   const r = spawnSync('npx', ['tsx', join(here, 'visualize.ts'), '--out', dir], { cwd: repoRoot, encoding: 'utf8' });
   if (r.status !== 0) return { error: `visualize.ts --out exited ${r.status}: ${(r.stderr || r.stdout || '').trim().split('\n').slice(-3).join(' / ')}` };
@@ -92,7 +100,7 @@ export const UNCOMMITTED_OUT = ['components/component-defs.json', 'components/co
  *  local `out/` holds (CI holds none). Returns the files in `UNCOMMITTED_OUT` order, or an error the caller reports as
  *  blindness, never as clean. The temp dir is removed when the process exits. */
 export const renderUncommitted = (): { files: string[] } | { error: string } => {
-  const dir = mkdtempSync(join(tmpdir(), 'prism3-uncommitted-'));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-uncommitted-'));
   process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
   const r = spawnSync('npx', ['tsx', join(here, 'emit-component-docs.ts'), '--uncommitted', '--out', dir], { cwd: repoRoot, encoding: 'utf8' });
   if (r.status !== 0) return { error: `emit-component-docs.ts --uncommitted exited ${r.status}: ${(r.stderr || r.stdout || '').trim().split('\n').slice(-3).join(' / ')}` };
@@ -312,7 +320,7 @@ export type CheckReport = { inSync: boolean; failed: string | null; silent: stri
 export const check = (steps: readonly Step[] = STEPS, { quiet = false }: { quiet?: boolean } = {}): CheckReport => {
   const say = quiet ? QUIET : LOUD;
   const line = (s: string) => say.err(`${s}\n`);
-  const tmp = mkdtempSync(join(tmpdir(), 'prism3-regen-'));
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), 'prism3-regen-'));
   const outSnap = join(tmp, 'out');
   const schemaSnap = join(tmp, 'schema');
   const engineSnap = join(tmp, 'engine');
@@ -484,7 +492,7 @@ export const check = (steps: readonly Step[] = STEPS, { quiet = false }: { quiet
 // artifact generation from a script the developer ran for something else entirely.
 // Same guard, and the same reason, as `materialise-to-figma.ts` — which already carries it precisely
 // so `test.ts` can import `aliasRows` without running a CLI.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   if (process.argv.includes('--check')) { console.log('Checking committed artifacts for drift…'); process.exitCode = check().inSync ? 0 : 1; }
   else {
     console.log('Regenerating committed artifacts…');
