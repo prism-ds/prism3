@@ -394,6 +394,8 @@ export const handleHostMessage: Parameters<HostCommit['onHostMessage']>[0] = (ra
   host = reduce(prev, m);
   // #2879: any answer to the restore ends "Reading this file"; the library answer opens its home below.
   if (home?.kind === 'reading' && (m.kind === 'restore-input' || m.kind === 'restore-input-error' || m.kind === 'restore-input-empty' || m.kind === 'restore-input-library')) home = null;
+  // #4469: Export manifest's answer, downloaded as it lands. DRAFT file name, for owner approval.
+  if (m.kind === 'component-manifest' && m.text) download(MANIFEST_FILE, m.text, 'application/json');
   // #2700: a set's result while a multi-set run is out posts the next set, before this message's topics fire.
   if (m.kind === 'component-result' && prev.componentState === 'pending') runAfterResult(m, prev.componentDef);
   // #3128: a set the run posted that the host refused gets no verdict, so the run ends on the refusal.
@@ -1389,6 +1391,10 @@ subscribe('brand', syncLeaving);
 subscribe('identity', syncLeaving);
 subscribe('origin', syncLeaving);
 
+/** #4469: Export manifest's download. DRAFT, for owner approval. It names no brand and no file: the manifest holds this
+ *  file's ids, and the name stays free of a file's or a client's name wherever the copy goes. */
+const MANIFEST_FILE = 'component-manifest.json';
+
 /** Trigger a client-side file download (Blob → object URL → anchor click). */
 const download = (filename: string, text: string, mime: string): void => {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -2163,6 +2169,11 @@ const documentationLend: DocumentationLend = {
       hostChanged();
       commit.postDrawSpecs();
     },
+  },
+  // #4469: Export manifest, a read of the file's component manifest, downloaded when it answers (`handleHostMessage`).
+  manifest: {
+    read: () => host.manifestExport,
+    export: () => { setHost({ manifestExport: 'pending' }); hostChanged(); commit.requestManifest(); },
   },
   // #3137 Q3137.6 A, Q3137.7 A: the sets with no usage panel (the live recount's, else the read's), and the panels drawn.
   panels: {

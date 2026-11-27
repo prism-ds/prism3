@@ -449,6 +449,18 @@ no fork) and mounts the Agent switch into the top bar's `bar-agent` slot, Minimi
 and the library home's Agent link switch into `home-agent`, which only the plugin's frame renders, so the web build
 carries none of it.
 
+## Scope (#4469 — the component manifest, for agents)
+
+- ✅ **`src/component-manifest.ts`** — after Build, Update file and Set up file, the plugin keeps a list of the
+  component sets it built in the file's root **shared** plugin data (`prism3` / `componentManifest`, draft names):
+  each set's def, name and node id, and each property with its allowed values and its default (owner decision A).
+  Shared, so an agent's own plugin run can read it; nothing is drawn on the canvas. Generated from the plans the
+  executor builds from, never written by hand; a variant's default is the set's first member, its `defaultVariant`.
+- ✅ **Parity** — `test-component-manifest.ts` lays the whole catalog's manifest against the committed component
+  contract, and `test-build-completed.ts` proves the real `main.ts` writes it on a build and an update and answers
+  Export manifest (Docs › Spec drawings). How an agent reads it: `skills/prism3-rebind`, section 2.
+- Standalone components (the icons, the spinner) have no set, so they are not listed.
+
 ## Run
 
 ```bash

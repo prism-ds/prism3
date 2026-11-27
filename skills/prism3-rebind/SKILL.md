@@ -125,6 +125,34 @@ decision for the owner (section 6), and most become component work.
 19. **Plugin widgets inside a design frame** (a research-tool card, a third-party embed) are designer
     artifacts. Leave them out of the inventory and the build, and report them.
 
+### Read the component manifest before searching the library
+
+In a file whose Prism3 components the Prism3 plugin built, the plugin keeps a list of them in the file: each
+component set, its properties with their allowed values and defaults, and the id to place it by. Build and
+Update file write it; nothing is drawn on the canvas. Read it with
+`figma.root.getSharedPluginData('prism3', 'componentManifest')` before you search the file's whole library
+listing: one call answers what a search of every component would.
+
+- **The shape.** JSON: `{ v: 1, engine, sets: [{ def, name, id, properties }] }`. `def` is the Prism3
+  component id, `name` the set's name, `id` the set's node id. Each property has a `name` (as the properties
+  panel shows it) and a `type`. A `"VARIANT"` lists its `values` and its `default`, which is the set's first
+  member, the one its `defaultVariant` gives; `axis` is the code name where the panel's name differs, and
+  `slot: true` marks a slot's on/off coordinate (`leading icon`). A `"TEXT"` or `"BOOLEAN"` property has a
+  `default`; an `"INSTANCE_SWAP"` has the name of the component it starts on; a `"SLOT"` has none.
+- **Placing a set.** `figma.getNodeByIdAsync(id)` gives the set: place its `defaultVariant`, or the member
+  whose name is the coordinate you need (`size=small, state=rest`). A non-variant property's key in
+  `componentPropertyDefinitions` is its `name` followed by `#` and an id, so match on the name before the `#`.
+- **When it is empty or wrong.** An empty string means the file holds no manifest: no set was built or updated
+  since the plugin began writing one. Ask the owner to run Update file, or read the sets as section 8, step 2
+  describes. A set missing from it was not built or updated since then. An `id` that is no longer a
+  `"COMPONENT_SET"` was deleted or replaced by hand: find the set by its name, and report it.
+- **What it leaves out.** Component sets only: the icons and the spinner are built as standalone components,
+  so they are not in it. In a file that uses Prism3 as a published library (section 8), the manifest is the
+  library file's: read it there, read-only, and import by key in the consuming file.
+- **Keys and file names stay private.** The manifest holds the file's own node ids. Never copy it, its ids, a
+  component key, a file key or a file's name into the shared repository, an issue or an example. A copy
+  downloaded with the plugin's Export manifest stays in the brand's private material.
+
 ## 3. Running a screen
 
 - **One representative screen per pattern.** Rebinding every similar screen proves nothing more. The goal

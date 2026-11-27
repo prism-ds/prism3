@@ -1756,6 +1756,24 @@
       }
     },
     {
+      "id": "component-manifest",
+      "label": "Keep a component manifest in the file for agents",
+      "group": "Write to Figma",
+      "lanes": {
+        "figma": {
+          "status": "shipped",
+          "via": "Build and Update file keep it in the file's plugin data; Docs, Spec drawings tab: Export manifest",
+          "sources": [
+            "apps/plugin/src/component-manifest.ts",
+            "apps/studio/src/shell/documentation.ts"
+          ],
+          "messages": [
+            "manifest-export"
+          ]
+        }
+      }
+    },
+    {
       "id": "prune",
       "label": "Remove what the brand no longer has",
       "group": "Write to Figma",

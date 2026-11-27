@@ -1114,6 +1114,34 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/Cmd\/Ctrl\+Y/, /library instances in purple/i],
     resolve: [],
   },
+  // #4469 part 2 (owner decision A): the plugin keeps the component manifest in the file's shared plugin data. The skill
+  // names the call that reads it, in section 2 (`apps/plugin/test-component-manifest.ts` holds the call to the key the
+  // module writes), says a variant's default is the set's `defaultVariant`, and keeps keys and file names out of the
+  // shared repository. One rule each, so dropping either fails by its own id.
+  {
+    id: '#4469 read the component manifest (section 2)',
+    skills: ['prism3-rebind'],
+    section: '## 2.',
+    roles: [],
+    must: [/`figma\.root\.getSharedPluginData\('prism3', 'componentManifest'\)`/, /before you search the file's whole library/i],
+    resolve: [],
+  },
+  {
+    id: '#4469 the manifest\'s shape (section 2)',
+    skills: ['prism3-rebind'],
+    section: '## 2.',
+    roles: [],
+    must: [/`\{ v: 1, engine, sets: \[\{ def, name, id, properties \}\] \}`/, /`"VARIANT"`[^.]*`values`[^.]*`default`/, /`defaultVariant`/],
+    resolve: [],
+  },
+  {
+    id: '#4469 manifest keys and file names stay private (section 2)',
+    skills: ['prism3-rebind'],
+    section: '## 2.',
+    roles: [],
+    must: [/never copy it, its ids, a\s+component key, a file key or a file's name into the shared repository/i, /Export manifest stays in the brand's private material/i],
+    resolve: [],
+  },
   {
     id: '#4469 the end-of-job note (section 9)',
     skills: ['prism3-rebind'],

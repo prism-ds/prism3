@@ -2,7 +2,7 @@
 
 <!-- DRAFT for owner review (#2637, lane 4; corrected to the Update file checklist for #3264). -->
 
-Setting up a file gives it the page structure Prism3 builds into, plus the helper components the other steps draw with. <!-- src: apps/plugin/src/main.ts@"const fileSetup = async".."}\n};"#d08fa154 -->
+Setting up a file gives it the page structure Prism3 builds into, plus the helper components the other steps draw with. <!-- src: apps/plugin/src/main.ts@"const fileSetup = async".."}\n};"#23798f8b --> It also writes the file's component manifest, the list of Prism3 sets agents read, and drops any set no longer in the file. <!-- src: apps/plugin/src/main.ts@"// #4469: the component manifest, written so"#0b6f2e6c -->
 It is the first item of the **Update file** checklist, **Set up file**, listed while the file isn't set up yet, or lacks something setup builds: "The pages, the templates and the style-guide cells. The cover too, while Docs has it on." <!-- src: apps/studio/src/state/update-file.ts@"setup: 'Set up file'".."setupSub: 'The pages" -->
 
 ## Set up a new file

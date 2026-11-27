@@ -82,7 +82,9 @@
  * (#3096 into #3090). #3205: `ledgerNow` giving no entry its panel format (`main.ts`, `panelFormatOf`) →
  * `format due/build`, `format due/main`; the format-due credit dropped from `dueOf` → `format due/main`; the credit
  * given whatever the panels switch → `format due/panels off`; the update's record (`acted`) giving `panel: undefined` →
- * `format due/recorded by main` (#3349 review).
+ * `format due/recorded by main` (#3349 review). #4469: the build's `noteManifest` after `applyComponentPlan` dropped →
+ * `manifest/build`; the Update's after `applyUpdate` dropped, or `ids` never filled (`update-apply.ts`) → `manifest/update`;
+ * the `manifest-export` case posting nothing → `manifest/export`.
  */
 import { EXECUTOR_REACH } from './src/executor-reach';
 import { makeShim } from './component-shim';
@@ -276,6 +278,13 @@ const ask = async (msg: Record<string, unknown>, type: string, until: (m: any) =
 };
 const ledger = (): Record<string, { def: string; rev: number; engine: string; print?: { plan: string } }> => { try { return JSON.parse(pluginData.get('prism3:asBuilt') ?? '{}').sets ?? {}; } catch { return {}; } };
 ok(typeof ledger().badge?.def === 'string', `ledger/build: the build records the set it landed (${JSON.stringify(ledger().badge)})`);
+// #4469 (owner decision A): THE COMPONENT MANIFEST, through the real `main.ts`. The build lists the set it landed in the
+// file's root shared plugin data, by the id of the set it drew; Export manifest posts that record back to download.
+const manifest = (): { sets?: { def: string; id: string; properties: { type: string }[] }[] } | null => { try { return JSON.parse(sharedData.get('prism3:componentManifest') ?? 'null'); } catch { return null; } };
+const mBuilt = manifest()?.sets?.find((s) => s.def === 'badge');
+ok(!!mBuilt && mBuilt.id === set?.id && mBuilt.properties.some((p) => p.type === 'VARIANT'), `#4469 manifest/build: the build lists Badge in the file's manifest, by the id of the set it drew (${JSON.stringify(mBuilt && { id: mBuilt.id, set: set?.id })})`);
+const exported = (await ask({ type: 'manifest-export' }, 'component-manifest'))[0];
+ok(typeof exported?.text === 'string' && JSON.parse(exported.text).sets?.some((s: { def: string }) => s.def === 'badge'), `#4469 manifest/export: Export manifest posts the file's record back (${String(exported?.text).slice(0, 60)})`);
 ok(sharedData.get('prism3:addQueue.badge') === '', `queue/build: the build that lands Badge whole clears its add-queue key, where the ledger records it (${JSON.stringify(sharedData.get('prism3:addQueue.badge'))})`);
 const fs1 = (await ask({ type: 'file-sets-request' }, 'file-sets'))[0];
 const fs1Entry = ledger().badge as (Record<string, unknown> & { panel?: number }) | undefined;
@@ -361,6 +370,8 @@ const runAction = async (go: (sink: Sink) => Promise<void>): Promise<{ posts: an
 const { panel: _noFormat, ...noFormat } = ledger().badge as Record<string, unknown>;
 pluginData.set('prism3:asBuilt', JSON.stringify({ v: 1, sets: { badge: noFormat } }));
 const fsBefore = (await ask({ type: 'file-sets-request' }, 'file-sets'))[0];
+// #4469: the manifest cleared before the Update, so `manifest/update` below reads what the Update wrote.
+sharedData.delete('prism3:componentManifest');
 const check = await runAction((sink) => ACTIONS.updateComponents('badge', null, undefined, undefined, sink as never));
 const hash = (check.data.find((d) => (d.update as { mode?: string })?.mode === 'preview')?.update as { previewHash?: string })?.previewHash;
 ok(typeof hash === 'string', `fixture: the Update's check finds Badge and returns its hash (${hash})`);
@@ -375,6 +386,8 @@ ok(!!applied && String(applied.summary).includes(NO_LABEL_UPDATE) && (applied.li
 ok(chk?.previewHash === hash, `update-check: the panel's scoped check hashes as the agent's check of the same set (${chk?.previewHash} vs ${hash})`);
 // The apply records the set it acted on, so the ledger reads it current again.
 const fs3 = (await ask({ type: 'file-sets-request' }, 'file-sets'))[0];
+const mUpdated = manifest()?.sets?.find((s) => s.def === 'badge');
+ok(!!mUpdated && mUpdated.id === set?.id, `#4469 manifest/update: the Update lists the set it read in the file's manifest, by its id (${JSON.stringify(mUpdated && mUpdated.id)})`);
 ok(fs3?.due?.badge?.state === 'current' && ledger().badge?.def !== 'another-def', `ledger/update: the update records the set it acted on, current again (${JSON.stringify(fs3?.due)})`);
 // #3349 review: an update over a lead set whose entry has no panel format records today's, so the set reads current, not
 // due for its panel on every read after. This file has no `_Doc-block`, so no panel is drawn: the record does not wait on

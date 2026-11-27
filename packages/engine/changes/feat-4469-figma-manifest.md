@@ -1,0 +1,4 @@
+---
+engine: minor
+---
+The Figma plugin keeps a component manifest in the file (#4469 part 2, owner decision A). After Build, Update file or Set up file, it writes a list of the component sets it built into the file's shared plugin data, under the namespace prism3 and the key componentManifest: each set's Prism3 id, its name, its node id, and each property with its allowed values and its default. An agent reads it with one call instead of searching the whole library. A variant's default is the set's first member, its default variant. The list is built from the same plans the plugin builds the sets from, and a test holds it against the component contract. Nothing is drawn on the canvas. Docs › Spec drawings gains Export manifest, which downloads the list. The icons and the spinner are standalone components, so they are not listed. The prism3-rebind skill says how to read it, and that keys and file names stay out of the shared repository.
