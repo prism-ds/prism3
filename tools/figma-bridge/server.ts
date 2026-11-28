@@ -245,16 +245,23 @@ export const ARM_REFUSAL = { code: 'unknown-command', message: 'context is not a
  * ONE LINE PER `figma_run` CALL, for `--record <file>` (#3440 §3, V7 and refused attempts). Each call writes an
  * `attempt` line before anything runs (so a call the bridge refuses, or one cut off by a crash, is still on record) and an
  * `outcome` line when it ends, with the same `seq`. `args` are kept whole: `run-code`'s `code` is what V7 is scored from.
+ * A plain call that times out ends with `tool-error`, but its run goes on (#4646): when that run settles, a `late` line
+ * with the same `seq` records how it ended (#4656 item 2). It is its own kind, so a reader that keys `outcome` lines by
+ * `seq` still reads the call's outcome, the one the agent saw.
  */
 export type RecordLine =
   | { kind: 'attempt'; seq: number; at: string; arm: BridgeArm; cmd: unknown; args: unknown }
-  | { kind: 'outcome'; seq: number; at: string; outcome: 'refused-by-bridge' | 'tool-error' | 'ok' | 'not-ok'; error?: unknown };
+  | { kind: 'outcome'; seq: number; at: string; outcome: 'refused-by-bridge' | 'tool-error' | 'ok' | 'not-ok'; error?: unknown }
+  | { kind: 'late'; seq: number; at: string; outcome: 'tool-error' | 'ok' | 'not-ok'; error?: unknown };
 export const createRecorder = (write: (line: string) => void, now: () => Date = () => new Date()) => {
   let seq = 0;
   return {
     attempt: (arm: BridgeArm, cmd: unknown, args: unknown): number => { seq += 1; write(JSON.stringify({ kind: 'attempt', seq, at: now().toISOString(), arm, cmd, args } satisfies RecordLine) + '\n'); return seq; },
     outcome: (s: number, outcome: Extract<RecordLine, { kind: 'outcome' }>['outcome'], error?: unknown): void => {
       write(JSON.stringify({ kind: 'outcome', seq: s, at: now().toISOString(), outcome, ...(error !== undefined ? { error } : {}) } satisfies RecordLine) + '\n');
+    },
+    late: (s: number, outcome: Extract<RecordLine, { kind: 'late' }>['outcome'], error?: unknown): void => {
+      write(JSON.stringify({ kind: 'late', seq: s, at: now().toISOString(), outcome, ...(error !== undefined ? { error } : {}) } satisfies RecordLine) + '\n');
     },
   };
 };
@@ -920,22 +927,35 @@ export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown }
   return { forward: m };
 };
 
+/** JSON-RPC's method-not-found code. */
+export const METHOD_NOT_FOUND = -32601;
+/** The bridge's -32601 message, as it was before the SDK (#4652): it names the method. The SDK's own is a bare
+ *  `Method not found`, so `bridgeTransport` puts the name back on the way out. */
+export const methodNotFound = (method: string): string => `method not found: ${method}`;
+
 /** The SDK's stdio transport with `compatAnswer` in front of it. Reading, framing and sending are the SDK's own; one
- *  difference from the hand-written loop is the SDK's: a line that is not JSON is skipped, not answered -32700. */
+ *  difference from the hand-written loop is the SDK's: a line that is not JSON is skipped, not answered -32700. On the
+ *  way out, a -32601 error names the method it answers (#4652), as the hand-written loop's did. */
 export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => {
+  /** The method of each request forwarded to the SDK and not yet answered, by id. */
+  const asked = new Map<string | number, string>();
   // A `skill://` file the skills extension does not serve: the SDK answers -32602 with `data: { uri }`, and the bridge
-  // sends it as -32002, the code an unknown `prism3://` URI gets (#4661 review). The message stays the SDK's.
+  // sends it as -32002, the code an unknown `prism3://` URI gets (#4661 review). The message stays the SDK's. Such a read
+  // is in both maps; both are looked up and cleared before the one send.
   const skillReads = new Map<number | string, string>();
   const outer: Transport = {
     start: () => inner.start(),
     send: (msg, options) => {
-      const r = msg as { id?: number | string; error?: { code?: number; data?: { uri?: unknown } } };
-      const uri = r.id === undefined ? undefined : skillReads.get(r.id);
-      if (uri !== undefined) {
-        skillReads.delete(r.id!);
-        const e = r.error;
-        if (e?.code === -32602 && e.data !== undefined && JSON.stringify(Object.keys(e.data)) === '["uri"]' && e.data.uri === uri) {
-          return inner.send({ ...r, error: { ...e, code: RESOURCE_NOT_FOUND } } as JSONRPCMessage, options);
+      const m = msg as { id?: string | number | null; error?: { code?: number; message?: string; data?: { uri?: unknown } } };
+      if (m.id !== undefined && m.id !== null && ('result' in m || 'error' in m)) {
+        const method = asked.get(m.id);
+        const uri = skillReads.get(m.id);
+        asked.delete(m.id);
+        skillReads.delete(m.id);
+        const e = m.error;
+        if (method !== undefined && e?.code === METHOD_NOT_FOUND) return inner.send({ ...m, error: { ...e, message: methodNotFound(method) } } as JSONRPCMessage, options);
+        if (uri !== undefined && e?.code === -32602 && e.data !== undefined && JSON.stringify(Object.keys(e.data)) === '["uri"]' && e.data.uri === uri) {
+          return inner.send({ ...m, error: { ...e, code: RESOURCE_NOT_FOUND } } as JSONRPCMessage, options);
         }
       }
       return inner.send(msg, options);
@@ -945,12 +965,13 @@ export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => 
   };
   inner.onmessage = (msg, extra) => {
     const c = compatAnswer(msg as WireMessage, arm);
-    if ('reply' in c) void inner.send(c.reply as JSONRPCMessage).catch((e: Error) => outer.onerror?.(e));
-    else {
-      const f = c.forward;
-      if (f?.method === 'resources/read' && f.id !== undefined && f.id !== null && typeof f.params?.uri === 'string' && f.params.uri.startsWith(SKILL_BASE)) skillReads.set(f.id, f.params.uri);
-      outer.onmessage?.(f as JSONRPCMessage, extra);
+    if ('reply' in c) { void inner.send(c.reply as JSONRPCMessage).catch((e: Error) => outer.onerror?.(e)); return; }
+    const f = c.forward;
+    if (f && typeof f === 'object' && typeof f.method === 'string' && f.id !== undefined && f.id !== null) {
+      asked.set(f.id, f.method);
+      if (f.method === 'resources/read' && typeof f.params?.uri === 'string' && f.params.uri.startsWith(SKILL_BASE)) skillReads.set(f.id, f.params.uri);
     }
+    outer.onmessage?.(f as JSONRPCMessage, extra);
   };
   inner.onerror = (e) => outer.onerror?.(e);
   inner.onclose = () => outer.onclose?.();
@@ -982,22 +1003,33 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
   });
   const server = mcp.server;
 
-  // `toolsFor`'s JSON Schemas are plain objects; the SDK's type wants its own schema type for them.
-  server.setRequestHandler('tools/list', () => ({ tools: toolsFor(arm) as never }));
+  /** The revision the last `initialize` on this connection answered with (#4656 item 3). Tasks, and figma_run's
+   *  `execution`, are this session's only when it is `TASKS_SINCE` or later, as its capabilities say. Before any
+   *  `initialize` there is no session, so none are. */
+  let revision: string | undefined;
+  const tasksOffered = () => revision !== undefined && revision >= TASKS_SINCE;
+
+  // `toolsFor`'s JSON Schemas are plain objects; the SDK's type wants its own schema type for them. Below `TASKS_SINCE`
+  // no tool carries `execution`, a field those revisions do not define.
+  server.setRequestHandler('tools/list', () => ({
+    tools: (tasksOffered() ? toolsFor(arm) : toolsFor(arm).map(({ execution: _, ...t }: { execution?: unknown }) => t)) as never,
+  }));
 
   type Outcome = Extract<RecordLine, { kind: 'outcome' }>['outcome'];
+  type Late = Extract<RecordLine, { kind: 'late' }>['outcome'];
   /** figma_run's checks, before anything is queued: the refusal to answer with, or what to start and how to record it. */
   const prepareRun = (a: Record<string, unknown>):
-    { refusal: ReturnType<typeof text> } | { cmd: string; args: unknown; timeoutMs: number; outcome(o: Outcome, error?: unknown): void } => {
+    { refusal: ReturnType<typeof text> } | { cmd: string; args: unknown; timeoutMs: number; outcome(o: Outcome, error?: unknown): void; late(o: Late, error?: unknown): void } => {
     const seq = opts.record?.attempt(arm, a.cmd, a.args ?? {});
     const outcome = (o: Outcome, error?: unknown) => { if (seq !== undefined) opts.record!.outcome(seq, o, error); };
+    const late = (o: Late, error?: unknown) => { if (seq !== undefined) opts.record!.late(seq, o, error); };
     if (typeof a.cmd !== 'string') { outcome('refused-by-bridge', 'figma_run needs cmd'); return { refusal: text({ error: 'figma_run needs cmd' }, true) }; }
     if (a.cmd === CONTEXT_CMD && !view.context) { outcome('refused-by-bridge', ARM_REFUSAL); return { refusal: text({ error: ARM_REFUSAL }, true) }; }
     const timeoutMs = typeof a.timeoutMs === 'number' && a.timeoutMs > 0 ? Math.min(a.timeoutMs, 3_600_000) : 600_000;
-    return { cmd: a.cmd, args: a.args ?? {}, timeoutMs, outcome };
+    return { cmd: a.cmd, args: a.args ?? {}, timeoutMs, outcome, late };
   };
   /** A settled run's `--record` outcome. A result that arrived is the tool working: `ok: false` is the action's verdict. */
-  const recordOutcome = (outcome: (o: Outcome, error?: unknown) => void, o: RunOutcome) => {
+  const recordOutcome = (outcome: (o: Late, error?: unknown) => void, o: RunOutcome) => {
     if ('error' in o) { outcome('tool-error', o.error); return; }
     const env = o.result as { ok?: unknown; error?: unknown };
     outcome(env.ok === false ? 'not-ok' : 'ok', env.ok === false ? env.error : undefined);
@@ -1039,6 +1071,8 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
         // #4646: the run goes on. Its id is stable, so the caller fetches the result instead of sending the command again.
         const error = `no result for '${p.cmd}' (${run.id}) within ${p.timeoutMs} ms — the plugin may still be running it. Don't send it again: figma_result {"id": "${run.id}"} returns its result once it lands`;
         p.outcome('tool-error', error);
+        // #4656 item 2: the run goes on, so how it ends is recorded too, as a `late` line under the same seq.
+        void run.done.then((late) => recordOutcome(p.late, late));
         return text({ error, runId: run.id }, true);
       }
       recordOutcome(p.outcome, o);
@@ -1119,26 +1153,41 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
   // The capabilities an `initialize` answers with are the negotiated revision's: no tasks below `TASKS_SINCE`.
   const plainInit = handlers.get('initialize') as (req: unknown, ctx: unknown) => Promise<{ protocolVersion: string; capabilities: unknown }>;
   handlers.set('initialize', async (req: unknown, ctx: unknown) => {
+    // Set before the SDK's handler yields, from the revision `compatAnswer` already negotiated, so a request read right
+    // after this `initialize` sees its session.
+    const asked = (req as { params?: { protocolVersion?: unknown } })?.params?.protocolVersion;
+    if (typeof asked === 'string') revision = asked;
     const r = await plainInit(req, ctx);
+    revision = r.protocolVersion;
     return { ...r, capabilities: capabilitiesFor(arm, r.protocolVersion) };
   });
   const plainCall = handlers.get('tools/call') as (req: { params?: Record<string, unknown> }, ctx: unknown) => Promise<unknown>;
   handlers.set('tools/call', (req: { params?: Record<string, unknown> }, ctx: Parameters<typeof streamTo>[0]) => {
     const params = req?.params;
-    if (params && typeof params === 'object' && 'task' in params && params.name === 'figma_run') {
-      try { return Promise.resolve(startTask(params, ctx)); } catch (e) { return Promise.reject(e); }
+    if (params && typeof params === 'object' && 'task' in params) {
+      if (params.name === 'figma_run' && tasksOffered()) {
+        try { return Promise.resolve(startTask(params, ctx)); } catch (e) { return Promise.reject(e); }
+      }
+      // #4656 item 3: a session not offered tasks is served the plain call, the `task` field ignored, as MCP has a
+      // receiver do with task metadata for a request it declared no task support for.
+      if (!tasksOffered()) { const { task: _, ...plain } = params; return plainCall({ ...req, params: plain }, ctx); }
     }
     return plainCall(req, ctx);
   });
   // The SDK leaves the `2025-11-25` task methods out of its method type but serves them: its codec validates each request.
+  // A session not offered tasks does not have them (#4656 item 3), so each answers it -32601, as for any method it lacks.
   const setTaskHandler = server.setRequestHandler.bind(server) as unknown as (method: 'tasks/get' | 'tasks/list' | 'tasks/result', handler: (req: { params: { taskId: string } }) => unknown) => void;
-  setTaskHandler('tasks/get', (req) => taskView(taskOf(req.params.taskId)));
-  setTaskHandler('tasks/list', () => { expireTasks(); return { tasks: [...tasks.values()].map(taskView) }; });
-  setTaskHandler('tasks/result', async (req) => {
+  const ifOffered = <R>(method: string, h: (req: { params: { taskId: string } }) => R) => (req: { params: { taskId: string } }): R => {
+    if (!tasksOffered()) throw new ProtocolError(ProtocolErrorCode.MethodNotFound, methodNotFound(method));
+    return h(req);
+  };
+  setTaskHandler('tasks/get', ifOffered('tasks/get', (req) => taskView(taskOf(req.params.taskId))));
+  setTaskHandler('tasks/list', ifOffered('tasks/list', () => { expireTasks(); return { tasks: [...tasks.values()].map(taskView) }; }));
+  setTaskHandler('tasks/result', ifOffered('tasks/result', async (req) => {
     const t = taskOf(req.params.taskId);
     const o = await t.run.done;
     return { ...runResult(o), _meta: { [RELATED_TASK_META_KEY]: { taskId: t.run.id } } };
-  });
+  }));
 
   // An arm below 2 has no resources and no skills, so it registers neither and the SDK answers their methods -32601 (#3440).
   if (view.skills) {

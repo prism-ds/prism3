@@ -110,7 +110,9 @@ as raw counts per rule, plus the per-arm medians. There's no 0–100 score (Q344
 
 `--record <file>` appends two JSON lines per `figma_run` call: an `attempt` line (cmd and args, with `run-code`'s
 code kept whole) before anything runs, and an `outcome` line after (`ok`, `not-ok`, `tool-error` or
-`refused-by-bridge`). V7 and refused attempts are scored from that log, not from the agent's own account.
+`refused-by-bridge`). V7 and refused attempts are scored from that log, not from the agent's own account. A call
+that timed out (`tool-error`) gets one more line when its run ends, `late`, with the same `seq` (#4656). The scorer
+reads `outcome` lines only, so a late result does not change what the call scored.
 
 ## The runner's invariants
 

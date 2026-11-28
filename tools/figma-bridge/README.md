@@ -137,9 +137,13 @@ any call should wait. Two things keep the result:
   names the run's id (`runId`), and the command goes on in the plugin. Don't send it again:
   `figma_result {id}` returns the result envelope once it lands, or the run's status and last
   progress while it is still running. A result that lands late is kept as the run's result. The
-  bridge keeps the last 200 runs that ended, and every run still working. A run whose plugin stays
-  connected but never answers stays `working` until the plugin drops and the grace runs out, or the
-  bridge restarts.
+  bridge keeps the last 200 runs that ended, and every run still working.
+- **A hung run has no bound** (#4656). A run ends only when the plugin answers or the bridge gives up on
+  it, and the bridge gives up only when the plugin drops and does not come back within `--grace-ms`. So
+  a plugin that stays connected but never answers leaves its run `working`: `figma_status` lists it
+  under `running`, `figma_result` and `tasks/get` say `working`, and the run is never dropped from the
+  200 kept. It clears when the plugin's socket drops past the grace, or when the bridge restarts. It
+  does not block later commands: the queue moves on after the call's `timeoutMs`.
 
 A reconnect mid-run (#2497, `awaitingReconnect`) keeps the same run, so a task goes on being the same
 task, and `figma_result` reads the result the plugin re-sends.
@@ -149,7 +153,10 @@ bridge answers with the revision the client asked for whenever the MCP SDK speak
 `2025-06-18`, `2025-03-26`, `2024-11-05`, `2024-10-07`), so an older client keeps its own, and answers
 anything else with `2025-11-25`. It never answers `2026-07-28`, which Claude Code refuses (#3109).
 Only a `2025-11-25` session is offered `tasks`; every session gets `tools` and `logging`, and arm 2
-`resources`. The engine's MCP server still answers `2024-11-05`; `packages/engine/mcp-handshake-probes.ts`
+`resources`. The rest of the surface follows the session's revision too (#4656): below `2025-11-25`,
+`tools/list` gives `figma_run` no `execution` field, a `figma_run` sent with `task` is served as a plain
+call with the `task` ignored, and `tasks/get`, `tasks/list` and `tasks/result` answer -32601. The
+session's revision is the one the connection's last `initialize` answered. The engine's MCP server still answers `2024-11-05`; `packages/engine/mcp-handshake-probes.ts`
 holds both servers' answers as literals, and the suite's `handshake/<version>` arms hold what each
 revision is offered.
 
@@ -216,7 +223,10 @@ The bridge points at the engine MCP server (`prism3-engine`) rather than proxyin
 Every arm declares `tasks` and `logging` and lists `figma_result` (#4646 step 1): they are how the bridge works, not
 what an agent is shown. The skills (#4646 step 2) are what an agent is shown, so only arm 2 serves them, like the
 resources. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
-`figma_run` call before it runs, and one `outcome` line after it ends, refused calls included.
+`figma_run` call before it runs, and one `outcome` line after it ends, refused calls included. A plain
+call that times out ends `tool-error`, but its run goes on, so when that run ends a `late` line with the same
+`seq` records how (`ok`, `not-ok` or `tool-error`; #4656). It is its own kind, so the `outcome` line stays the
+one the agent saw.
 `apps/plugin/test-agent-bridge.ts` (`arm/…`, `record/…`) checks both. Its sentinels are written in the test, not read
 from `BRIDGE_INSTRUCTIONS`.
 
@@ -233,9 +243,15 @@ from `BRIDGE_INSTRUCTIONS`.
   `compatAnswer` keeps three answers the SDK would give differently, so nothing a client read moved
   with the SDK: `server/discover` is answered beside `initialize` on one connection, an `initialize`
   without `capabilities` or `clientInfo` is served rather than refused, and an unknown resource fails
-  with -32002, not the SDK's -32602. Two things did move: `initialize` now declares `logging`, since the
-  bridge sends console lines as `notifications/message`, and a stdin line that is not JSON is skipped
-  rather than answered -32700.
+  with -32002, not the SDK's -32602. `bridgeTransport` also puts the method's name back in a -32601
+  error, `method not found: <method>`, where the SDK says only `Method not found` (#4652). What did
+  move with the SDK, on every connection:
+  - `initialize` declares `logging`, since the bridge sends console lines as `notifications/message`.
+  - A stdin line that is not JSON is skipped rather than answered -32700.
+  - Results no longer carry `resultType: 'complete'` or the `_meta` server stamp, and `tools/list` no
+    longer carries `ttlMs` or `cacheScope`. Those are `2026-07-28` fields, and no client gets that
+    revision from `initialize`, so this holds for every client. `server/discover`, which `compatAnswer`
+    answers itself, keeps both stamps.
 - `apps/plugin/src/agent-bridge-relay.ts` — the plugin side. It runs in the UI iframe, since the main
   thread has no network, and relays commands to the main thread's dispatcher.
 - `apps/plugin/test-agent-bridge.ts` — the gate, an arm of the plugin's `test` step. It spawns this
