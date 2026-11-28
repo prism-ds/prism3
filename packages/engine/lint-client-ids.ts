@@ -21,7 +21,9 @@
  *   - `names`  — the full display names (#1824), as patterns.
  *   - `ids`    — the fixture ids, as patterns; the two-letter id only in id positions.
  *   - `hashes` — every further client name, as the SHA-256 of its normalized form (Q6 A). The gate hashes each word
- *                and each phrase of each listed length in every path and file, and compares. So the list never
+ *                and each phrase of each listed length in every path and file, and compares; words split at case
+ *                boundaries too (`fooBarTheme`), and a multi-word name's `joined` digest is compared with each single
+ *                word, so the name run together (`foobar`) is found. So the list never
  *                spells a name out, and neither does this gate's output: a hashed hit is named by its hash prefix.
  *
  * Two hits that overlap are one hit, credited to the first rule in list order (ids before names), so `wendys` counts
@@ -52,7 +54,8 @@
  * ── PROOF THE GATE CAN SEE ──────────────────────────────────────────────────────────────────────
  *
  *   - `CLIENT_ID_SELF_CHECK` runs `hitsOf`, the function the scan runs, over planted strings that must and must not
- *     be flagged (the proposal's cases), plus the planted hash word.
+ *     be flagged (the proposal's cases), plus the planted hash word and a planted two-word name, spaced, camelCase
+ *     and run together.
  *   - `PLANTED_ARM` is a real tracked file outside the allowlist. The scan must reach it and find exactly its planted
  *     hits, the hashed one included. This proves the walk reaches real paths and the hash path reads real files, not
  *     only strings. Its hits are the gate's own and are never in the baseline. Moved into an allowlisted path, or
@@ -67,7 +70,9 @@
  * two-letter id is matched only in the positions the patterns name, so an id in a new position is missed until a
  * pattern and a self-check sample are added. It reads tracked files only, not the built bundles: those are
  * `lint-voice.ts`'s, and they are built from tracked sources this gate reads. And a ratchet counts, so a name moved
- * from one line to another in the same file passes.
+ * from one line to another in the same file passes. A hashed name is found as whole words, split at case boundaries,
+ * or run together as one whole word; run together INSIDE a longer word (`foobartheme`, all one case) it is missed, and
+ * so is a spelling the normalization does not fold (an apostrophe dropped, a digit-to-letter boundary).
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -83,11 +88,15 @@ const BASELINE_REL = 'packages/engine/schema/client-id-baseline.json';
 const TAG = 'lint-client-ids';
 
 // ---- normalization and hashing (shared with `--hash`, so a pasted entry matches what the scan computes) ----------
-/** The words of a text, normalized: lowercased, curly apostrophes made straight, letters and digits, with an
- *  apostrophe kept only inside a word. Each with its offset in the original text, for line numbers. */
+/** The words of a text, normalized: curly apostrophes made straight, letters and digits, with an apostrophe kept
+ *  only inside a word, split again at case boundaries (`fooBar` → foo bar, `FOOBar` → foo bar), then lowercased.
+ *  Each with its offset in the original text, for line numbers. */
+const CASE_BOUNDARY = /(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u;
 export const normalizeWords = (txt: string): { word: string; index: number }[] =>
-  [...txt.toLowerCase().replace(/[\u2018\u2019]/g, "'").matchAll(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)]
-    .map((m) => ({ word: m[0], index: m.index! }));
+  [...txt.replace(/[\u2018\u2019]/g, "'").matchAll(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)].flatMap((m) => {
+    let index = m.index!;
+    return m[0].split(CASE_BOUNDARY).map((part) => { const w = { word: part.toLowerCase(), index }; index += part.length; return w; });
+  });
 const sha256 = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex');
 
 if (process.argv.includes('--hash')) {
@@ -95,7 +104,8 @@ if (process.argv.includes('--hash')) {
   const words = normalizeWords(name).map((w) => w.word);
   if (!words.length) { console.error(`${TAG}: --hash needs a name: --hash "<the name>"`); process.exit(2); }
   // The entry only. The name itself is never echoed, so a terminal log or a pasted transcript does not carry it.
-  console.log(`{ sha256: '${sha256(words.join(' '))}', words: ${words.length} },`);
+  const joined = words.length > 1 ? `, joined: '${sha256(words.join(''))}'` : '';
+  console.log(`{ sha256: '${sha256(words.join(' '))}', words: ${words.length}${joined} },`);
   process.exit(0);
 }
 
@@ -104,6 +114,10 @@ if (process.argv.includes('--hash')) {
 // runs over the tree on every run, even while `CLIENT_DENY_LIST.hashes` is empty.
 const PLANTED_WORD = 'quorvalinth';
 const PLANTED_HASH: DenyHash = { sha256: 'c608275db08efdc338de13951301f91952032fb7a92dc9217d83ff6098ae273e', words: 1 };
+// A made-up two-word name, so the case-boundary split and the run-together digest are tested too. Self-check only:
+// it is in no tracked file outside this gate.
+const PLANTED_PAIR = ['zentrava', 'morquil'];
+const PLANTED_PAIR_HASH: DenyHash = { sha256: '5d9afaf19495721a285a02c16b9323733ac2d15b2ad89a42bda33567d5b5b86c', words: 2, joined: '5245e04d9045ed5baaf598a2cc87cd733d64b7df753375fc9bf9f9e5289e3cb5' };
 const PLANTED_ARM = 'packages/engine/fixtures/client-id-arm.txt';
 /** What the scan must find in `PLANTED_ARM`, as `rule@line`, in order. */
 const PLANTED_EXPECT = (hashRule: string): string[] => [
@@ -117,8 +131,11 @@ const PATTERNS = [
   ...CLIENT_DENY_LIST.ids.map(({ name, re }) => ({ rule: `client-id:${name}`, re })),
   ...CLIENT_DENY_LIST.names.map(({ name, re }) => ({ rule: `client-name:${name}`, re })),
 ];
-const HASHES: DenyHash[] = [...CLIENT_DENY_LIST.hashes, PLANTED_HASH];
+const HASHES: DenyHash[] = [...CLIENT_DENY_LIST.hashes, PLANTED_HASH, PLANTED_PAIR_HASH];
+const PLANTED_COUNT = 2;
 const HASH_BY_DIGEST = new Map(HASHES.map((h) => [h.sha256, h]));
+/** A multi-word name run together is one word, so each single word is also compared with the `joined` digests. */
+const HASH_BY_JOINED = new Map(HASHES.flatMap((h) => (h.joined ? [[h.joined, h] as const] : [])));
 const PHRASE_LENGTHS = [...new Set(HASHES.map((h) => h.words))];
 const digestMemo = new Map<string, string>();
 const digestOf = (s: string): string => { let d = digestMemo.get(s); if (d === undefined) { d = sha256(s); digestMemo.set(s, d); } return d; };
@@ -137,6 +154,12 @@ export const hitsOf = (txt: string): Hit[] => {
         const last = words[i + n - 1];
         raw.push({ rule: hashRule(h), index: words[i].index, end: last.index + last.word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
       }
+    }
+  }
+  if (HASH_BY_JOINED.size) {
+    for (const w of words) {
+      const h = HASH_BY_JOINED.get(digestOf(w.word));
+      if (h) raw.push({ rule: hashRule(h), index: w.index, end: w.index + w.word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
     }
   }
   // One sweep in text order: a hit that overlaps the last one kept replaces it only if its rule ranks higher.
@@ -162,6 +185,11 @@ const CLIENT_ID_SELF_CHECK: { sample: string; want: string | null }[] = [
   { sample: 'reference/New Balance/tokens', want: 'client-name:new balance' },
   { sample: 'examples/nb-redesign.design.md', want: 'client-id:nb' },
   { sample: `a stray ${PLANTED_WORD.toUpperCase()} in prose`, want: hashRule(PLANTED_HASH) },
+  { sample: `the ${PLANTED_PAIR.join(' ')} rollout`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `const ${PLANTED_PAIR[0]}${PLANTED_PAIR.slice(1).map((w) => w[0].toUpperCase() + w.slice(1)).join('')}Theme = {}`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `import theme from './${PLANTED_PAIR.join('')}.json'`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `const ${PLANTED_PAIR.join('')}Theme = {}`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `${PLANTED_PAIR[0]}s ${PLANTED_PAIR[1]}ia`, want: null },
   { sample: 'const nb = box(x)', want: null },
   { sample: 'a snb-redesigned layout', want: null },
   { sample: 'a&nbsp;b and &nbsp;', want: null },
@@ -176,6 +204,7 @@ for (const { sample, want } of CLIENT_ID_SELF_CHECK) {
   }
 }
 if (sha256(PLANTED_WORD) !== PLANTED_HASH.sha256) fail(`SELF-CHECK  PLANTED_HASH is not the SHA-256 of the planted word, so the hash path is untested`);
+if (sha256(PLANTED_PAIR.join(' ')) !== PLANTED_PAIR_HASH.sha256 || sha256(PLANTED_PAIR.join('')) !== PLANTED_PAIR_HASH.joined) fail(`SELF-CHECK  PLANTED_PAIR_HASH is not the SHA-256 of the planted pair (spaced and joined), so the multi-word hash path is untested`);
 
 // ---- the allowlist ------------------------------------------------------------------------------------------
 const ALLOWLIST: { glob: string; why: string }[] = [
@@ -287,7 +316,7 @@ for (const [path, counts] of Object.entries(baseline)) {
 }
 
 const totalHits = [...actual.values()].reduce((n, f) => n + Object.values(f.counts).reduce((a, b) => a + b, 0), 0);
-const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary} allowlisted by ${ALLOWLIST.length} entries; ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - 1} hashed names + the planted hash; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
+const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary} allowlisted by ${ALLOWLIST.length} entries; ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - PLANTED_COUNT} hashed names + ${PLANTED_COUNT} planted hashes; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
 if (failures.length) {
   console.error(`❌ ${TAG}: ${failures.length} failure(s)\n`);
   for (const f of failures) console.error(`  ✗ ${f}`);
