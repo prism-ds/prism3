@@ -333,6 +333,8 @@ try {
         await choosePreset(page, preset);
         const chips = await usedByChips(page);
         const want = usersOf(preset);
+        const shown = await page.locator('[data-p3="motion-used-by-chip"]').evaluateAll((els) => els.map((x) => (x.textContent ?? '').trim()));
+        ok(shown.every((t) => t && !t.includes('/') && !chips.includes(t)), `${b.label}: Used by ${preset}'s chips show labels, not engine names (owner, #4665; ${shown.join(', ') || 'none'})`);
         ok(JSON.stringify([...chips].sort()) === JSON.stringify([...want].sort()), `${b.label}: Used by ${preset} is ${want.length ? want.join(', ') : 'nothing (a specimen)'}${JSON.stringify([...chips].sort()) === JSON.stringify([...want].sort()) ? '' : `, got ${chips.join(', ') || 'nothing'}`}`);
       }
 
@@ -388,6 +390,8 @@ try {
         for (const preset of presets.filter((p) => usersOf(p).length === 0)) {
           await choosePreset(page, preset);
           await hooks.need(page, '[data-p3="motion-used-by-none"]');
+          const cap = await page.evaluate(() => document.querySelector('[data-p3="motion-stage-block"] .mo-scene-cap')?.textContent ?? null);
+          ok(cap === preset, `${b.label} ${mode}: specimen '${preset}': the caption is the preset's name (owner, #4665; says ${JSON.stringify(cap)})`);
           const want = expectedOf(e, `motion.preset.${preset}`, mode);
           for (const when of ['at rest', 'played'] as const) {
             const label = when === 'played' ? await press(page) : '';

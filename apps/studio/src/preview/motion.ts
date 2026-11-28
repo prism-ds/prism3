@@ -35,6 +35,19 @@ const copyOf = (title: string): { title: string; desc: string } => ({ title, des
 
 /** The preview's own copy. APPROVED (owner, 2026-10-04) unless marked DRAFT; the DRAFT strings are in the S9.2
  *  fragment's "Copy for owner approval" block. */
+/** A Used by chip's label (owner, #4665, 2026-11-28: human labels, as in wireframe A). No display name for a pattern
+ *  exists in the engine, so the label is composed: the component, or the dialog placement's name, then the rest of the
+ *  pattern's path as written ("dialog/bottom/enter" → "Bottom sheet enter", "tooltip/show" → "Tooltip show"). The
+ *  engine name stays on the chip as `data-pattern`. */
+const PLACEMENT_NAMES: Record<string, string> = { 'dialog/bottom': 'bottom sheet', 'dialog/end': 'end panel' };
+export const patternLabel = (name: string): string => {
+  const segs = name.split('/');
+  const placed = PLACEMENT_NAMES[segs.slice(0, 2).join('/')];
+  const words = placed ? [placed, ...segs.slice(2)] : segs;
+  const text = words.join(' ');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+};
+
 export const MOTION_PREVIEW_COPY = {
   curves: { title: 'Curves', desc: 'The six curves are fixed. Each role picks one.' },   // title DRAFT (concept v6's)
   durations: {
@@ -57,10 +70,11 @@ export const MOTION_PREVIEW_COPY = {
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
   } satisfies TransitionsCopy,
-  /** #4571 PR 3: the stage. Every string here is DRAFT, in the PR's "Strings for owner approval". */
+  /** #4571 PR 3: the stage. The owner approved these on #4665 (2026-11-28): A throughout, the description trimmed,
+   *  the delay suffix B, and the Used by chips in human labels as in wireframe A. */
   stage: {
     title: 'In motion',
-    desc: 'The chosen preset playing on each pattern that uses it, at this tempo, with one bar per moving part.',
+    desc: 'Each preset playing on the patterns that use it, with one bar per moving part.',
     preset: 'Preset',
     usedBy: 'Used by',
     specimen: 'No pattern uses this preset yet, so it plays on a specimen.',
@@ -68,7 +82,8 @@ export const MOTION_PREVIEW_COPY = {
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
     ms: (ms: number) => `${ms}ms`,
-    delay: (ms: number) => `waits ${ms}ms`,
+    delay: (ms: number) => `${ms}ms delay`,
+    pattern: patternLabel,
   } satisfies StageCopy,
 } as const;
 

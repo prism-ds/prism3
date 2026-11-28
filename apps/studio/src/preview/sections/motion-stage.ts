@@ -88,7 +88,7 @@ export const specimenOf = (preset: string): MotionPattern => (SPECIMENS[preset] 
 export type StageCopy = {
   readonly title: string; readonly desc: string; readonly preset: string; readonly usedBy: string; readonly specimen: string;
   readonly timeline: string; readonly play: string; readonly replay: string; readonly slow: string; readonly off: string; readonly reduced: string;
-  readonly ms: (ms: number) => string; readonly delay: (ms: number) => string;
+  readonly ms: (ms: number) => string; readonly delay: (ms: number) => string; readonly pattern: (name: string) => string;
 };
 
 export type StageState = {
@@ -146,7 +146,7 @@ export const motionStageSection = (
   used.append(el('span', 'mo-usedby-lab', copy.usedBy));
   if (!users.length) used.append(hook(el('span', 'mo-usedby-none', copy.specimen), 'motion-used-by-none'));
   for (const p of users) {
-    const chip = hook(el('button', 'p3-btn p3-btn-page mo-usedby-chip', p.name), 'motion-used-by-chip') as HTMLButtonElement;
+    const chip = hook(el('button', 'p3-btn p3-btn-page mo-usedby-chip', copy.pattern(p.name)), 'motion-used-by-chip') as HTMLButtonElement;
     chip.type = 'button';
     chip.dataset.pattern = p.name;
     chip.setAttribute('aria-pressed', String(p === chosen));
@@ -168,7 +168,9 @@ export const motionStageSection = (
     stage.append(page);
   }
   const movers = drawPattern(c, mo, mode, chosen, stage, distancePx, s.slowmo);
-  wrap.append(stage, el('p', 'mo-scene-cap', `${chosen.name}${chosen.label ? ` · ${chosen.label}` : ''}`));
+  // A specimen's caption is its preset's name (owner, #4665); a pattern's is its engine name and its placement.
+  const cap = chosen.name.startsWith('specimen:') ? s.preset : `${chosen.name}${chosen.label ? ` · ${chosen.label}` : ''}`;
+  wrap.append(stage, el('p', 'mo-scene-cap', cap));
 
   // ── the timeline ─────────────────────────────────────────────────────────────────────────────
   const rows = chosen.tracks.map((t) => ({ t, tm: trackTiming(mo, mode, t.preset) }));
