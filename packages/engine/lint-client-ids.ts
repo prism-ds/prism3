@@ -23,7 +23,9 @@
  *   - `hashes` — every further client name, as the SHA-256 of its normalized form (Q6 A). The gate hashes each word
  *                and each phrase of each listed length in every path and file, and compares; words split at case
  *                boundaries too (`fooBarTheme`), and a multi-word name's `joined` digest is compared with each single
- *                word, so the name run together (`foobar`) is found. So the list never
+ *                word, so the name run together (`foobar`) is found. Each run of case-split parts of one token, the
+ *                whole token included, is rejoined and compared too, so a one-word name in camel casing (`FooBar`)
+ *                is still found. A multi-word entry without a real `joined` fails by name. So the list never
  *                spells a name out, and neither does this gate's output: a hashed hit is named by its hash prefix.
  *
  * Two hits that overlap are one hit, credited to the first rule in list order (ids before names), so `wendys` counts
@@ -72,7 +74,9 @@
  * `lint-voice.ts`'s, and they are built from tracked sources this gate reads. And a ratchet counts, so a name moved
  * from one line to another in the same file passes. A hashed name is found as whole words, split at case boundaries,
  * or run together as one whole word; run together INSIDE a longer word (`foobartheme`, all one case) it is missed, and
- * so is a spelling the normalization does not fold (an apostrophe dropped, a digit-to-letter boundary).
+ * so is a spelling the normalization does not fold (an apostrophe dropped, a digit-to-letter boundary). An acronym
+ * with a lower-case suffix splits in the wrong place (`APIs` → `AP` + `Is`), so a hashed name in capitals with a
+ * lower-case suffix (`FOOs` → `fo` + `os`) is missed. Runs are rejoined across at most `MAX_RUN` parts of one token.
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -90,13 +94,17 @@ const TAG = 'lint-client-ids';
 // ---- normalization and hashing (shared with `--hash`, so a pasted entry matches what the scan computes) ----------
 /** The words of a text, normalized: curly apostrophes made straight, letters and digits, with an apostrophe kept
  *  only inside a word, split again at case boundaries (`fooBar` → foo bar, `FOOBar` → foo bar), then lowercased.
- *  Each with its offset in the original text, for line numbers. */
+ *  Each with its offset in the original text, for line numbers, and `tok`, the ordinal of the unsplit token it came
+ *  from, so the scan can rejoin the parts. */
 const CASE_BOUNDARY = /(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u;
-export const normalizeWords = (txt: string): { word: string; index: number }[] =>
-  [...txt.replace(/[\u2018\u2019]/g, "'").matchAll(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)].flatMap((m) => {
+export const normalizeWords = (txt: string): { word: string; index: number; tok: number }[] =>
+  [...txt.replace(/[\u2018\u2019]/g, "'").matchAll(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)].flatMap((m, tok) => {
     let index = m.index!;
-    return m[0].split(CASE_BOUNDARY).map((part) => { const w = { word: part.toLowerCase(), index }; index += part.length; return w; });
+    return m[0].split(CASE_BOUNDARY).map((part) => { const w = { word: part.toLowerCase(), index, tok }; index += part.length; return w; });
   });
+/** The most case-split parts of one token the scan rejoins as a run (see `hitsOf`), so a long mixed-case blob (an
+ *  inlined base64 string, say) costs a bounded number of digests. */
+const MAX_RUN = 6;
 const sha256 = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex');
 
 if (process.argv.includes('--hash')) {
@@ -116,6 +124,7 @@ const PLANTED_WORD = 'quorvalinth';
 const PLANTED_HASH: DenyHash = { sha256: 'c608275db08efdc338de13951301f91952032fb7a92dc9217d83ff6098ae273e', words: 1 };
 // A made-up two-word name, so the case-boundary split and the run-together digest are tested too. Self-check only:
 // it is in no tracked file outside this gate.
+const CAMEL_WORD = `${PLANTED_WORD[0].toUpperCase()}${PLANTED_WORD.slice(1, 4)}${PLANTED_WORD[4].toUpperCase()}${PLANTED_WORD.slice(5)}`;
 const PLANTED_PAIR = ['zentrava', 'morquil'];
 const PLANTED_PAIR_HASH: DenyHash = { sha256: '5d9afaf19495721a285a02c16b9323733ac2d15b2ad89a42bda33567d5b5b86c', words: 2, joined: '5245e04d9045ed5baaf598a2cc87cd733d64b7df753375fc9bf9f9e5289e3cb5' };
 const PLANTED_ARM = 'packages/engine/fixtures/client-id-arm.txt';
@@ -162,6 +171,16 @@ export const hitsOf = (txt: string): Hit[] => {
       if (h) raw.push({ rule: hashRule(h), index: w.index, end: w.index + w.word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
     }
   }
+  // The case split must not lose what the unsplit token held: a one-word name in its brand's camel casing
+  // (`FooBar`), or a run-together name followed by a suffix (`FooBarTheme`). So every run of two or more parts of
+  // one token, the whole token included, is rejoined and compared with the one-word and the `joined` digests.
+  for (let s = 0; s < words.length; s++) {
+    for (let e = s + 1; e < words.length && e - s < MAX_RUN && words[e].tok === words[s].tok; e++) {
+      const d = digestOf(words.slice(s, e + 1).map((w) => w.word).join(''));
+      const h = HASH_BY_DIGEST.get(d) ?? HASH_BY_JOINED.get(d);
+      if (h && (h.joined === d || h.words === 1)) raw.push({ rule: hashRule(h), index: words[s].index, end: words[e].index + words[e].word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
+    }
+  }
   // One sweep in text order: a hit that overlaps the last one kept replaces it only if its rule ranks higher.
   raw.sort((a, b) => a.index - b.index || a.rank - b.rank);
   const kept: (Hit & { rank: number })[] = [];
@@ -190,6 +209,9 @@ const CLIENT_ID_SELF_CHECK: { sample: string; want: string | null }[] = [
   { sample: `import theme from './${PLANTED_PAIR.join('')}.json'`, want: hashRule(PLANTED_PAIR_HASH) },
   { sample: `const ${PLANTED_PAIR.join('')}Theme = {}`, want: hashRule(PLANTED_PAIR_HASH) },
   { sample: `${PLANTED_PAIR[0]}s ${PLANTED_PAIR[1]}ia`, want: null },
+  // The one-word planted name in a camel casing, which the case split cuts in two.
+  { sample: `brand: '${CAMEL_WORD}'`, want: hashRule(PLANTED_HASH) },
+  { sample: `const ${CAMEL_WORD}Theme = {}`, want: hashRule(PLANTED_HASH) },
   { sample: 'const nb = box(x)', want: null },
   { sample: 'a snb-redesigned layout', want: null },
   { sample: 'a&nbsp;b and &nbsp;', want: null },
@@ -205,6 +227,33 @@ for (const { sample, want } of CLIENT_ID_SELF_CHECK) {
 }
 if (sha256(PLANTED_WORD) !== PLANTED_HASH.sha256) fail(`SELF-CHECK  PLANTED_HASH is not the SHA-256 of the planted word, so the hash path is untested`);
 if (sha256(PLANTED_PAIR.join(' ')) !== PLANTED_PAIR_HASH.sha256 || sha256(PLANTED_PAIR.join('')) !== PLANTED_PAIR_HASH.joined) fail(`SELF-CHECK  PLANTED_PAIR_HASH is not the SHA-256 of the planted pair (spaced and joined), so the multi-word hash path is untested`);
+
+// ---- the hash entries: is each one whole? -------------------------------------------------------------------
+// The gate cannot check a digest without the name, but it can refuse an entry that silently drops a detection: a
+// multi-word name with no `joined`, or with `joined` equal to the spaced digest, is never found run together.
+const hashEntryProblem = (h: DenyHash): string | null => {
+  if (!/^[0-9a-f]{64}$/.test(h.sha256)) return 'sha256 is not a 64-character hex digest';
+  if (!Number.isInteger(h.words) || h.words < 1) return `words is ${h.words}, not a whole number of at least 1`;
+  if (h.words > 1 && !h.joined) return `has ${h.words} words but no joined digest, so the name run together is not found`;
+  if (h.words > 1 && h.joined === h.sha256) return 'joined equals the spaced digest, so the name run together is not found';
+  if (h.joined !== undefined && !/^[0-9a-f]{64}$/.test(h.joined)) return 'joined is not a 64-character hex digest';
+  return null;
+};
+// Made-up names, never a client's.
+const HASH_ENTRY_SELF_CHECK: { label: string; entry: DenyHash; bad: boolean }[] = [
+  { label: 'a two-word entry with no joined', entry: { sha256: sha256('vellmar oskiri'), words: 2 }, bad: true },
+  { label: 'a two-word entry whose joined is its spaced digest', entry: { sha256: sha256('vellmar oskiri'), words: 2, joined: sha256('vellmar oskiri') }, bad: true },
+  { label: 'the planted pair', entry: PLANTED_PAIR_HASH, bad: false },
+  { label: 'the planted word', entry: PLANTED_HASH, bad: false },
+];
+for (const { label, entry, bad } of HASH_ENTRY_SELF_CHECK) {
+  const problem = hashEntryProblem(entry);
+  if (bad !== (problem !== null)) fail(`SELF-CHECK  hash entry check: ${label} should be ${bad ? 'refused' : 'accepted'} (got: ${problem ?? 'accepted'})`);
+}
+for (const h of CLIENT_DENY_LIST.hashes) {
+  const problem = hashEntryProblem(h);
+  if (problem) fail(`HASH ENTRY  client-ids.ts entry ${hashRule(h)} ${problem} — re-run --hash and paste the whole line it prints`);
+}
 
 // ---- the allowlist ------------------------------------------------------------------------------------------
 const ALLOWLIST: { glob: string; why: string }[] = [

@@ -21,7 +21,8 @@
  * made straight, split into words of letters and digits (an apostrophe inside a word stays) and again at case
  * boundaries (`fooBar`, `FOOBar`), joined by one space. `words` is how many words the name has, so the gate knows
  * which phrase lengths to hash. A name of two or more words also carries `joined`, the SHA-256 of its words run
- * together with no space, so a run-together identifier (`foobar`, `FOOBAR`, `foobarTheme`) is found too.
+ * together with no space, so a run-together identifier (`foobar`, `FOOBAR`, `foobarTheme`) is found too. The gate
+ * fails a multi-word entry whose `joined` is missing or equal to `sha256`, so paste the whole line `--hash` prints.
  */
 
 export type DenyPattern = { name: string; re: RegExp };
