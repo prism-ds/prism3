@@ -980,6 +980,14 @@ jobs:
       - name: One version of a published format names one shape (#4458)
         run: npx tsx packages/engine/lint-format-history.ts
 
+      # #4645 phase 1 — a ratchet on client names and fixture ids. Every tracked file's path and contents is matched
+      # against the deny-list in client-ids.ts (patterns, plus SHA-256 hashes for any further name, so the list never
+      # spells one out) and held per file and rule to schema/client-id-baseline.json, written by `--accept` only. A
+      # count that rises, a new file with hits, or a count that falls fails by path and line. History paths are
+      # allowlisted; a planted arm file and six represented surfaces prove the walk sees.
+      - name: No client name or fixture id spreads further (#4645)
+        run: npx tsx packages/engine/lint-client-ids.ts
+
       # #2997 gate 3 — shadcn/ui's theme variable names are an external contract. The role map's keys are held to the
       # pinned set in schema/shadcn-vars.json both ways (UNMAPPED / UNPINNED by name), and the pin to SHADCN_MAP_VERSION;
       # only `--accept` rewrites the pin, after a version raise.

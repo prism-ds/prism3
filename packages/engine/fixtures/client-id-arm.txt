@@ -1,0 +1,7 @@
+Planted arm for lint-client-ids.ts (#4645). The gate must reach this file and report exactly the hits below,
+one per line, as hits outside its allowlist. They are the gate's own and never enter its baseline.
+examples/wendys.design.md
+out/nb.tokens.json
+nbds.pds.color
+theme-nb
+quorvalinth

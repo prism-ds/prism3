@@ -1,0 +1,442 @@
+/**
+ * CLIENT-ID GATE (#4645, phase 1) — no client name or fixture id spreads further through the tree.
+ *
+ *   npx tsx packages/engine/lint-client-ids.ts
+ *   npx tsx packages/engine/lint-client-ids.ts --accept         # rewrite the baseline to today's counts
+ *   npx tsx packages/engine/lint-client-ids.ts --hash "<name>"  # print a deny-list hash entry; writes nothing
+ *
+ * ── WHY ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * The repo is public, and two of its regression fixtures carry ids that read as client names. #4645 renames them in
+ * phases (`docs/superpowers/brand-id-rename-proposal.md` §5). This gate lands first, as a ratchet (owner decision
+ * Q7 A), so nothing grows while the renames are in flight: every later phase lowers the baseline, and phase 5 empties
+ * it and makes the gate absolute.
+ *
+ * ── WHAT IT READS ───────────────────────────────────────────────────────────────────────────────
+ *
+ * Every tracked file (`git ls-files`): its PATH, and its CONTENTS unless it is binary (a NUL byte in its first 8 KiB).
+ * Binary files are counted and reported, never skipped silently. Each is matched against `CLIENT_DENY_LIST` in
+ * `client-ids.ts`, the one constant `lint-voice.ts` also reads:
+ *
+ *   - `names`  — the full display names (#1824), as patterns.
+ *   - `ids`    — the fixture ids, as patterns; the two-letter id only in id positions.
+ *   - `hashes` — every further client name, as the SHA-256 of its normalized form (Q6 A). The gate hashes each word
+ *                and each phrase of each listed length in every path and file, and compares; words split at case
+ *                boundaries too (`fooBarTheme`), and a multi-word name's `joined` digest is compared with each single
+ *                word, so the name run together (`foobar`) is found. Each run of case-split parts of one token, the
+ *                whole token included, is rejoined and compared too, so a one-word name in camel casing (`FooBar`)
+ *                is still found. A multi-word entry without a real `joined` fails by name. So the list never
+ *                spells a name out, and neither does this gate's output: a hashed hit is named by its hash prefix.
+ *
+ * Two hits that overlap are one hit, credited to the first rule in list order (ids before names), so `wendys` counts
+ * once and not as both an id and a name.
+ *
+ * ── THE RATCHET ─────────────────────────────────────────────────────────────────────────────────
+ *
+ *   EXPECTED = `schema/client-id-baseline.json`: per file, per rule, the hit count when it was last accepted. Written
+ *              by `--accept` only, never by `regen.ts` (CLAUDE.md principle 5: a gate allowed to rewrite what it reads
+ *              has no memory).
+ *   ACTUAL   = the counts read from the tree as it stands.
+ *
+ * A file whose count for a rule ROSE fails, and so does a file with hits that the baseline does not hold (NEW). Each
+ * failure lists every hit of that rule in that file by `path:line`, so the reader finds the new one. A count that FELL
+ * fails too, until `--accept` lowers the baseline, so the baseline never goes stale and a later rise cannot hide in
+ * the slack. A file the baseline holds that is gone from the tree counts as fallen to zero.
+ *
+ * A rise that is not a new name (a regenerated fixture emission that gained a token, say) is still a rise. Run
+ * `--accept` and let the reviewer read the baseline diff: that diff is the point of a ratchet.
+ *
+ * ── THE ALLOWLIST ───────────────────────────────────────────────────────────────────────────────
+ *
+ * `ALLOWLIST` names the paths that keep the names on purpose: the fold-owned history (owner decision Q3 A: forward
+ * only), the fold's own inputs, the deny-list and the two gates that read it, the proposal, and the baseline itself.
+ * Each entry is a path or a glob (`*` within a segment, `**` across them) and must match at least one tracked file,
+ * so an entry left behind by a rename fails instead of quietly widening.
+ *
+ * Two entries, the fold's inputs (`docs/progress/pending/**`, `packages/engine/changes/**`), are exempt from the id
+ * ratchet only (owner decision Q-a A, 2026-11-28). Progress prose legitimately names the fixture ids, and the fold
+ * can't run `--accept`. But the fold copies both verbatim into public history, so their contents are still read, and a
+ * full client name or a hashed name there fails outright (`FOLD INPUT`), with no baseline to absorb it. Their paths
+ * are read too, since a fold input's file name comes from its branch name. A binary one has its path read only and
+ * is counted apart.
+ *
+ * ── PROOF THE GATE CAN SEE ──────────────────────────────────────────────────────────────────────
+ *
+ *   - `CLIENT_ID_SELF_CHECK` runs `hitsOf`, the function the scan runs, over planted strings that must and must not
+ *     be flagged (the proposal's cases), plus the planted hash word and a planted two-word name, spaced, camelCase
+ *     and run together.
+ *   - `PLANTED_ARM` is a real tracked file outside the allowlist. The scan must reach it and find exactly its planted
+ *     hits, the hashed one included. This proves the walk reaches real paths and the hash path reads real files, not
+ *     only strings. Its hits are the gate's own and are never in the baseline. Moved into an allowlisted path, or
+ *     out of the walk, it fails by name. (The proposal put it under `test-arms/`, but that directory is
+ *     `lint-test-arms.ts`'s registry, which reads every file in it as an arm.)
+ *   - `SURFACES`: each of `packages/`, `apps/`, `docs/`, `tools/`, `reference/` and `.github/` must contribute at least
+ *     one scanned file, so a narrowed walk cannot pass by seeing less.
+ *
+ * ── ITS LIMIT ───────────────────────────────────────────────────────────────────────────────────
+ *
+ * It finds the names it is given. A client nobody has listed is not found; the owner extends the list (Q6). The
+ * two-letter id is matched only in the positions the patterns name, so an id in a new position is missed until a
+ * pattern and a self-check sample are added. It reads tracked files only, not the built bundles: those are
+ * `lint-voice.ts`'s, and they are built from tracked sources this gate reads. And a ratchet counts, so a name moved
+ * from one line to another in the same file passes. A hashed name is found as whole words, split at case boundaries,
+ * or run together as one whole word; run together INSIDE a longer word (`foobartheme`, all one case) it is missed, and
+ * so is a spelling the normalization does not fold (an apostrophe dropped, a digit-to-letter boundary). An acronym
+ * with a lower-case suffix splits in the wrong place (`APIs` → `AP` + `Is`), so a hashed name in capitals with a
+ * lower-case suffix (`FOOs` → `fo` + `os`) is missed. Runs are rejoined across at most `MAX_RUN` parts of one token,
+ * so a name cut into more case parts than that is missed. So type each name in its brand casing when running `--hash`:
+ * each capital inside the name becomes a word boundary, and the entry then matches the brand's spelling phrase by
+ * phrase instead of relying on a rejoin.
+ */
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { lstatSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CLIENT_DENY_LIST } from './client-ids.ts';
+import type { DenyHash } from './client-ids.ts';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repo = join(here, '..', '..');
+const BASELINE_REL = 'packages/engine/schema/client-id-baseline.json';
+const TAG = 'lint-client-ids';
+
+// ---- normalization and hashing (shared with `--hash`, so a pasted entry matches what the scan computes) ----------
+/** The words of a text, normalized: curly apostrophes made straight, letters and digits, with an apostrophe kept
+ *  only inside a word, split again at case boundaries (`fooBar` → foo bar, `FOOBar` → foo bar), then lowercased.
+ *  Each with its offset in the original text, for line numbers, and `tok`, the ordinal of the unsplit token it came
+ *  from, so the scan can rejoin the parts. */
+const CASE_BOUNDARY = /(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u;
+export const normalizeWords = (txt: string): { word: string; index: number; tok: number }[] =>
+  [...txt.replace(/[\u2018\u2019]/g, "'").matchAll(/[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu)].flatMap((m, tok) => {
+    let index = m.index!;
+    return m[0].split(CASE_BOUNDARY).map((part) => { const w = { word: part.toLowerCase(), index, tok }; index += part.length; return w; });
+  });
+/** The most case-split parts of one token the scan rejoins as a run (see `hitsOf`), so a long mixed-case blob (an
+ *  inlined base64 string, say) costs a bounded number of digests. */
+const MAX_RUN = 6;
+const sha256 = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex');
+
+if (process.argv.includes('--hash')) {
+  const name = process.argv[process.argv.indexOf('--hash') + 1] ?? '';
+  const words = normalizeWords(name).map((w) => w.word);
+  if (!words.length) { console.error(`${TAG}: --hash needs a name: --hash "<the name>"`); process.exit(2); }
+  // The entry only. The name itself is never echoed, so a terminal log or a pasted transcript does not carry it.
+  const joined = words.length > 1 ? `, joined: '${sha256(words.join(''))}'` : '';
+  console.log(`{ sha256: '${sha256(words.join(' '))}', words: ${words.length}${joined} },`);
+  process.exit(0);
+}
+
+// ---- the planted arm ------------------------------------------------------------------------------------------
+// A made-up word, not a name, hashed the way a real entry is. It is scanned with the real hashes, so the hash path
+// runs over the tree on every run, even while `CLIENT_DENY_LIST.hashes` is empty.
+const PLANTED_WORD = 'quorvalinth';
+const PLANTED_HASH: DenyHash = { sha256: 'c608275db08efdc338de13951301f91952032fb7a92dc9217d83ff6098ae273e', words: 1 };
+// A made-up two-word name, so the case-boundary split and the run-together digest are tested too. Self-check only:
+// it is in no tracked file outside this gate.
+const CAMEL_WORD = `${PLANTED_WORD[0].toUpperCase()}${PLANTED_WORD.slice(1, 4)}${PLANTED_WORD[4].toUpperCase()}${PLANTED_WORD.slice(5)}`;
+const RUN_AT_LIMIT = 'QuOrVaLiNtH'; // Qu|Or|Va|Li|Nt|H: 6 parts
+const RUN_PAST_LIMIT = 'qUoRVaLiNtH'; // q|Uo|R|Va|Li|Nt|H: 7 parts
+const PLANTED_PAIR = ['zentrava', 'morquil'];
+const PLANTED_PAIR_HASH: DenyHash = { sha256: '5d9afaf19495721a285a02c16b9323733ac2d15b2ad89a42bda33567d5b5b86c', words: 2, joined: '5245e04d9045ed5baaf598a2cc87cd733d64b7df753375fc9bf9f9e5289e3cb5' };
+const PLANTED_ARM = 'packages/engine/fixtures/client-id-arm.txt';
+/** What the scan must find in `PLANTED_ARM`, as `rule@line`, in order. */
+const PLANTED_EXPECT = (hashRule: string): string[] => [
+  'client-id:wendys@3', 'client-id:nb@4', 'client-id:nbds@5', 'client-id:nb@6', `${hashRule}@7`,
+];
+
+// ---- the rules ------------------------------------------------------------------------------------------------
+type Hit = { rule: string; index: number; end: number };
+const hashRule = (h: DenyHash): string => `client-id:sha256:${h.sha256.slice(0, 12)}`;
+const PATTERNS = [
+  ...CLIENT_DENY_LIST.ids.map(({ name, re }) => ({ rule: `client-id:${name}`, re })),
+  ...CLIENT_DENY_LIST.names.map(({ name, re }) => ({ rule: `client-name:${name}`, re })),
+];
+const HASHES: DenyHash[] = [...CLIENT_DENY_LIST.hashes, PLANTED_HASH, PLANTED_PAIR_HASH];
+const PLANTED_COUNT = 2;
+const HASH_BY_DIGEST = new Map(HASHES.map((h) => [h.sha256, h]));
+/** A multi-word name run together is one word, so each single word is also compared with the `joined` digests. */
+const HASH_BY_JOINED = new Map(HASHES.flatMap((h) => (h.joined ? [[h.joined, h] as const] : [])));
+const PHRASE_LENGTHS = [...new Set(HASHES.map((h) => h.words))];
+const digestMemo = new Map<string, string>();
+const digestOf = (s: string): string => { let d = digestMemo.get(s); if (d === undefined) { d = sha256(s); digestMemo.set(s, d); } return d; };
+
+/** Every hit in a text, overlaps collapsed to the first rule in list order (patterns, then hashes). */
+export const hitsOf = (txt: string): Hit[] => {
+  const raw: (Hit & { rank: number })[] = [];
+  PATTERNS.forEach(({ rule, re }, rank) => {
+    for (const m of txt.matchAll(re)) raw.push({ rule, index: m.index!, end: m.index! + m[0].length, rank });
+  });
+  const words = normalizeWords(txt);
+  for (const n of PHRASE_LENGTHS) {
+    for (let i = 0; i + n <= words.length; i++) {
+      const h = HASH_BY_DIGEST.get(digestOf(n === 1 ? words[i].word : words.slice(i, i + n).map((w) => w.word).join(' ')));
+      if (h) {
+        const last = words[i + n - 1];
+        raw.push({ rule: hashRule(h), index: words[i].index, end: last.index + last.word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
+      }
+    }
+  }
+  if (HASH_BY_JOINED.size) {
+    for (const w of words) {
+      const h = HASH_BY_JOINED.get(digestOf(w.word));
+      if (h) raw.push({ rule: hashRule(h), index: w.index, end: w.index + w.word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
+    }
+  }
+  // The case split must not lose what the unsplit token held: a one-word name in its brand's camel casing
+  // (`FooBar`), or a run-together name followed by a suffix (`FooBarTheme`). So every run of two or more parts of
+  // one token, the whole token included, is rejoined and compared with the one-word and the `joined` digests.
+  for (let s = 0; s < words.length; s++) {
+    for (let e = s + 1; e < words.length && e - s < MAX_RUN && words[e].tok === words[s].tok; e++) {
+      const d = digestOf(words.slice(s, e + 1).map((w) => w.word).join(''));
+      const h = HASH_BY_DIGEST.get(d) ?? HASH_BY_JOINED.get(d);
+      if (h && (h.joined === d || h.words === 1)) raw.push({ rule: hashRule(h), index: words[s].index, end: words[e].index + words[e].word.length, rank: PATTERNS.length + HASHES.indexOf(h) });
+    }
+  }
+  // One sweep in text order: a hit that overlaps the last one kept replaces it only if its rule ranks higher.
+  raw.sort((a, b) => a.index - b.index || a.rank - b.rank);
+  const kept: (Hit & { rank: number })[] = [];
+  for (const h of raw) {
+    const last = kept[kept.length - 1];
+    if (last && h.index < last.end) { if (h.rank < last.rank) kept[kept.length - 1] = h; continue; }
+    kept.push(h);
+  }
+  return kept.map(({ rule, index, end }) => ({ rule, index, end }));
+};
+
+// ---- the self-check: does `hitsOf` see what it claims to? ---------------------------------------------------
+const CLIENT_ID_SELF_CHECK: { sample: string; want: string | null }[] = [
+  { sample: 'packages/engine/examples/wendys.design.md', want: 'client-id:wendys' },
+  { sample: "brands: ['nb', 'aurora']", want: 'client-id:nb' },
+  { sample: 'packages/engine/out/nb.tokens.json', want: 'client-id:nb' },
+  { sample: '{nbds.pds.color.neutral-cool.850}', want: 'client-id:nbds' },
+  { sample: 'import { nbTheme } from "./theme-nb.ts"', want: 'client-id:nb' },
+  { sample: 'out/figma/nb/core.json', want: 'client-id:nb' },
+  { sample: 'the regression gate, nb-regression.ts', want: 'client-id:nb' },
+  { sample: 'reference/New Balance/tokens', want: 'client-name:new balance' },
+  { sample: 'examples/nb-redesign.design.md', want: 'client-id:nb' },
+  { sample: `a stray ${PLANTED_WORD.toUpperCase()} in prose`, want: hashRule(PLANTED_HASH) },
+  { sample: `the ${PLANTED_PAIR.join(' ')} rollout`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `const ${PLANTED_PAIR[0]}${PLANTED_PAIR.slice(1).map((w) => w[0].toUpperCase() + w.slice(1)).join('')}Theme = {}`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `import theme from './${PLANTED_PAIR.join('')}.json'`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `const ${PLANTED_PAIR.join('')}Theme = {}`, want: hashRule(PLANTED_PAIR_HASH) },
+  { sample: `${PLANTED_PAIR[0]}s ${PLANTED_PAIR[1]}ia`, want: null },
+  // The one-word planted name in a camel casing, which the case split cuts in two.
+  { sample: `brand: '${CAMEL_WORD}'`, want: hashRule(PLANTED_HASH) },
+  { sample: `const ${CAMEL_WORD}Theme = {}`, want: hashRule(PLANTED_HASH) },
+  // The planted word cut into exactly MAX_RUN case parts is found; cut into one more, it is not (the recorded limit).
+  // Spelled literally, so lowering MAX_RUN fails the first and raising it fails the second.
+  { sample: `brand: '${RUN_AT_LIMIT}'`, want: hashRule(PLANTED_HASH) },
+  { sample: `brand: '${RUN_PAST_LIMIT}'`, want: null },
+  { sample: 'const nb = box(x)', want: null },
+  { sample: 'a snb-redesigned layout', want: null },
+  { sample: 'a&nbsp;b and &nbsp;', want: null },
+  { sample: 'the weights strike a new balance between the two', want: null },
+];
+const failures: string[] = [];
+const fail = (s: string): void => { failures.push(s); };
+for (const { sample, want } of CLIENT_ID_SELF_CHECK) {
+  const rules = hitsOf(sample).map((h) => h.rule);
+  if (want === null ? rules.length > 0 : !rules.includes(want)) {
+    fail(`SELF-CHECK  "${sample}" should ${want ? `be flagged as ${want}` : 'not be flagged'} (got: ${rules.join(', ') || 'nothing'})`);
+  }
+}
+for (const [spelling, parts] of [[RUN_AT_LIMIT, MAX_RUN], [RUN_PAST_LIMIT, MAX_RUN + 1]] as const) {
+  const got = normalizeWords(spelling);
+  if (got.length !== parts || got.map((w) => w.word).join('') !== PLANTED_WORD) fail(`SELF-CHECK  "${spelling}" should be the planted word in ${parts} case parts (MAX_RUN ${MAX_RUN}${parts > MAX_RUN ? ' + 1' : ''}), got ${got.length}: re-spell the sample with MAX_RUN`);
+}
+if (sha256(PLANTED_WORD) !== PLANTED_HASH.sha256) fail(`SELF-CHECK  PLANTED_HASH is not the SHA-256 of the planted word, so the hash path is untested`);
+if (sha256(PLANTED_PAIR.join(' ')) !== PLANTED_PAIR_HASH.sha256 || sha256(PLANTED_PAIR.join('')) !== PLANTED_PAIR_HASH.joined) fail(`SELF-CHECK  PLANTED_PAIR_HASH is not the SHA-256 of the planted pair (spaced and joined), so the multi-word hash path is untested`);
+
+// ---- the hash entries: is each one whole? -------------------------------------------------------------------
+// The gate cannot check a digest without the name, but it can refuse an entry that silently drops a detection: a
+// multi-word name with no `joined`, or with `joined` equal to the spaced digest, is never found run together.
+const hashEntryProblem = (h: DenyHash): string | null => {
+  if (!/^[0-9a-f]{64}$/.test(h.sha256)) return 'sha256 is not a 64-character hex digest';
+  if (!Number.isInteger(h.words) || h.words < 1) return `words is ${h.words}, not a whole number of at least 1`;
+  if (h.words > 1 && !h.joined) return `has ${h.words} words but no joined digest, so the name run together is not found`;
+  if (h.words > 1 && h.joined === h.sha256) return 'joined equals the spaced digest, so the name run together is not found';
+  if (h.joined !== undefined && !/^[0-9a-f]{64}$/.test(h.joined)) return 'joined is not a 64-character hex digest';
+  return null;
+};
+// Made-up names, never a client's.
+const HASH_ENTRY_SELF_CHECK: { label: string; entry: DenyHash; bad: boolean }[] = [
+  { label: 'a two-word entry with no joined', entry: { sha256: sha256('vellmar oskiri'), words: 2 }, bad: true },
+  { label: 'a two-word entry whose joined is its spaced digest', entry: { sha256: sha256('vellmar oskiri'), words: 2, joined: sha256('vellmar oskiri') }, bad: true },
+  { label: 'the planted pair', entry: PLANTED_PAIR_HASH, bad: false },
+  { label: 'the planted word', entry: PLANTED_HASH, bad: false },
+];
+for (const { label, entry, bad } of HASH_ENTRY_SELF_CHECK) {
+  const problem = hashEntryProblem(entry);
+  if (bad !== (problem !== null)) fail(`SELF-CHECK  hash entry check: ${label} should be ${bad ? 'refused' : 'accepted'} (got: ${problem ?? 'accepted'})`);
+}
+for (const h of CLIENT_DENY_LIST.hashes) {
+  const problem = hashEntryProblem(h);
+  if (problem) fail(`HASH ENTRY  client-ids.ts entry ${hashRule(h)} ${problem} — re-run --hash and paste the whole line it prints`);
+}
+
+// ---- the allowlist ------------------------------------------------------------------------------------------
+// `scope: 'ids'` exempts a path from the id ratchet only: its contents are still read, and any full or hashed name in
+// them fails outright (Q-a A). Every other entry is exempt from everything.
+const ALLOWLIST: { glob: string; why: string; scope?: 'ids' }[] = [
+  { glob: 'docs/00-progress.md', why: 'fold-owned history (Q3 A)' },
+  { glob: 'docs/progress/archive/**', why: 'fold-owned history (Q3 A)' },
+  { glob: 'docs/progress/pending/**', scope: 'ids', why: 'the fold carries each entry verbatim into docs/00-progress.md' },
+  { glob: 'packages/engine/CHANGELOG.md', why: 'fold-owned history (Q3 A)' },
+  { glob: 'packages/engine/changes/**', scope: 'ids', why: 'the fold carries each note verbatim into the CHANGELOG and a release page' },
+  { glob: 'docs/public/releases/**', why: 'fold-owned history (Q3 A)' },
+  { glob: 'packages/engine/client-ids.ts', why: 'the deny-list itself' },
+  { glob: 'packages/engine/lint-client-ids.ts', why: 'this gate: its self-check spells the cases' },
+  { glob: 'packages/engine/lint-voice.ts', why: 'reads the deny-list; its client-name self-check spells the cases' },
+  { glob: 'docs/superpowers/brand-id-rename-proposal.md', why: 'the proposal names the two ids it renames' },
+  { glob: BASELINE_REL, why: "the ratchet's memory: it lists the paths it counts" },
+];
+const globRe = (g: string): RegExp => new RegExp(`^${g.split('**').map((p) => p.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*')}$`);
+const ALLOW_RES = ALLOWLIST.map((a) => ({ ...a, re: globRe(a.glob) }));
+const allowed = (path: string): boolean => ALLOW_RES.some((a) => !a.scope && a.re.test(path));
+const idsOnly = (path: string): boolean => !allowed(path) && ALLOW_RES.some((a) => a.scope === 'ids' && a.re.test(path));
+/** In a path exempt from the id ratchet only, every hit that is not a plain id fails outright: full names and hashes.
+ *  The path is read as well as the contents (`null` for a binary file), because a fold input's file name comes from
+ *  its branch name. Each finding is at `'path'` or at an offset in `txt`. */
+const isAbsolute = (h: Hit): boolean => h.rule.startsWith('client-name:') || h.rule.startsWith('client-id:sha256:');
+const foldInputFailures = (path: string, txt: string | null): { rule: string; at: 'path' | number }[] => {
+  if (!idsOnly(path)) return [];
+  const found: { rule: string; at: 'path' | number }[] = hitsOf(path).filter(isAbsolute).map((h) => ({ rule: h.rule, at: 'path' }));
+  if (txt !== null) found.push(...hitsOf(txt).filter(isAbsolute).map((h) => ({ rule: h.rule, at: h.index })));
+  return found;
+};
+
+// The fold-input rule, checked through the same functions the walk runs, over paths no file holds. The hashed cases
+// use the made-up planted names. The full-name and id cases reuse self-check samples above, so no name is spelled
+// again here.
+const sampleWanting = (pred: (want: string) => boolean): string => CLIENT_ID_SELF_CHECK.find((c) => c.want !== null && pred(c.want))!.sample;
+const FOLD_INPUT_SELF_CHECK: { path: string; txt: string; want: string | null; where?: 'path' }[] = [
+  { path: 'docs/progress/pending/sc-fold.md', txt: `a stray ${PLANTED_WORD} in prose`, want: hashRule(PLANTED_HASH) },
+  { path: 'packages/engine/changes/sc-fold.md', txt: `const ${CAMEL_WORD}Theme = {}`, want: hashRule(PLANTED_HASH) },
+  { path: 'docs/progress/pending/sc-fold.md', txt: `the ${PLANTED_PAIR.join(' ')} rollout`, want: hashRule(PLANTED_PAIR_HASH) },
+  { path: 'packages/engine/changes/sc-fold.md', txt: sampleWanting((w) => w.startsWith('client-name:')), want: 'client-name:*' },
+  { path: 'docs/progress/pending/sc-fold.md', txt: sampleWanting((w) => w.startsWith('client-name:')), want: 'client-name:*' },
+  { path: 'docs/progress/pending/sc-fold.md', txt: sampleWanting((w) => w === 'client-id:nbds'), want: null },
+  { path: 'packages/engine/changes/sc-fold.md', txt: sampleWanting((w) => w === 'client-id:wendys'), want: null },
+  // The file name alone, with clean contents: a pending entry named from a branch, and a camel-cased change note.
+  { path: `docs/progress/pending/feat-${PLANTED_PAIR.join('-')}-theme.md`, txt: 'clean prose', want: hashRule(PLANTED_PAIR_HASH), where: 'path' },
+  { path: `packages/engine/changes/feat-${PLANTED_PAIR[0]}${PLANTED_PAIR[1][0].toUpperCase()}${PLANTED_PAIR[1].slice(1)}Theme.md`, txt: 'clean prose', want: hashRule(PLANTED_PAIR_HASH), where: 'path' },
+];
+for (const { path, txt, want, where } of FOLD_INPUT_SELF_CHECK) {
+  const rules = foldInputFailures(path, txt).filter((f) => !where || f.at === where).map((f) => f.rule);
+  const ok = want === null ? rules.length === 0 : want.endsWith('*') ? rules.some((r) => r.startsWith(want.slice(0, -1))) : rules.includes(want);
+  if (!ok) fail(`SELF-CHECK  fold input ${path}: "${txt}" should ${want ? `fail outright as ${want}${where ? ' on its path' : ''}` : 'pass (ids are exempt there)'} (got: ${rules.join(', ') || 'nothing'})`);
+}
+
+// ---- the walk -----------------------------------------------------------------------------------------------
+const SURFACES = ['packages/', 'apps/', 'docs/', 'tools/', 'reference/', '.github/'];
+const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: repo, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean);
+
+// The baseline's own entry is exempt only while `--accept` writes it for the first time.
+for (const a of ALLOW_RES) if (!tracked.some((p) => a.re.test(p)) && !(a.glob === BASELINE_REL && process.argv.includes('--accept'))) fail(`ALLOWLIST   '${a.glob}' matches no tracked file — remove it, or fix it after a rename`);
+
+type FileHits = { path: string; counts: Record<string, number>; lines: Record<string, (number | 'path')[]> };
+const actual = new Map<string, FileHits>();
+const surfaceCount = new Map(SURFACES.map((s) => [s, 0]));
+let scanned = 0;
+let binary = 0;
+let foldInputs = 0;
+let foldBinary = 0;
+let plantedSeen: string[] | null = null;
+/** A line finder for one text: the offsets of its line starts, searched by bisection. */
+const lineFinder = (txt: string): ((index: number) => number) => {
+  const starts = [0];
+  for (let i = txt.indexOf('\n'); i !== -1; i = txt.indexOf('\n', i + 1)) starts.push(i + 1);
+  return (index) => { let lo = 0; let hi = starts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= index) lo = mid; else hi = mid - 1; } return lo + 1; };
+};
+
+for (const path of tracked) {
+  if (allowed(path)) continue;
+  let buf: Buffer;
+  // A tracked symlink is stored as its target path, so that is what is read.
+  try { const abs = join(repo, path); buf = lstatSync(abs).isSymbolicLink() ? Buffer.from(readlinkSync(abs)) : readFileSync(abs); } catch (e) {
+    fail(`UNREADABLE  ${path} is tracked but could not be read (${(e as Error).message}); stage its deletion or restore it`);
+    continue;
+  }
+  const isBinary = buf.subarray(0, 8192).includes(0);
+  if (idsOnly(path)) {
+    // A binary fold input has its path read and is counted apart, never as read.
+    if (isBinary) foldBinary++;
+    else foldInputs++;
+    const txt = isBinary ? null : buf.toString('utf8');
+    const lineOf = txt === null ? null : lineFinder(txt);
+    for (const f of foldInputFailures(path, txt)) fail(`FOLD INPUT  ${f.rule} at ${path}:${f.at === 'path' || !lineOf ? 'path' : lineOf(f.at)} — a full or hashed client name may not enter a fold input, which the fold copies verbatim into public history (Q-a A)`);
+    continue;
+  }
+  if (isBinary) binary++;
+  else scanned++;
+  for (const s of SURFACES) if (path.startsWith(s) && !isBinary) surfaceCount.set(s, surfaceCount.get(s)! + 1);
+  const fh: FileHits = { path, counts: {}, lines: {} };
+  const add = (rule: string, line: number | 'path'): void => { fh.counts[rule] = (fh.counts[rule] ?? 0) + 1; (fh.lines[rule] ??= []).push(line); };
+  for (const h of hitsOf(path)) add(h.rule, 'path');
+  if (!isBinary) { const txt = buf.toString('utf8'); const lineOf = lineFinder(txt); for (const h of hitsOf(txt)) add(h.rule, lineOf(h.index)); }
+  if (path === PLANTED_ARM) { plantedSeen = Object.entries(fh.lines).flatMap(([r, ls]) => ls.map((l) => ({ r, l }))).sort((a, b) => (a.l === 'path' ? 0 : a.l) - (b.l === 'path' ? 0 : b.l)).map(({ r, l }) => `${r}@${l}`); continue; }
+  if (Object.keys(fh.counts).length) actual.set(path, fh);
+}
+
+// The planted arm: reached, outside the allowlist, and found to hold exactly what was planted.
+if (!tracked.includes(PLANTED_ARM)) fail(`PLANTED ARM ${PLANTED_ARM} is not a tracked file, so nothing proves the walk reaches a real path`);
+else if (allowed(PLANTED_ARM)) fail(`PLANTED ARM ${PLANTED_ARM} is allowlisted, so its hits are not counted and nothing proves a hit outside the allowlist is reported`);
+else if (plantedSeen === null) fail(`PLANTED ARM ${PLANTED_ARM} is tracked but the walk did not read it`);
+else {
+  const want = PLANTED_EXPECT(hashRule(PLANTED_HASH)).join(', ');
+  const got = (plantedSeen as string[]).join(', ');
+  if (got !== want) fail(`PLANTED ARM ${PLANTED_ARM} should report ${want}; the scan found ${got || 'nothing'}`);
+}
+for (const [s, n] of surfaceCount) if (!n) fail(`SCANNED BLIND  ${s} contributed no scanned file — a narrowed walk would pass by seeing less`);
+
+// ---- --accept: the only writer of the baseline --------------------------------------------------------------
+const sortObj = <T>(o: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+if (process.argv.includes('--accept')) {
+  if (failures.length) {
+    console.error(`❌ ${TAG}: --accept refused; the gate cannot see what it claims to:\n`);
+    for (const f of failures) console.error(`  ✗ ${f}`);
+    process.exit(1);
+  }
+  const files = sortObj(Object.fromEntries([...actual.values()].map((f) => [f.path, sortObj(f.counts)])));
+  // Pure data, no prose field: lint-schema-classification.ts exempts it on that ground, and a note would make it
+  // prose that the two prose gates would have to read, with the names this file counts in its keys.
+  writeFileSync(join(repo, BASELINE_REL), `${JSON.stringify({
+    files,
+  }, null, 2)}\n`);
+  const total = Object.values(files).reduce((n, c) => n + Object.values(c).reduce((a, b) => a + b, 0), 0);
+  console.log(`${TAG}: baseline written — ${Object.keys(files).length} files, ${total} hits (${BASELINE_REL})`);
+  process.exit(0);
+}
+
+// ---- the ratchet ------------------------------------------------------------------------------------------------
+let baseline: Record<string, Record<string, number>> = {};
+try { baseline = JSON.parse(readFileSync(join(repo, BASELINE_REL), 'utf8')).files ?? {}; } catch (e) {
+  fail(`BASELINE    ${BASELINE_REL} could not be read (${(e as Error).message})`);
+}
+const at = (path: string, lines: (number | 'path')[]): string => lines.map((l) => (l === 'path' ? `${path} (path)` : `${path}:${l}`)).join(', ');
+for (const fh of actual.values()) {
+  const base = baseline[fh.path];
+  for (const [rule, n] of Object.entries(fh.counts)) {
+    const b = base?.[rule] ?? 0;
+    if (!base) fail(`NEW   ${rule} at ${at(fh.path, fh.lines[rule])} (not in baseline, not allowlisted)`);
+    else if (n > b) fail(`ROSE  ${rule} in ${fh.path}: ${n} now, baseline ${b} — at ${at(fh.path, fh.lines[rule])}`);
+    else if (n < b) fail(`FELL  ${rule} in ${fh.path}: ${n} now, baseline ${b} — lower the baseline with --accept`);
+  }
+}
+for (const [path, counts] of Object.entries(baseline)) {
+  for (const [rule, b] of Object.entries(counts)) {
+    if (b > 0 && !actual.get(path)?.counts[rule]) fail(`FELL  ${rule} in ${path}: 0 now, baseline ${b} — lower the baseline with --accept`);
+  }
+}
+
+const totalHits = [...actual.values()].reduce((n, f) => n + Object.values(f.counts).reduce((a, b) => a + b, 0), 0);
+const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary - foldInputs - foldBinary} allowlisted by ${ALLOWLIST.length} entries, ${foldInputs} fold inputs read for names and hashes only (${foldBinary} binary, path only); ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - PLANTED_COUNT} hashed names + ${PLANTED_COUNT} planted hashes; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
+if (failures.length) {
+  console.error(`❌ ${TAG}: ${failures.length} failure(s)\n`);
+  for (const f of failures) console.error(`  ✗ ${f}`);
+  console.error(`\n  ${summary}`);
+  console.error(`  A rise or a new file: rename the id, or (only if it must stay) --accept and say why in the PR. A fall: --accept.`);
+  process.exit(1);
+}
+console.log(`✅ ${TAG}: clean — ${summary}`);
