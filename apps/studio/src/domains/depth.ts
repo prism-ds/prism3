@@ -1,46 +1,36 @@
 /**
- * Depth & motion, the levers panel (UI redesign S9.2; concept v6's Depth & motion page, V4).
+ * Depth, the levers panel (UI redesign S9.2; concept v6's Depth & motion page, V4). #4571 (owner decision Q-ME3 A) split
+ * Depth & motion in two: tempo and easing moved to Motion (`domains/motion.ts`), and this page keeps the shadow.
  *
  * WHAT IT DRAWS: the intro; **Elevation**: the shadow softness slider, on the manifest's range and named stops, and,
  * behind its own Show advanced, **Shadow tint**'s hue and amount sliders (owner decision D8 A: tint is part of the
- * shadow, so it sits inside Elevation rather than after Motion); **Motion**: the tempo chips, then one value picker per
- * motion role (default, enter, exit, emphasized), each listing the six fixed curves, drawn (D10 A, D15). Last, the way
- * on to Layout. Each manifest key homed here draws its `lever-*` block exactly once; the easing rows draw the schema
- * input `motionPersonality.easingRoles`.
+ * shadow, so it sits inside Elevation). Last, the way on to Motion. Each manifest key homed here draws its `lever-*`
+ * block exactly once.
  *
- * WHICH MODE A CONTROL EDITS (owner decision Q22): the mode the preview shows, for every control here (softness, tint,
- * tempo and easing are all per mode). Previewing Light writes the brand value; previewing Dark or a custom mode writes
- * `modeLevers[mode].*`, and the control says "Auto: follows Light (‹value›)" until it is set, with Return to Auto once it
- * is. Auto names LIGHT's value in every mode, a custom mode included: the engine resolves these levers from the brand
- * value, never from a custom mode's base (the S9 scoping report, finding 7). A derived mode (HC light, HC dark,
- * wireframe) is read-only, held by the frame: the whole levers panel is inert and disabled under one line (N-3 A, #1984), and the preview is still drawn (Q59). A brand
- * with one mode picks its easing per role here too: the legacy table that did it sat inside `rp.modes.length > 1`
- * (#2046).
+ * WHICH MODE A CONTROL EDITS (owner decision Q22): the mode the preview shows (softness and tint are per mode).
+ * Previewing Light writes the brand value; previewing Dark or a custom mode writes `modeLevers[mode].*`, and the control
+ * says "Auto: follows Light (‹value›)" until it is set, with Return to Auto once it is. Auto names LIGHT's value in every
+ * mode, a custom mode included: the engine resolves these levers from the brand value, never from a custom mode's base
+ * (the S9 scoping report, finding 7). A derived mode (HC light, HC dark, wireframe) is read-only, held by the frame: the
+ * whole levers panel is inert and disabled under one line (N-3 A, #1984), and the preview is still drawn (Q59).
  *
  * BEHAVIOR-NEUTRAL (the S2 rule). Every write goes through `state/depth-motion-input.ts`, which writes what the legacy
- * Elevation and Motion pages wrote, byte for byte, its traps included: Light's tint is written one key at a time, a
- * mode's shadow slider landing exactly on the brand value clears the override, and Light's easing at a role's default
- * curve is unset rather than written (#2051). In a mode, picking Light's own curve for a role is Auto: the legacy table never
- * offered that self-map, and Auto stands for it.
+ * Elevation page wrote, byte for byte, its traps included: Light's tint is written one key at a time, and a mode's
+ * shadow slider landing exactly on the brand value clears the override.
  *
  * HOW IT REPAINTS: by store subscription only (plan §5): `brand`, `mode` and `search`. A control writes, notes the edit
  * for the preview's reveal (`noteSectionEdit`, QA-B9) and calls `rebuild()`. The panel redraws itself whole only when
- * its shape changes (the mode, a picker opened, Show advanced, a tempo or easing edit, a search); a shadow slider's
- * edit updates the sliders, their readouts and their Auto lines in place, so a drag survives every repaint. Tempo
- * commits through the same `rebuild()`, and the preview repaints its durations from the store (#800's trap is gone:
- * nothing here has a volatile region to leave stale). It never names a legacy repaint tier and never imports `main.ts`
- * (`test-shell-imports.ts`).
+ * its shape changes (the mode, Show advanced, a search); a shadow slider's edit updates the sliders, their readouts and
+ * their Auto lines in place, so a drag survives every repaint. It never names a legacy repaint tier and never imports
+ * `main.ts` (`test-shell-imports.ts`).
  */
 import { brandState, currentMode, getPath, lastError, searchQuery, setPage, setSearchHits, subscribe, theme } from '../state/store';
 import { isDerived } from '../state/verdict';
-import {
-  authoredTint, brandShadowValue, easingOverride, setEasingRole, setShadow, shadowOverride, setTempo, tempoOverride, type ShadowKey,
-} from '../state/depth-motion-input';
+import { authoredTint, brandShadowValue, setShadow, shadowOverride, type ShadowKey } from '../state/depth-motion-input';
 import { DOMAINS, pageOfTab, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import { armEnter, enterMark, glyph, h, hook } from '../shell/dom';
-import { valuePicker } from '../ui/value-picker';
-import { advancedLabel, choice, leverBlock, leverOf, setText, slider, sliderReadout, stateLine, subLine, tokenLabel, type LeverBlock, keepFocus, pageEdit, filterLevers } from '../ui/lever-kit';
+import { advancedLabel, leverBlock, leverOf, setText, slider, sliderReadout, stateLine, subLine, type LeverBlock, keepFocus, pageEdit, filterLevers } from '../ui/lever-kit';
 
 const PAGE = DOMAINS.find((d) => d.id === 'depth') as PageData;
 const section = (title: string) => PAGE.sections.find((s) => s.title === title)!;
@@ -52,13 +42,9 @@ export const DEPTH_COPY = {
   autoLight: (v: string): string => `Auto · follows Light (${v})`,
   toAuto: 'Return to Auto',
   editing: (m: string): string => `Editing ${m}, the mode the preview shows.`,
-  easingRow: (role: string): string => `Easing for ${role}`,
-  easingHint: 'The six curves are fixed. Each role picks one.',
-  next: 'Continue to Layout',
-  /** DRAFT: the easing rows' group label (concept v6's), and the tempo and tint info text, in D16's plain words. */
-  easingLabel: 'Easing per motion role',
-  easingTip: 'Which of the six curves each kind of motion follows, by its role.',
-  tempoTip: 'How fast every duration runs: Snappy 0.8×, Standard 1×, Relaxed 1.3×.',
+  /** DRAFT (#4571): the way on to Motion, the tab Depth & motion split into (Q-ME3 A). */
+  next: 'Continue to Motion',
+  /** DRAFT: the tint info text, in D16's plain words. */
   tintTip: 'How far shadows move off pure black, and toward which hue. 0 is pure black.',
   /** The two tint sliders' names (the legacy page's). */
   hue: 'Tint hue',
@@ -70,34 +56,6 @@ export const DEPTH_COPY = {
   noHuePinned: 'The pinned gray has no hue, so shadows are untinted.',
   noHueGray: 'The neutral is gray, so shadows are untinted.',
 } as const;
-
-/** The tempo chips, from the manifest's options (the legacy page's three). */
-const tempoOptions = (): { v: string; l: string }[] => (leverOf('motionPersonality.tempo')?.options ?? []).map((o) => ({ v: String(o.value), l: String(o.label) }));
-const tempoName = (v: string): string => tempoOptions().find((o) => o.v === v)?.l ?? v;
-
-
-/** A cubic-bezier, drawn: the curve a value picker row shows (D10). Inline SVG, stroked in the row's ink. */
-const SVGNS = 'http://www.w3.org/2000/svg';
-const curveSvg = (b: readonly number[]): SVGElement => {
-  const svg = document.createElementNS(SVGNS, 'svg');
-  svg.setAttribute('viewBox', '-6 -6 112 112');
-  svg.setAttribute('class', 'p3-curve');
-  svg.setAttribute('aria-hidden', 'true');
-  const axis = document.createElementNS(SVGNS, 'path');
-  axis.setAttribute('d', 'M0,0 L0,100 L100,100');
-  axis.setAttribute('fill', 'none');
-  axis.setAttribute('stroke', 'currentColor');
-  axis.setAttribute('stroke-opacity', '0.35');
-  axis.setAttribute('stroke-width', '3');
-  const line = document.createElementNS(SVGNS, 'path');
-  line.setAttribute('d', `M0,100 C${b[0] * 100},${100 - b[1] * 100} ${b[2] * 100},${100 - b[3] * 100} 100,0`);
-  line.setAttribute('fill', 'none');
-  line.setAttribute('stroke', 'currentColor');
-  line.setAttribute('stroke-width', '7');
-  line.setAttribute('stroke-linecap', 'round');
-  svg.append(axis, line);
-  return svg;
-};
 
 /** Something drawn that search can hide and a refusal can mark. */
 type Item = { el: HTMLElement; said: string; key: string; block: LeverBlock };
@@ -112,10 +70,6 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
   host.replaceChildren(root);
   /** Elevation's own Show advanced (Shadow tint, D8 A). */
   let tintOpen = false;
-  /** The value picker that is open, by its role, or null; one at a time, under its row (v6). */
-  let openPick: string | null = null;
-  let focusPick = false;
-  let pickFocus: (() => void) | null = null;
   /** The key the last edit wrote, so an engine refusal marks the lever that caused it. */
   let lastEdited: string | null = null;
   let items: Item[] = [];
@@ -228,83 +182,6 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     }
   };
 
-  // ── Motion ────────────────────────────────────────────────────────────────────────────────────
-  /** Tempo, as chips (D15). Light writes `motionPersonality.tempo`; another mode `modeLevers[mode].tempo`. */
-  const tempo = (): Item => {
-    const b = leverBlock('motionPersonality.tempo', { desc: DEPTH_COPY.tempoTip, group: true });
-    const mode = currentMode;
-    const brandV = theme.motion.tempo;
-    const ov = light() ? undefined : tempoOverride(mode);
-    const c = choice(`${leverOf('motionPersonality.tempo')?.label ?? 'Motion tempo'}, ${modeLabel(mode)}`, 'tempo', tempoOptions(),
-      (v) => edit('motionPersonality.tempo', () => setTempo(mode, v)));
-    c.set((light() ? (getPath(brandState, 'motionPersonality.tempo') as string | undefined) : ov) ?? brandV);
-    b.ctl.append(c.el);
-    if (!light() && !derived()) {
-      const pair = autoPair('tempo', () => edit('motionPersonality.tempo', () => setTempo(mode, undefined)));
-      pair.auto.textContent = DEPTH_COPY.autoLight(tempoName(brandV));
-      pair.auto.hidden = ov !== undefined;
-      pair.reset.hidden = ov === undefined;
-      b.ctl.append(pair.el);
-    }
-    return { el: b.el, said: b.said, key: 'motionPersonality.tempo', block: b };
-  };
-
-  const pickButton = (role: string, id: string, now: string, set: boolean): HTMLButtonElement => {
-    const btn = hook(h('button', 'p3-btn p3-btn-page p3-pick'), 'easing-pick');
-    btn.type = 'button';
-    btn.id = id;
-    btn.dataset.role = role;
-    if (set) btn.dataset.set = 'true';
-    btn.setAttribute('aria-expanded', String(openPick === role));
-    btn.setAttribute('aria-label', `${DEPTH_COPY.easingRow(role)}, ${modeLabel(currentMode)}: ${now}. Pick a value`);
-    btn.append(h('span', 'p3-btn-label', now), glyph('chev'));
-    btn.onclick = () => {
-      const opening = openPick !== role;
-      openPick = opening ? role : null;
-      focusPick = opening;
-      render();
-    };
-    return btn;
-  };
-  /** Easing per motion role (D10 A): a value picker per role, each of the six curves drawn. */
-  const easing = (): Item => {
-    const b = leverBlock('motionPersonality.easingRoles', { label: DEPTH_COPY.easingLabel, desc: DEPTH_COPY.easingTip, group: true });
-    const mode = currentMode;
-    const curves = Object.entries(theme.motion.easing);
-    const names = curves.map(([n]) => n);
-    const rows = hook(h('div', 'p3-fillrows'), 'easing-rows');
-    for (const r of theme.motion.easingRoles) {
-      const brandCurve = r.curve;
-      const ov = light() ? undefined : easingOverride(mode, r.role);
-      const cur = ov ?? brandCurve;
-      const id = `p3-easing-${r.role}`;
-      const row = hook(h('div', 'p3-tweight'), 'easing-row');
-      row.dataset.role = r.role;
-      const now = !light() && ov === undefined ? DEPTH_COPY.autoLight(brandCurve) : cur;
-      row.append(tokenLabel(`motion.easing-role.${r.role}`, DEPTH_COPY.easingRow(r.role), id, { wrap: true }), pickButton(r.role, id, now, ov !== undefined));
-      rows.append(row);
-      if (openPick === r.role && !derived()) {
-        const pk = valuePicker({
-          name: DEPTH_COPY.easingRow(r.role), modeLabel: modeLabel(mode), hint: DEPTH_COPY.easingHint,
-          current: names.indexOf(cur),
-          values: curves.map(([n, bez], i) => ({
-            v: i, label: n,
-            sample: (e: HTMLElement) => { e.dataset.curve = n; e.append(curveSvg(bez)); },
-          })),
-          ...(light() ? {} : { reset: { label: DEPTH_COPY.toAuto, enabled: ov !== undefined } }),
-          // In a mode, Light's own curve is Auto: the legacy table never offered the self-map.
-          onPick: (i) => edit('motionPersonality.easingRoles', () => setEasingRole(mode, r.role, light() || names[i] !== brandCurve ? names[i] : undefined)),
-          onReset: () => edit('motionPersonality.easingRoles', () => setEasingRole(mode, r.role, undefined)),
-          onClose: () => { openPick = null; render(); root.querySelector<HTMLElement>(`#${id}`)?.focus(); },
-        });
-        pickFocus = pk.focusCurrent;
-        rows.append(pk.el);
-      }
-    }
-    b.ctl.append(rows);
-    return { el: b.el, said: `${b.said} ${theme.motion.easingRoles.map((r) => `${DEPTH_COPY.easingRow(r.role)} motion.easing-role.${r.role}`).join(' ')}`.toLowerCase(), key: 'motionPersonality.easingRoles', block: b };
-  };
-
   // ── the sections ──────────────────────────────────────────────────────────────────────────────
   const sectionShell = (title: string, desc: string | undefined, i: number): HTMLElement => {
     const el = hook(h('section', 'p3-lsec'), 'lever-section');
@@ -340,8 +217,7 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     return { el: row, item };
   };
 
-  const shape = (): string => JSON.stringify([currentMode, tintOpen || !!searchQuery.trim(), openPick, lastError && lastEdited,
-    getPath(brandState, 'motionPersonality'), light() ? null : [tempoOverride(currentMode), getPath(brandState, `modeLevers.${currentMode}.easings`)]]);
+  const shape = (): string => JSON.stringify([currentMode, tintOpen || !!searchQuery.trim(), lastError && lastEdited]);
 
   const render = (): void => {
     // What had focus, found again after the redraw (`keepFocus`, #2487 B5).
@@ -350,7 +226,6 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     shapeKey = shape();
     items = [];
     shadows = [];
-    pickFocus = null;
     const parts: HTMLElement[] = [h('p', 'p3-intro', PAGE.intro)];
     // Elevation, with Shadow tint behind its own Show advanced (D8 A); a search opens it.
     const elev = section('Elevation');
@@ -359,18 +234,11 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     const fold = tintFold(tintOpen || !!searchQuery.trim());
     e.append(soft.el, fold.el);
     items.push(soft, ...(fold.item ? [fold.item] : []));
-    // Motion.
-    const mot = section('Motion');
-    const m = sectionShell(mot.title, mot.desc, 1);
-    const t = tempo();
-    const ez = easing();
-    m.append(t.el, ez.el);
-    items.push(t, ez);
-    parts.push(e, m);
+    parts.push(e);
     const next = hook(h('button', 'p3-btn p3-btn-page p3-next'), 'depth-continue');
     next.type = 'button';
     next.append(h('span', 'p3-btn-label', DEPTH_COPY.next), glyph('chevr'));
-    next.onclick = () => setPage(pageOfTab('layout'));   // by tab (S7's pageOfTab)
+    next.onclick = () => setPage(pageOfTab('motion'));   // by tab (S7's pageOfTab)
     const nr = h('div', 'p3-nextrow');
     nr.append(next);
     parts.push(nr);
@@ -378,10 +246,7 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     syncShadows();
     for (const it of items) it.block.setRefused(!!lastError && !!lastEdited && it.key === lastEdited);
     filter();
-    if (focusPick && pickFocus) { focusPick = false; (pickFocus as () => void)(); }
-    else if (focusKey) {
-      again()?.focus({ preventScroll: true });
-    }
+    if (focusKey) again()?.focus({ preventScroll: true });
     if (host.scrollTop !== scrollTop) host.scrollTop = scrollTop;
   };
 
@@ -393,7 +258,7 @@ export const mountDepthLevers = (host: HTMLElement, cleanups: (() => void)[]): v
     syncShadows();
     for (const it of items) it.block.setRefused(!!lastError && !!lastEdited && it.key === lastEdited);
   }));
-  cleanups.push(subscribe('mode', () => { openPick = null; render(); }));
+  cleanups.push(subscribe('mode', () => render()));
   cleanups.push(subscribe('search', () => { if (shape() !== shapeKey) render(); else filter(); }));
   cleanups.push(() => { if (searchQuery.trim()) setSearchHits(null); });
   render();

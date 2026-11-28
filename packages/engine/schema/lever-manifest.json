@@ -861,6 +861,15 @@
       "description": "How fast every duration runs: Snappy is 0.8×, Standard 1×, Relaxed 1.3×. Reduced motion is set for you."
     },
     {
+      "key": "motionPersonality.presets",
+      "group": "motion",
+      "kind": "value",
+      "label": "Motion presets",
+      "control": "object",
+      "tip": "Each preset's duration, easing and delay, as a step, role, curve or spring.",
+      "description": "Each motion preset's duration, easing and delay, set brand-wide. A slot names a step of the duration scale, an easing role, a curve or a spring, never a number, so one edit re-times every component motion that plays on that preset."
+    },
+    {
       "key": "shadow.softness",
       "group": "elevation",
       "kind": "value",

@@ -53,7 +53,7 @@ export const SHAPE_COPY = {
   densityMode: 'Spacing follows the brand’s density, not the mode’s: a mode’s density changes control heights only.',
   padding: 'Padding is set per component.',
   paddingLink: 'Set it in Components',
-  next: 'Continue to Depth & motion',
+  next: 'Continue to Depth',   // #4571: DRAFT, Depth & motion split into Depth and Motion (Q-ME3 A)
   // DRAFT, pending the owner: the labels and tooltips in plain words (D16, E2).
   densityTip: 'Control heights, and each component\'s padding and gaps, one step up or down.',
   softnessLabel: 'Radius softness',

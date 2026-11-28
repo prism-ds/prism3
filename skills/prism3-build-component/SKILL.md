@@ -787,6 +787,7 @@ above; `lint-skills` fails if a row is missing or disagrees with the manifest. A
 | `typography.italics` | value |  |
 | `typography.italicDefault` | value |  |
 | `motionPersonality.tempo` | value |  |
+| `motionPersonality.presets` | value |  |
 | `shadow.softness` | value |  |
 | `shadow.tint` | value |  |
 | `layout.breakpoints` | value |  |

@@ -2062,8 +2062,9 @@ const OFF_HINT = "Off until a brand loads. This file's saved brand didn't open, 
     ok(t.deleteOff === true && t.posted.length === 0,
       `#1994 rejected: nothing reaches the plugin, Clean up's Delete included — Delete off ${t.deleteOff}, posted ${JSON.stringify(t.posted)}`);
     // A demo EDIT rebuilds cleanly, and must not turn the writes back on: only a brand loading does.
-    // The tempo chips moved from the legacy Motion page to the Depth & motion tab in UI redesign S9.2.
-    await gotoTheme(page, '[data-p3="tab-depth"]');
+    // The tempo chips moved from the legacy Motion page to the Depth & motion tab in UI redesign S9.2, and to the
+    // Motion tab when #4571 split it (Q-ME3 A).
+    await gotoTheme(page, '[data-p3="tab-motion"]');
     const tempo = page.locator('[data-p3="lever-motion-personality-tempo"] [role="radio"][aria-checked="false"]').first();
     const edited = await tempo.count() > 0;
     if (edited) await hooks.click(tempo, { force: true, timeout: 4000 }).catch(() => {});

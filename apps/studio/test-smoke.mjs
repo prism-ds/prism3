@@ -1006,6 +1006,8 @@ const SWEEP_PLACES = {
   type: ['[data-p3="tab-type"]'],
   shape: ['[data-p3="tab-shape"]'],
   depth: ['[data-p3="tab-depth"]'],
+  // #4571 (Q-ME3 A): Motion, split from Depth & motion.
+  motion: ['[data-p3="tab-motion"]'],
   layout: ['[data-p3="tab-layout"]'],
   // #2909 Q2909.9 A: the web's Components is a rail area, as the plugin's is, not a tab.
   components: ['[data-p3="rail-components"]'],
@@ -2961,17 +2963,23 @@ ok(perModeDensityKnobs >= BRANDS.length && perModeDensityMissing.length === 0,
 //   · the preview's text and form controls through the legibility probe, at the bars the sweep above holds.
 console.log(`\nDepth & motion — the moved page, against each brand's emission\n${'='.repeat(78)}`);
 const SG_DEPTH = '[data-p3="preview-body"] [data-p3="depth-style-guide"]';
-/** The Depth & motion preview's sections, by title, in order (V4), and the marker each piece stamps, by the section it
- *  sits in. Literal. */
-const EXPECT_DEPTH_SECTIONS = ['Elevation', 'Motion'];
-const EXPECT_DEPTH_PIECES = { 'shadow-ramp': 'Elevation', 'shadow-tint': 'Elevation', 'motion-curves': 'Motion', 'duration-ramp': 'Motion', springs: 'Motion', 'motion-transitions': 'Motion' };
-/** Open Depth & motion through the tab row (S9.2: it left the Pages menu for the two panes). */
-const gotoDepth = async (page) => {
-  await tabClick(page, 'depth');
-  await hooks.need(page, '[data-p3="depth-levers"]');
-  await hooks.need(page, `${SG_DEPTH} .psec`);
+/** #4571 (owner decision Q-ME3 A): Depth & motion split in two tabs, each with its own preview. */
+const SG_MOTION = '[data-p3="preview-body"] [data-p3="motion-style-guide"]';
+/** Each tab's preview sections, by title, in order (V4), and the marker each piece stamps, by the section it sits in.
+ *  Literal. `fields` is whether the preview draws a form control (Motion's Slow motion select; Depth draws none). */
+const EXPECT_SPLIT = [
+  { tab: 'depth', sel: SG_DEPTH, sections: ['Elevation'], pieces: { 'shadow-ramp': 'Elevation', 'shadow-tint': 'Elevation' }, fields: false },
+  { tab: 'motion', sel: SG_MOTION, sections: ['Motion'], pieces: { 'motion-curves': 'Motion', 'duration-ramp': 'Motion', springs: 'Motion', 'motion-transitions': 'Motion' }, fields: true },
+];
+/** Open Depth or Motion through the tab row (S9.2: it left the Pages menu for the two panes). */
+const gotoSplit = async (page, x) => {
+  await tabClick(page, x.tab);
+  await hooks.need(page, `[data-p3="${x.tab}-levers"]`);
+  await hooks.need(page, `${x.sel} .psec`);
   await page.evaluate(() => document.fonts.ready);
 };
+/** Open Motion, where tempo, easing and the durations live since #4571. */
+const gotoMotion = (page) => gotoSplit(page, EXPECT_SPLIT[1]);
 /** THE MOTION ORACLE, from a token tree (the committed emission, or an export the test downloads), in one mode: each
  *  duration step's ms (the mode's own where the leaf carries one), and the curve each easing role resolves to (the
  *  mode's alias where it has one, followed to `motion.easing.<curve>`, its bezier). */
@@ -3023,7 +3031,7 @@ const readDepthMotion = (page) => page.evaluate((sel) => {
     cards: [...(host?.querySelectorAll('[data-sg-section="motion-curves"] [data-p3="curve-card"]') ?? [])].map((c) => ({
       curve: c.querySelector('.mo-ez-name')?.textContent ?? '', roles: [...c.querySelectorAll('[data-p3="curve-role"]')].map((r) => r.textContent) })),
   };
-}, SG_DEPTH);
+}, SG_MOTION);
 const sameBez = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 4 && b.length === 4 && a.every((x, i) => Math.abs(x - b[i]) < 0.002);
 /** Hold what the preview draws for motion against the oracle, in one mode. */
 const checkDepthMotion = (where, got, o) => {
@@ -3051,31 +3059,32 @@ for (const brand of BRANDS) {
   const { ctx, page, drain } = await openBrand(brand);
   const emission = await loadEmission(brand);
   const tree = JSON.parse(await readFile(join(OUT_DIR, `${brand.toLowerCase()}.tokens.json`), 'utf8'));
-  await gotoDepth(page);
+  for (const x of EXPECT_SPLIT) {
+  await gotoSplit(page, x);
   const modes = await page.locator('[data-p3="mode-option"]').evaluateAll((ns) => ns.map((n) => n.dataset.mode));
   for (const mode of modes) {
     await chooseMode(page, mode);
-    const where = `${brand} / Depth & motion / ${mode}`;
+    const where = `${brand} / ${x.tab === 'depth' ? 'Depth' : 'Motion'} / ${mode}`;
     depthStates++;
     const errs = drain();
     ok(errs.length === 0, `${where}: 0 console errors${errs.length ? ` — ${errs.slice(0, 3).join(' | ')}` : ''}`);
-    const got = await readSections(page, SG_DEPTH);
-    ok(JSON.stringify(got.sections.map((x) => x.name)) === JSON.stringify(EXPECT_DEPTH_SECTIONS),
-      `${where}: the preview draws exactly ${EXPECT_DEPTH_SECTIONS.join(' then ')} (V4) — drew ${got.sections.map((x) => x.name).join(', ')}`);
+    const got = await readSections(page, x.sel);
+    ok(JSON.stringify(got.sections.map((y) => y.name)) === JSON.stringify(x.sections),
+      `${where}: the preview draws exactly ${x.sections.join(' then ')} (V4, #4571) — drew ${got.sections.map((y) => y.name).join(', ')}`);
     const page0 = emission?.role('background.primary', mode)?.hex;
-    for (const name of EXPECT_DEPTH_SECTIONS) {
-      const x = got.sections.find((y) => y.name === name);
-      ok(!!x && x.root && x.ground === page0, `${where}: section ${name} is a specimen root on the emission's background.primary ${page0}${!x ? ' — not drawn' : !x.root ? ' — not a specimen root' : x.ground !== page0 ? ` — on ${x.ground}` : ''}`);
+    for (const name of x.sections) {
+      const z = got.sections.find((y) => y.name === name);
+      ok(!!z && z.root && z.ground === page0, `${where}: section ${name} is a specimen root on the emission's background.primary ${page0}${!z ? ' — not drawn' : !z.root ? ' — not a specimen root' : z.ground !== page0 ? ` — on ${z.ground}` : ''}`);
     }
     const marks = await page.evaluate((sel) => [...document.querySelectorAll(`${sel} [data-sg-section]`)].map((n) => ({
-      key: n.getAttribute('data-sg-section'), in: n.closest('.psec')?.querySelector('.psec-t')?.textContent ?? null })), SG_DEPTH);
-    for (const [key, sec] of Object.entries(EXPECT_DEPTH_PIECES)) {
+      key: n.getAttribute('data-sg-section'), in: n.closest('.psec')?.querySelector('.psec-t')?.textContent ?? null })), x.sel);
+    for (const [key, sec] of Object.entries(x.pieces)) {
       const hits = marks.filter((m) => m.key === key);
       ok(hits.length === 1 && hits[0].in === sec, `${where}: the shared ${key} piece is drawn exactly once, in ${sec} — drawn ${hits.length} time(s)${hits.length ? ` in ${hits.map((h) => h.in).join(', ')}` : ': drawn by something other than preview/sections/, or not at all'}`);
     }
-    checkDepthMotion(where, await readDepthMotion(page), motionOracle(tree, mode));
+    if (x.tab === 'motion') checkDepthMotion(where, await readDepthMotion(page), motionOracle(tree, mode));
     await settle(page, where);
-    const probe = await page.evaluate(LEGIBILITY_PROBE, SG_DEPTH);
+    const probe = await page.evaluate(LEGIBILITY_PROBE, x.sel);
     assertParsed(where, probe.unparsed);
     ok(probe.rootFound && probe.text.length >= STATE_NODE_FLOOR, `${where}: the contrast probe measured ${probe.text.length} text nodes in the preview (floor ${STATE_NODE_FLOOR})`);
     const under = probe.text.filter((r) => r.ratio < CONTRAST_FLOOR);
@@ -3086,11 +3095,12 @@ for (const brand of BRANDS) {
     const unmarked = probe.text.filter((r) => r.inlineInk && !r.specimen);
     ok(unmarked.length === 0, `${where}: every node inked by an inline style is marked data-specimen at its render site${unmarked.length ? ` — ${unmarked.slice(0, 3).map((u) => `${u.cls} "${u.text}"`).join(' | ')}` : ''}`);
     const fieldsUnder = fieldsUnderBar(probe, where);
-    ok(probe.fields.length >= 1 && fieldsUnder.length === 0, `${where}: every one of ${probe.fields.length} form control(s) in the preview inks its value at its text bar${fieldsUnder.length ? ` — ${fieldsUnder.slice(0, 3).map(describeField).join(' | ')}` : ''}`);
+    ok((x.fields ? probe.fields.length >= 1 : true) && fieldsUnder.length === 0, `${where}: every one of ${probe.fields.length} form control(s) in the preview inks its value at its text bar${fieldsUnder.length ? ` — ${fieldsUnder.slice(0, 3).map(describeField).join(' | ')}` : ''}`);
+  }
   }
   await ctx.close();
 }
-ok(depthStates >= BRANDS.length * 2, `the Depth & motion sweep visited ${depthStates} brand × mode states (floor ${BRANDS.length * 2})`);
+ok(depthStates >= BRANDS.length * 4, `the Depth and Motion sweep visited ${depthStates} tab × brand × mode states (floor ${BRANDS.length * 4})`);
 
 // =============================================================================================
 // 2. The controls — driven, not merely rendered
@@ -3471,9 +3481,9 @@ s5aArm: for (const brand of BRANDS) {
   // third page must not lose it. A page-local bar would vanish here, which is the state #388 described
   // from the other end — the error existing with nothing rendering it.
   // (Motion until UI redesign S9.2 moved it into Depth & motion's two panes: the third page is that one now.)
-  await gotoDepth(page);
+  await gotoMotion(page);
   const afterNav = await errState();
-  ok(afterNav.shown, `${brand}: the error is still shown after navigating to Depth & motion — it belongs to the chrome, not to a page`);
+  ok(afterNav.shown, `${brand}: the error is still shown after navigating to Motion — it belongs to the chrome, not to a page`);
 
   // Put it back, and check the bar CLEARS. A surface that only ever appears is half a surface, and the
   // rest of this context (and the console-error drain below) needs a resolved theme.
@@ -3818,7 +3828,7 @@ const LEVER_TEMPO_LABEL = (v) => TEMPO_LABELS[v] ?? v;
 let rampChecks = 0;
 for (const brand of BRANDS) {
   const { ctx, page, drain } = await openBrand(brand);
-  await gotoDepth(page);
+  await gotoMotion(page);
   const options = await page.locator(`${TEMPO} [role="radio"]`).evaluateAll((os) => os.map((o) => o.dataset.value));
   ok(options.length >= 2, `${brand}: the Tempo control offers ${options.length} tempi`);
   const checkShown = async (where, tempo) => {
@@ -4044,10 +4054,10 @@ const readNewChips = (sel) => {
 {
   const brand = BRANDS[0];
   const { ctx, page, drain } = await openBrand(brand);
-  await gotoDepth(page);
+  await gotoMotion(page);
   const c = { key: 'motionPersonality.tempo', group: '[data-p3="lever-motion-personality-tempo"]' };
   const lever = leverOf(c.key);
-  const where = `${brand} / Depth & motion / ${c.key}`;
+  const where = `${brand} / Motion / ${c.key}`;
   const g = await page.evaluate(readNewChips, c.group);
   ok(g.found === 1 && g.tag === 'FIELDSET' && g.legend === lever.label && (g.group ?? '').startsWith(lever.label),
     `${where}: one fieldset whose legend and radio group name the lever ("${g.legend}", "${g.group}", want "${lever.label}")`);
@@ -4087,7 +4097,7 @@ const exportTree = async (page, where, id) => {
   const set = await downloadSet(page, id, id ? undefined : 1);
   // #2909 Q2909.9 A: Export is a rail area drawn as a page, not a dialog that closed on its download, so the arm goes
   // back to the page it exported from (both callers drive Depth).
-  await gotoDepth(page);
+  await gotoMotion(page);
   const own = id ?? Object.keys(set).find((n) => n.endsWith('.base.tokens.json'))?.slice(0, -'.base.tokens.json'.length);
   if (!own || !set[`${own}.base.tokens.json`]) { ok(false, `${where}: the export is a parseable token set`); return null; }
   return { light: mergedFromSet(set, own, 'light'), dark: mergedFromSet(set, own, 'dark') };
@@ -4108,7 +4118,7 @@ let easingTrips = 0;
 {
   const brand = BRANDS[0];
   const { ctx, page, drain } = await openBrand(brand);
-  await gotoDepth(page);
+  await gotoMotion(page);
   const role = 'enter', curve = 'calm';
   const lightBefore = (await persistedBrand(page))?.motionPersonality?.easingRoles?.[role];
   await chooseMode(page, 'dark');
@@ -4150,7 +4160,7 @@ let easingTrips = 0;
   await page.goto(`${ORIGIN}/index.html`, { waitUntil: 'networkidle' });
   await hooks.click(page.locator('[data-p3="start-blank"]'));
   await hooks.need(page, '[data-p3="frame"]');
-  await gotoDepth(page);
+  await gotoMotion(page);
   const modes = await page.locator('[data-p3="mode-option"]').evaluateAll((ns) => ns.map((n) => n.dataset.mode));
   ok(JSON.stringify(modes) === '["light"]', `#2046: Start blank makes a one-mode brand (modes ${JSON.stringify(modes)})`);
   const role = 'enter', curve = 'calm';
@@ -5198,10 +5208,15 @@ for (const brand of BRANDS) {
   pages.push('Interactive');
   // Depth & motion (UI redesign S9.2): the shadow, duration, easing, transition and spring pills the legacy Elevation and
   // Motion pages drew, in its preview now.
-  await gotoDepth(page);
+  // #4571 (Q-ME3 A): split in two, Depth's shadow pills and Motion's duration, easing, transition and spring pills.
+  await gotoSplit(page, EXPECT_SPLIT[0]);
   await hooks.need(page, '[data-p3="depth-style-guide"] [data-p3="token-pill"]');
   await walkPills();
-  pages.push('Depth & motion');
+  pages.push('Depth');
+  await gotoMotion(page);
+  await hooks.need(page, '[data-p3="motion-style-guide"] [data-p3="token-pill"]');
+  await walkPills();
+  pages.push('Motion');
   // Layout (UI redesign S10): the breakpoint, grid and container pills the legacy Layout page drew, in its preview now.
   await gotoLayout(page);
   await hooks.need(page, '[data-p3="layout-style-guide"] [data-p3="token-pill"]');

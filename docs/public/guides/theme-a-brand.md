@@ -34,7 +34,8 @@ A lever is one brand setting, such as the primary color, the type scale or the c
 | **Color** › **Interactive** | How actions, links and disabled states draw from the palettes. <!-- src: apps/studio/src/shell/pages.ts@"id: 'interactive', label" --> |
 | **Type** | A typeface library, a font family for each text type, and the scale. <!-- src: apps/studio/src/shell/pages.ts@"id: 'type', label: '".."// with it on, inside" --> |
 | **Shape** | **Density**, **Radius** and the base radius. <!-- src: apps/studio/src/shell/pages.ts@"id: 'shape', label: ".."{ title: 'Base radius" --> |
-| **Depth & motion** | **Elevation**, **Motion** and the shadow tint. <!-- src: apps/studio/src/shell/pages.ts@"id: 'depth', label: ".."{ title: 'Shadow tint" --> |
+| **Depth** | **Elevation** and the shadow tint. <!-- src: apps/studio/src/shell/pages.ts@"id: 'depth', label: ".."{ title: 'Shadow tint" --> |
+| **Motion** | **Motion** (the tempo and the easing for each role) and **Presets**. <!-- src: apps/studio/src/shell/pages.ts@"id: 'motion', label: ".."{ title: 'Presets" --> |
 | **Layout** | **Grid**, **Breakpoints** and **Containers**. <!-- src: apps/studio/src/shell/pages.ts@"id: 'layout', label:".."{ title: 'Containers" --> |
 
 Component settings, such as how buttons place their icons, are in the **Components** area, beside the list of component sets. See [Build components](build-components.md). <!-- src: apps/studio/src/shell/pages.ts@"id: 'components', label: 'Components', home".."{ title: 'Component " -->

@@ -1595,6 +1595,19 @@ h1.p3-sr { margin: 0; font-family: var(--p3-font-ui); font-size: var(--p3-fs-14)
 .p3-btn.p3-pick[data-set="true"] { border-color: var(--p3-ctl-edge); }
 /* A picker button whose value is long ("Auto: follows Light (160px)") wraps inside its cell rather than run past it. */
 :is(.p3-tsizes-cells, .p3-tweight, .p3-tspace-ctl) > .p3-btn.p3-pick { min-width: 0; white-space: normal; }
+/* #4571: the Motion page's preset rows. One row per preset, its name and where its easing comes from, then the three
+   slot rows on the type rows' two columns; an arriving preset's Exit disclosure under them. */
+.p3-presets { display: grid; gap: var(--p3-space-300); }
+.p3-fillrows.p3-preset-slots { gap: var(--p3-space-150); }
+.p3-preset { display: grid; gap: var(--p3-space-150); }
+/* The preset's name is its group's heading (`.p3-rows-sub`, L2, with its own rule above it); the row's gap stands in
+   for the heading's own top margin. */
+.p3-preset > .p3-rows-sub { margin-top: 0; }
+.p3-preset-head { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--p3-space-200); row-gap: var(--p3-space-050); }
+.p3-preset-tag { color: var(--p3-text-2); font-size: var(--p3-fs-12); }
+.p3-preset-head > .p3-btn { margin-inline-start: auto; }
+.p3-preset-exit { display: grid; gap: var(--p3-space-150); padding-inline-start: var(--p3-space-300); }
+.p3-btn.p3-preset-exit-toggle { justify-self: start; }
 /* #3337 (Q3337.2 A): a "Set it in …" link is a text link flush with the column: no inline padding and no edge, so its words
    start on the row's edge; still a whole target tall, underlined, the chevron after it. Its hover is the underline it
    already draws: with no edge, the ghost button's hover edge has nothing to color. */
