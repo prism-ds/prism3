@@ -891,7 +891,7 @@ type WireMessage = { jsonrpc?: string; id?: number | string | null; method?: str
  *   · `initialize` is served at the version the bridge's rule picks (`negotiateBridgeHandshake`, #4646 step 1; never
  *     `2026-07-28`, #3109), and one sent without `capabilities` or `clientInfo` is served with empty ones, not refused.
  *   · A read of a resource this bridge does not serve fails with -32002 and names a renamed URI (#3412). The SDK
- *     re-codes -32002 as -32602.
+ *     re-codes -32002 as -32602. A `skill://` file goes on to the SDK, and `bridgeTransport` sends its not-found as -32002.
  * Everything else goes to the SDK unchanged. Pure, so it is tested without a process.
  */
 export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown } | { forward: WireMessage } => {
@@ -923,16 +923,34 @@ export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown }
 /** The SDK's stdio transport with `compatAnswer` in front of it. Reading, framing and sending are the SDK's own; one
  *  difference from the hand-written loop is the SDK's: a line that is not JSON is skipped, not answered -32700. */
 export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => {
+  // A `skill://` file the skills extension does not serve: the SDK answers -32602 with `data: { uri }`, and the bridge
+  // sends it as -32002, the code an unknown `prism3://` URI gets (#4661 review). The message stays the SDK's.
+  const skillReads = new Map<number | string, string>();
   const outer: Transport = {
     start: () => inner.start(),
-    send: (msg, options) => inner.send(msg, options),
+    send: (msg, options) => {
+      const r = msg as { id?: number | string; error?: { code?: number; data?: { uri?: unknown } } };
+      const uri = r.id === undefined ? undefined : skillReads.get(r.id);
+      if (uri !== undefined) {
+        skillReads.delete(r.id!);
+        const e = r.error;
+        if (e?.code === -32602 && e.data !== undefined && JSON.stringify(Object.keys(e.data)) === '["uri"]' && e.data.uri === uri) {
+          return inner.send({ ...r, error: { ...e, code: RESOURCE_NOT_FOUND } } as JSONRPCMessage, options);
+        }
+      }
+      return inner.send(msg, options);
+    },
     close: () => inner.close(),
     setProtocolVersion: (v: string) => inner.setProtocolVersion?.(v),
   };
   inner.onmessage = (msg, extra) => {
     const c = compatAnswer(msg as WireMessage, arm);
     if ('reply' in c) void inner.send(c.reply as JSONRPCMessage).catch((e: Error) => outer.onerror?.(e));
-    else outer.onmessage?.(c.forward as JSONRPCMessage, extra);
+    else {
+      const f = c.forward;
+      if (f?.method === 'resources/read' && f.id !== undefined && f.id !== null && typeof f.params?.uri === 'string' && f.params.uri.startsWith(SKILL_BASE)) skillReads.set(f.id, f.params.uri);
+      outer.onmessage?.(f as JSONRPCMessage, extra);
+    }
   };
   inner.onerror = (e) => outer.onerror?.(e);
   inner.onclose = () => outer.onclose?.();

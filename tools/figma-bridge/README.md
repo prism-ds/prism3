@@ -196,7 +196,9 @@ more:
   `prism3://skills/…` resources. A client that speaks the extension finds them with `skills/list`, gets
   one with `skills/get` (its frontmatter and the list of its files, each with a digest), and reads each
   file at `skill://<name>/<path>`, for example `skill://prism3-rebind/consistency-audit.js`. They load
-  when the agent needs them, and update with the checkout. The skill files are not listed in
+  when the agent needs them. The bridge reads them from the checkout once, when it starts, so an edit
+  to a skill shows after a restart. A skill file it does not serve fails with -32002, as an unknown
+  `prism3://` URI does. The skill files are not listed in
   `resources/list`, which stays the five resources above, and an older client keeps reading the
   `prism3://` URIs. `prism3-build-screens` joins once its skill is on `main` (#4632).
 

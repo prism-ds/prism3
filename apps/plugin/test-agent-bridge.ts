@@ -25,8 +25,11 @@
  * one appended to the context refusal's message → `arm/no-leak: arm 0's context refusal …`)
  * tasks/capability · tasks/tool · tasks/plugin · tasks/create · tasks/id · tasks/status · tasks/progress · tasks/result · tasks/notify ·
  * tasks/list · tasks/same-run · tasks/once · tasks/unknown · tasks/reconnect · tasks/failed · tasks/order · timeout/run-id ·
- * skills/capability · skills/list · skills/get · skills/read · skills/template · skills/unknown · skills/not-listed · arm/<n>-skills
- * (#4646 step 2: prism3-rebind and prism3-build-ui as MCP skills, arm 2 only) ·
+ * skills/capability · skills/list · skills/get · skills/read · skills/files · skills/template · skills/unknown · skills/not-listed · arm/<n>-skills
+ * (#4646 step 2: prism3-rebind and prism3-build-ui as MCP skills, arm 2 only; `skills/files` walks each skill's folder
+ * itself and compares every file byte for byte, #4661 review. MUTATIONS: consistency-audit.js served stale →
+ * `skills/files: skill://prism3-rebind/consistency-audit.js is …`; it dropped from the served set → `skills/files: skills/get
+ * lists exactly the files in skills/prism3-rebind/`; the -32002 recode dropped from `bridgeTransport` → `skills/unknown`) ·
  * figma_result/working · figma_result/late · figma_result/once · figma_result/unknown · arm/<n>-tasks · handshake/<asked> (#4646 step 1: figma_run as a
  * task against a fake slow plugin, a reconnect mid-task resuming the same task, and a run kept past its caller's timeout)
  *
@@ -105,7 +108,7 @@ import { spawn } from 'node:child_process';
 import { connect, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { mkdtempSync, writeFileSync, statSync, readFileSync, chmodSync, realpathSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, statSync, readFileSync, readdirSync, chmodSync, realpathSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -1426,8 +1429,33 @@ section('instructions + resources — what a fresh agent reads on connecting (#3
   ok(typeof audit?.text === 'string' && audit.text.length > 0, 'skills/read: a skill\'s other file, consistency-audit.js, reads back');
   const templates = (await rpc('resources/templates/list')).result?.resourceTemplates ?? [];
   ok(templates.some((t: { uriTemplate: string }) => t.uriTemplate === 'skill://{+path}'), `skills/template: resources/templates/list offers skill://{+path} (${JSON.stringify(templates)})`);
+  // skills/files (#4661 review, should-fix 1): every file of each served skill, not only SKILL.md, is the file in the
+  // checkout, byte for byte. The folder is walked here with its own readdir, never through the server's
+  // `loadSkillFiles` (docs/34 shape 1), so a file the bridge drops, adds or serves stale fails by its path.
+  const walk = (dir: string, under = ''): string[] => readdirSync(join(dir, under), { withFileTypes: true }).flatMap((d) =>
+    d.isDirectory() ? walk(dir, under ? `${under}/${d.name}` : d.name) : d.isFile() ? [under ? `${under}/${d.name}` : d.name] : []);
+  for (const skill of SKILL_URIS.map((u) => u.slice('skill://'.length).split('/')[0])) {
+    const dir = resolve(HERE, '../../skills', skill);
+    const onDisk = walk(dir).sort();
+    const got = (await rpc('skills/get', { uri: `skill://${skill}/SKILL.md` })).result?.skill;
+    const listedFiles = new Map<string, string>((got?.resources ?? []).map((r: { uri: string; digest: string }) => [r.uri.slice(`skill://${skill}/`.length), r.digest]));
+    const missing = onDisk.filter((p) => !listedFiles.has(p));
+    const extra = [...listedFiles.keys()].filter((p) => !onDisk.includes(p));
+    ok(onDisk.includes('SKILL.md') && missing.length === 0 && extra.length === 0,
+      `skills/files: skills/get lists exactly the files in skills/${skill}/ (${onDisk.length} on disk${missing.length ? `; missing ${missing.join(', ')}` : ''}${extra.length ? `; extra ${extra.join(', ')}` : ''})`);
+    for (const path of onDisk) {
+      const disk = readFileSync(join(dir, path));
+      const read = await rpc('resources/read', { uri: `skill://${skill}/${path}` });
+      const text = read.result?.contents?.[0]?.text;
+      const same = typeof text === 'string' && Buffer.from(text, 'utf8').equals(disk);
+      const digest = `sha256:${createHash('sha256').update(disk).digest('hex')}`;
+      ok(same && listedFiles.get(path) === digest,
+        `skills/files: skill://${skill}/${path} is skills/${skill}/${path} byte for byte, and skills/get gives its digest (${typeof text === 'string' ? `${Buffer.byteLength(text, 'utf8')} bytes served, ${disk.length} on disk` : JSON.stringify(read.error)}; digest ${listedFiles.get(path) === digest ? 'matches' : `${listedFiles.get(path)} ≠ ${digest}`})`);
+    }
+  }
   const noSkill = await rpc('resources/read', { uri: 'skill://prism3-rebind/no-such-file.md' });
-  ok(noSkill.error !== undefined, `skills/unknown: a skill file that is not served is an error (${JSON.stringify(noSkill.error)})`);
+  ok(noSkill.error?.code === -32002 && noSkill.error?.data?.uri === 'skill://prism3-rebind/no-such-file.md',
+    `skills/unknown: a skill file that is not served is -32002 with its uri, like an unknown prism3:// resource (${JSON.stringify(noSkill.error)})`);
   ok(listed.every((r) => r.uri.startsWith('prism3://')), 'skills/not-listed: resources/list still holds only the five prism3:// resources, not the skill files (Q3300.3 A)');
 }
 
