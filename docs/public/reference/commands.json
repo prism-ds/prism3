@@ -757,6 +757,9 @@
           }
         }
       },
+      "capabilitiesByRevision": {
+        "tasks": "Offered only to a session that negotiated 2025-11-25. An older session gets no tasks capability, no execution field on figma_run, and no tasks/* methods, and a figma_run sent with task runs as a plain call."
+      },
       "source": "tools/figma-bridge/server.ts#isMain",
       "tools": [
         {
