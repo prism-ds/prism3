@@ -22,9 +22,10 @@ import { h, hook } from '../shell/dom';
 import { DOMAINS, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import {
-  durationRampSection, motionCurvesSection, motionTransitionsSection, presetCurveOf, springsSection,
-  type DurationsCopy, type TransitionsCopy,
+  durationRampSection, motionCurvesSection, motionStageSection, motionTransitionsSection, presetCurveOf, springsSection,
+  type DurationsCopy, type StageCopy, type TransitionsCopy,
 } from './sections/index';
+import { buildTree, pxOf, subNode, type Theme } from '@prism3/engine';
 import { SG_SURFACES, ground, oppositeOf, palSection, sgContext, type SgRole } from './sections/kit';
 import { must } from '../must';
 
@@ -56,6 +57,19 @@ export const MOTION_PREVIEW_COPY = {
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
   } satisfies TransitionsCopy,
+  /** #4571 PR 3: the stage. Every string here is DRAFT, in the PR's "Strings for owner approval". */
+  stage: {
+    title: 'In motion',
+    desc: 'The chosen preset playing on each pattern that uses it, at this tempo, with one bar per moving part.',
+    preset: 'Preset',
+    usedBy: 'Used by',
+    specimen: 'No pattern uses this preset yet, so it plays on a specimen.',
+    timeline: 'Timeline',
+    play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
+    reduced: 'Reduced motion is on: playing once on request.',
+    ms: (ms: number) => `${ms}ms`,
+    delay: (ms: number) => `waits ${ms}ms`,
+  } satisfies StageCopy,
 } as const;
 
 /** Whether the viewer asked for reduced motion. Read on every paint, so a change applies at the next one. */
@@ -63,6 +77,20 @@ const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMe
 
 /** The Slow motion divisor: view state, kept for the session (a page visit never resets it), never a token. */
 let slowmo = 1;
+/** The stage's preset and pattern (#4571 PR 3): view state, kept for the session, never written to the brand. A
+ *  pattern of null plays the preset's first user. */
+let stagePreset: string | null = null;
+let stagePattern: string | null = null;
+
+/** A distance token's px (`distance.nudge`, `space.<step>`), read from the brand's tree once per theme. Drawing only:
+ *  where an element travels, never when. */
+const treeOf = new WeakMap<Theme, unknown>();
+const distancePxOf = (t: Theme) => (token: string): number => {
+  let tree = treeOf.get(t);
+  if (!tree) { tree = buildTree(t).tree; treeOf.set(t, tree); }
+  const n = subNode(tree, `${t.root}.motion.${token}`) ?? subNode(tree, `${t.root}.${token}`);
+  return n ? pxOf(tree, n) : 0;
+};
 
 /** Mount the Motion preview into `host`. Subscriptions are released through `cleanups`. */
 export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]): void => {
@@ -98,8 +126,15 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
       onSlowmo: (v) => { slowmo = v; paint('mode'); },
       onPlay: () => { played = true; },
     }, C.transitions);
-    play = traces.play;
-    m.append(motionCurvesSection(mo, cur, C.curves), durationRampSection(mo, cur, C.durations), springsSection(mo.spring, C.springs), traces.node);
+    if (!stagePreset || !mo.presets.some((p) => p.preset === stagePreset)) stagePreset = mo.presets[0]?.preset ?? '';
+    const stage = motionStageSection(c, mo, cur, distancePxOf(theme), {
+      preset: stagePreset, pattern: stagePattern, slowmo, reduced, played,
+      onPick: (preset, pattern) => { stagePreset = preset; stagePattern = pattern; paint('mode'); },
+      onSlowmo: (v) => { slowmo = v; paint('mode'); },
+      onPlay: () => { played = true; },
+    }, C.stage);
+    play = () => { traces.play(); stage.play(); };
+    m.append(stage.node, motionCurvesSection(mo, cur, C.curves), durationRampSection(mo, cur, C.durations), springsSection(mo.spring, C.springs), traces.node);
 
     const secs = [m];
     // Q24: each section's container on the levers panel's gray, as the other previews' are.
@@ -107,11 +142,12 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
     card.replaceChildren(...secs.map((s) => ground(c, s, page)));
 
     // D9: a Motion edit plays the traces once, at the chosen speed, unless reduced motion is on.
-    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.presets.map((p) => presetCurveOf(mo, cur, p))]);
+    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.presets, mo.patterns, mo.presets.map((p) => presetCurveOf(mo, cur, p))]);
     if (why === 'brand' && lastDrawn !== null && lastMode === cur && drawn !== lastDrawn && !reduced) {
       played = true;
       play();
       card.querySelector<HTMLElement>('[data-p3="motion-play"]')!.textContent = C.transitions.replay;
+      card.querySelector<HTMLElement>('[data-p3="motion-stage-play"]')!.textContent = C.stage.replay;
     }
     lastDrawn = drawn;
     lastMode = cur;

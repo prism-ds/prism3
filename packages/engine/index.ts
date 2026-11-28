@@ -61,6 +61,10 @@ export { leverManifest } from './levers';
 // The motion editor's read model (#4571): the Studio Motion page's pickers, "used by" lists and advisories.
 export { durationTargetsFor, easingSourceOf, patternsReachedBy, presetAdvisories, presetSlotTargets, slotPathsOf } from './motion-editor';
 export type { EasingSource, PresetAdvisory, SlotTarget } from './motion-editor';
+// The motion previews (#4571 PR 3): a spring as the CSS `linear()` curve a preview plays it on, the patterns' track key.
+export { springLinearEasing } from './spring';
+export { trackKey } from './motion-patterns';
+export type { MotionPattern, MotionTrack } from './motion-patterns';
 export type { Lever } from './levers';
 export { parseDesignMd, toDesignMd } from './design-md';
 export { isStandardDesignMd, parseStandardDesignMd, standardToBrandInput } from './standard-design-md';
