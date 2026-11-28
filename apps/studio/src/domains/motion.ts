@@ -283,7 +283,9 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
 
   const presets = (): Item => {
     const s = section('Presets');
-    const b = leverBlock('motionPersonality.presets', { group: true });
+    // Named for its section, so the promoted ⓘ reads "About Presets" (BG1 A); search still finds "Motion presets",
+    // the manifest's label, through the block's words.
+    const b = leverBlock('motionPersonality.presets', { label: s.title, group: true });
     const readOnly = !light();
     if (readOnly && !derived()) b.ctl.append(hook(stateLine(P.brandWide), 'presets-brand-wide'));
     const advisories = presetAdvisories(theme.motion, currentMode);
@@ -379,7 +381,7 @@ export const mountMotionLevers = (host: HTMLElement, cleanups: (() => void)[]): 
     const pr = presets();
     ps.append(pr.el);
     // The Presets title says it once (owner, 2026-11-27): the lever's own label, "Motion presets", stays in the
-    // manifest for wherever settings list on their own, and its info button moves up beside the title.
+    // manifest for wherever settings are listed on their own, and its info button moves up beside the title.
     promoteLever(ps, pr.block);
     items.push(t, ez, pr);
     parts.push(m, ps);
