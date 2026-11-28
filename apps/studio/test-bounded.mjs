@@ -175,6 +175,17 @@ export const DISARM = Symbol('p3.disarm');
 /** A page's own bound for its bounded evaluates, in ms, set by a self-check that wants a short one on a page of its own. */
 export const BOUND_MS = Symbol('p3.boundMs');
 
+/** The raw input methods `boundEvaluates` bounds (#4649): every method Playwright's Keyboard, Mouse and Touchscreen
+ *  classes define. Playwright sends each with no timeout, as it does an evaluate, so a key press on a busy page waited
+ *  for the 600 s watchdog. A Locator's `click`, `press` or `fill` is not here: it carries Playwright's own 30 s action
+ *  timeout. `boundEvaluates` fails at install if Playwright adds a method to one of these classes that is not listed,
+ *  so a new method cannot arrive unbounded. */
+export const INPUT_METHODS = {
+  keyboard: ['down', 'up', 'insertText', 'type', 'press'],
+  mouse: ['move', 'down', 'up', 'click', 'dblclick', 'wheel'],
+  touchscreen: ['tap'],
+};
+
 /**
  * EVERY EVALUATE HAS A BOUND (#4342). Playwright sends `evaluate`, `evaluateAll`, `$eval` and `$$eval` with no timeout
  * at all (`kNoTimeout` in its client), so on a page whose main thread is busy, or that renders no frame while the
@@ -183,7 +194,11 @@ export const BOUND_MS = Symbol('p3.boundMs');
  * stall came at a plain read on another path (18-s4f's Gradients read, 2026-11-27). The suite holds about 1,500 such
  * calls, so they are bounded where they all go through, not one by one: this replaces the evaluate family on
  * Playwright's own client prototypes, read off a live page (Page, Frame, Locator, JSHandle, ElementHandle), so every
- * page any context of this process opens is bounded from its first call, however it was made.
+ * page any context of this process opens is bounded from its first call, however it was made. The page's raw input
+ * goes the same way (#4649): Playwright sends a `keyboard`, `mouse` or `touchscreen` call with no timeout either, and the
+ * suite made 184 of them, so every method in `INPUT_METHODS` is bounded on those three prototypes too, and a key press
+ * on a busy page fails by name the same way. A stalled input is still in flight when it rejects; the rejection ends its
+ * case, and the case's `finally` closes the context, which cancels it (this file's header).
  *
  *   · The bound is `ms`, or a page's own `BOUND_MS`. A `waitForFunction` already ends on Playwright's own timeout; its
  *     bound is that timeout plus `ms`, so Playwright's error still comes first, and a `timeout: 0` gets `ms`.
@@ -194,8 +209,8 @@ export const BOUND_MS = Symbol('p3.boundMs');
  *     into JSHandle.evaluate after an await) is bounded at the outer call alone, which an AsyncLocalStorage marks.
  *   · `within(page, label, page.evaluate(…), ms)` passes the promise itself, and takes the bound over (`DISARM`), so
  *     an explicit label and limit always win over these.
- *   · The process-wide reach is the point, and the limit: a page of another browser binary or a CDP `Runtime.evaluate`
- *     is not covered, which `lint-chrome-bounds` keeps out of the suite.
+ *   · The process-wide reach is the point, and the limit: a page of another browser binary, a CDP `Runtime.evaluate`
+ *     or a CDP `Input.dispatch…` is not covered, which `lint-chrome-bounds` keeps out of the suite.
  * Returns the stats `log` gathers: the slowest call that settled, by site, so the bound's margin can be measured.
  */
 export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
@@ -214,12 +229,20 @@ export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
       [Object.getPrototypeOf(page.locator('p')), (o) => o.page(), ['evaluate', 'evaluateAll', 'evaluateHandle']],
       [protoOf(handle, 'evaluate'), (o) => o._parentOfType?.('Page') ?? null, ['evaluate', 'evaluateHandle']],
       [protoOf(handle, '$$eval'), (o) => o._parentOfType?.('Page') ?? null, ['$eval', '$$eval']],
+      // #4649: the page's raw input, which Playwright sends with no timeout either (a key press, a mouse move).
+      [Object.getPrototypeOf(page.keyboard), (o) => o._page ?? null, INPUT_METHODS.keyboard],
+      [Object.getPrototypeOf(page.mouse), (o) => o._page ?? null, INPUT_METHODS.mouse],
+      [Object.getPrototypeOf(page.touchscreen), (o) => o._page ?? null, INPUT_METHODS.touchscreen],
     ];
-    const kinds = { Page: 'page', Frame: 'frame', Locator: 'locator', JSHandle: 'handle', ElementHandle: 'handle' };
+    const kinds = { Page: 'page', Frame: 'frame', Locator: 'locator', JSHandle: 'handle', ElementHandle: 'handle', Keyboard: 'keyboard', Mouse: 'mouse', Touchscreen: 'touchscreen' };
     for (const [proto, pageOf, names] of targets) {
-      if (!proto) throw new Error('boundEvaluates: a Playwright prototype was not found, so the evaluates cannot be bounded');
-      const kind = kinds[proto.constructor.name.replace(/^_/, '')] ?? proto.constructor.name;
+      if (!proto) throw new Error('boundEvaluates: a Playwright prototype was not found, so the evaluates and input cannot be bounded');
+      const kind = kinds[proto.constructor.name.replace(/^_/, '').replace(/\d+$/, '')] ?? proto.constructor.name;
       proto[RAW] = {};
+      if (Object.values(INPUT_METHODS).includes(names)) {
+        const unlisted = Object.getOwnPropertyNames(proto).filter((n) => n !== 'constructor' && typeof proto[n] === 'function' && !names.includes(n));
+        if (unlisted.length) throw new Error(`boundEvaluates: ${proto.constructor.name} has input methods the bound does not list (${unlisted.join(', ')}); add them to INPUT_METHODS`);
+      }
       for (const name of names) {
         const orig = proto[name];
         if (typeof orig !== 'function') throw new Error(`boundEvaluates: ${proto.constructor.name}.${name} is not a method`);
