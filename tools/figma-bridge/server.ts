@@ -167,6 +167,61 @@ export const negotiateBridgeHandshake = (want: unknown): string =>
 export const TASKS_SINCE = '2025-11-25';
 
 /**
+ * ELICITATION (#4646 step 3). The bridge asks the person through the client before a write that discards their work.
+ * Elicitation is a CLIENT capability: the server declares nothing for it, so `capabilitiesFor` is unchanged and an
+ * `initialize` answer looks the same with or without it. The bridge asks only a session that negotiated
+ * `ELICITATION_SINCE` or later AND whose client declared form elicitation (`elicitation: {}`, the `2025-06-18` form, or
+ * `elicitation: { form: {} }`). Any other session gets today's behaviour: the preview, then a confirm that echoes its
+ * `previewHash`. Every arm asks, like tasks (the owner's Q1 A on #4654): it is how a write is gated, not what an agent is
+ * shown.
+ */
+export const ELICITATION_SINCE = '2025-06-18';
+/** Whether a session is asked: its negotiated revision and the client's declared capabilities. Pure. */
+export const elicitsFor = (revision: string | undefined, client: unknown): boolean => {
+  if (revision === undefined || revision < ELICITATION_SINCE) return false;
+  const e = (client as { elicitation?: unknown } | undefined)?.elicitation;
+  if (e === null || typeof e !== 'object' || Array.isArray(e)) return false;
+  return Object.keys(e).length === 0 || (e as { form?: unknown }).form !== undefined;
+};
+/** How long the bridge waits for the person's answer before it writes nothing. */
+export const ELICIT_TIMEOUT_MS = 10 * 60_000;
+
+/** The first use (#4646 step 3): an `update-components` confirm that overwrites hand edits, for every set or for one. */
+export const overwritesHandEdits = (cmd: unknown, args: unknown): boolean => {
+  if (cmd !== 'update-components' || args === null || typeof args !== 'object') return false;
+  const a = args as { confirm?: unknown; choices?: { handEdits?: unknown; sets?: Record<string, { handEdits?: unknown } | undefined> } };
+  if (a.confirm !== true || !a.choices || typeof a.choices !== 'object') return false;
+  return a.choices.handEdits === 'overwrite' || Object.values(a.choices.sets ?? {}).some((s) => s?.handEdits === 'overwrite');
+};
+/**
+ * The sets whose hand edits the confirm overwrites, with how many members each has hand-edited, read from its check's
+ * result envelope (`update.sets[].counts.handEdited`), each set's choice resolved as the plugin resolves it (its own
+ * `sets[name]` choice, else the run's). Null when there is no check to read: it ran before this bridge started, or on
+ * another one.
+ */
+export const handEditsOverwritten = (check: AgentResult | null, args: unknown): { set: string; handEdited: number }[] | null => {
+  const update = (check?.result as { data?: { update?: { sets?: unknown } } } | undefined)?.data?.update;
+  if (!update || !Array.isArray(update.sets)) return null;
+  const c = (args as { choices?: { handEdits?: unknown; sets?: Record<string, { handEdits?: unknown } | undefined> } }).choices ?? {};
+  return (update.sets as { set?: unknown; counts?: { handEdited?: unknown } }[])
+    .filter((s) => typeof s.set === 'string' && typeof s.counts?.handEdited === 'number' && s.counts.handEdited > 0)
+    .filter((s) => (c.sets?.[s.set as string]?.handEdits ?? c.handEdits) === 'overwrite')
+    .map((s) => ({ set: s.set as string, handEdited: s.counts!.handEdited as number }));
+};
+/** STRINGS FOR OWNER APPROVAL (#4646 step 3): the question, and figma_run's answer when nothing was sent. */
+export const overwriteQuestion = (sets: { set: string; handEdited: number }[] | null): string => [
+  'Overwrite hand edits in this Figma file?',
+  sets === null
+    ? "update-components will replace the hand edits its check found with the plan. That check didn't run through this bridge, so it can't list them here."
+    : `update-components will replace hand edits with the plan in ${sets.length === 1 ? '1 set' : `${sets.length} sets`}: ${sets.map((s) => `${s.set} (${s.handEdited} ${s.handEdited === 1 ? 'member' : 'members'})`).join(', ')}.`,
+  'The plugin saves a named version first. Decline, and nothing is written.',
+].join('\n');
+export const overwriteRefusal = (why: 'decline' | 'cancel' | 'error', detail?: string): string =>
+  why === 'error'
+    ? `The person couldn't be asked (${detail}), so update-components wasn't sent and nothing was written.`
+    : `The person ${why === 'decline' ? 'declined' : 'dismissed the question'}, so update-components wasn't sent and nothing was written. Don't send it again unless they ask.`;
+
+/**
  * SKILLS OVER MCP (#4646 step 2). The skills the bridge serves as MCP skills (`skills/list`, `skills/get`, and each file
  * at `skill://<name>/<path>`), from the same checkout files as the `prism3://skills/…` resources, read once at start.
  * `prism3-bridge` (Q3 A, 2026-11-28) is `BRIDGE_INSTRUCTIONS` verbatim plus figma_run's long-run line, as a skill only:
@@ -687,6 +742,16 @@ export const createBridge = (opts: { pairing: Pairing; now?: () => Date; log?: (
     open, detach, onMessage, start,
     /** A run by id, while it is kept. */
     run: (id: string): Run | null => runs.get(id)?.run ?? null,
+    /** The newest kept `update-components` check whose result carries this `previewHash` (#4646 step 3), or null. */
+    checkFor: (previewHash: unknown): AgentResult | null => {
+      if (typeof previewHash !== 'string' || !previewHash) return null;
+      for (const r of [...runs.values()].reverse()) {
+        const env = r.view.result;
+        const u = (env?.result as { data?: { update?: { mode?: unknown; previewHash?: unknown } } } | undefined)?.data?.update;
+        if (env && env.cmd === 'update-components' && u?.mode === 'preview' && u.previewHash === previewHash) return env;
+      }
+      return null;
+    },
     status: () => ({
       connected: !!plugin, connectedAt: plugin?.connectedAt ?? null, plugin: pluginState, pairingCode: plugin ? pairing.code() : pairing.request(),
       running: [...pending.keys()], awaitingReconnect: orphans(), bridge: SERVER_INFO, protocol: AGENT_PROTOCOL_VERSION, commands: [...AGENT_COMMANDS],
@@ -1048,6 +1113,29 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     };
   };
 
+  /**
+   * #4646 step 3: before a confirm that overwrites hand edits, ask the person, when this session can be asked
+   * (`elicitsFor`). Null means go on; otherwise nothing is queued and this is figma_run's answer. A check that found no
+   * hand edits under `overwrite` discards nothing, so it is not asked. An answer that is not an accept, or a question
+   * that could not be put, writes nothing.
+   */
+  type Ctx = Parameters<typeof streamTo>[0] & { mcpReq: { elicitInput(params: unknown, options?: unknown): Promise<{ action: string }> } };
+  const askBeforeWrite = async (p: { cmd: string; args: unknown; outcome(o: Outcome, error?: unknown): void }, ctx: Ctx): Promise<ReturnType<typeof text> | null> => {
+    if (!overwritesHandEdits(p.cmd, p.args) || !elicitsFor(revision, server.getClientCapabilities())) return null;
+    const sets = handEditsOverwritten(bridge.checkFor((p.args as { previewHash?: unknown }).previewHash), p.args);
+    if (sets !== null && sets.length === 0) return null;
+    let why: 'decline' | 'cancel' | 'error';
+    let detail: string | undefined;
+    try {
+      const answer = await ctx.mcpReq.elicitInput({ mode: 'form', message: overwriteQuestion(sets), requestedSchema: { type: 'object', properties: {} } }, { timeout: ELICIT_TIMEOUT_MS });
+      if (answer.action === 'accept') return null;
+      why = answer.action === 'decline' ? 'decline' : 'cancel';
+    } catch (e) { why = 'error'; detail = (e as Error).message; }
+    const error = overwriteRefusal(why, detail);
+    p.outcome('refused-by-bridge', error);
+    return text({ error }, true);
+  };
+
   server.setRequestHandler('tools/call', async (req, ctx) => {
     const name = req.params.name;
     const a = (req.params.arguments ?? {}) as Record<string, unknown>;
@@ -1061,6 +1149,8 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     if (name === 'figma_run') {
       const p = prepareRun(a);
       if ('refusal' in p) return p.refusal;
+      const refused = await askBeforeWrite(p, ctx as unknown as Ctx);
+      if (refused) return refused;
       const run = bridge.start(p.cmd, p.args, p.timeoutMs);
       const stop = run.listen(streamTo(ctx));
       // The clock starts when the command is sent, as before: time spent queued behind another command is not counted.
@@ -1127,7 +1217,7 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     if (!t) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `unknown or expired task: ${taskId}`);
     return t;
   };
-  const startTask = (params: { arguments?: unknown; task?: unknown }, ctx: Parameters<typeof streamTo>[0]) => {
+  const startTask = async (params: { arguments?: unknown; task?: unknown }, ctx: Ctx) => {
     const aug = params.task;
     if (aug === null || typeof aug !== 'object' || Array.isArray(aug)) throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'task must be an object, such as {} or { "ttl": 3600000 }');
     const asked = (aug as { ttl?: unknown }).ttl;
@@ -1135,6 +1225,9 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     const p = prepareRun((params.arguments ?? {}) as Record<string, unknown>);
     // Refused before anything is queued: answered at once as a plain result, which a task requester accepts.
     if ('refusal' in p) return p.refusal;
+    // #4646 step 3: the person is asked before the task exists, so a decline is a plain result too and no task is made.
+    const refused = await askBeforeWrite(p, ctx);
+    if (refused) return refused;
     const run = bridge.start(p.cmd, p.args, p.timeoutMs);
     run.listen(streamTo(ctx));
     const ttl = asked === undefined ? null : Math.min(asked as number, TASK_TTL_MAX_MS);
@@ -1164,12 +1257,10 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     return { ...r, capabilities: capabilitiesFor(arm, r.protocolVersion) };
   });
   const plainCall = handlers.get('tools/call') as (req: { params?: Record<string, unknown> }, ctx: unknown) => Promise<unknown>;
-  handlers.set('tools/call', (req: { params?: Record<string, unknown> }, ctx: Parameters<typeof streamTo>[0]) => {
+  handlers.set('tools/call', (req: { params?: Record<string, unknown> }, ctx: Ctx) => {
     const params = req?.params;
     if (params && typeof params === 'object' && 'task' in params) {
-      if (params.name === 'figma_run' && tasksOffered()) {
-        try { return Promise.resolve(startTask(params, ctx)); } catch (e) { return Promise.reject(e); }
-      }
+      if (params.name === 'figma_run' && tasksOffered()) return startTask(params, ctx);
       // #4656 item 3: a session not offered tasks is served the plain call, the `task` field ignored, as MCP has a
       // receiver do with task metadata for a request it declared no task support for.
       if (!tasksOffered()) { const { task: _, ...plain } = params; return plainCall({ ...req, params: plain }, ctx); }

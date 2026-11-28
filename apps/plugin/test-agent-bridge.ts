@@ -125,7 +125,7 @@ import type { AgentResult, AgentLinkState } from './src/agent-protocol';
 import { createBridgeRelay, BRIDGE_PORT, BRIDGE_URL } from './src/agent-bridge-relay';
 import type { WsLike } from './src/agent-bridge-relay';
 import { pairPromptText } from './src/agent-link-ui';
-import { createPairing, createProgressCounter, loadSecret, RESOURCES } from '../../tools/figma-bridge/server';
+import { bridgeTransport, createPairing, createProgressCounter, loadSecret, RESOURCES } from '../../tools/figma-bridge/server';
 import { HANDSHAKE_PROBES, SERVER_INFO as ENGINE_SERVER } from '@prism3/engine/harness';
 import { READ_COMMANDS, AGENT_COMMANDS } from './src/agent-protocol';
 import { readFixture, ARGS, EXPECTED, canon, ACTIVITY_NOTES, activityExpected, atRead, contextExpected } from './agent-read-fixture';
@@ -177,6 +177,10 @@ const replies = new Map<number, any>();
 /** How many replies arrived per request id: a result delivered twice would show here, not in `replies`. */
 const replyCount = new Map<number, number>();
 const notes: any[] = [];
+/** #4646 step 3: requests the bridge sends the client (`elicitation/create`), and how the client answers each; null leaves
+ *  it unanswered. A request carries an id like a reply does, so it is told apart by its `method`. */
+const serverRequests: any[] = [];
+let answerServer: (m: any) => unknown | null = () => null;
 /** #4646: every stdout message in arrival order, `reply:<id>` or `note:<method>:<taskId>`, for the arms that care which came first. */
 const arrivals: string[] = [];
 let out = '';
@@ -190,6 +194,13 @@ child.stdout.on('data', (d) => {
     const line = out.slice(0, nl); out = out.slice(nl + 1);
     if (!line.trim()) continue;
     const m = JSON.parse(line);
+    if (typeof m.method === 'string' && m.id !== undefined && m.id !== null) {
+      arrivals.push(`request:${m.method}`);
+      serverRequests.push(m);
+      const result = answerServer(m);
+      if (result !== null) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }) + '\n');
+      continue;
+    }
     arrivals.push(m.id !== undefined && m.id !== null ? `reply:${m.id}` : `note:${m.method}:${m.params?.taskId ?? ''}`);
     if (m.id !== undefined && m.id !== null) { replies.set(m.id, m); replyCount.set(m.id, (replyCount.get(m.id) ?? 0) + 1); } else notes.push(m);
   }
@@ -1364,6 +1375,109 @@ section('tasks — figma_run as a task, and figma_result after a timeout (#4646 
   ok((await rpc('tasks/get', { taskId: orphanId })).result?.taskId === orphanId, 'tasks/revision: back at 2025-11-25, the same session reads its task again');
 }
 
+/* ── elicitation: the person is asked before hand edits are overwritten (#4646 step 3) ──────────────────────── */
+section('elicitation — the person is asked before update-components overwrites hand edits (#4646 step 3)');
+{
+  // A fake plugin that answers every command at once: a check with the hand edits below, a confirm with `applied`.
+  // Every literal is written here, not read from the bridge (docs/34 shape 1).
+  const HASH = 'h-elicit-1';
+  const CHECK = { update: { mode: 'preview', previewHash: HASH, missing: [], refused: [], sets: [
+    { set: 'Button', counts: { handEdited: 3 } }, { set: 'Card', counts: { handEdited: 1 } }, { set: 'Badge', counts: { handEdited: 0 } },
+  ] } };
+  const p = await openClient();
+  await p.hello();
+  ok(await untilAsync(async () => (await call('figma_status')).value?.connected === true), 'elicit/plugin: a fake plugin is connected');
+  const answered = new Set<string>();
+  const responder = setInterval(() => {
+    for (const m of p.texts()) {
+      if (m.type !== 'command' || answered.has(m.command.id)) continue;
+      answered.add(m.command.id);
+      const data = m.command.args?.confirm === true ? { update: { mode: 'apply', applied: true } } : CHECK;
+      p.sendJson({ type: 'result', result: { v: 1, id: m.command.id, cmd: m.command.cmd, ok: true, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), engineVersion: ENGINE_VERSION, transport: 'bridge', result: { verdict: null, data, logs: [] } } });
+    }
+  }, 20);
+  const confirms = () => p.texts().filter((m) => m.type === 'command' && m.command.cmd === 'update-components' && m.command.args?.confirm === true).length;
+  const asks = () => serverRequests.filter((m) => m.method === 'elicitation/create');
+  const OVERWRITE = { confirm: true, previewHash: HASH, choices: { handEdits: 'overwrite' } };
+  /** One overwrite confirm, the client answering any question with `answer`: what it returned, and what it caused. */
+  const confirm = async (args: unknown, answer: unknown | null, task = false) => {
+    const asked = asks().length;
+    const sent = confirms();
+    answerServer = (m) => (m.method === 'elicitation/create' ? answer : null);
+    const r = await rpc('tools/call', { name: 'figma_run', arguments: { cmd: 'update-components', args }, ...(task ? { task: {} } : {}) });
+    const reached = await until(() => confirms() > sent, 1500);
+    answerServer = () => null;
+    return { r, value: r.result?.structuredContent, isError: r.result?.isError === true, question: asks().slice(asked), reached };
+  };
+  const session = (protocolVersion: string, capabilities: unknown) => rpc('initialize', { protocolVersion, capabilities, clientInfo: { name: 'elicit', version: '1' } });
+
+  // The check, run through this bridge, so the question can name what it found.
+  await session('2025-11-25', { elicitation: {} });
+  const checked = await call('figma_run', { cmd: 'update-components', args: { confirm: false } });
+  ok(checked.value?.result?.data?.update?.previewHash === HASH, 'elicit/check: the check ran through the bridge and returned its previewHash');
+
+  // handshake/<asked>-elicitation: what each revision gets with a client that declares elicitation. The answer's
+  // capabilities are unchanged (elicitation is the client's, so the server declares nothing for it); only a revision that
+  // defines elicitation is asked. Literals, not the bridge's lists.
+  const TABLE: readonly [asked: string, elicits: boolean][] = [['2024-11-05', false], ['2025-03-26', false], ['2025-06-18', true], ['2025-11-25', true]];
+  for (const [asked, elicits] of TABLE) {
+    const plain = Object.keys((await session(asked, {})).result?.capabilities ?? {});
+    const withE = Object.keys((await session(asked, { elicitation: {} })).result?.capabilities ?? {});
+    const c = await confirm(OVERWRITE, { action: 'decline' });
+    ok(JSON.stringify(plain) === JSON.stringify(withE) && !withE.includes('elicitation') && (c.question.length === 1) === elicits && c.reached === !elicits,
+      `handshake/${asked}-elicitation: the capabilities are the same with or without the client's elicitation, and the overwrite is ${elicits ? 'asked about, then not sent' : 'sent unasked, as today'} (${withE.join(', ')}; ${c.question.length} asked; ${c.reached ? 'sent' : 'not sent'})`);
+  }
+
+  // The question, at 2025-11-25 with a form-mode client: the file, the command and the check's counts, as the text says.
+  await session('2025-11-25', { elicitation: { form: {} } });
+  const declined = await confirm(OVERWRITE, { action: 'decline' });
+  const q = declined.question[0]?.params;
+  ok(declined.question.length === 1 && q?.mode === 'form' && JSON.stringify(q?.requestedSchema) === '{"type":"object","properties":{}}',
+    `elicit/ask: an overwrite confirm sends one form elicitation/create with an empty schema (${JSON.stringify(q).slice(0, 200)})`);
+  ok(q?.message === 'Overwrite hand edits in this Figma file?\nupdate-components will replace hand edits with the plan in 2 sets: Button (3 members), Card (1 member).\nThe plugin saves a named version first. Decline, and nothing is written.',
+    `elicit/counts: the question names the sets whose hand edits the overwrite replaces, from the check, and not Badge, which has none (${JSON.stringify(q?.message)})`);
+  ok(declined.isError && !declined.reached && declined.value?.error === "The person declined, so update-components wasn't sent and nothing was written. Don't send it again unless they ask.",
+    `elicit/decline: a decline sends nothing to the plugin, and figma_run says why (${JSON.stringify(declined.value)})`);
+  const cancelled = await confirm(OVERWRITE, { action: 'cancel' });
+  ok(cancelled.isError && !cancelled.reached && /dismissed the question/.test(cancelled.value?.error ?? ''), `elicit/cancel: a dismissed question sends nothing (${JSON.stringify(cancelled.value)})`);
+  const accepted = await confirm(OVERWRITE, { action: 'accept', content: {} });
+  ok(!accepted.isError && accepted.reached && accepted.question.length === 1 && accepted.value?.result?.data?.update?.applied === true,
+    `elicit/accept: an accept sends the confirm, once, and returns the plugin's envelope (${JSON.stringify(accepted.value).slice(0, 160)})`);
+  // One set's own choice counts as the plugin counts it: Card overwritten alone, the run's choice kept.
+  const one = await confirm({ confirm: true, previewHash: HASH, choices: { handEdits: 'keep', sets: { Card: { handEdits: 'overwrite' } } } }, { action: 'decline' });
+  ok(/in 1 set: Card \(1 member\)\./.test(one.question[0]?.params?.message ?? '') && !one.reached,
+    `elicit/per-set: a per-set overwrite is asked about, naming that set alone (${JSON.stringify(one.question[0]?.params?.message)})`);
+  // What the bridge cannot read is said, not guessed: a check it did not run.
+  const unknown = await confirm({ ...OVERWRITE, previewHash: 'h-not-checked-here' }, { action: 'decline' });
+  ok(unknown.question.length === 1 && /didn't run through this bridge/.test(unknown.question[0]?.params?.message ?? '') && !unknown.reached,
+    `elicit/no-check: a confirm whose check this bridge did not run is still asked about, and says it can't list the sets (${JSON.stringify(unknown.question[0]?.params?.message)})`);
+  // Writes that discard nothing are not asked about.
+  const keep = await confirm({ confirm: true, previewHash: HASH, choices: { handEdits: 'keep' } }, { action: 'decline' });
+  ok(keep.question.length === 0 && keep.reached, `elicit/keep: a confirm that keeps hand edits is sent unasked (${keep.question.length} asked)`);
+  const onlyBadge = await confirm({ confirm: true, previewHash: HASH, choices: { sets: { Badge: { handEdits: 'overwrite' } } } }, { action: 'decline' });
+  ok(onlyBadge.question.length === 0 && onlyBadge.reached, `elicit/nothing-lost: overwriting a set the check found no hand edits in is sent unasked (${onlyBadge.question.length} asked)`);
+  // A client that can't be asked, or a question that fails, writes nothing.
+  const failed = await confirm(OVERWRITE, { action: 'maybe' });
+  ok(failed.isError && !failed.reached, `elicit/bad-answer: an answer that is neither accept, decline nor cancel writes nothing (${JSON.stringify(failed.value)})`);
+  // As a task: the question comes before the task, and a decline is a plain result, with no task made.
+  const taskDeclined = await confirm(OVERWRITE, { action: 'decline' }, true);
+  ok(taskDeclined.question.length === 1 && taskDeclined.r.result?.task === undefined && taskDeclined.isError && !taskDeclined.reached,
+    `elicit/task: a task-augmented overwrite is asked about first, and a decline makes no task (${JSON.stringify(taskDeclined.r.result).slice(0, 160)})`);
+  const taskAccepted = await confirm(OVERWRITE, { action: 'accept', content: {} }, true);
+  ok(taskAccepted.question.length === 1 && /^b/.test(taskAccepted.r.result?.task?.taskId ?? '') && taskAccepted.reached,
+    `elicit/task: an accepted one runs as a task (${JSON.stringify(taskAccepted.r.result?.task)})`);
+  // A client without elicitation at the same revision: today's behaviour, unasked.
+  await session('2025-11-25', {});
+  const unasked = await confirm(OVERWRITE, { action: 'decline' });
+  ok(unasked.question.length === 0 && unasked.reached && !unasked.isError, `elicit/no-capability: a client that declares no elicitation is sent the confirm as today (${unasked.question.length} asked)`);
+  await session('2025-11-25', { elicitation: { url: {} } });
+  const urlOnly = await confirm(OVERWRITE, { action: 'decline' });
+  ok(urlOnly.question.length === 0 && urlOnly.reached, `elicit/url-only: a client that declares URL elicitation only is not asked a form question (${urlOnly.question.length} asked)`);
+  clearInterval(responder);
+  p.sock.destroy();
+  await session('2025-11-25', { tasks: {} });
+}
+
 /* ── the self-describing bridge (#3300 A, the owner's Q3300.1–.3 A) ──────────────────────────────────────── */
 section('instructions + resources — what a fresh agent reads on connecting (#3300)');
 {
@@ -1507,6 +1621,20 @@ section('instructions + resources — what a fresh agent reads on connecting (#3
   ok(noSkill.error?.code === -32002 && noSkill.error?.data?.uri === 'skill://prism3-rebind/no-such-file.md',
     `skills/unknown: a skill file that is not served is -32002 with its uri, like an unknown prism3:// resource (${JSON.stringify(noSkill.error)})`);
   ok(listed.every((r) => r.uri.startsWith('prism3://')), 'skills/not-listed: resources/list still holds only the five prism3:// resources, not the skill files (Q3300.3 A)');
+
+  // #4646 step 3, the #4661 review's note: a request the bridge sends the client (an elicitation) can carry the id of a
+  // `skill://` read the client still waits on, since each side numbers its own requests. That request must not clear the
+  // read's record, or the read's not-found goes out as -32602. Driven in process, against a stand-in for the SDK's
+  // stdio transport, because the SDK answers a read before any question could be sent on the wire.
+  const sentOut: any[] = [];
+  const inner: any = { start: async () => undefined, close: async () => undefined, send: async (m: unknown) => { sentOut.push(m); } };
+  const wrapped = bridgeTransport(inner, 2);
+  wrapped.onmessage = () => undefined;
+  inner.onmessage({ jsonrpc: '2.0', id: 0, method: 'resources/read', params: { uri: 'skill://prism3-rebind/no-such-file.md' } });
+  await wrapped.send({ jsonrpc: '2.0', id: 0, method: 'elicitation/create', params: { mode: 'form', message: 'q', requestedSchema: { type: 'object', properties: {} } } } as never);
+  await wrapped.send({ jsonrpc: '2.0', id: 0, error: { code: -32602, message: 'Resource skill://prism3-rebind/no-such-file.md not found', data: { uri: 'skill://prism3-rebind/no-such-file.md' } } } as never);
+  ok(sentOut[0]?.method === 'elicitation/create' && sentOut[1]?.error?.code === -32002,
+    `skills/request-id: a request the bridge sends on a pending skill read's id leaves the read's not-found as -32002 (${JSON.stringify(sentOut.map((m) => m.method ?? m.error?.code))})`);
 }
 
 /* ── the adherence test's arms (#3440, Q3440.3 A) ─────────────────────────────────────────────────────────── */
@@ -1525,12 +1653,20 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     let err = '';
     let buf = '';
     const got = new Map<number, any>();
+    const asked: any[] = [];
     p.stderr.setEncoding('utf8'); p.stdout.setEncoding('utf8');
     p.stderr.on('data', (d) => { err += d; });
     p.stdout.on('data', (d) => {
       buf += d;
       let nl: number;
-      while ((nl = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, nl); buf = buf.slice(nl + 1); if (line.trim()) { const m = JSON.parse(line); if (m.id != null) got.set(m.id, m); } }
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        const m = JSON.parse(line);
+        // #4646 step 3: a request from the bridge (an elicitation) is declined, and kept; it is not a reply.
+        if (typeof m.method === 'string' && m.id != null) { asked.push(m); p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { action: 'decline' } }) + '\n'); }
+        else if (m.id != null) got.set(m.id, m);
+      }
     });
     const started = await until(() => /listening on localhost:\d+/.test(err) || p.exitCode !== null, 60000);
     let n = 0;
@@ -1542,7 +1678,7 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     };
     const stop = async () => { p.stdin.end(); await until(() => p.exitCode !== null, 5000); if (p.exitCode === null) p.kill(); };
     const port = Number(/listening on localhost:(\d+)/.exec(err)?.[1] ?? 0);
-    return { started: started && p.exitCode === null, ask, stop, stderr: () => err, port };
+    return { started: started && p.exitCode === null, ask, stop, stderr: () => err, port, asked };
   };
 
   const REC = join(TMP, 'arm0-record.jsonl');
@@ -1613,6 +1749,12 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
       ok(slow.result?.isError === true && /^b/.test(slowId) && pl.texts().some((m) => m.type === 'command' && m.command.id === slowId), `record/late: the slow call times out with its run id (${slowId})`);
       pl.sendJson({ type: 'result', result: { v: 1, id: slowId, cmd: 'readback', ok: true, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), engineVersion: ENGINE_VERSION, transport: 'bridge', result: { verdict: null, data: {}, logs: [] } } });
       await until(() => { try { return readFileSync(REC, 'utf8').includes('"kind":"late"'); } catch { return false; } });
+      // #4646 step 3: arm 0 asks too (every arm, like tasks), and a declined overwrite is recorded as refused by the bridge.
+      await s.ask('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 'arm', version: '1' } });
+      const before = pl.texts().filter((m) => m.type === 'command').length;
+      const ow = await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'update-components', args: { confirm: true, previewHash: 'h-arm0', choices: { handEdits: 'overwrite' } } } });
+      ok(s.asked.some((m) => m.method === 'elicitation/create') && ow.result?.isError === true && /declined/.test(ow.result?.structuredContent?.error ?? '') && pl.texts().filter((m) => m.type === 'command').length === before,
+        `arm/0-elicit: arm 0 asks before an overwrite, and a decline sends the plugin nothing (${JSON.stringify(ow.result?.structuredContent)})`);
       pl.sock.destroy();
     }
     await s.stop();
@@ -1622,8 +1764,8 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
   const lines = (() => { try { return readFileSync(REC, 'utf8').trim().split('\n').map((l) => JSON.parse(l)); } catch { return []; } })();
   const attempts = lines.filter((l) => l.kind === 'attempt');
   const outcomeOf = (seq: number) => lines.find((l) => l.kind === 'outcome' && l.seq === seq)?.outcome;
-  const want = [['context', 'refused-by-bridge'], ['status', 'tool-error'], ['run-code', 'tool-error'], ['readback', 'tool-error']];
-  ok(attempts.length === 4 && want.every(([cmd, outcome], i) => attempts[i]?.cmd === cmd && attempts[i]?.arm === 0 && outcomeOf(attempts[i].seq) === outcome),
+  const want = [['context', 'refused-by-bridge'], ['status', 'tool-error'], ['run-code', 'tool-error'], ['readback', 'tool-error'], ['update-components', 'refused-by-bridge']];
+  ok(attempts.length === 5 && want.every(([cmd, outcome], i) => attempts[i]?.cmd === cmd && attempts[i]?.arm === 0 && outcomeOf(attempts[i].seq) === outcome),
     `record/calls: the log holds each figma_run with its outcome, the refused context first (${attempts.map((a) => `${a.cmd}→${outcomeOf(a.seq)}`).join(', ')})`);
   ok(attempts[2]?.args?.code === 'return 1', `record/args: run-code's code is kept whole (${JSON.stringify(attempts[2]?.args)})`);
   // #4656 item 2: the timed-out call keeps its `tool-error` outcome, and how its run ended follows as one `late` line.
