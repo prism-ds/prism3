@@ -1170,6 +1170,113 @@ const OWNER_RULES: OwnerRule[] = [
     must: [/list, then get/i, /`list_components`/, /`get_component`/, /before you compose/i],
     resolve: [],
   },
+  // #4617 (owner decisions, 2026-11-26): `prism3-build-screens` prefers Prism3's own component on each surface, records
+  // every stack stand-in under a Stand-ins ledger heading, and renders and checks every view before the ledger. Each
+  // placement is held to its own section, so moving or dropping one fails by its own id.
+  {
+    id: '#4617 prefer Prism3 components, record each stand-in (section 3)',
+    skills: ['prism3-build-screens'],
+    section: '## 3.',
+    roles: [],
+    must: [/Prefer Prism3's own component on each surface/, /stack's equivalent, restyled to the Prism3\s+spec/, /\*\*Stand-ins\*\*/, /naming the Prism3 component\s+it stands in for/, /Never use a stack component where Prism3's own exists/],
+    resolve: [],
+  },
+  {
+    // The Figma target: instances only, never detached, and a hand-built frame is a `GAP / ` layer (#4469).
+    id: '#4617 Figma: instances, never detached (section 3)',
+    skills: ['prism3-build-screens'],
+    section: '## 3.',
+    roles: [],
+    must: [/as an instance,\s+attached; never detach/, /`GAP \/ `/],
+    resolve: [],
+  },
+  {
+    // A planned or absent component has no spec to restyle to, so it gets no stand-in (owner decision 7175625635).
+    // Scoped to code (owner Q1 A, 2026-11-27); the Figma half is the next rule.
+    id: '#4617 no stand-in without a Prism3 component (section 3)',
+    skills: ['prism3-build-screens'],
+    section: '## 3.',
+    roles: [],
+    must: [/In code, a piece Prism3 has no component for is still left out/, /A stand-in always names the Prism3\s+component it stands in for/, /`planned` list/, /leave it out and name it/],
+    resolve: [],
+  },
+  {
+    // A planned component, such as a card (owner Q1 A, 2026-11-27): in code it is left out (the rule above); on the
+    // Figma canvas it is a hand-built `GAP / <Component>` frame, counted in the ledger, as `prism3-rebind` names it.
+    id: '#4617 Figma: a planned component is a GAP frame (section 3)',
+    skills: ['prism3-build-screens'],
+    section: '## 3.',
+    roles: [],
+    must: [/component Prism3 only plans/, /"GAP \/ [A-Z]/, /counted in the ledger/],
+    resolve: [],
+  },
+  {
+    id: '#4617 Stand-ins in the ledger (section 5)',
+    skills: ['prism3-build-screens'],
+    section: '## 5.',
+    roles: [],
+    must: [/plus a fifth heading: Stand-ins/, /\*\*Used\*\*/, /\*\*Composed\*\*/, /\*\*Invented\*\*/, /\*\*Unsure\*\*/, /\*\*Stand-ins\*\* lists/, /the Prism3 `id` it\s+stands in for/, /off spec/],
+    resolve: [],
+  },
+  {
+    id: '#4617 the Stand-ins list is the hardening backlog (section 5)',
+    skills: ['prism3-build-screens'],
+    section: '## 5.',
+    roles: [],
+    must: [/Stand-ins list is the hardening backlog/],
+    resolve: [],
+  },
+  // The rendered check: one rule per pass, since each pass is its own bullet (a block), so dropping one fails by name.
+  {
+    id: '#4617 rendered check: every view (section 4)',
+    skills: ['prism3-build-screens'],
+    section: '## 4.',
+    roles: [],
+    must: [/1280px and 390px/, /light and dark/, /open and closed/, /horizontal overflow/],
+    resolve: [],
+  },
+  {
+    id: '#4617 rendered check: contrast on resolved colors (section 4)',
+    skills: ['prism3-build-screens'],
+    section: '## 4.',
+    roles: [],
+    must: [/contrast on resolved colors/i, /real surface under it, per mode/],
+    resolve: [],
+  },
+  {
+    id: '#4617 rendered check: the keyboard path (section 4)',
+    skills: ['prism3-build-screens'],
+    section: '## 4.',
+    roles: [],
+    must: [/keyboard path/i, /Escape closes/, /focus returns/],
+    resolve: [],
+  },
+  {
+    id: '#4617 rendered check: reduced motion (section 4)',
+    skills: ['prism3-build-screens'],
+    section: '## 4.',
+    roles: [],
+    must: [/`prefers-reduced-motion`/, /becomes a fade/],
+    resolve: [],
+  },
+  {
+    id: '#4617 rendered check: each unrendered view under Unsure (section 4)',
+    skills: ['prism3-build-screens'],
+    section: '## 4.',
+    roles: [],
+    must: [/could\s+not render/, /\*\*Unsure\*\*/],
+    resolve: [],
+  },
+  // #4604 (owner decision A, comment 7201572369): next to a destructive action, the routine action is the neutral
+  // button, on every brand. Held here; the `prism3-build-ui` half lands with #4604's own build.
+  {
+    id: '#4604 neutral beside destructive (section 3)',
+    skills: ['prism3-build-screens'],
+    section: '## 3.',
+    roles: [],
+    must: [/Next to a destructive action, the routine action uses the neutral button/, /`button-neutral`/, /every\s+brand/],
+    resolve: [],
+  },
   // #4615 (owner direction, 2026-11-26): `prism3-motion` gets a choreography section and a plain-words-to-preset
   // table, phrased only in Prism3 presets and tokens (`lint-motion-literals` holds the no-number half). One rule per
   // choreography point, each held to its section, so dropping or moving any one fails by its own id.
@@ -1333,6 +1440,44 @@ export const ledgerComponentFindings = (text: string, ids: ReadonlySet<string>, 
   }
   const ui = join(skillsDir, 'prism3-build-ui', 'SKILL.md');
   if (existsSync(ui)) findings.push(...ledgerComponentFindings(readFileSync(ui, 'utf8'), ids, plannedOnly));
+}
+
+// ---- 8c. THE WORKED STAND-INS ENTRY'S COMPONENTS (#4617) ------------------------------------------------------------
+// `prism3-build-screens` teaches what a Stand-ins entry names with one worked entry: "<stack component> for `<id>`". Each
+// `<id>` after "for" must be a registered component, and the entry must name at least one, or it teaches an agent to
+// write a stand-in for a component that has no spec to restyle to (owner rule '#4617 no stand-in without a Prism3
+// component'). A planned-only name fails by the same test: it is not registered. Oracle: the registry; subject: the
+// skill text. WHAT IT CANNOT SEE: whether the stack component named beside each id is a fair equivalent.
+export const standInFindings = (text: string, ids: ReadonlySet<string>): Finding[] => {
+  const file = 'skills/prism3-build-screens/SKILL.md';
+  const lines = text.split('\n');
+  const i = lines.findIndex((l) => l.startsWith('> **Stand-ins:**'));
+  if (i < 0) return [{ file, kind: 'stand-in component', detail: 'the skill has no worked **Stand-ins:** entry to check' }];
+  const body: string[] = [];
+  for (let j = i; j < lines.length && lines[j].startsWith('>') && lines[j].trim() !== '>'; j++) body.push(lines[j].replace(/^>\s?/, ''));
+  const named = [...body.join(' ').matchAll(/\bfor `([^`]+)`/g)].map((m) => m[1]);
+  const out: Finding[] = [];
+  if (!named.length) out.push({ file, kind: 'stand-in component', detail: 'the worked **Stand-ins:** entry names no Prism3 component ("<stack component> for `<id>`")' });
+  for (const n of named) if (!ids.has(n)) out.push({ file, kind: 'stand-in component', detail: `the worked **Stand-ins:** entry stands in for \`${n}\`, which no component definition registers` });
+  return out;
+};
+{
+  const ids = new Set(componentDefs.map((d) => d.id));
+  // Self-check, both directions: real ids pass; a planned-only id fails once; an entry naming no id fails once; no entry fails once.
+  const good = '> **Stand-ins:** shadcn `Button` for `button-neutral` (matches). shadcn `Dialog` for `dialog` (matches).\n';
+  const self: [string, number, number][] = [
+    ['real ids', standInFindings(good, ids).length, 0],
+    ['a planned-only id', standInFindings(good.replace('for `dialog`', 'for `card`'), ids).length, 1],
+    ['no id named', standInFindings('> **Stand-ins:** a stock button, restyled.\n', ids).length, 1],
+    ['no entry', standInFindings('no ledger here\n', ids).length, 1],
+  ];
+  const brokenSelf = self.filter(([, got, want]) => got !== want);
+  if (brokenSelf.length) {
+    console.error(`\n❌ the stand-in component check is broken: ${brokenSelf.map(([w, g, n]) => `${w} gave ${g} finding(s), expected ${n}`).join('; ')}`);
+    process.exit(1);
+  }
+  const screens = join(skillsDir, 'prism3-build-screens', 'SKILL.md');
+  if (existsSync(screens)) findings.push(...standInFindings(readFileSync(screens, 'utf8'), ids));
 }
 
 // ---- 9. RETIRED SKILL NAMES (#3412) --------------------------------------------------------------
