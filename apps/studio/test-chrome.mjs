@@ -8556,7 +8556,7 @@ for (const host of ['web', 'figma']) {
   ok(found.length === 0, `#4342 lint-chrome-bounds: test-chrome.mjs makes no evaluate the bound cannot reach${found.length ? ` — ${found.slice(0, 4).join('; ')}` : ''}`);
   // #4647: the other browser suites, by repo path. EXEMPT names each file that launches a browser and is not held, and why.
   const SUITES = [
-    'apps/studio/test-smoke.mjs', 'apps/studio/test-site-headers.mjs', 'apps/studio/test-export-parity.mjs', 'apps/studio/lint-live-css.mjs',
+    'apps/studio/test-smoke.mjs', 'apps/studio/test-site-headers.mjs', 'apps/studio/test-export-parity.mjs', 'apps/studio/lint-live-css.mjs', 'apps/studio/test-plays-the-data.ts',
     'apps/plugin/test-start-screen.mjs', 'apps/plugin/test-build-verdict.mjs', 'apps/plugin/test-style-guides-page.mjs', 'apps/plugin/test-agent-bridge.ts',
   ];
   const EXEMPT = {

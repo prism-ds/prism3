@@ -2969,7 +2969,7 @@ const SG_MOTION = '[data-p3="preview-body"] [data-p3="motion-style-guide"]';
  *  Literal. `fields` is whether the preview draws a form control (Motion's Slow motion select; Depth draws none). */
 const EXPECT_SPLIT = [
   { tab: 'depth', sel: SG_DEPTH, sections: ['Elevation'], pieces: { 'shadow-ramp': 'Elevation', 'shadow-tint': 'Elevation' }, fields: false },
-  { tab: 'motion', sel: SG_MOTION, sections: ['Motion'], pieces: { 'motion-curves': 'Motion', 'duration-ramp': 'Motion', springs: 'Motion', 'motion-transitions': 'Motion' }, fields: true },
+  { tab: 'motion', sel: SG_MOTION, sections: ['Motion'], pieces: { 'motion-stage': 'Motion', 'motion-curves': 'Motion', 'duration-ramp': 'Motion', springs: 'Motion', 'motion-transitions': 'Motion' }, fields: true },
 ];
 /** Open Depth or Motion through the tab row (S9.2: it left the Pages menu for the two panes). */
 const gotoSplit = async (page, x) => {

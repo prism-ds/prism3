@@ -48,5 +48,7 @@
     { "file": "test-canonical-names.ts", "floor": 28 },
     { "file": "test-legacy-input.ts", "floor": 23 }
   ],
-  "elsewhere": {}
+  "elsewhere": {
+    "test-plays-the-data.ts": "its own CI step, test:plays-the-data, after the web build: it drives dist/main.js in Chromium (#4571)"
+  }
 }

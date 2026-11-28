@@ -22,9 +22,10 @@ import { h, hook } from '../shell/dom';
 import { DOMAINS, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import {
-  durationRampSection, motionCurvesSection, motionTransitionsSection, presetCurveOf, springsSection,
-  type DurationsCopy, type TransitionsCopy,
+  durationRampSection, motionCurvesSection, motionStageSection, motionTransitionsSection, presetCurveOf, springsSection,
+  type DurationsCopy, type StageCopy, type TransitionsCopy,
 } from './sections/index';
+import { buildTree, pxOf, subNode, type Theme } from '@prism3/engine';
 import { SG_SURFACES, ground, oppositeOf, palSection, sgContext, type SgRole } from './sections/kit';
 import { must } from '../must';
 
@@ -34,6 +35,19 @@ const copyOf = (title: string): { title: string; desc: string } => ({ title, des
 
 /** The preview's own copy. APPROVED (owner, 2026-10-04) unless marked DRAFT; the DRAFT strings are in the S9.2
  *  fragment's "Copy for owner approval" block. */
+/** A Used by chip's label (owner, #4665, 2026-11-28: human labels, as in wireframe A). No display name for a pattern
+ *  exists in the engine, so the label is composed: the component, or the dialog placement's name, then the rest of the
+ *  pattern's path as written ("dialog/bottom/enter" → "Bottom sheet enter", "tooltip/show" → "Tooltip show"). The
+ *  engine name stays on the chip as `data-pattern`. */
+const PLACEMENT_NAMES: Record<string, string> = { 'dialog/bottom': 'bottom sheet', 'dialog/end': 'end panel' };
+export const patternLabel = (name: string): string => {
+  const segs = name.split('/');
+  const placed = PLACEMENT_NAMES[segs.slice(0, 2).join('/')];
+  const words = placed ? [placed, ...segs.slice(2)] : segs;
+  const text = words.join(' ');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+};
+
 export const MOTION_PREVIEW_COPY = {
   curves: { title: 'Curves', desc: 'The six curves are fixed. Each role picks one.' },   // title DRAFT (concept v6's)
   durations: {
@@ -56,6 +70,21 @@ export const MOTION_PREVIEW_COPY = {
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
   } satisfies TransitionsCopy,
+  /** #4571 PR 3: the stage. The owner approved these on #4665 (2026-11-28): A throughout, the description trimmed,
+   *  the delay suffix B, and the Used by chips in human labels as in wireframe A. */
+  stage: {
+    title: 'In motion',
+    desc: 'Each preset playing on the patterns that use it, with one bar per moving part.',
+    preset: 'Preset',
+    usedBy: 'Used by',
+    specimen: 'No pattern uses this preset yet, so it plays on a specimen.',
+    timeline: 'Timeline',
+    play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
+    reduced: 'Reduced motion is on: playing once on request.',
+    ms: (ms: number) => `${ms}ms`,
+    delay: (ms: number) => `${ms}ms delay`,
+    pattern: patternLabel,
+  } satisfies StageCopy,
 } as const;
 
 /** Whether the viewer asked for reduced motion. Read on every paint, so a change applies at the next one. */
@@ -63,6 +92,20 @@ const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMe
 
 /** The Slow motion divisor: view state, kept for the session (a page visit never resets it), never a token. */
 let slowmo = 1;
+/** The stage's preset and pattern (#4571 PR 3): view state, kept for the session, never written to the brand. A
+ *  pattern of null plays the preset's first user. */
+let stagePreset: string | null = null;
+let stagePattern: string | null = null;
+
+/** A distance token's px (`distance.nudge`, `space.<step>`), read from the brand's tree once per theme. Drawing only:
+ *  where an element travels, never when. */
+const treeOf = new WeakMap<Theme, unknown>();
+const distancePxOf = (t: Theme) => (token: string): number => {
+  let tree = treeOf.get(t);
+  if (!tree) { tree = buildTree(t).tree; treeOf.set(t, tree); }
+  const n = subNode(tree, `${t.root}.motion.${token}`) ?? subNode(tree, `${t.root}.${token}`);
+  return n ? pxOf(tree, n) : 0;
+};
 
 /** Mount the Motion preview into `host`. Subscriptions are released through `cleanups`. */
 export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]): void => {
@@ -98,8 +141,15 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
       onSlowmo: (v) => { slowmo = v; paint('mode'); },
       onPlay: () => { played = true; },
     }, C.transitions);
-    play = traces.play;
-    m.append(motionCurvesSection(mo, cur, C.curves), durationRampSection(mo, cur, C.durations), springsSection(mo.spring, C.springs), traces.node);
+    if (!stagePreset || !mo.presets.some((p) => p.preset === stagePreset)) stagePreset = mo.presets[0]?.preset ?? '';
+    const stage = motionStageSection(c, mo, cur, distancePxOf(theme), {
+      preset: stagePreset, pattern: stagePattern, slowmo, reduced, played,
+      onPick: (preset, pattern) => { stagePreset = preset; stagePattern = pattern; paint('mode'); },
+      onSlowmo: (v) => { slowmo = v; paint('mode'); },
+      onPlay: () => { played = true; },
+    }, C.stage);
+    play = () => { traces.play(); stage.play(); };
+    m.append(stage.node, motionCurvesSection(mo, cur, C.curves), durationRampSection(mo, cur, C.durations), springsSection(mo.spring, C.springs), traces.node);
 
     const secs = [m];
     // Q24: each section's container on the levers panel's gray, as the other previews' are.
@@ -107,11 +157,12 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
     card.replaceChildren(...secs.map((s) => ground(c, s, page)));
 
     // D9: a Motion edit plays the traces once, at the chosen speed, unless reduced motion is on.
-    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.presets.map((p) => presetCurveOf(mo, cur, p))]);
+    const drawn = JSON.stringify([mo.motionByMode?.[cur]?.duration ?? mo.duration, mo.presets, mo.patterns, mo.presets.map((p) => presetCurveOf(mo, cur, p))]);
     if (why === 'brand' && lastDrawn !== null && lastMode === cur && drawn !== lastDrawn && !reduced) {
       played = true;
       play();
       card.querySelector<HTMLElement>('[data-p3="motion-play"]')!.textContent = C.transitions.replay;
+      card.querySelector<HTMLElement>('[data-p3="motion-stage-play"]')!.textContent = C.stage.replay;
     }
     lastDrawn = drawn;
     lastMode = cur;

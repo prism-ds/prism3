@@ -14,6 +14,7 @@
     "test:chrome": "node test-chrome.mjs",
     "test:chrome-shards": "node test-chrome-shards.mjs",
     "test:export-parity": "node test-export-parity.mjs",
+    "test:plays-the-data": "npx tsx test-plays-the-data.ts",
     "test:site-headers": "node test-site-headers.mjs",
     "lint:contrast": "node lint-contrast.mjs",
     "lint:live-css": "node lint-live-css.mjs && node test-live-css.mjs",
