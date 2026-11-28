@@ -33,12 +33,15 @@ export const INPUT_MS = 15000;
  *  read them: a probe that asks whether a stuck page renders must not itself be bounded, or its own bound's diagnosis
  *  would probe again. `lint-chrome-bounds` (section 20 of test-chrome) fails by name on any use outside this file. */
 const RAW = Symbol('p3.unbounded');
-/** `page.evaluate` without the bound, for this file's probes. A page from a browser `boundEvaluates` never patched
- *  (test-smoke's) has no originals stored, so its own method is the raw one. */
+/** `page.evaluate` without the bound, for this file's probes. A page from a browser `boundEvaluates` never patched has
+ *  no originals stored, so its own method is the raw one. */
 const rawEvaluate = (page, fn) => {
   const f = page.mainFrame();
   return (Object.getPrototypeOf(f)[RAW]?.evaluate ?? f.evaluate).call(f, fn);
 };
+/** A CDP session's `send` without the bound (#4647), for this file's debugger: `Debugger.enable` and `Debugger.pause`
+ *  are raced against their own 3 s here, and a probe of a stuck page must not itself be bounded. */
+const rawSend = (cdp, method, params) => (Object.getPrototypeOf(cdp)[RAW]?.send ?? cdp.send).call(cdp, method, params);
 
 /** Whether the page renders a frame within 3 s, bounded on this side. */
 export const rendersFrame = (page) => Promise.race([
@@ -52,7 +55,7 @@ const debuggerOf = async (page) => {
   const pending = (async () => {
     try {
       const cdp = await page.context().newCDPSession(page);
-      const on = await Promise.race([cdp.send('Debugger.enable').then(() => true, () => false), new Promise((r) => setTimeout(() => r(false), 3000))]);
+      const on = await Promise.race([rawSend(cdp, 'Debugger.enable').then(() => true, () => false), new Promise((r) => setTimeout(() => r(false), 3000))]);
       return on ? cdp : null;
     } catch { return null; }
   })();
@@ -78,11 +81,11 @@ const stallStack = async (page) => {
   if (!cdp) return 'no debugger session could be opened on the page, so where it stopped is unknown';
   try {
     const paused = new Promise((r) => cdp.once('Debugger.paused', (e) => r(e)));
-    await Promise.race([cdp.send('Debugger.pause').catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+    await Promise.race([rawSend(cdp, 'Debugger.pause').catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     const e = await Promise.race([paused, new Promise((r) => setTimeout(() => r(null), 5000))]);
     if (!e) return 'the debugger could not pause it within 5s: it was not running JavaScript (layout, paint, GC, or no frames being produced at all)';
     const frames = (e.callFrames ?? []).slice(0, 6).map((f) => `${f.functionName || '(anonymous)'} ${String(f.url).split('/').pop() || '(page)'}:${f.location.lineNumber + 1}`);
-    await Promise.race([cdp.send('Debugger.resume').catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+    await Promise.race([rawSend(cdp, 'Debugger.resume').catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     return `it was running JavaScript: ${frames.join(' < ') || '(no frames)'}`;
   } catch (err) {
     return `the debugger failed (${String(err?.message ?? err).slice(0, 80)})`;
@@ -209,11 +212,25 @@ export const INPUT_METHODS = {
  *     into JSHandle.evaluate after an await) is bounded at the outer call alone, which an AsyncLocalStorage marks.
  *   · `within(page, label, page.evaluate(…), ms)` passes the promise itself, and takes the bound over (`DISARM`), so
  *     an explicit label and limit always win over these.
+ *   · Every CDP session's `send` goes the same way (#4647): a `DOM.getDocument`, an `Accessibility.getPartialAXTree`
+ *     or an `Emulation.setEmulatedMedia` is answered on the renderer's main thread, and Playwright sends it with no
+ *     timeout either. Its label names the CDP method; the page is the one the session was opened on, recorded by
+ *     `newCDPSession`, which is wrapped for that alone.
  *   · The process-wide reach is the point, and the limit: a page of another browser binary, a CDP `Runtime.evaluate`
  *     or a CDP `Input.dispatch…` is not covered, which `lint-chrome-bounds` keeps out of the suite.
+ *   · Every browser suite installs it (#4647: test-chrome, test-smoke, test-site-headers, test-export-parity,
+ *     lint-live-css, and the plugin's test-start-screen, test-build-verdict, test-style-guides-page and
+ *     test-agent-bridge), right after its launch and before any page; `lint-chrome-bounds` holds each to that. One
+ *     install per process: the prototypes are shared, so a second call (a suite that launches twice) returns the
+ *     first call's stats and patches nothing again.
  * Returns the stats `log` gathers: the slowest call that settled, by site, so the bound's margin can be measured.
  */
-export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
+let installed = null;
+export const boundEvaluates = async (browser, opts) => {
+  installed ??= install(browser, opts);
+  return installed;
+};
+const install = async (browser, { ms, where = () => '' }) => {
   const { AsyncLocalStorage } = await import('node:async_hooks');
   const inner = new AsyncLocalStorage();
   const stats = { calls: 0, slowestMs: 0, slowestSite: '', bySite: new Map() };
@@ -222,6 +239,7 @@ export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
     const page = await ctx.newPage();
     await page.setContent('<p>bounds</p>');
     const handle = await page.locator('p').elementHandle();
+    const cdp = await ctx.newCDPSession(page);
     const protoOf = (o, name) => { for (let p = Object.getPrototypeOf(o); p; p = Object.getPrototypeOf(p)) if (Object.hasOwn(p, name)) return p; return null; };
     const targets = [
       [Object.getPrototypeOf(page), (o) => o, ['evaluate', 'evaluateHandle', '$eval', '$$eval', 'waitForFunction']],
@@ -233,8 +251,21 @@ export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
       [Object.getPrototypeOf(page.keyboard), (o) => o._page ?? null, INPUT_METHODS.keyboard],
       [Object.getPrototypeOf(page.mouse), (o) => o._page ?? null, INPUT_METHODS.mouse],
       [Object.getPrototypeOf(page.touchscreen), (o) => o._page ?? null, INPUT_METHODS.touchscreen],
+      // #4647: a CDP session's commands, answered on the renderer's main thread (DOM, Accessibility, Emulation, CSS).
+      [protoOf(cdp, 'send'), (o) => sessionPage.get(o) ?? null, ['send']],
     ];
-    const kinds = { Page: 'page', Frame: 'frame', Locator: 'locator', JSHandle: 'handle', ElementHandle: 'handle', Keyboard: 'keyboard', Mouse: 'mouse', Touchscreen: 'touchscreen' };
+    // The page each CDP session was opened on, so a stalled `send` reads that page. `newCDPSession` takes a Page or a
+    // Frame; it is wrapped to record that and nothing else, and it is not bounded: attaching is answered by the browser.
+    const sessionPage = new WeakMap();
+    const ctxProto = protoOf(ctx, 'newCDPSession');
+    if (!ctxProto) throw new Error('boundEvaluates: BrowserContext.newCDPSession was not found, so CDP commands cannot be bounded');
+    const newSession = ctxProto.newCDPSession;
+    ctxProto.newCDPSession = async function newCDPSession(target, ...rest) {
+      const s = await newSession.call(this, target, ...rest);
+      sessionPage.set(s, typeof target?.mainFrame === 'function' ? target : target?.page?.() ?? null);
+      return s;
+    };
+    const kinds = { Page: 'page', Frame: 'frame', Locator: 'locator', JSHandle: 'handle', ElementHandle: 'handle', Keyboard: 'keyboard', Mouse: 'mouse', Touchscreen: 'touchscreen', CDPSession: 'cdp' };
     for (const [proto, pageOf, names] of targets) {
       if (!proto) throw new Error('boundEvaluates: a Playwright prototype was not found, so the evaluates and input cannot be bounded');
       const kind = kinds[proto.constructor.name.replace(/^_/, '').replace(/\d+$/, '')] ?? proto.constructor.name;
@@ -255,6 +286,7 @@ export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
           Error.captureStackTrace(site, bounded);
           Error.stackTraceLimit = lim;
           const page = pageOf(this);
+          const call = name === 'send' ? `${kind}.send('${a[0]}')` : `${kind}.${name}`;
           let bound = page?.[BOUND_MS] ?? ms;
           if (name === 'waitForFunction') {
             const t = a[2]?.timeout;
@@ -270,14 +302,14 @@ export const boundEvaluates = async (browser, { ms, where = () => '' }) => {
               if (late) return;
               const took = Date.now() - t0;
               stats.calls++;
-              if (took > stats.slowestMs) { stats.slowestMs = took; stats.slowestSite = `${kind}.${name} (${siteOf(site)})`; }
-              if (took > 1000) { const k = `${kind}.${name} (${siteOf(site)})`; stats.bySite.set(k, Math.max(took, stats.bySite.get(k) ?? 0)); }
+              if (took > stats.slowestMs) { stats.slowestMs = took; stats.slowestSite = `${call} (${siteOf(site)})`; }
+              if (took > 1000) { const k = `${call} (${siteOf(site)})`; stats.bySite.set(k, Math.max(took, stats.bySite.get(k) ?? 0)); }
             };
             raw.then((v) => { done(); resolve(v); }, (e) => { done(); reject(e); });
             timer = setTimeout(async () => {
               late = true;
               const w = where();
-              reject(new Error(await stallMessage(page, `${kind}.${name} (${siteOf(site)}${w ? `; ${w}` : ''})`, bound)));
+              reject(new Error(await stallMessage(page, `${call} (${siteOf(site)}${w ? `; ${w}` : ''})`, bound)));
             }, bound);
           });
           out[DISARM] = () => { clearTimeout(timer); late = true; };
