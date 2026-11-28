@@ -53,6 +53,11 @@ npm install ./prism3-tokens-<version>.tgz       # in the client project
 under `@media (prefers-color-scheme: dark)` on `:root:not([data-theme])`, with no script and no flash of light. A page
 or subtree that sets `data-theme` keeps the theme it asked for. The high-contrast modes are opt-in only, by attribute.
 
+**With the shadcn/ui theme.** The shadcn/ui theme the engine exports switches on the `.dark` class, not on
+`data-theme`, and doesn't follow the system setting. On a page that uses both, set `class="dark"` and
+`data-theme="dark"` together on the same element ([The shadcn/ui theme](https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme)).
+In light, set `data-theme="light"` (or remove both), so the token CSS doesn't follow a dark system.
+
 The CSS defines custom properties only, so it can't set `color-scheme`, which native form controls and scrollbars read.
 Add it beside the import:
 
@@ -106,6 +111,9 @@ falls back to the same kind of face rather than the browser default. The build r
 `prism3.web.base.tokens.json`, which is the conforming base with each stack as its DTCG array value. The
 platform-neutral `prism3.base.tokens.json` keeps one family per typeface, because a comma list isn't a font
 name on Android. `check-package.mjs`'s [FALLBACK] arm checks the generic family in every block.
+
+The CSS names each typeface but doesn't load it: it carries no `@font-face`. Load each face yourself, under the
+family name its stack starts with.
 
 ### Two names that read differently elsewhere (#4161, #4175)
 
@@ -393,7 +401,7 @@ compile, would not parse, or states the wrong number) or **lost** (absent).
 
 ### What it found
 
-The full tables are in [`sd-version-matrix.md`](sd-version-matrix.md). In short:
+The full tables are in [`sd-version-matrix.md`](https://github.com/prism-ds/prism3/blob/main/packages/tokens/sd-version-matrix.md). In short:
 
 - **Web is whole.** CSS, SCSS and JavaScript carry every type usably except gradient on CSS and
   SCSS, the known consumer gap above.

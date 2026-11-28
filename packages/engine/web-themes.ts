@@ -232,9 +232,9 @@ export const SHADCN_BASE_CSS = {
   },
 } as const;
 
-/** The registry item's `docs` line (owner decision 2026-11-24 A on #4575, wording approved): a pointer to the full
- *  consumer note, the `### The shadcn/ui theme` section of `apps/studio/README.md`. */
-export const SHADCN_DOCS = 'Focus rings draw at full strength. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme';
+/** The registry item's `docs` line (owner decision 2026-11-24 A on #4575, wording approved; the font sentence is #4636,
+ *  approved by the owner 2026-11-28): a pointer to the full consumer note, the `### The shadcn/ui theme` section of `apps/studio/README.md`. */
+export const SHADCN_DOCS = 'Focus rings draw at full strength. The theme names the brand\'s sans and mono fonts but doesn\'t load them. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme';
 
 /** The `registry:theme` item `npx shadcn add <url>` installs. */
 export const shadcnRegistryItem = (h: Handoff): Record<string, unknown> => ({
