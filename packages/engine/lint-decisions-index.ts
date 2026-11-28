@@ -363,6 +363,7 @@ const REQUIRED_DECISION_DOCS: readonly string[] = [
   'docs/44-materialization-renames.md',
   'docs/45-style-guide-generator.md',
   'docs/46-never-detach.md',
+  'docs/47-brands-as-modes.md',
 ];
 const required = new Set(REQUIRED_DECISION_DOCS);
 
