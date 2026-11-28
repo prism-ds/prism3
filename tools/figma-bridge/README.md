@@ -171,6 +171,40 @@ that reason. Progress and log lines streamed while the socket was down are not r
 result the plugin still keeps logs "a result for a command this bridge is not waiting on"; that is
 harmless.
 
+## Writes that discard work: the bridge asks first (#4646)
+
+Three writes throw away something a person may want back: `prune` (deletes what the brand no longer
+uses), `update-components` with `handEdits: "overwrite"` (replaces hand edits with the plan), and
+`panels-clean` (removes usage panels). When the client declares MCP elicitation with a form, the
+bridge asks the person before it sends any of them with `confirm: true`:
+
+1. It reads which file is open (`status`) and runs the same command as a dry run (`confirm: false`).
+2. If the agent's `previewHash` no longer matches the dry run's, the file changed since the preview:
+   the call is refused without asking ("Run the preview again").
+3. If the dry run would discard nothing, the write goes out without asking.
+4. Otherwise the person sees one question naming the file, the command's count and, where the plugin
+   gives one, its summary, with one checkbox, **Allow**. It says whether Prism3 saves a named version
+   first: `prune` and an update apply do (the plugin's `saveVersion`), `panels-clean` does not, and
+   the question tells the person to save one in Figma first if they want to come back.
+5. Allow sends the write as the agent sent it. Anything else (unchecked, declined, cancelled, or no
+   answer within 10 minutes) is a refusal (`declined: true`) and nothing is written. For
+   `panels-clean`, which has no hash, the bridge reads the file name again after the answer and
+   refuses if the open file changed.
+
+`prune` and an overwrite are tied to the file by `previewHash`, which the plugin checks again when it
+writes. `panels-clean` is tied by the file's name, which is weaker: two open files with the same name
+look alike.
+
+A client without form elicitation sees no change: `confirm: true` (with its `previewHash`) is the
+confirmation, as before. A bare `elicitation: {}`, which clients before `2025-11-25` send, counts as a
+form. A gated `figma_run` sent as a task asks before the task exists, so the task reply waits for the
+answer; a refusal is a plain result, not a task. Every arm asks, because this is a safety check, not
+something an agent is shown. At arm 0, `--record` logs a refusal as `refused-by-bridge`. Not asked
+about: `draw-specs`, which replaces only a spec panel Prism3 drew and nobody edited, and keeps an edited one aside;
+`set-override`, a Theme write that saves a named version itself and removes no nodes; and `run-code` (dev builds only),
+whose writes the bridge cannot count ahead of time.
+`docs/public/reference/commands.json` lists the gated writes under the bridge's `elicitation`.
+
 ## What an agent reads on connecting (#3300)
 
 A fresh agent with no checkout arrives knowing the rules that matter in a Figma file, and where to read

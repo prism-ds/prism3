@@ -125,7 +125,7 @@ import type { AgentResult, AgentLinkState } from './src/agent-protocol';
 import { createBridgeRelay, BRIDGE_PORT, BRIDGE_URL } from './src/agent-bridge-relay';
 import type { WsLike } from './src/agent-bridge-relay';
 import { pairPromptText } from './src/agent-link-ui';
-import { createPairing, createProgressCounter, loadSecret, RESOURCES } from '../../tools/figma-bridge/server';
+import { createPairing, createProgressCounter, loadSecret, RESOURCES, bridgeTransport } from '../../tools/figma-bridge/server';
 import { HANDSHAKE_PROBES, SERVER_INFO as ENGINE_SERVER } from '@prism3/engine/harness';
 import { READ_COMMANDS, AGENT_COMMANDS } from './src/agent-protocol';
 import { readFixture, ARGS, EXPECTED, canon, ACTIVITY_NOTES, activityExpected, atRead, contextExpected } from './agent-read-fixture';
@@ -177,6 +177,9 @@ const replies = new Map<number, any>();
 /** How many replies arrived per request id: a result delivered twice would show here, not in `replies`. */
 const replyCount = new Map<number, number>();
 const notes: any[] = [];
+/** #4646 step 3: requests the server sends the client (a `method` AND an `id`, such as `elicitation/create`), kept apart
+ *  from the replies: their ids are the server's own and would collide with this test's. */
+const asks: any[] = [];
 /** #4646: every stdout message in arrival order, `reply:<id>` or `note:<method>:<taskId>`, for the arms that care which came first. */
 const arrivals: string[] = [];
 let out = '';
@@ -190,6 +193,7 @@ child.stdout.on('data', (d) => {
     const line = out.slice(0, nl); out = out.slice(nl + 1);
     if (!line.trim()) continue;
     const m = JSON.parse(line);
+    if (m.method !== undefined && m.id !== undefined && m.id !== null) { arrivals.push(`ask:${m.method}`); asks.push(m); continue; }
     arrivals.push(m.id !== undefined && m.id !== null ? `reply:${m.id}` : `note:${m.method}:${m.params?.taskId ?? ''}`);
     if (m.id !== undefined && m.id !== null) { replies.set(m.id, m); replyCount.set(m.id, (replyCount.get(m.id) ?? 0) + 1); } else notes.push(m);
   }
@@ -1364,6 +1368,212 @@ section('tasks — figma_run as a task, and figma_result after a timeout (#4646 
   ok((await rpc('tasks/get', { taskId: orphanId })).result?.taskId === orphanId, 'tasks/revision: back at 2025-11-25, the same session reads its task again');
 }
 
+section('elicitation — the bridge asks the person before a write that discards work (#4646 step 3)');
+{
+  const envelopeOf = (id: string, cmd: string, verdict: unknown, data: unknown = {}): AgentResult => ({
+    v: 1, id, cmd, ok: true, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+    engineVersion: ENGINE_VERSION, transport: 'bridge', result: { verdict: verdict as never, data, logs: [] },
+  });
+  type Cmd = { id: string; cmd: string; args: any };
+  const commandsOf = (c: { texts(): any[] }): Cmd[] => c.texts().filter((m) => m.type === 'command').map((m) => m.command);
+  /** The next command the fake plugin gets after the first `from` it already had. */
+  const nextCommand = async (c: { texts(): any[] }, from: number): Promise<Cmd | null> => (await until(() => commandsOf(c).length > from)) ? commandsOf(c)[from] : null;
+  /** Answer a server-to-client request, as the client would. */
+  const answerAsk = (id: unknown, result: unknown) => child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
+  const nextAsk = async (from: number) => (await until(() => asks.length > from)) ? asks[from] : null;
+  /** Wait for a call to end OR for one more command past `from` to reach the plugin. A command that should not have been
+   *  sent is answered, so the call ends and the arm that follows fails by name rather than the suite timing out. */
+  const settle = async (c: { texts(): any[] }, rpc: number, from: number) => {
+    await until(() => replies.has(rpc) || commandsOf(c).length > from);
+    const stray = commandsOf(c)[from];
+    if (stray) c === p && p.sendJson({ type: 'result', result: envelopeOf(stray.id, stray.cmd, { stray: true }) });
+  };
+  const FILE = 'Scratch file';
+  const statusData = (name: string) => ({ status: { file: { name } } });
+
+  // A client before 2025-11-25 that sends a bare `elicitation: {}`, which then meant a form.
+  await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 'elicit', version: '1' } });
+  const p = await openClient();
+  await p.hello();
+  ok(await untilAsync(async () => (await call('figma_status')).value?.connected === true), 'elicit/plugin: a fake plugin is connected');
+
+  // prune, declined: status, then the dry run, then the question; the confirm is never sent.
+  let seen = commandsOf(p).length;
+  let askAt = asks.length;
+  const PRUNE = { input: 'brand-input', confirm: true, previewHash: 'h-prune' };
+  const declined = callLater('figma_run', { cmd: 'prune', args: PRUNE });
+  const st1 = await nextCommand(p, seen);
+  ok(st1?.cmd === 'status', `elicit/status-first: before a gated prune the bridge reads which file is open (${st1?.cmd})`);
+  p.sendJson({ type: 'result', result: envelopeOf(st1!.id, 'status', null, statusData(FILE)) });
+  const dry1 = await nextCommand(p, seen + 1);
+  ok(dry1?.cmd === 'prune' && dry1.args?.confirm === false && dry1.args?.input === 'brand-input' && dry1.args?.previewHash === undefined,
+    `elicit/dry-run: then it runs the same prune as a dry run, with the agent's input and confirm false (${JSON.stringify(dry1?.args)})`);
+  p.sendJson({ type: 'result', result: envelopeOf(dry1!.id, 'prune', { count: 3, summary: '2 variables, 1 style', previewHash: 'h-prune' }) });
+  const q1 = await nextAsk(askAt);
+  const m1: string = q1?.params?.message ?? '';
+  ok(q1?.method === 'elicitation/create' && m1.includes(`"${FILE}"`) && m1.includes('delete 3 things') && m1.includes('2 variables, 1 style') && m1.includes('saves a named version'),
+    `elicit/question: the person is asked, with the file, the count, the plugin's summary and the version Prism3 saves (${m1})`);
+  ok(q1?.params?.mode === undefined && q1?.params?.requestedSchema?.properties?.allow?.type === 'boolean' && q1?.params?.requestedSchema?.required?.[0] === 'allow',
+    `elicit/form: a 2025-06-18 client gets a form with one boolean, allow, and no mode field (${JSON.stringify(q1?.params?.requestedSchema)})`);
+  answerAsk(q1?.id, { action: 'accept', content: { allow: false } });
+  await settle(p, declined.rpcId, seen + 2);
+  const d1 = await declined();
+  ok(d1.isError && d1.value?.declined === true && /did not allow/.test(d1.value?.error ?? '') && /Nothing was written/.test(d1.value?.error ?? ''),
+    `elicit/declined: allow false is a refusal that says nothing was written (${JSON.stringify(d1.value)})`);
+  await sleep(200);
+  ok(commandsOf(p).length === seen + 2, `elicit/declined: the confirmed prune never reached the plugin (${commandsOf(p).slice(seen).map((c) => c.cmd).join(', ')})`);
+
+  // prune, allowed: the write goes out as the agent sent it, and its result is the answer.
+  seen = commandsOf(p).length; askAt = asks.length;
+  const allowed = callLater('figma_run', { cmd: 'prune', args: PRUNE });
+  const st2 = await nextCommand(p, seen);
+  p.sendJson({ type: 'result', result: envelopeOf(st2!.id, 'status', null, statusData(FILE)) });
+  const dry2 = await nextCommand(p, seen + 1);
+  p.sendJson({ type: 'result', result: envelopeOf(dry2!.id, 'prune', { count: 1, previewHash: 'h-prune' }) });
+  const q2 = await nextAsk(askAt);
+  ok((q2?.params?.message ?? '').includes('delete 1 thing the brand'), `elicit/singular: one item reads "1 thing" (${q2?.params?.message})`);
+  answerAsk(q2?.id, { action: 'accept', content: { allow: true } });
+  const w2 = await nextCommand(p, seen + 2);
+  ok(w2?.cmd === 'prune' && w2.args?.confirm === true && w2.args?.previewHash === 'h-prune', `elicit/allowed: allow true sends the confirmed prune, previewHash and all (${JSON.stringify(w2?.args)})`);
+  const done2 = envelopeOf(w2!.id, 'prune', { deleted: 1 });
+  p.sendJson({ type: 'result', result: done2 });
+  ok(JSON.stringify((await allowed()).value) === JSON.stringify(done2), 'elicit/allowed: the answer is the plugin\'s result for the write');
+
+  // The file moved since the agent's preview: refused without asking.
+  seen = commandsOf(p).length; askAt = asks.length;
+  const moved = callLater('figma_run', { cmd: 'prune', args: PRUNE });
+  const st3 = await nextCommand(p, seen);
+  p.sendJson({ type: 'result', result: envelopeOf(st3!.id, 'status', null, statusData(FILE)) });
+  const dry3 = await nextCommand(p, seen + 1);
+  p.sendJson({ type: 'result', result: envelopeOf(dry3!.id, 'prune', { count: 3, previewHash: 'h-other' }) });
+  const q3 = await (async () => { await until(() => replies.has(moved.rpcId) || asks.length > askAt || commandsOf(p).length > seen + 2); return asks[askAt]; })();
+  if (q3) answerAsk(q3.id, { action: 'decline' });
+  await settle(p, moved.rpcId, seen + 2);
+  const mv = await moved();
+  ok(mv.isError && mv.value?.previewHash === 'h-other' && /Run the preview again/.test(mv.value?.error ?? ''), `elicit/moved: a dry run whose hash differs from the agent's is refused, naming the new hash (${mv.value?.error})`);
+  ok(asks.length === askAt && commandsOf(p).length === seen + 2, 'elicit/moved: the person was not asked and nothing was written');
+
+  // Nothing to discard: no question, the write goes out.
+  seen = commandsOf(p).length; askAt = asks.length;
+  const empty = callLater('figma_run', { cmd: 'prune', args: PRUNE });
+  const st4 = await nextCommand(p, seen);
+  p.sendJson({ type: 'result', result: envelopeOf(st4!.id, 'status', null, statusData(FILE)) });
+  const dry4 = await nextCommand(p, seen + 1);
+  p.sendJson({ type: 'result', result: envelopeOf(dry4!.id, 'prune', { count: 0, previewHash: 'h-prune' }) });
+  const w4 = await nextCommand(p, seen + 2);
+  ok(w4?.cmd === 'prune' && w4.args?.confirm === true && asks.length === askAt, 'elicit/nothing: a prune that deletes nothing is sent without asking');
+  p.sendJson({ type: 'result', result: envelopeOf(w4!.id, 'prune', { deleted: 0 }) });
+  await empty();
+
+  // Not a gated write: a keep-only update and a dry run go straight to the plugin.
+  seen = commandsOf(p).length; askAt = asks.length;
+  const keep = callLater('figma_run', { cmd: 'update-components', args: { confirm: true, previewHash: 'h-u', choices: { handEdits: 'keep' } } });
+  const k1 = await nextCommand(p, seen);
+  ok(k1?.cmd === 'update-components' && k1.args?.confirm === true, `elicit/keep: an update that keeps hand edits is not asked about (${k1?.cmd})`);
+  p.sendJson({ type: 'result', result: envelopeOf(k1!.id, 'update-components', null, { update: { mode: 'apply' } }) });
+  await keep();
+  const preview = callLater('figma_run', { cmd: 'prune', args: { input: 'brand-input', confirm: false } });
+  const pv = await nextCommand(p, seen + 1);
+  ok(pv?.cmd === 'prune' && pv.args?.confirm === false && asks.length === askAt, 'elicit/preview: a dry run is not asked about');
+  p.sendJson({ type: 'result', result: envelopeOf(pv!.id, 'prune', { count: 3, previewHash: 'h-prune' }) });
+  await preview();
+
+  // update-components with overwrite, at 2025-11-25 with `elicitation.form`: the count is the hand edits of the sets
+  // whose choice is overwrite, and a decline is a refusal.
+  await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: { elicitation: { form: {} } }, clientInfo: { name: 'elicit', version: '1' } });
+  seen = commandsOf(p).length; askAt = asks.length;
+  const OVER = { confirm: true, previewHash: 'h-u', choices: { handEdits: 'keep', sets: { Button: { handEdits: 'overwrite' } } } };
+  const over = callLater('figma_run', { cmd: 'update-components', args: OVER });
+  const st5 = await nextCommand(p, seen);
+  p.sendJson({ type: 'result', result: envelopeOf(st5!.id, 'status', null, statusData(FILE)) });
+  const dry5 = await nextCommand(p, seen + 1);
+  ok(dry5?.cmd === 'update-components' && dry5.args?.confirm === false && dry5.args?.choices === undefined, `elicit/overwrite-dry: the dry run is the update preview (${JSON.stringify(dry5?.args)})`);
+  p.sendJson({ type: 'result', result: envelopeOf(dry5!.id, 'update-components', null, { update: { mode: 'preview', previewHash: 'h-u', sets: [{ set: 'Button', counts: { handEdited: 4 } }, { set: 'Card', counts: { handEdited: 2 } }] } }) });
+  const q5 = await nextAsk(askAt);
+  const m5: string = q5?.params?.message ?? '';
+  ok(q5?.params?.mode === 'form' && m5.includes(`"${FILE}"`) && m5.includes('replace 4 hand edits in 1 component set ') && m5.includes('saves a named version'),
+    `elicit/overwrite: the question counts only the hand edits overwrite discards, and a 2025-11-25 client gets mode form (${m5})`);
+  answerAsk(q5?.id, { action: 'decline' });
+  await settle(p, over.rpcId, seen + 2);
+  const o5 = await over();
+  ok(o5.isError && o5.value?.declined === true && o5.value?.action === 'decline', `elicit/decline: a declined question is a refusal (${JSON.stringify(o5.value)})`);
+  await sleep(200);
+  ok(commandsOf(p).length === seen + 2, 'elicit/decline: the overwrite never reached the plugin');
+
+  // panels-clean has no hash: the file is read again after the answer, and a different file is refused.
+  seen = commandsOf(p).length; askAt = asks.length;
+  const panels = callLater('figma_run', { cmd: 'panels-clean', args: { confirm: true } });
+  const st6 = await nextCommand(p, seen);
+  p.sendJson({ type: 'result', result: envelopeOf(st6!.id, 'status', null, statusData(FILE)) });
+  const dry6 = await nextCommand(p, seen + 1);
+  ok(dry6?.cmd === 'panels-clean' && dry6.args?.confirm === false, 'elicit/panels-dry: panels-clean is dry-run first');
+  p.sendJson({ type: 'result', result: envelopeOf(dry6!.id, 'panels-clean', { drawn: 5, removable: 2 }) });
+  const q6 = await nextAsk(askAt);
+  const m6: string = q6?.params?.message ?? '';
+  ok(m6.includes('remove 2 usage panels') && m6.includes("can't save a version") && !m6.includes('saves a named version'), `elicit/panels: the question says Prism3 cannot save a version first (${m6})`);
+  answerAsk(q6?.id, { action: 'accept', content: { allow: true } });
+  const st6b = await nextCommand(p, seen + 2);
+  ok(st6b?.cmd === 'status', `elicit/panels-reread: after the answer the bridge reads the open file again (${st6b?.cmd})`);
+  if (st6b) p.sendJson({ type: 'result', result: envelopeOf(st6b.id, st6b.cmd, null, statusData('Another file')) });
+  await settle(p, panels.rpcId, seen + 3);
+  const r6 = await panels();
+  ok(r6.isError && /open file changed/.test(r6.value?.error ?? '') && (r6.value?.error ?? '').includes('Another file'), `elicit/panels-moved: a different file after the answer is refused (${r6.value?.error})`);
+  await sleep(200);
+  ok(commandsOf(p).length === seen + 3, 'elicit/panels-moved: panels-clean was not sent');
+
+  // The owner's note on #4646 (from the #4661 delta review): a request the server sends its client reuses ids of its
+  // own, so one can carry the id of a pending `skill://` read. It must not clear that read's record, or the read's
+  // not-found goes out as -32602 instead of -32002. Driven on bridgeTransport directly, over a fake inner transport,
+  // since the SDK's ids cannot be steered from stdio. The codes are written here: -32602 in, -32002 out.
+  {
+    const sent: any[] = [];
+    const inner: any = { start: async () => undefined, send: async (m: unknown) => { sent.push(m); }, close: async () => undefined };
+    const t = bridgeTransport(inner, 2);
+    t.onmessage = () => undefined;
+    inner.onmessage({ jsonrpc: '2.0', id: 0, method: 'resources/read', params: { uri: 'skill://prism3-rebind/no-such-file.md' } });
+    await t.send({ jsonrpc: '2.0', id: 0, method: 'elicitation/create', params: { message: 'm', requestedSchema: { type: 'object', properties: {} } } } as never);
+    await t.send({ jsonrpc: '2.0', id: 0, error: { code: -32602, message: 'not found', data: { uri: 'skill://prism3-rebind/no-such-file.md' } } } as never);
+    ok(sent[0]?.method === 'elicitation/create' && sent[1]?.error?.code === -32002,
+      `elicit/id-reuse: an elicitation that reuses a pending skill read's id leaves its record, so the read's not-found is still -32002 (${JSON.stringify(sent.map((m) => m.method ?? m.error?.code))})`);
+  }
+
+  // As a task: the question comes before the task exists, and a refusal is the plain answer.
+  await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: { elicitation: { form: {} }, tasks: {} }, clientInfo: { name: 'elicit', version: '1' } });
+  seen = commandsOf(p).length; askAt = asks.length;
+  const tid = ++rpcId;
+  child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: tid, method: 'tools/call', params: { name: 'figma_run', arguments: { cmd: 'prune', args: PRUNE }, task: {} } }) + '\n');
+  const st7 = await nextCommand(p, seen);
+  p.sendJson({ type: 'result', result: envelopeOf(st7!.id, 'status', null, statusData(FILE)) });
+  const dry7 = await nextCommand(p, seen + 1);
+  p.sendJson({ type: 'result', result: envelopeOf(dry7!.id, 'prune', { count: 2, previewHash: 'h-prune' }) });
+  const q7 = await nextAsk(askAt);
+  answerAsk(q7?.id, { action: 'cancel' });
+  await settle(p, tid, seen + 2);
+  ok(await until(() => replies.has(tid)), 'elicit/task: the task request is answered');
+  const r7 = replies.get(tid)?.result;
+  ok(r7?.task === undefined && r7?.isError === true && r7?.structuredContent?.declined === true, `elicit/task: a cancelled question answers the task request with the refusal, and no task is made (${JSON.stringify(r7).slice(0, 160)})`);
+
+  // No elicitation, or URL only: nothing changes, the confirmed write is the confirmation.
+  for (const caps of [{}, { elicitation: { url: {} } }]) {
+    await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: caps, clientInfo: { name: 'plain', version: '1' } });
+    seen = commandsOf(p).length; askAt = asks.length;
+    const plain = callLater('figma_run', { cmd: 'prune', args: PRUNE });
+    const w = await nextCommand(p, seen);
+    ok(w?.cmd === 'prune' && w.args?.confirm === true && asks.length === askAt, `elicit/without: a client with ${JSON.stringify(caps)} gets the confirmed prune sent as before, unasked (${w?.cmd})`);
+    // Answer whatever does come, so a gate that wrongly asks still lets the call end and the arm above fails by name.
+    for (let k = seen; ; k++) {
+      const c = await nextCommand(p, k);
+      if (!c) break;
+      if (c.cmd === 'status') p.sendJson({ type: 'result', result: envelopeOf(c.id, 'status', null, statusData(FILE)) });
+      else if (c.args?.confirm === false) p.sendJson({ type: 'result', result: envelopeOf(c.id, c.cmd, { count: 0, previewHash: 'h-prune' }) });
+      else { p.sendJson({ type: 'result', result: envelopeOf(c.id, c.cmd, { deleted: 3 }) }); break; }
+    }
+    await plain();
+  }
+  p.sock.destroy();
+  ok(await untilAsync(async () => (await call('figma_status')).value?.connected === false), 'elicit/plugin: the fake plugin is gone');
+}
+
 /* ── the self-describing bridge (#3300 A, the owner's Q3300.1–.3 A) ──────────────────────────────────────── */
 section('instructions + resources — what a fresh agent reads on connecting (#3300)');
 {
@@ -1525,12 +1735,14 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     let err = '';
     let buf = '';
     const got = new Map<number, any>();
+    /** #4646 step 3: requests this server sends its client, kept apart from replies (their ids are the server's). */
+    const armAsks: any[] = [];
     p.stderr.setEncoding('utf8'); p.stdout.setEncoding('utf8');
     p.stderr.on('data', (d) => { err += d; });
     p.stdout.on('data', (d) => {
       buf += d;
       let nl: number;
-      while ((nl = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, nl); buf = buf.slice(nl + 1); if (line.trim()) { const m = JSON.parse(line); if (m.id != null) got.set(m.id, m); } }
+      while ((nl = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, nl); buf = buf.slice(nl + 1); if (line.trim()) { const m = JSON.parse(line); if (m.method !== undefined && m.id != null) armAsks.push(m); else if (m.id != null) got.set(m.id, m); } }
     });
     const started = await until(() => /listening on localhost:\d+/.test(err) || p.exitCode !== null, 60000);
     let n = 0;
@@ -1540,9 +1752,16 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
       if (!(await until(() => got.has(id), 20000))) throw new Error(`arm ${arm}: no reply to ${method}`);
       return got.get(id);
     };
+    /** Send without waiting, for a call that waits on the person's answer. */
+    const askLater = (method: string, params: unknown = {}) => {
+      const id = ++n;
+      p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+      return async (): Promise<any> => { if (!(await until(() => got.has(id), 20000))) throw new Error(`arm ${arm}: no reply to ${method}`); return got.get(id); };
+    };
+    const answer = (id: unknown, result: unknown) => p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
     const stop = async () => { p.stdin.end(); await until(() => p.exitCode !== null, 5000); if (p.exitCode === null) p.kill(); };
     const port = Number(/listening on localhost:(\d+)/.exec(err)?.[1] ?? 0);
-    return { started: started && p.exitCode === null, ask, stop, stderr: () => err, port };
+    return { started: started && p.exitCode === null, ask, askLater, answer, asks: armAsks, stop, stderr: () => err, port };
   };
 
   const REC = join(TMP, 'arm0-record.jsonl');
@@ -1615,6 +1834,29 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
       await until(() => { try { return readFileSync(REC, 'utf8').includes('"kind":"late"'); } catch { return false; } });
       pl.sock.destroy();
     }
+    {
+      // #4646 step 3: the question before a write that discards work is safety, not what an agent is shown, so every arm
+      // asks it. A declined prune is refused at the bridge; at arm 0 it is recorded as such (`record/calls` below).
+      await s.ask('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 'arm', version: '1' } });
+      const pl = await openClient(IFRAME_ORIGIN, s.port);
+      await pl.hello();
+      const cmds = () => pl.texts().filter((m) => m.type === 'command').map((m) => m.command);
+      const env = (id: string, cmd: string, verdict: unknown, data: unknown = {}) => ({ v: 1, id, cmd, ok: true, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), engineVersion: ENGINE_VERSION, transport: 'bridge', result: { verdict, data, logs: [] } });
+      await untilAsync(async () => (await s.ask('tools/call', { name: 'figma_status', arguments: {} })).result?.structuredContent?.connected === true);
+      const wait = s.askLater('tools/call', { name: 'figma_run', arguments: { cmd: 'prune', args: { input: 'brand-input', confirm: true, previewHash: 'h-arm' } } });
+      if (await until(() => cmds().length >= 1)) pl.sendJson({ type: 'result', result: env(cmds()[0].id, 'status', null, { status: { file: { name: 'Arm file' } } }) });
+      if (await until(() => cmds().length >= 2)) pl.sendJson({ type: 'result', result: env(cmds()[1].id, 'prune', { count: 2, previewHash: 'h-arm' }) });
+      const q = (await until(() => s.asks.length >= 1)) ? s.asks[0] : null;
+      if (q) s.answer(q.id, { action: 'decline' });
+      await until(() => cmds().length > 2, 1500);
+      if (cmds()[2]) pl.sendJson({ type: 'result', result: env(cmds()[2].id, cmds()[2].cmd, { stray: true }) });
+      const r = await wait();
+      await sleep(200);
+      ok(cmds()[0]?.cmd === 'status' && cmds()[1]?.args?.confirm === false && q?.method === 'elicitation/create' && String(q?.params?.message ?? '').includes('"Arm file"')
+        && r.result?.isError === true && r.result?.structuredContent?.declined === true && cmds().length === 2,
+        `arm/${arm}-elicit: a confirmed prune is dry-run, asked about with the file named, and refused on decline, with nothing written (${cmds().map((c) => c.cmd).join(', ')}; ${q?.method})`);
+      pl.sock.destroy();
+    }
     await s.stop();
   }
 
@@ -1622,8 +1864,8 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
   const lines = (() => { try { return readFileSync(REC, 'utf8').trim().split('\n').map((l) => JSON.parse(l)); } catch { return []; } })();
   const attempts = lines.filter((l) => l.kind === 'attempt');
   const outcomeOf = (seq: number) => lines.find((l) => l.kind === 'outcome' && l.seq === seq)?.outcome;
-  const want = [['context', 'refused-by-bridge'], ['status', 'tool-error'], ['run-code', 'tool-error'], ['readback', 'tool-error']];
-  ok(attempts.length === 4 && want.every(([cmd, outcome], i) => attempts[i]?.cmd === cmd && attempts[i]?.arm === 0 && outcomeOf(attempts[i].seq) === outcome),
+  const want = [['context', 'refused-by-bridge'], ['status', 'tool-error'], ['run-code', 'tool-error'], ['readback', 'tool-error'], ['prune', 'refused-by-bridge']];
+  ok(attempts.length === 5 && want.every(([cmd, outcome], i) => attempts[i]?.cmd === cmd && attempts[i]?.arm === 0 && outcomeOf(attempts[i].seq) === outcome),
     `record/calls: the log holds each figma_run with its outcome, the refused context first (${attempts.map((a) => `${a.cmd}→${outcomeOf(a.seq)}`).join(', ')})`);
   ok(attempts[2]?.args?.code === 'return 1', `record/args: run-code's code is kept whole (${JSON.stringify(attempts[2]?.args)})`);
   // #4656 item 2: the timed-out call keeps its `tool-error` outcome, and how its run ended follows as one `late` line.

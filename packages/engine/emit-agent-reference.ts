@@ -46,7 +46,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toolDefs, PROTOCOL_VERSIONS, SERVER_INFO } from './mcp';
-import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES, TASKS_SINCE as BRIDGE_TASKS_SINCE, BRIDGE_SKILLS, SKILL_BASE } from '../../tools/figma-bridge/server';
+import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES, TASKS_SINCE as BRIDGE_TASKS_SINCE, BRIDGE_SKILLS, SKILL_BASE, GATED_WRITES } from '../../tools/figma-bridge/server';
 import { AGENT_COMMANDS, AGENT_PROTOCOL_VERSION, MAILBOX } from '../../apps/plugin/src/agent-protocol';
 import { RUN_CODE } from '../../apps/plugin/src/dev-commands';
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
@@ -126,6 +126,12 @@ const mcp = () => [
     },
     // #4646 step 2: the skills served over MCP, each with the checkout file it is read from.
     skills: BRIDGE_SKILLS.map((name) => ({ uri: `${SKILL_BASE}${name}/SKILL.md`, source: `skills/${name}/SKILL.md` })),
+    // #4646 step 3: the writes the bridge asks the person about first, when the client takes a form elicitation.
+    elicitation: {
+      when: 'The client declares elicitation with form (or a bare elicitation: {}, which before 2025-11-25 meant a form). Without it nothing changes: confirm: true is the confirmation.',
+      asks: 'Before the write the bridge reads the open file\'s name and runs the same command as a dry run, then asks the person, naming the file, the command and the dry run\'s count. A confirm whose previewHash no longer matches the dry run is refused without asking. A decline, a cancel or no answer within 10 minutes is a refusal, and nothing is written.',
+      gatedWrites: GATED_WRITES,
+    },
     source: at('tools/figma-bridge/server.ts', /^const isMain/, 'isMain'),
     tools: (BRIDGE_TOOLS as Tool[]).map((t) => mcpTool('tools/figma-bridge/server.ts', t)),
   },

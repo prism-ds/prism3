@@ -889,6 +889,98 @@ export const TASK_POLL_MS = 5_000;
 /** The longest `ttl` a task keeps; a longer one asked for is cut to this. */
 export const TASK_TTL_MAX_MS = 24 * 3_600_000;
 
+/*
+ * ASKING THE PERSON BEFORE A WRITE THAT DISCARDS WORK (#4646 step 3). Three `figma_run` writes throw away what someone
+ * made: `prune` with `confirm: true` deletes what the brand no longer uses, `update-components` with `confirm: true` and
+ * `handEdits: "overwrite"` (for every set, or any one) replaces hand edits with the plan, and `panels-clean` with
+ * `confirm: true` removes usage panels. When the client supports elicitation, the bridge reads the open file's name
+ * (`status`), runs the command's own dry run for the counts, and asks the person, through `elicitation/create`, with the
+ * file, the command and the counts. Only an explicit yes sends the write; a no, or no answer, writes nothing.
+ *
+ * TIED TO THAT FILE. `prune` and `update-components` confirm with the `previewHash` of a dry run, and the plugin refuses a
+ * confirm whose hash no longer matches the file. The bridge checks the hash its own dry run gets against the one the
+ * agent sent before it asks, and refuses a moved file without asking. `panels-clean` has no hash, so the bridge reads the
+ * file's name again after the answer and refuses if the open file changed in between.
+ *
+ * WITHOUT ELICITATION nothing changes: the command's own `confirm: true` (and its `previewHash`) is the explicit
+ * confirmation, as before. A write that would discard nothing (no items, no hand edits, no panels) is not asked about.
+ */
+export type GatedWrite = 'prune' | 'overwrite' | 'panels-clean';
+/** The writes the bridge asks about, as `commands.json` states them (`emit-agent-reference.ts`). Read by no code here:
+ *  `gatedWrite` below is the rule, and the bridge suite's `elicit/*` arms hold it. */
+export const GATED_WRITES: Readonly<Record<string, string>> = {
+  prune: 'confirm: true, when the dry run would delete anything',
+  'update-components': 'confirm: true with handEdits "overwrite", for all sets or any one, when the preview counts hand edits in a set it overwrites',
+  'panels-clean': 'confirm: true, when the dry run would remove any panel',
+};
+/** Which gated write a `figma_run` is, or null for any other command or mode. */
+export const gatedWrite = (cmd: unknown, args: unknown): GatedWrite | null => {
+  const a = (args && typeof args === 'object' ? args : {}) as Record<string, unknown>;
+  if (a.confirm !== true) return null;
+  if (cmd === 'prune') return 'prune';
+  if (cmd === 'panels-clean') return 'panels-clean';
+  if (cmd === 'update-components') {
+    const c = (a.choices && typeof a.choices === 'object' ? a.choices : {}) as { handEdits?: unknown; sets?: Record<string, { handEdits?: unknown }> };
+    const any = c.handEdits === 'overwrite' || Object.values(c.sets && typeof c.sets === 'object' ? c.sets : {}).some((v) => v?.handEdits === 'overwrite');
+    return any ? 'overwrite' : null;
+  }
+  return null;
+};
+/** The dry run's args: the same command with `confirm: false`, keeping what the dry run needs (`input`, `def`). */
+export const previewArgsFor = (kind: GatedWrite, args: unknown): Record<string, unknown> => {
+  const a = (args && typeof args === 'object' ? args : {}) as Record<string, unknown>;
+  if (kind === 'prune') return { input: a.input, confirm: false };
+  if (kind === 'overwrite') return { ...(a.def !== undefined ? { def: a.def } : {}), confirm: false };
+  return { confirm: false };
+};
+/** What a dry run says the write would discard: a count, the plugin's own summary where it gives one, and the hash a
+ *  confirm must echo (null for `panels-clean`, which has none). Read from the result envelope as the plugin sends it. */
+export const gateCounts = (kind: GatedWrite, env: unknown, args: unknown): { discards: number; sets: number; summary: string | null; hash: string | null } => {
+  const r = (env as { result?: { verdict?: Record<string, unknown> | null; data?: Record<string, unknown> } })?.result;
+  const v = r?.verdict ?? {};
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
+  if (kind === 'prune') {
+    const hash = typeof v.previewHash === 'string' ? v.previewHash : typeof r?.data?.previewHash === 'string' ? (r.data.previewHash as string) : null;
+    return { discards: num(v.count), sets: 0, summary: typeof v.summary === 'string' ? v.summary : null, hash };
+  }
+  if (kind === 'panels-clean') return { discards: num(v.removable), sets: 0, summary: null, hash: null };
+  const u = (r?.data?.update ?? {}) as { previewHash?: unknown; sets?: { set?: unknown; counts?: { handEdited?: unknown } }[] };
+  const c = ((args as { choices?: unknown })?.choices ?? {}) as { handEdits?: unknown; sets?: Record<string, { handEdits?: unknown }> };
+  let discards = 0;
+  let sets = 0;
+  for (const sp of Array.isArray(u.sets) ? u.sets : []) {
+    const choice = (typeof sp.set === 'string' ? c.sets?.[sp.set]?.handEdits : undefined) ?? c.handEdits ?? 'keep';
+    const n = num(sp.counts?.handEdited);
+    if (choice === 'overwrite' && n > 0) { discards += n; sets += 1; }
+  }
+  return { discards, sets, summary: null, hash: typeof u.previewHash === 'string' ? u.previewHash : null };
+};
+/**
+ * THE QUESTION THE PERSON SEES (#4646 step 3). Wording held for the owner's approval; change it only with the owner.
+ * Shipped prose in the product-agent channel (docs/voice-standard.md): plain, no RFC 2119 words, the file named, the
+ * count stated, and whether Prism3 saves a version first. `prune` and an update apply save a named version first
+ * (`saveVersion` in the plugin); `panels-clean` saves none.
+ */
+export const elicitationMessage = (kind: GatedWrite, file: string, n: { discards: number; sets: number; summary: string | null }): string => {
+  if (kind === 'prune') {
+    return `In "${file}", Prism3 is about to delete ${n.discards} thing${n.discards === 1 ? '' : 's'} the brand no longer uses${n.summary ? `: ${n.summary}` : ''}. Prism3 saves a named version of the file first. Delete them?`;
+  }
+  if (kind === 'overwrite') {
+    return `In "${file}", Prism3 is about to replace ${n.discards} hand edit${n.discards === 1 ? '' : 's'} in ${n.sets} component set${n.sets === 1 ? '' : 's'} with the plan. Prism3 saves a named version of the file first. Replace them?`;
+  }
+  return `In "${file}", Prism3 is about to remove ${n.discards} usage panel${n.discards === 1 ? '' : 's'} that still hold what it drew. Prism3 can't save a version for this, so save one in Figma first if you want to come back to this state. Remove them?`;
+};
+/** Whether a client's `elicitation` capability takes a form. The SDK reads a bare `elicitation: {}`, which every client
+ *  before 2025-11-25 sends, as `{ form: {} }` when it stores the capabilities, so `form` is the whole rule; a client that
+ *  names only `url` does not take one. The suite's `elicit/form` arm drives a bare `{}` client to hold that. */
+export const formElicitation = (el: unknown): boolean => !!el && typeof el === 'object' && (el as { form?: unknown }).form !== undefined;
+/** The one field the question asks for. */
+export const ELICIT_SCHEMA = { type: 'object', properties: { allow: { type: 'boolean', title: 'Allow' } }, required: ['allow'] } as const;
+/** How long the bridge waits for the person's answer before it writes nothing. */
+export const ELICIT_TIMEOUT_MS = 10 * 60_000;
+/** How long the bridge waits for its own `status` read before it refuses to ask. */
+const GATE_READ_MS = 60_000;
+
 /** A JSON-RPC message as it arrives on stdio, before the SDK reads it. */
 type WireMessage = { jsonrpc?: string; id?: number | string | null; method?: string; params?: any };
 
@@ -949,7 +1041,9 @@ export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => 
     start: () => inner.start(),
     send: (msg, options) => {
       const m = msg as { id?: string | number | null; error?: { code?: number; message?: string; data?: { uri?: unknown } } };
-      if (m.id !== undefined && m.id !== null && ('result' in m || 'error' in m)) {
+      // Only a reply clears a record. A request the server sends its client (`elicitation/create`, #4646 step 3) carries a
+      // `method` and an id of the server's own, which can equal a pending read's: it must leave that read's record alone.
+      if (m.id !== undefined && m.id !== null && !('method' in m) && ('result' in m || 'error' in m)) {
         const method = asked.get(m.id);
         const uri = skillReads.get(m.id);
         asked.delete(m.id);
@@ -1048,6 +1142,54 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     };
   };
 
+  /** One command the bridge runs for itself (the gate's `status` read and dry run), waited for up to `ms` once sent. */
+  const ownRun = async (cmd: string, args: unknown, ms: number): Promise<RunOutcome | null> => {
+    const run = bridge.start(cmd, args, ms);
+    await run.sent;
+    let timer: NodeJS.Timeout | undefined;
+    const o = await Promise.race([run.done, new Promise<null>((r) => { timer = setTimeout(() => r(null), ms); })]);
+    clearTimeout(timer);
+    return o;
+  };
+  const fileName = (o: RunOutcome | null): string | null => {
+    const name = o && 'result' in o ? (o.result as { result?: { data?: { status?: { file?: { name?: unknown } } } } }).result?.data?.status?.file?.name : undefined;
+    return typeof name === 'string' ? name : null;
+  };
+  /** The gate (#4646 step 3): null to send the write, or the refusal to answer with. Records its own refusals. */
+  const gate = async (p: { cmd: string; args: unknown; timeoutMs: number; outcome(o: Outcome, error?: unknown): void }): Promise<ReturnType<typeof text> | null> => {
+    const kind = gatedWrite(p.cmd, p.args);
+    if (!kind || !formElicitation(server.getClientCapabilities()?.elicitation)) return null;
+    const refuse = (error: string, extra: Record<string, unknown> = {}) => { p.outcome('refused-by-bridge', error); return text({ error, ...extra }, true); };
+    const file = fileName(await ownRun('status', {}, GATE_READ_MS));
+    if (file === null) return refuse(`${p.cmd} was not sent: the bridge could not read which file is open, so it could not ask the person. Nothing was written.`);
+    const dry = await ownRun(p.cmd, previewArgsFor(kind, p.args), p.timeoutMs);
+    if (!dry || !('result' in dry) || (dry.result as { ok?: unknown }).ok === false) {
+      return refuse(`${p.cmd} was not sent: its dry run did not finish, so there was nothing to show you. Nothing was written.`, { dryRun: dry && 'result' in dry ? dry.result : dry && 'error' in dry ? dry.error : null });
+    }
+    const n = gateCounts(kind, dry.result, p.args);
+    const sent = (p.args as { previewHash?: unknown })?.previewHash;
+    if (n.hash !== null && sent !== n.hash) {
+      return refuse(`${p.cmd} was not sent: the file changed since the preview it confirms (previewHash ${String(sent)}, now ${n.hash}). Run the preview again. Nothing was written.`, { previewHash: n.hash });
+    }
+    if (n.discards === 0) return null;
+    let answer: { action?: string; content?: Record<string, unknown> };
+    try {
+      // Sent as a plain request, not `elicitInput`, which always adds `mode`: that field exists only from 2025-11-25.
+      const params = { ...(revision !== undefined && revision >= TASKS_SINCE ? { mode: 'form' } : {}), message: elicitationMessage(kind, file, n), requestedSchema: ELICIT_SCHEMA };
+      answer = await server.request({ method: 'elicitation/create', params } as never, { timeout: ELICIT_TIMEOUT_MS }) as typeof answer;
+    } catch (e) {
+      return refuse(`${p.cmd} was not sent: the question to the person got no answer (${(e as Error).message}). Nothing was written.`);
+    }
+    if (answer.action !== 'accept' || answer.content?.allow !== true) {
+      return refuse(`${p.cmd} was not sent: the person did not allow it. Nothing was written.`, { declined: true, action: answer.action ?? null });
+    }
+    if (kind === 'panels-clean') {
+      const now = fileName(await ownRun('status', {}, GATE_READ_MS));
+      if (now !== file) return refuse(`${p.cmd} was not sent: the open file changed while the person was asked ("${file}", now "${now ?? 'unreadable'}"). Nothing was written.`);
+    }
+    return null;
+  };
+
   server.setRequestHandler('tools/call', async (req, ctx) => {
     const name = req.params.name;
     const a = (req.params.arguments ?? {}) as Record<string, unknown>;
@@ -1061,6 +1203,8 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     if (name === 'figma_run') {
       const p = prepareRun(a);
       if ('refusal' in p) return p.refusal;
+      const held = await gate(p);
+      if (held) return held;
       const run = bridge.start(p.cmd, p.args, p.timeoutMs);
       const stop = run.listen(streamTo(ctx));
       // The clock starts when the command is sent, as before: time spent queued behind another command is not counted.
@@ -1127,7 +1271,7 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     if (!t) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `unknown or expired task: ${taskId}`);
     return t;
   };
-  const startTask = (params: { arguments?: unknown; task?: unknown }, ctx: Parameters<typeof streamTo>[0]) => {
+  const startTask = async (params: { arguments?: unknown; task?: unknown }, ctx: Parameters<typeof streamTo>[0]) => {
     const aug = params.task;
     if (aug === null || typeof aug !== 'object' || Array.isArray(aug)) throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'task must be an object, such as {} or { "ttl": 3600000 }');
     const asked = (aug as { ttl?: unknown }).ttl;
@@ -1135,6 +1279,9 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     const p = prepareRun((params.arguments ?? {}) as Record<string, unknown>);
     // Refused before anything is queued: answered at once as a plain result, which a task requester accepts.
     if ('refusal' in p) return p.refusal;
+    // #4646 step 3: a gated write asks the person before the task exists; a refusal is answered as a plain result too.
+    const held = await gate(p);
+    if (held) return held;
     const run = bridge.start(p.cmd, p.args, p.timeoutMs);
     run.listen(streamTo(ctx));
     const ttl = asked === undefined ? null : Math.min(asked as number, TASK_TTL_MAX_MS);
@@ -1168,7 +1315,7 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     const params = req?.params;
     if (params && typeof params === 'object' && 'task' in params) {
       if (params.name === 'figma_run' && tasksOffered()) {
-        try { return Promise.resolve(startTask(params, ctx)); } catch (e) { return Promise.reject(e); }
+        return startTask(params, ctx);
       }
       // #4656 item 3: a session not offered tasks is served the plain call, the `task` field ignored, as MCP has a
       // receiver do with task metadata for a request it declared no task support for.

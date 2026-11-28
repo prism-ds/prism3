@@ -237,7 +237,7 @@ real `main.ts` is `apps/plugin/test-agent-link.ts`, an arm of the plugin's `test
 ## `tools/figma-bridge/`
 
 The agent link's transport B: `server.ts` is a stdio MCP server (`figma_status`, `figma_run`,
-`figma_logs`, `figma_result`; `figma_run` also runs as an MCP task, and three skills are served over MCP, #4646) plus a hand-rolled RFC 6455 WebSocket server on `ws://localhost:17331`, which the plugin's
+`figma_logs`, `figma_result`; `figma_run` also runs as an MCP task, three skills are served over MCP, and a write that discards work is asked about through elicitation first, #4646) plus a hand-rolled RFC 6455 WebSocket server on `ws://localhost:17331`, which the plugin's
 UI iframe connects to while the owner has the link on. It is a TOOL the owner registers with Claude Code,
 not a measurement, and like `figma-mcp/` its gate lives in the plugin: `apps/plugin/test-agent-bridge.ts`
 spawns it, speaks MCP to it over stdio, drives the socket with an independently written client, and runs

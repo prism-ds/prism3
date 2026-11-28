@@ -111,6 +111,10 @@ as raw counts per rule, plus the per-arm medians. There's no 0–100 score (Q344
 F2 runs from the #4646 step 2 merge on (#4661) aren't comparable to earlier F2 runs: a client that auto-loads skills shows
 the agent their text without a resource read (Q1 A, 2026-11-28).
 
+Since #4646 step 3 every arm asks the person, through elicitation, before a `prune`, an overwrite or a `panels-clean`
+that would discard work, when the client takes a form. A declined one is recorded `refused-by-bridge`, as a refused
+`context` is, so score the two apart by `cmd`. Asking is the same at every arm, so it does not separate them.
+
 `--record <file>` appends two JSON lines per `figma_run` call: an `attempt` line (cmd and args, with `run-code`'s
 code kept whole) before anything runs, and an `outcome` line after (`ok`, `not-ok`, `tool-error` or
 `refused-by-bridge`). V7 and refused attempts are scored from that log, not from the agent's own account. A call
