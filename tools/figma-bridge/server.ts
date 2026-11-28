@@ -169,11 +169,13 @@ export const TASKS_SINCE = '2025-11-25';
 /**
  * SKILLS OVER MCP (#4646 step 2). The skills the bridge serves as MCP skills (`skills/list`, `skills/get`, and each file
  * at `skill://<name>/<path>`), from the same checkout files as the `prism3://skills/…` resources, read once at start.
+ * `prism3-bridge` (Q3 A, 2026-11-28) is `BRIDGE_INSTRUCTIONS` verbatim plus figma_run's long-run line, as a skill only:
+ * `instructions` and `readFirst` stay as they are, and it is not a resource.
  * Arm 2 only, like the resources. They are not listed in `resources/list`, which stays the five approved resources
  * (Q3300.3 A): a client that speaks the extension finds them through `skills/list`, and an older client keeps reading
  * `prism3://skills/…`. `prism3-build-screens` joins once its skill is on `main` (#4632).
  */
-export const BRIDGE_SKILLS = ['prism3-rebind', 'prism3-build-ui'] as const;
+export const BRIDGE_SKILLS = ['prism3-rebind', 'prism3-build-ui', 'prism3-bridge'] as const;
 /** The URI prefix every served skill file sits under (the SDK's default). */
 export const SKILL_BASE = 'skill://';
 type SkillFolder = { name: string; files: Record<string, string> } | { name: string; error: string };

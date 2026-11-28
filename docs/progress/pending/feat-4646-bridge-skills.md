@@ -1,4 +1,4 @@
-## (2026-11-28) — The Figma bridge serves prism3-rebind and prism3-build-ui as MCP skills (#4646 step 2)
+## (2026-11-28) — The Figma bridge serves prism3-rebind, prism3-build-ui and prism3-bridge as MCP skills (#4646 step 2)
 
 The bridge's two skills were resources an agent had to know to read: `instructions` named them, and nothing loaded them
 when they were needed. Step 2 of #4646 serves them through the MCP Skills extension (`io.modelcontextprotocol/skills`,
@@ -18,7 +18,10 @@ SEP-2640), from the same checkout files.
   `SKILL.md` in `resources/list`. The SDK's own `skillEntry` builds and validates each entry (digests, frontmatter). A
   skill that does not validate is left out and named on stderr; the bridge still starts. `createMcpServer` throws at
   start if what the SDK declares for the extension is not what `initialize` answers.
-- **Not built, held for the owner:** a small `prism3-bridge` skill holding the note (`readFirst`), so `instructions`
-  could shrink to a pointer. New skill prose is the owner's call. `prism3-build-screens` joins when #4632 merges.
+- **Owner decisions (2026-11-28).** Q3 A: `skills/prism3-bridge/SKILL.md` is the approved note (`BRIDGE_INSTRUCTIONS`,
+  Q3300.1 A) verbatim plus `figma_run`'s long-run line, served as a third MCP skill; `instructions` and `readFirst` are
+  unchanged (`skills/bridge-note` holds the body to both). Q2 A: skills at every revision, as built. Q1 A: the skills
+  stay in F2, so F2 runs from this merge on aren't comparable with earlier ones (`tools/agent-adherence/figma.md`).
+  `prism3-build-screens` joins when #4632 merges.
 - **Tests.** `apps/plugin/test-agent-bridge.ts`: 321 assertions, all pass (310 before). Mutations, each failing by
   name, are in the PR.

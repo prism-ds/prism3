@@ -26,10 +26,13 @@
  * tasks/capability · tasks/tool · tasks/plugin · tasks/create · tasks/id · tasks/status · tasks/progress · tasks/result · tasks/notify ·
  * tasks/list · tasks/same-run · tasks/once · tasks/unknown · tasks/reconnect · tasks/failed · tasks/order · timeout/run-id ·
  * skills/capability · skills/list · skills/get · skills/read · skills/files · skills/template · skills/unknown · skills/not-listed · arm/<n>-skills
- * (#4646 step 2: prism3-rebind and prism3-build-ui as MCP skills, arm 2 only; `skills/files` walks each skill's folder
+ * skills/bridge-note · skills/bridge-description
+ * (#4646 step 2: prism3-rebind, prism3-build-ui and prism3-bridge as MCP skills, arm 2 only; `skills/files` walks each skill's folder
  * itself and compares every file byte for byte, #4661 review. MUTATIONS: consistency-audit.js served stale →
  * `skills/files: skill://prism3-rebind/consistency-audit.js is …`; it dropped from the served set → `skills/files: skills/get
- * lists exactly the files in skills/prism3-rebind/`; the -32002 recode dropped from `bridgeTransport` → `skills/unknown`) ·
+ * lists exactly the files in skills/prism3-rebind/`; the -32002 recode dropped from `bridgeTransport` → `skills/unknown`.
+ * prism3-bridge, Q3 A of 2026-11-28: one word of its SKILL.md body changed → `skills/bridge-note`; prism3-bridge dropped from
+ * `BRIDGE_SKILLS` → `skills/list`, `skills/bridge-description`) ·
  * figma_result/working · figma_result/late · figma_result/once · figma_result/unknown · arm/<n>-tasks · handshake/<asked> (#4646 step 1: figma_run as a
  * task against a fake slow plugin, a reconnect mid-task resuming the same task, and a run kept past its caller's timeout)
  * mcp/method-not-found · arm/<n>-method-not-found (#4652: a -32601 names its method) · tasks/revision (#4656 item 3: below
@@ -1434,15 +1437,16 @@ section('instructions + resources — what a fresh agent reads on connecting (#3
   const FILE_KEY = /figma\.com\/(file|design|board|proto|slides|make)\/[A-Za-z0-9]{6,}/;
   for (const [what, body] of bodies) ok(!FILE_KEY.test(body), `served/no-file-keys: ${what} carries no Figma file URL or key${FILE_KEY.test(body) ? ` (${FILE_KEY.exec(body)![0]})` : ''}`);
 
-  // #4646 step 2: the two skills over MCP (SEP-2640), from the same checkout files as their prism3:// resources. The URIs,
-  // names and sentinels are written here by hand, not read from BRIDGE_SKILLS.
-  const SKILL_URIS = ['skill://prism3-build-ui/SKILL.md', 'skill://prism3-rebind/SKILL.md'];
+  // #4646 step 2: the skills over MCP (SEP-2640), from the checkout files (prism3-rebind and prism3-build-ui also as
+  // prism3:// resources; prism3-bridge, Q3 A, only as a skill). The URIs, names and sentinels are written here by hand,
+  // not read from BRIDGE_SKILLS.
+  const SKILL_URIS = ['skill://prism3-bridge/SKILL.md', 'skill://prism3-build-ui/SKILL.md', 'skill://prism3-rebind/SKILL.md'];
   const SKILLS_EXT = 'io.modelcontextprotocol/skills';
   ok(init.result?.capabilities?.extensions?.[SKILLS_EXT] !== undefined && disc.result?.capabilities?.extensions?.[SKILLS_EXT] !== undefined,
     `skills/capability: initialize and server/discover both declare the skills extension (${JSON.stringify(init.result?.capabilities?.extensions)})`);
   const skillList = await rpc('skills/list');
   const skillUris: string[] = (skillList.result?.skills ?? []).map((k: { uri: string }) => k.uri).sort();
-  ok(JSON.stringify(skillUris) === JSON.stringify(SKILL_URIS), `skills/list: exactly prism3-rebind and prism3-build-ui (${skillUris.join(', ') || JSON.stringify(skillList.error)})`);
+  ok(JSON.stringify(skillUris) === JSON.stringify(SKILL_URIS), `skills/list: exactly prism3-bridge, prism3-build-ui and prism3-rebind (${skillUris.join(', ') || JSON.stringify(skillList.error)})`);
   const rebind = (await rpc('skills/get', { uri: 'skill://prism3-rebind/SKILL.md' })).result?.skill;
   const rebindFiles: string[] = (rebind?.resources ?? []).map((r: { uri: string }) => r.uri);
   ok(rebind?.frontmatter?.name === 'prism3-rebind' && typeof rebind?.frontmatter?.description === 'string'
@@ -1482,6 +1486,21 @@ section('instructions + resources — what a fresh agent reads on connecting (#3
         `skills/files: skill://${skill}/${path} is skills/${skill}/${path} byte for byte, and skills/get gives its digest (${typeof text === 'string' ? `${Buffer.byteLength(text, 'utf8')} bytes served, ${disk.length} on disk` : JSON.stringify(read.error)}; digest ${listedFiles.get(path) === digest ? 'matches' : `${listedFiles.get(path)} ≠ ${digest}`})`);
     }
   }
+  // skills/bridge-note (Q3 A, 2026-11-28): the prism3-bridge skill's body is the approved note verbatim, then the long-run
+  // line figma_run's description carries. Each side is read on its own (docs/34): the body from the file on disk, the
+  // note from what initialize serves, the line from what tools/list serves. A word changed on either side fails here.
+  const bridgeFile = readFileSync(resolve(HERE, '../../skills/prism3-bridge/SKILL.md'), 'utf8');
+  const bridgeBody = bridgeFile.replace(/^---\n[\s\S]*?\n---\n\n/, '');
+  const servedNote = String(init.result?.instructions ?? '');
+  const runDesc: string = ((await rpc('tools/list')).result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run')?.description ?? '';
+  const longRun = bridgeBody.startsWith(`${servedNote}\n`) ? bridgeBody.slice(servedNote.length + 1).replace(/\n$/, '') : '';
+  ok(servedNote.length > 0 && bridgeBody !== bridgeFile && bridgeBody === `${servedNote}\n${longRun}\n` && longRun.length > 0 && !longRun.includes('\n')
+    && longRun.includes('figma_result') && runDesc.includes(longRun),
+    `skills/bridge-note: skills/prism3-bridge/SKILL.md's body is the served note verbatim, then one line figma_run's description carries word for word (${longRun ? `line: ${longRun.slice(0, 60)}…; in figma_run: ${runDesc.includes(longRun)}` : 'the body does not start with the note'})`);
+  const bridgeSkill = (await rpc('skills/get', { uri: 'skill://prism3-bridge/SKILL.md' })).result?.skill;
+  ok(bridgeSkill?.frontmatter?.name === 'prism3-bridge'
+    && bridgeSkill?.frontmatter?.description === "How to work in a Figma file through the Prism3 bridge: the rules that keep the file safe, which command to run first, and how to get a long command's result without sending it again.",
+    `skills/bridge-description: prism3-bridge is served with the owner-approved description (${JSON.stringify(bridgeSkill?.frontmatter ?? null)})`);
   const noSkill = await rpc('resources/read', { uri: 'skill://prism3-rebind/no-such-file.md' });
   ok(noSkill.error?.code === -32002 && noSkill.error?.data?.uri === 'skill://prism3-rebind/no-such-file.md',
     `skills/unknown: a skill file that is not served is -32002 with its uri, like an unknown prism3:// resource (${JSON.stringify(noSkill.error)})`);

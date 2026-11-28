@@ -106,7 +106,10 @@ as raw counts per rule, plus the per-arm medians. There's no 0–100 score (Q344
 |---|---|
 | F0, `0` | The four tools (`figma_result` since #4646). No `instructions`, no `readFirst`, no resources. `context` is refused at the bridge (`unknown-command`) and isn't listed. |
 | F1, `1` | F0 plus the note (`instructions` and `readFirst`). |
-| F2, `2` (the default) | Today's bridge: the note, five resources and `context`. |
+| F2, `2` (the default) | Today's bridge: the note, five resources and `context`, and the three MCP skills since #4646 step 2. |
+
+F2 runs from the #4646 step 2 merge on (#4661) aren't comparable to earlier F2 runs: a client that auto-loads skills shows
+the agent their text without a resource read (Q1 A, 2026-11-28).
 
 `--record <file>` appends two JSON lines per `figma_run` call: an `attempt` line (cmd and args, with `run-code`'s
 code kept whole) before anything runs, and an `outcome` line after (`ok`, `not-ok`, `tool-error` or

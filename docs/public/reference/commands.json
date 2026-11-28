@@ -771,6 +771,10 @@
         {
           "uri": "skill://prism3-build-ui/SKILL.md",
           "source": "skills/prism3-build-ui/SKILL.md"
+        },
+        {
+          "uri": "skill://prism3-bridge/SKILL.md",
+          "source": "skills/prism3-bridge/SKILL.md"
         }
       ],
       "source": "tools/figma-bridge/server.ts#isMain",

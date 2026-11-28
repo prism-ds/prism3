@@ -198,9 +198,10 @@ more:
   Each file is under `skills/` or `docs/public/`, so it is text that is already public. Nothing is read
   live from the Figma file as a resource.
 
-- **Two skills over MCP** (#4646 step 2): `prism3-rebind` and `prism3-build-ui`, served through the MCP
+- **Three skills over MCP** (#4646 step 2): `prism3-rebind` and `prism3-build-ui`, served through the MCP
   Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) from the same checkout files as their
-  `prism3://skills/…` resources. A client that speaks the extension finds them with `skills/list`, gets
+  `prism3://skills/…` resources, and `prism3-bridge` (Q3 A, 2026-11-28), whose body is the note above
+  verbatim plus `figma_run`'s line on long runs, and which is not a `prism3://` resource. A client that speaks the extension finds them with `skills/list`, gets
   one with `skills/get` (its frontmatter and the list of its files, each with a digest), and reads each
   file at `skill://<name>/<path>`, for example `skill://prism3-rebind/consistency-audit.js`. They load
   when the agent needs them. The bridge reads them from the checkout once, when it starts, so an edit
