@@ -141,7 +141,7 @@ a vendor's current business decision, not a property of the library.
 |---|---|---|---|
 | `adobe/aem-block-collection` | yes | yes | **full source**, read from the collection's published site (`main--aem-block-collection--adobe.aem.live/blocks/<name>/<name>.js`); the per-block doc pages on `aem.live` now redirect to a Sidekick library tool |
 | daisyUI (free) | yes, 68 components (now including Megamenu and Drawer) | yes, descriptive | yes, per component page |
-| Tailwind Plus | **no** — every catalogue URL, the index included, serves the same login page | **no** | **no** |
+| Tailwind Plus | **no** — every catalog URL, the index included, serves the same login page | **no** | **no** |
 | Relume | yes, incl. Ecommerce and Application UI | numbered only (*"Navbar 1–32"*), **but each category publishes filter facets** (§6) | no — preview URLs still return *"Component not found"* |
 | Initium | **yes — a public registry index**, `app.initium.sh/r/registry.json`, 252 items, no auth | numbered titles, **plus a one-line description per block built from a shared facet vocabulary** (§6) | no — block items return 401 without a license |
 
@@ -186,8 +186,8 @@ question, and none answers all of them:
 | Relume | Category names and numbered counts, and per-category **filter facets** — the vendor's own statement of what varies (§7) | Per-variant layouts (previews return *"Component not found"*), markup, any description per variant |
 | daisyUI (free) | Descriptive example names and **full markup** for navbar (10), footer (11), hero (5), drawer (5), and two log-in form examples | Sections: it is a component library, so it has no CTA, no commerce and no auth page |
 | `adobe/aem-block-collection` | **Running source** for header, footer, cards, columns, carousel and the page decoration script; the membership rule; the Universal Editor model format | Marketing families: no CTA, pricing, testimonial or commerce block exists in it |
-| Tailwind Plus | Nothing new. Every catalogue URL now serves the login page. The 2026-08-11 reads in §2 and §3 stand as recorded | Everything, until a human with an account reads it (§11) |
-| The practice's legacy template library | **Demand evidence**: which families the practice actually reached for, and how many sets each (below) | Layouts, until screenshots are taken (§11). Every set is a component set with `Breakpoint = Desktop \| Mobile` at 1440 and 375 |
+| Tailwind Plus | Nothing new. Every catalog URL now serves the login page. The 2026-08-11 reads in §2 and §3 stand as recorded | Everything, until a human with an account reads it (§11) |
+| The practice's legacy template library | **Demand evidence**: which families the practice actually reached for, and how many sets each (below) | Layouts, until screenshots are taken (§11). The navigation, CTA and footer sets are component sets with `Breakpoint = Desktop \| Mobile` at 1440 and 375; the sign-up and log-in templates are desktop only |
 
 **The practice's legacy template library**, read by the owner and summarized here without its name:
 Navigation 22 sets (from a plain bar to mega-menu and drawer states; desktop heights 72–900), CTA 58
@@ -198,9 +198,9 @@ features, pricing, testimonials, logo wall, stats, FAQ, blog, team, contact or c
 **One structural finding before any family: most axes are not per-family.** Initium's facet vocabulary
 and Relume's filter panel are two independent witnesses, and both describe every family with the
 **same** dimensions. Relume's are *Element*, *Columns*, *Content Alignment*, *Text Alignment* and
-*Navigation Level*. Initium's most frequent terms are *"background contrast section"* (in 20 of the
+*Navigation Level*. Initium's most frequent terms are *"background contrast section"* (in 21 of the
 index's 34 block categories), *"centered content"* (22), *"media"* (14), *"primary and secondary CTAs"* (15),
-*"two-column layout"* (15) and *"reversed column order"* (5). So the vocabulary has two tiers:
+*"two-column layout"* (16) and *"reversed column order"* (5). So the vocabulary has two tiers:
 
 - **Shared axes**, the same on every family: surface (default or contrast band), content alignment
   (start or center), column arrangement (one, two, three-up, bento), mirror (reversed order), media
@@ -269,7 +269,7 @@ payment-method marks, or app-store badges. On a store footer those are ordinary 
 
 ### 7.3 CTA
 
-**Witnesses:** Relume CTA 1–31 (one further entry is only a truncated thumbnail); Initium CTA 1–7; the
+**Witnesses:** Relume CTA 1–67; Initium CTA 1–7; the
 practice library's 58 sets, its deepest family. daisyUI has no CTA, and **AEM has no CTA block**:
 on Edge Delivery a CTA is default content (a heading, text and buttons) in a section that a
 Section Metadata `Style` row styles.
@@ -396,15 +396,15 @@ Missed axes are counted separately.
 
 | Family | Hypothesis | Confirmed | Wrong | Open | Missed |
 |---|---|---|---|---|---|
-| Navigation | logo position; link alignment; an action count; mobile is a responsive collapse of the same block; mega menu is a variant | 2 | 3 — actions are a typed tools group; mobile disclosure is its own axis; mega menu is a value of disclosure, coupled to depth | 0 | 4 — depth, behavior, surface, open state |
+| Navigation | logo position; link alignment; surface; an action count; mobile is a responsive collapse of the same block; mega menu is a variant | 3 | 3 — actions are a typed tools group; mobile disclosure is its own axis; mega menu is a value of disclosure, coupled to depth | 0 | 3 — depth, behavior, open state |
 | Footer | link-column count; newsletter; legal row | 2 | 1 — the legal row is an invariant | 0 | 5 — brand block, social, contact details, arrangement, bands |
 | CTA | alignment; media placement; surface; action count; social proof | 3 | 2 — action count splits into action kind (form vs buttons); social proof reduces to logos | 0 | 4 — background media, scale, the banner boundary, AEM's "not a block" |
 | Sign-up and log-in | a page template, not a block; form alone vs form with media; the two differ only in fields | 1 | 1 — it is a page or a modal | 1 | 3 — logo position, media kind, AEM's "a widget, not a block" |
-| Commerce | one family | 0 | 1 — three families in Relume, 14 groups in Tailwind Plus | 1 (PDP header as a hero with a price) | not countable from one layout-only witness |
-| **All** | **18** | **8** | **8** | **2** | **16** |
+| Commerce | one family; the PDP header is a hero with a price | 0 | 1 — three families in Relume, 14 groups in Tailwind Plus | 1 — the PDP header as a hero with a price | not countable from one layout-only witness |
+| **All** | **19** | **9** | **8** | **2** | **15** |
 
-**Correction rate: half of the decidable hypothesis was wrong in some way (8 of 16), and the missed axes
-(16) equal the hypothesis in number.** That is lower than hero's five of six, and the cause is visible:
+**Correction rate: nearly half of the decidable hypothesis was wrong in some way (8 of 17), and the missed
+axes (15) nearly match the hypothesis (19) in number.** That is lower than hero's five of six, and the cause is visible:
 hero's first pass had one witness, this one had up to five per family. Add the structural correction
 in §6 (most axes are shared, not per-family), which no single family's tally shows. **The next family
 needs the survey as much as these did.**
@@ -430,7 +430,7 @@ needs the survey as much as these did.**
 |---|---|---|---|---|---|---|
 | Navigation | ✓ 10 | ✓ 32 | ✓ | ✓ boilerplate | ○ | ✓ 22 |
 | Footer | ✓ 9 | ✓ 17 | ✓ 11 | ✓ boilerplate | ○ | ✓ 11 |
-| CTA | ✓ 7 | ✓ 31 | ✗ | ✗ default content | ○ | ✓ 58 |
+| CTA | ✓ 7 | ✓ 67 | ✗ | ✗ default content | ○ | ✓ 58 |
 | Sign-up and log-in | ✗ | ✓ 17 + modals | partial | ✗ widget | ○ | ✓ 17 |
 | Hero | ✓ 22 | ○ | ✓ 5 | ✓ boilerplate | ✓ names (§2) | ✗ |
 | Commerce | ✗ | ✓ 27, layout-only | ✗ | ✗ | ○ 14 groups | ✗ |
@@ -449,7 +449,8 @@ commerce (product header, product list, category filters) → sign-up and log-in
 - They are where commerce enters first: the navigation tools group (search, account, cart with count)
   and the footer's region selector and payment marks are commerce cells (§7.1, §7.2), and they are on
   every PDP the practice builds.
-- CTA is the practice library's deepest family (58 sets) with two readable witnesses.
+- CTA is the practice library's deepest family (58 sets) and Relume's deepest here (67), with two
+  readable witnesses.
 - Commerce follows once the §11 screenshots exist, so its axes come from at least two witnesses.
 - Hero is last: every vendor ships it and the practice library does not, which is §5's rule — order
   by our demand, not by vendor depth.
@@ -459,6 +460,13 @@ commerce (product header, product list, category filters) → sign-up and log-in
 that it builds the least-witnessed families first: one layout-only witness today, so the first recipes
 would rest on exactly the single-witness reading §2 warns against, and nothing could start before the
 §11 commerce screenshots.
+
+**A's commerce argument rests on one witness too.** The cart and account tools in the navigation come
+from daisyUI's example 6 alone (§7.1), and the footer's region selector and payment marks have no
+readable witness at all: they are the empty cells in §7.2. So A's first commerce cells stand on one
+witness and on none, the same thinness B is marked down for. What A has that B lacks is the rest of
+each family: navigation and footer are well witnessed without their commerce cells, so A can build
+them now and add the commerce cells when the §11 screenshots arrive.
 
 **Why A over B:** A reaches commerce through the shell in its first deliverable and holds the PDP
 families until a second witness exists; B is faster to a PDP and slower to a correct one.
@@ -506,7 +514,7 @@ Sections*; Marketing *Headers*, *Footers*, *CTA Sections* and *Newsletter Sectio
   session but not attached, and the run used one reader per witness, not one identical prompt against
   two agents with raw outputs kept under `_inbound/`. A second identical-prompt run is owed before any
   of §6–§10 is promoted.
-- **Tailwind Plus contributed nothing new**: the whole catalogue is behind its login as of 2026-11-28.
+- **Tailwind Plus contributed nothing new**: the whole catalog is behind its login as of 2026-11-28.
 - **AEM's per-block doc pages** now redirect to a Sidekick library tool and were not followed; header,
   footer, cards, columns, carousel and hero were read from the collection's published site instead.
 - **Relume's counts** come from numbered cards, partly through a summary of truncated pages; treat
