@@ -1,0 +1,47 @@
+name: deploy-freshness
+
+# #4634 — A DAILY CHECK THAT PRODUCTION IS WITHIN A DAY OF MAIN. A monitor, not a merge gate: nothing reads its result
+# to merge, and it runs on main only. On 2026-11-20 the Vercel production deploy stopped without a word (the project
+# was still linked to the repository's old location after its transfer) and the site served a week-old build until a
+# 404 gave it away. CI runs inside the tree and cannot see production (docs/34 shape 17), so this reads production.
+#
+# WHAT IT DOES. `deploy-freshness.mjs` reads the commit production serves from `/build.json` (written by
+# `apps/studio/build-site.mjs`), then judges each later commit on main with that commit's own
+# `apps/studio/vercel-ignore.sh`, as Vercel would. A commit Vercel would skip does not count. The run goes red, naming
+# both commits and the lag, when the first commit that changes the site landed more than 24 hours ago, or when it
+# cannot tell which commit production serves. The script's header has the rest; its test, which CI does run, is
+# `test-deploy-freshness.ts` beside it.
+#
+# NO SECRET. The site is public and the history comes from this checkout: no Vercel token, no deploy hook.
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-freshness
+  cancel-in-progress: true
+
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history: the check walks every commit since the served one and diffs each against it.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Production is within a day of main
+        env:
+          SITE_URL: https://prism3-ds.vercel.app
+        run: node .github/scripts/deploy-freshness.mjs HEAD

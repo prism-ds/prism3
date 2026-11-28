@@ -1855,6 +1855,10 @@ bash .github/scripts/test-docs-only.sh   # the docs-only exemption (#3698 R4): t
 bash .github/scripts/test-all-gates.sh  # the base cases of all-gates.sh, the `gates` step the merge
                                           # rule reads (#3736): failure, cancelled, skipped, empty and
                                           # unset NEEDS each fail by job name. No git, no network
+npx tsx .github/scripts/test-deploy-freshness.ts # the test for deploy-freshness.mjs, the daily
+                                          # production-freshness monitor (#4634), which is not a merge
+                                          # gate: its decision by literal cases, its git half in a
+                                          # throwaway repo in $TMPDIR with the real vercel-ignore.sh
 bash .github/scripts/test-install-chromium.sh # the test for install-chromium.sh, which all four
                                           # browser jobs run (#2981). A stand-in install and dpkg
                                           # lock in $TMPDIR: no browser, no network. Its stall/…

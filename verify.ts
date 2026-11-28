@@ -1431,6 +1431,13 @@ export const GATES: Gate[] = [
     cmd: ['bash', '.github/scripts/test-all-gates.sh'],
   },
   {
+    // #4634 — the test for the daily production-freshness monitor (`deploy-freshness.mjs`), which is not a merge gate:
+    // its decision by literal cases and its git half in a throwaway repo in $TMPDIR. No network, no `after`.
+    id: 'deploy-freshness',
+    ciStep: 'The production-freshness check decides by the commits Vercel would build (#4634)',
+    cmd: ['npx', 'tsx', '.github/scripts/test-deploy-freshness.ts'],
+  },
+  {
     id: 'smoke',
     ciStep: 'Studio headless smoke suite (#775)',
     cmd: ws('@prism3/studio', 'test:smoke'),
