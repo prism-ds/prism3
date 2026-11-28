@@ -23,5 +23,5 @@ SEP-2640), from the same checkout files.
   unchanged (`skills/bridge-note` holds the body to both). Q2 A: skills at every revision, as built. Q1 A: the skills
   stay in F2, so F2 runs from this merge on aren't comparable with earlier ones (`tools/agent-adherence/figma.md`).
   `prism3-build-screens` joins when #4632 merges.
-- **Tests.** `apps/plugin/test-agent-bridge.ts`: 321 assertions, all pass (310 before). Mutations, each failing by
+- **Tests.** `apps/plugin/test-agent-bridge.ts`: 342 assertions, all pass, merged with #4663. Mutations, each failing by
   name, are in the PR.
