@@ -509,7 +509,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { launchWithoutWebFonts } from './test-web-fonts-stub.mjs';
 import { hookGuard } from './test-hooks.mjs';
-import { BOUND_MS, boundEvaluates, DISARM, INPUT_MS, makeBounded, rendersFrame, stallMessage, stallWhere, watchStalls } from './test-bounded.mjs';
+import { BOUND_MS, boundEvaluates, DISARM, INPUT_METHODS, INPUT_MS, makeBounded, rendersFrame, stallMessage, stallWhere, watchStalls } from './test-bounded.mjs';
 import { P, loadModes, resolve as resolveToken } from './chrome/tokens.mjs';
 import { assertBundleFresh, PLUGIN_UI_SOURCE_ROOTS, STUDIO_SOURCE_ROOTS } from './test-bundle-freshness.mjs';
 import { SHARDS } from './chrome-shards.mjs';
@@ -1073,7 +1073,8 @@ const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 // §3138 serves its own fixture by `page.route`.
 const browser = MODE === 'run' ? await launchWithoutWebFonts(chromium) : null;
 /** #4342: every evaluate, `waitForFunction` and frame wait on every page this run opens is bounded (`boundEvaluates`,
- *  test-bounded.mjs), so a busy or frameless page fails the call by name, with its call site, the section and the last
+ *  test-bounded.mjs), and since #4649 every `keyboard`, `mouse` and `touchscreen` call too (`INPUT_METHODS`), so a busy
+ *  or frameless page fails the call by name, with its call site, the section and the last
  *  check reached, in `EVAL_MS` and the page reading after it, not at the 600 s watchdog. Installed before any page
  *  exists. 60 s is twice `STEP_MS`, so a `within` around an async step (whose calls start before its own timer) always
  *  speaks first, and 10x the slowest call that settled across the three shards (6.0 s, a frame wait in `settleModes`,
@@ -8433,6 +8434,44 @@ for (const host of ['web', 'figma']) {
       ok(said.startsWith(`${call} (test-chrome.mjs:`) && said.includes('; section 20, after "') && said.includes(') did not settle within 3s; the page renders no frame') && took < 20000,
         `#4342: on a busy page, a plain ${call} fails by name, with its call site and the last check, within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 200)})`);
     }
+    // #4649: the page's raw input, the same way. Each input method Playwright's Keyboard, Mouse and Touchscreen define
+    // (`INPUT_METHODS`), written plain, on the same busy page, all at once: each its own call on its own 3s bound, so a
+    // method left off the bound is the one that reads the guard's words. The kinds are typed here, not read off the list,
+    // so a method dropped from it is still called. A tap needs a touch-enabled context, so it runs on a page of its own.
+    const tctx = await browser.newContext({ hasTouch: true });
+    try {
+      const tp = await tctx.newPage();
+      await tp.setContent('<p>busy</p>');
+      tp[BOUND_MS] = 3000;
+      await tp.evaluate(() => { setTimeout(() => { const end = Date.now() + 90000; while (Date.now() < end) { /* busy */ } }, 0); });
+      await new Promise((r) => setTimeout(r, 300));
+      const inputs = [
+        ['keyboard.press', () => bp.keyboard.press('Tab')],
+        ['keyboard.type', () => bp.keyboard.type('x')],
+        ['keyboard.down', () => bp.keyboard.down('Shift')],
+        ['keyboard.up', () => bp.keyboard.up('Shift')],
+        ['keyboard.insertText', () => bp.keyboard.insertText('x')],
+        ['mouse.move', () => bp.mouse.move(10, 10)],
+        ['mouse.down', () => bp.mouse.down()],
+        ['mouse.up', () => bp.mouse.up()],
+        // Called by its name in brackets: the hook guard (#1831) refuses a plain one, which is for a locator's click.
+        ['mouse.click', () => bp.mouse['click'](10, 10)],
+        ['mouse.dblclick', () => bp.mouse.dblclick(10, 10)],
+        ['mouse.wheel', () => bp.mouse.wheel(0, 10)],
+        ['touchscreen.tap', () => tp.touchscreen.tap(10, 10)],
+      ];
+      const typed = inputs.map(([call]) => call).sort().join(' ');
+      const listed = Object.entries(INPUT_METHODS).flatMap(([k, ms]) => ms.map((m) => `${k}.${m}`)).sort().join(' ');
+      ok(typed === listed, `#4649: this self-check calls every input method the bound lists, and no other (typed: ${typed}; listed: ${listed})`);
+      const t1 = Date.now();
+      const heard = await Promise.all(inputs.map(([call, run]) => guard(run).then((said) => [call, said])));
+      const took = Date.now() - t1;
+      for (const [call, said] of heard) {
+        // The call site may lead with a function name V8 inferred for the arrow (`inputs`), so it is optional here.
+        ok(new RegExp(`^${call.replace('.', '\\.')} \\(([\\w$]+ )?test-chrome\\.mjs:\\d+`).test(said) && said.includes('; section 20, after "') && said.includes(') did not settle within 3s; the page renders no frame') && took < 20000,
+          `#4649: on a busy page, a plain ${call} fails by name, with its call site and the last check, within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 200)})`);
+      }
+    } finally { await tctx.close(); }
     bp[BOUND_MS] = 1000;
     const t0 = Date.now();
     // 6s: longer than the call's own 1s bound plus its 3s page reading, so a `within` that did not take the bound over
@@ -8445,7 +8484,8 @@ for (const host of ['web', 'figma']) {
 // (2) LINT-CHROME-BOUNDS. What the bound cannot reach, read off this file's code (comments dropped): a CDP Runtime
 // evaluate, a Worker's evaluate (Playwright's Worker class is not on `boundEvaluates`' list), Playwright's internal
 // channel, the unbounded originals, a bound disarmed anywhere but in `within`, and a page or context made before the
-// bound is installed. Each fails by name with its line. The patterns are built from parts, so this check does not
+// bound is installed; since #4649, raw input it cannot reach: a CDP Input dispatch, and an action whose own timeout is
+// turned off. Each fails by name with its line. The patterns are built from parts, so this check does not
 // match itself. A planted line of each kind, added to the source as read, must be caught too, so a pattern that stopped
 // matching cannot pass as "none found".
 {
@@ -8454,6 +8494,8 @@ for (const host of ['web', 'figma']) {
     ["a Worker's evaluate (Worker is not bounded)", new RegExp(['\\.(service)?[wW]orkers\\(', "on\\(\\s*'worker'"].join('|'))],
     ["Playwright's internal channel", new RegExp(['\\b_channel\\b', '\\bkNoTimeout\\b', '\\b_parentOfType\\b'].join('|'))],
     ['the unbounded originals', new RegExp(['\\bRAW\\b', '\\brawEvaluate\\b', "Symbol\\('p3\\.unbounded'\\)"].join('|'))],
+    ['a CDP Input dispatch (raw input the bound cannot reach: use page.keyboard or page.mouse)', new RegExp(['Input', '(dispatch\\w+|insertText|imeSetComposition|emulateTouchFromMouseEvent|synthesize\\w+)\\b'].join('\\.'))],
+    ["an action's timeout turned off (an input with no bound)", new RegExp(['setDefault(Navigation)?Timeout\\(\\s*0\\s*\\)', '\\.(click|dblclick|press|pressSequentially|fill|type|hover|tap|check|uncheck|setChecked|selectOption|selectText|dragTo|dragAndDrop|focus|dispatchEvent|setInputFiles)\\(.*\\btimeout:\\s*0\\b'].join('|'))],
   ];
   const DISARM_RE = new RegExp(['\\[', 'DISARM', '\\]'].join(''));
   const codeOf = (src) => src.split('\n').map((l) => l.replace(/^\s*(\/\/|\*|\/\*\*?).*$/, '').replace(/\s\/\/\s.*$/, ''));
@@ -8479,11 +8521,20 @@ for (const host of ['web', 'figma']) {
     ["Playwright's internal channel", `await page.mainFrame().${'_chan' + 'nel'}.evaluateExpression({});`],
     ['the unbounded originals', `await ${'raw' + 'Evaluate'}(page, () => 1);`],
     ['a bound disarmed outside within', `page.evaluate(() => 1)${'[DIS' + 'ARM]'}();`],
+    ['a CDP Input dispatch', `await cdp.send('${['Input', 'dispatchKeyEvent'].join('.')}', { type: 'keyDown', key: 'Tab' });`],
+    ["an action's timeout turned off", `await page.locator('p').press('Tab', { ${'time' + 'out'}: 0 });`],
+    ["an action's timeout turned off", `page.${'setDefault' + 'Timeout'}(0);`],
   ];
   for (const [what, line] of PLANTS) {
     const at = SRC.split('\n').length + 1;
     const caught = lint(`${SRC}\n${line}`);
     ok(caught.some((f) => f.startsWith(`line ${at}: `) && f.includes(what)), `#4342 lint-chrome-bounds: a planted line making ${what} fails it by name (${caught.slice(-1)[0] ?? 'nothing found'})`);
+  }
+  // #4649: the install-order rule, planted where it bites: a context made on the file's first line, ahead of the install.
+  {
+    const caught = lint(`const early = await browser.${'new' + 'Context'}();\n${SRC}`);
+    ok(caught.some((f) => f.startsWith('line 1: a page or context made before boundEvaluates is installed (line ')),
+      `#4649 lint-chrome-bounds: a planted line making a page or context before boundEvaluates is installed fails it by name (${caught.slice(-1)[0] ?? 'nothing found'})`);
   }
 }
 // Edits (Q22, Q62 option A): Light writes the brand value; previewing Dark, the same select writes
