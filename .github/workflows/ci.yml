@@ -1036,6 +1036,12 @@ jobs:
       - name: The gates aggregator fails on any result but success (#3736)
         run: bash .github/scripts/test-all-gates.sh
 
+      # #4634 — the test for `.github/scripts/deploy-freshness.mjs`, the daily production-freshness monitor
+      # (`deploy-freshness.yml`). The monitor reads production and is NOT a merge gate; this tests its decision and its
+      # git half, with no network: literal cases, and a throwaway repo in $TMPDIR carrying the real `vercel-ignore.sh`.
+      - name: The production-freshness check decides by the commits Vercel would build (#4634)
+        run: npx tsx .github/scripts/test-deploy-freshness.ts
+
   studio:
     # #3698 R4: skipped on a docs-only pull request, by the named exemption (`changes`, then `gates`).
     needs: [changes]
