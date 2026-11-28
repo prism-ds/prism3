@@ -46,7 +46,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toolDefs, PROTOCOL_VERSIONS, SERVER_INFO } from './mcp';
-import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES } from '../../tools/figma-bridge/server';
+import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES, TASKS_SINCE as BRIDGE_TASKS_SINCE } from '../../tools/figma-bridge/server';
 import { AGENT_COMMANDS, AGENT_PROTOCOL_VERSION, MAILBOX } from '../../apps/plugin/src/agent-protocol';
 import { RUN_CODE } from '../../apps/plugin/src/dev-commands';
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
@@ -120,6 +120,10 @@ const mcp = () => [
     // #4646 step 1: the bridge's own handshake list, which adds 2025-11-25 for Tasks, and what it declares at arm 2.
     protocolVersions: [...BRIDGE_PROTOCOL_VERSIONS],
     capabilities: BRIDGE_CAPABILITIES,
+    // #4656 item 4: `tasks` above, and figma_run's `execution` below, are a 2025-11-25 session's only.
+    capabilitiesByRevision: {
+      tasks: `Offered only to a session that negotiated ${BRIDGE_TASKS_SINCE}. An older session gets no tasks capability, no execution field on figma_run, and no tasks/* methods, and a figma_run sent with task runs as a plain call.`,
+    },
     source: at('tools/figma-bridge/server.ts', /^const isMain/, 'isMain'),
     tools: (BRIDGE_TOOLS as Tool[]).map((t) => mcpTool('tools/figma-bridge/server.ts', t)),
   },

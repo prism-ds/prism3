@@ -27,6 +27,8 @@
  * tasks/list · tasks/same-run · tasks/once · tasks/unknown · tasks/reconnect · tasks/failed · tasks/order · timeout/run-id ·
  * figma_result/working · figma_result/late · figma_result/once · figma_result/unknown · arm/<n>-tasks · handshake/<asked> (#4646 step 1: figma_run as a
  * task against a fake slow plugin, a reconnect mid-task resuming the same task, and a run kept past its caller's timeout)
+ * mcp/method-not-found · arm/<n>-method-not-found (#4652: a -32601 names its method) · tasks/revision (#4656 item 3: below
+ * 2025-11-25 no execution, a task field ignored, no tasks/*) · record/late (#4656 item 2) · resources/tasks-scope (#4656 item 4)
  *
  * #3147 Phase 2a: each read-only node command (inspect, component-keys, audit-frames, snapshot) through figma_run, against
  * the same `NodeShim` fixture and literal expectations as `test-agent-link.ts`; its shim write log must stay empty
@@ -237,12 +239,12 @@ const frame = (op: number, payload: Buffer, fin = true, unmasked = false): Buffe
  *  Q3147.2 A revised). Written here, not imported from the server, so the origin arms compare two independent things. */
 const IFRAME_ORIGIN = 'null';
 /** `origin` is the header the client sends; `null` sends none. */
-const openClient = async (origin: string | null = IFRAME_ORIGIN) => {
-  const sock: Socket = connect(PORT, '127.0.0.1');
+const openClient = async (origin: string | null = IFRAME_ORIGIN, port = PORT) => {
+  const sock: Socket = connect(port, '127.0.0.1');
   await new Promise((r) => sock.once('connect', r));
   const key = randomBytes(16).toString('base64');
   const originLine = origin === null ? '' : `Origin: ${origin}\r\n`;
-  sock.write(`GET / HTTP/1.1\r\nHost: localhost:${PORT}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n${originLine}Sec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+  sock.write(`GET / HTTP/1.1\r\nHost: localhost:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n${originLine}Sec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
   let raw = Buffer.alloc(0);
   let head: string | null = null;
   const frames: Frame[] = [];
@@ -320,6 +322,10 @@ section('mcp — the stdio loop');
     `mcp/args: figma_run's args description names every command with its args (${AGENT_COMMANDS.length - unnamed.length}/${AGENT_COMMANDS.length}${unnamed.length ? `, missing ${unnamed.join(', ')}` : ''})`);
   const bad = await rpc('tools/call', { name: 'figma_paint' });
   ok(bad.error?.code === -32602, 'an unknown tool is a protocol error');
+  // #4652: the SDK says a bare "Method not found"; the bridge's -32601 names the method, as before the SDK. Written here.
+  const nf = await rpc('prism3/no-such-method');
+  ok(nf.error?.code === -32601 && nf.error?.message === 'method not found: prism3/no-such-method',
+    `mcp/method-not-found: an unknown method is -32601 and its message names it (${JSON.stringify(nf.error ?? nf.result)})`);
 }
 
 section('relay url');
@@ -1329,6 +1335,24 @@ section('tasks — figma_run as a task, and figma_result after a timeout (#4646 
     'tasks/failed: with no plugin the task fails, and its statusMessage says why');
   ok(await until(() => arrivals.includes(`note:notifications/tasks/status:${orphanId}`)) && arrivals.indexOf(`reply:${orphan.id}`) < arrivals.indexOf(`note:notifications/tasks/status:${orphanId}`),
     'tasks/order: a task that fails at once is announced after the reply that names it');
+
+  // #4656 item 3: a session below 2025-11-25 is not offered tasks, so it gets none of their surface either: no
+  // `execution` on figma_run, a `task` field ignored (the plain call's result, not a task), and no tasks/* methods.
+  await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'old', version: '1' } });
+  const oldTools = (await rpc('tools/list')).result?.tools ?? [];
+  const oldRun = oldTools.find((t: { name: string }) => t.name === 'figma_run');
+  ok(oldRun !== undefined && !('execution' in oldRun) && oldTools.every((t: object) => !('execution' in t)),
+    `tasks/revision: a 2024-11-05 session's tools/list gives no tool an execution field (${JSON.stringify(oldRun?.execution)})`);
+  const plain = await rpc('tools/call', { name: 'figma_run', arguments: { cmd: 'status' }, task: {} });
+  ok(plain.result?.task === undefined && Array.isArray(plain.result?.content) && plain.result?.isError === true && /no plugin is connected/.test(plain.result?.structuredContent?.error ?? ''),
+    `tasks/revision: a 2024-11-05 session's figma_run with task is the plain call, not a task (${JSON.stringify(plain.result ?? plain.error).slice(0, 160)})`);
+  for (const [method, params] of [['tasks/list', {}], ['tasks/get', { taskId: orphanId }], ['tasks/result', { taskId: orphanId }]] as const) {
+    const r = await rpc(method, params);
+    ok(r.error?.code === -32601 && r.error?.message === `method not found: ${method}`,
+      `tasks/revision: a 2024-11-05 session has no ${method}: -32601, naming it (${JSON.stringify(r.error ?? r.result).slice(0, 160)})`);
+  }
+  await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: { tasks: {} }, clientInfo: { name: 'tasks', version: '1' } });
+  ok((await rpc('tasks/get', { taskId: orphanId })).result?.taskId === orphanId, 'tasks/revision: back at 2025-11-25, the same session reads its task again');
 }
 
 /* ── the self-describing bridge (#3300 A, the owner's Q3300.1–.3 A) ──────────────────────────────────────── */
@@ -1378,6 +1402,11 @@ section('instructions + resources — what a fresh agent reads on connecting (#3
     ok(!got.error && c?.uri === r.uri && body.length > 0 && want !== undefined && body.toLowerCase().includes(want.toLowerCase()) && c?._meta?.['prism3/engineVersion'] === ENGINE_VERSION,
       `resources/resolve: ${r.uri} reads back non-empty, stamped ${ENGINE_VERSION}, and carries "${want}" (${got.error ? `error ${got.error.code}: ${got.error.message}` : `${body.length} characters`})`);
   }
+  // #4656 item 4: the served commands.json says the bridge's tasks are a 2025-11-25 session's only. Literal, written here.
+  const cmdsBody = bodies.find(([w]) => w === 'prism3://commands')?.[1] ?? '';
+  const bridgeRef = (() => { try { return (JSON.parse(cmdsBody).mcp ?? []).find((m: { server?: string }) => m.server === 'prism3-figma-bridge'); } catch { return undefined; } })();
+  ok(typeof bridgeRef?.capabilitiesByRevision?.tasks === 'string' && bridgeRef.capabilitiesByRevision.tasks.includes('2025-11-25') && bridgeRef?.capabilities?.tasks !== undefined,
+    `resources/tasks-scope: prism3://commands says the bridge's tasks are offered only at 2025-11-25 (${JSON.stringify(bridgeRef?.capabilitiesByRevision)})`);
   const missing = await rpc('resources/read', { uri: 'prism3://no-such-thing' });
   ok(missing.error?.code === -32002, `resources/resolve: an unknown URI fails with resource-not-found, -32002 (${JSON.stringify(missing.error ?? missing.result)})`);
   // #3412: the skill once served as prism3://skills/prism3-consume is prism3://skills/prism3-build-ui. The old URI still
@@ -1432,7 +1461,8 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
       return got.get(id);
     };
     const stop = async () => { p.stdin.end(); await until(() => p.exitCode !== null, 5000); if (p.exitCode === null) p.kill(); };
-    return { started: started && p.exitCode === null, ask, stop, stderr: () => err };
+    const port = Number(/listening on localhost:(\d+)/.exec(err)?.[1] ?? 0);
+    return { started: started && p.exitCode === null, ask, stop, stderr: () => err, port };
   };
 
   const REC = join(TMP, 'arm0-record.jsonl');
@@ -1454,10 +1484,12 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     const toolNames: string[] = (tools.result?.tools ?? []).map((t: { name: string }) => t.name);
     const armRun = (tools.result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run');
     const init25 = await s.ask('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'arm', version: '1' } });
+    const run25 = ((await s.ask('tools/list')).result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run');
     ok(init25.result?.protocolVersion === '2025-11-25' && init25.result?.capabilities?.tasks?.requests?.tools?.call !== undefined && init25.result?.capabilities?.logging !== undefined
       && init.result?.capabilities?.tasks === undefined && init.result?.capabilities?.logging !== undefined
-      && armRun?.execution?.taskSupport === 'optional' && JSON.stringify(toolNames) === JSON.stringify(['figma_status', 'figma_run', 'figma_logs', 'figma_result']),
-      `arm/${arm}-tasks: a 2025-11-25 session is offered tasks and a 2024-11-05 one is not, both get logging, figma_run may run as a task, and figma_result is listed (${JSON.stringify(Object.keys(init25.result?.capabilities ?? {}))}; ${toolNames.join(', ')})`);
+      && run25?.execution?.taskSupport === 'optional' && armRun !== undefined && armRun.execution === undefined
+      && JSON.stringify(toolNames) === JSON.stringify(['figma_status', 'figma_run', 'figma_logs', 'figma_result']),
+      `arm/${arm}-tasks: a 2025-11-25 session is offered tasks and a 2024-11-05 one is not, both get logging, figma_run may run as a task at 2025-11-25 only, and figma_result is listed (${JSON.stringify(Object.keys(init25.result?.capabilities ?? {}))}; ${toolNames.join(', ')})`);
     const enumCmds: string[] = (tools.result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run')?.inputSchema?.properties?.cmd?.enum ?? [];
     const statusCmds: string[] = st.result?.structuredContent?.commands ?? [];
     // `context` is refused at the bridge, as the build's own code for a command it lacks, written here by hand.
@@ -1468,6 +1500,9 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
       `arm/${arm}-context: neither figma_run's command list, its args description, nor figma_status's names context (${enumCmds.length} listed, ${statusCmds.length} in status)`);
     ok(rl.error?.code === -32601 && rr.error?.code === -32601 && init.result?.capabilities?.resources === undefined && disc.result?.capabilities?.resources === undefined,
       `arm/${arm}-resources: no resources capability, and resources/list and resources/read are methods it does not have (${JSON.stringify(rl.error ?? rl.result)})`);
+    // #4652: the adherence agent reads these refusals, so their text is the bridge's own, naming the method, written here.
+    ok(rl.error?.message === 'method not found: resources/list' && rr.error?.message === 'method not found: resources/read',
+      `arm/${arm}-method-not-found: the refusals name their methods (${JSON.stringify([rl.error?.message, rr.error?.message])})`);
     if (arm === '0') {
       // The context refusal and a figma_logs reply reach arm 0's agent too (review nit): their bodies are scanned as well.
       const bodies: [string, unknown][] = [['initialize', init.result], ['server/discover', disc.result], ['tools/list', tools.result], ['figma_status', st.result], ['resources/list', rl], ['context refusal', cx.result], ['figma_logs', lg.result]];
@@ -1486,6 +1521,15 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     if (arm === '0') {
       await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'status' } });
       await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'run-code', args: { code: 'return 1' } } });
+      // #4656 item 2: a plain call that times out, whose result the plugin sends after the timeout.
+      const pl = await openClient(IFRAME_ORIGIN, s.port);
+      await pl.hello();
+      const slow = await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'readback', timeoutMs: 300 } });
+      const slowId: string = slow.result?.structuredContent?.runId ?? '';
+      ok(slow.result?.isError === true && /^b/.test(slowId) && pl.texts().some((m) => m.type === 'command' && m.command.id === slowId), `record/late: the slow call times out with its run id (${slowId})`);
+      pl.sendJson({ type: 'result', result: { v: 1, id: slowId, cmd: 'readback', ok: true, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), engineVersion: ENGINE_VERSION, transport: 'bridge', result: { verdict: null, data: {}, logs: [] } } });
+      await until(() => { try { return readFileSync(REC, 'utf8').includes('"kind":"late"'); } catch { return false; } });
+      pl.sock.destroy();
     }
     await s.stop();
   }
@@ -1494,10 +1538,14 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
   const lines = (() => { try { return readFileSync(REC, 'utf8').trim().split('\n').map((l) => JSON.parse(l)); } catch { return []; } })();
   const attempts = lines.filter((l) => l.kind === 'attempt');
   const outcomeOf = (seq: number) => lines.find((l) => l.kind === 'outcome' && l.seq === seq)?.outcome;
-  const want = [['context', 'refused-by-bridge'], ['status', 'tool-error'], ['run-code', 'tool-error']];
-  ok(attempts.length === 3 && want.every(([cmd, outcome], i) => attempts[i]?.cmd === cmd && attempts[i]?.arm === 0 && outcomeOf(attempts[i].seq) === outcome),
+  const want = [['context', 'refused-by-bridge'], ['status', 'tool-error'], ['run-code', 'tool-error'], ['readback', 'tool-error']];
+  ok(attempts.length === 4 && want.every(([cmd, outcome], i) => attempts[i]?.cmd === cmd && attempts[i]?.arm === 0 && outcomeOf(attempts[i].seq) === outcome),
     `record/calls: the log holds each figma_run with its outcome, the refused context first (${attempts.map((a) => `${a.cmd}→${outcomeOf(a.seq)}`).join(', ')})`);
   ok(attempts[2]?.args?.code === 'return 1', `record/args: run-code's code is kept whole (${JSON.stringify(attempts[2]?.args)})`);
+  // #4656 item 2: the timed-out call keeps its `tool-error` outcome, and how its run ended follows as one `late` line.
+  const lates = lines.filter((l) => l.kind === 'late');
+  ok(lates.length === 1 && lates[0].seq === attempts[3]?.seq && lates[0].outcome === 'ok' && lines.filter((l) => l.kind === 'outcome' && l.seq === attempts[3]?.seq).length === 1,
+    `record/late: a result that lands after the timeout is recorded as one late line, ok, under the call's seq (${JSON.stringify(lates)})`);
 
   const bad = spawn('npx', ['tsx', resolve(HERE, '../../tools/figma-bridge/server.ts'), '--port', '0', '--config', CONFIG], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, PRISM3_BRIDGE_ARM: '3' } });
   await until(() => bad.exitCode !== null, 60000);
