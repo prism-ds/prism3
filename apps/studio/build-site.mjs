@@ -104,6 +104,12 @@ if (unemitted.length) {
 await mkdir(resolve(pub, 'r'), { recursive: true });
 for (const item of REGISTRY) await cp(item.from, resolve(pub, item.path));
 
+// `/build.json` (#4634): the full commit this site was built from, for the daily production-freshness monitor
+// (`.github/scripts/deploy-freshness.mjs`), which reads it back from production. What production SERVES is the source
+// of truth, not what a deploy record claims. A local build has no commit to claim and writes `null`, which the monitor
+// refuses rather than mistaking for a deploy.
+await writeFile(resolve(pub, 'build.json'), `${JSON.stringify({ commit: process.env.VERCEL_GIT_COMMIT_SHA || null })}\n`);
+
 // Enforce the manifest rather than assume it. index.html is copied verbatim and references
 // only /dist/main.js, so an emitted-but-unreferenced asset would deploy a broken site on a green
 // build. THE EXAMPLE THIS COMMENT USED TO GIVE IS NOW LIVE: `src/entry.ts` does import a CSS file
@@ -112,7 +118,7 @@ for (const item of REGISTRY) await cp(item.from, resolve(pub, item.path));
 // all. `build:site` is NOT in ci.yml (it runs on Vercel's preview deploy), so run it by hand.
 // The docs are listed from `docs/public/` itself, so this checks the copy landed whole, not which docs exist.
 // The component specs chunk (#3429) is the one other script: `main.js` loads it on Download, never index.html.
-const EXPECTED = ['dist/main.js', 'dist/main.js.map', `dist/${SPECS_CHUNK_FILE}`, `dist/${SPECS_CHUNK_FILE}.map`, 'index.html', ...DOCS.map((f) => `docs/${f}`), ...GUIDES.map((g) => `docs/${g.path}`), ...REGISTRY.map((item) => item.path)];
+const EXPECTED = ['build.json', 'dist/main.js', 'dist/main.js.map', `dist/${SPECS_CHUNK_FILE}`, `dist/${SPECS_CHUNK_FILE}.map`, 'index.html', ...DOCS.map((f) => `docs/${f}`), ...GUIDES.map((g) => `docs/${g.path}`), ...REGISTRY.map((item) => item.path)];
 const found = (await readdir(pub, { recursive: true, withFileTypes: true }))
   .filter((e) => e.isFile())
   .map((e) => relative(pub, resolve(e.parentPath, e.name)).split('\\').join('/'))

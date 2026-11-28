@@ -87,9 +87,10 @@ export const LATEST_PROTOCOL_VERSION = PROTOCOL_VERSIONS[0];
  *  asks for `2025-11-25`, and answering `2026-07-28` made it refuse to connect. */
 export const HANDSHAKE_PROTOCOL_VERSION = '2024-11-05';
 /** The `initialize` answer for a client that asked for `want`: echoed when it is a handshake revision
- *  this server speaks, otherwise HANDSHAKE_PROTOCOL_VERSION, never `2026-07-28` (#1867). Exported so
- *  every MCP server in the repo answers the handshake by this one rule; `tools/figma-bridge/server.ts`
- *  kept its own copy of the old fallback and Claude Code refused it the same way (#3109). */
+ *  this server speaks, otherwise HANDSHAKE_PROTOCOL_VERSION, never `2026-07-28` (#1867). The Figma bridge
+ *  answered by this rule from #3109, after its own copy of the old fallback made Claude Code refuse it; since
+ *  #4646 step 1 it has its own list, which adds `2025-11-25` for Tasks (`negotiateBridgeHandshake`). Both
+ *  servers are held to the literal answers in `mcp-handshake-probes.ts`, which never include `2026-07-28`. */
 export const negotiateHandshakeVersion = (want: unknown): string =>
   typeof want === 'string' && want !== LATEST_PROTOCOL_VERSION && (PROTOCOL_VERSIONS as readonly string[]).includes(want) ? want : HANDSHAKE_PROTOCOL_VERSION;
 

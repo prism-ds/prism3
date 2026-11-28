@@ -228,7 +228,8 @@ npm run build:site --workspace @prism3/studio   # what Vercel runs → apps/stud
 
 `build:site` (`build-site.mjs`) bundles with the same options as `build` (`build.mjs`), then assembles
 `apps/studio/public/` containing exactly `index.html` + `dist/main.js` + `.map`, the `docs/public/` copy and the
-guide pages drawn from it (#3176) — and **fails
+guide pages drawn from it (#3176), and `build.json`, the commit it was built from, which the daily
+production-freshness check reads back (#4634) — and **fails
 non-zero if the output is anything else**, so an emitted-but-unreferenced asset can't ship a
 broken site on a green build. `dev` and `build` are unchanged and remain the local workflow;
 `apps/studio/public/` is gitignored.
