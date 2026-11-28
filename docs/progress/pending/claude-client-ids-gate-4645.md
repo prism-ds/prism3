@@ -26,7 +26,8 @@ with A. This PR lands the gate first, as a ratchet (Q7 A). Nothing is renamed he
   `packages/engine/changes/**`, since the fold copies them verbatim into allowlisted files), the deny-list, the two
   gates that read it, the proposal and the baseline. Each entry must match a tracked file. The two fold inputs are
   exempt from the id ratchet only (owner decision Q-a A, 2026-11-28): their contents are still read, and a full client
-  name or a hashed name there fails outright as `FOLD INPUT`, since the fold copies them into public history.
+  name or a hashed name there fails outright as `FOLD INPUT`, since the fold copies them into public history. Their
+  file names are read too, because they come from branch names.
 - **Proof the gate can see.** `CLIENT_ID_SELF_CHECK` runs the scan's own `hitsOf` over the proposal's cases. Nine
   must be flagged, four must not, and one is an upper-case copy of the planted hash word, which proves the lowercasing.
   A made-up two-word name, planted by hash, adds four more that must be flagged (spaced, camelCase, run together,
@@ -48,8 +49,10 @@ with A. This PR lands the gate first, as a ratchet (Q7 A). Nothing is renamed he
 
 ### Evidence
 
-- Baseline at landing: 13,815 hits in 305 files. 3,134 text files are read, 14 binary files are read by path only, and
-  103 files are allowlisted by 11 entries.
+- Baseline at landing: 13,816 hits in 306 files. 3,137 text files are read, 14 binary files are read by path only, 25
+  files are allowlisted by 11 entries, and 82 fold inputs are read for names and hashes only. The one hit added since
+  first acceptance is `nb-regression` in `docs/47-brands-as-modes.md` (#4673): the regression gate's own file name,
+  which a later rename phase handles.
 - **Mutations, each failing by name:**
   - a quoted fixture id added to `apps/plugin/src/apply-theme.ts` → `NEW client-id:… at apps/plugin/src/apply-theme.ts:219`.
   - the planted arm moved into `docs/progress/archive/` → `PLANTED ARM … is not a tracked file`.
@@ -65,6 +68,8 @@ with A. This PR lands the gate first, as a ratchet (Q7 A). Nothing is renamed he
   - `MAX_RUN` set to 2 → `SELF-CHECK "brand: '<planted word in six case parts>'" should be flagged as client-id:sha256:c608275db08e`.
   - `scope: 'ids'` dropped from the pending-fragment entry (the blanket exemption restored) → `SELF-CHECK fold input
     docs/progress/pending/sc-fold.md: "a stray <planted word> in prose" should fail outright as client-id:sha256:…`.
+  - the path check dropped from `foldInputFailures` → `SELF-CHECK fold input docs/progress/pending/feat-…-theme.md:
+    "clean prose" should fail outright as client-id:sha256:5d9afaf19495 on its path`.
   - the planted two-word name added to a new pending fragment → `FOLD INPUT client-id:sha256:5d9afaf19495 at
     docs/progress/pending/…:1`.
   - the entry check's two `joined` rules dropped → `SELF-CHECK hash entry check: a two-word entry with no joined should

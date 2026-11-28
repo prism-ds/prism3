@@ -259,6 +259,9 @@
       "client-id:nbds": 15,
       "client-name:new balance": 3
     },
+    "docs/47-brands-as-modes.md": {
+      "client-id:nb": 1
+    },
     "docs/inventory/surfaces.json": {
       "client-id:nb": 17
     },

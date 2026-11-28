@@ -56,7 +56,9 @@
  * Two entries, the fold's inputs (`docs/progress/pending/**`, `packages/engine/changes/**`), are exempt from the id
  * ratchet only (owner decision Q-a A, 2026-11-28). Progress prose legitimately names the fixture ids, and the fold
  * can't run `--accept`. But the fold copies both verbatim into public history, so their contents are still read, and a
- * full client name or a hashed name there fails outright (`FOLD INPUT`), with no baseline to absorb it.
+ * full client name or a hashed name there fails outright (`FOLD INPUT`), with no baseline to absorb it. Their paths
+ * are read too, since a fold input's file name comes from its branch name. A binary one has its path read only and
+ * is counted apart.
  *
  * ── PROOF THE GATE CAN SEE ──────────────────────────────────────────────────────────────────────
  *
@@ -293,15 +295,22 @@ const globRe = (g: string): RegExp => new RegExp(`^${g.split('**').map((p) => p.
 const ALLOW_RES = ALLOWLIST.map((a) => ({ ...a, re: globRe(a.glob) }));
 const allowed = (path: string): boolean => ALLOW_RES.some((a) => !a.scope && a.re.test(path));
 const idsOnly = (path: string): boolean => !allowed(path) && ALLOW_RES.some((a) => a.scope === 'ids' && a.re.test(path));
-/** In a path exempt from the id ratchet only, every hit that is not a plain id fails outright: full names and hashes. */
-const foldInputFailures = (path: string, txt: string): Hit[] =>
-  idsOnly(path) ? hitsOf(txt).filter((h) => h.rule.startsWith('client-name:') || h.rule.startsWith('client-id:sha256:')) : [];
+/** In a path exempt from the id ratchet only, every hit that is not a plain id fails outright: full names and hashes.
+ *  The path is read as well as the contents (`null` for a binary file), because a fold input's file name comes from
+ *  its branch name. Each finding is at `'path'` or at an offset in `txt`. */
+const isAbsolute = (h: Hit): boolean => h.rule.startsWith('client-name:') || h.rule.startsWith('client-id:sha256:');
+const foldInputFailures = (path: string, txt: string | null): { rule: string; at: 'path' | number }[] => {
+  if (!idsOnly(path)) return [];
+  const found: { rule: string; at: 'path' | number }[] = hitsOf(path).filter(isAbsolute).map((h) => ({ rule: h.rule, at: 'path' }));
+  if (txt !== null) found.push(...hitsOf(txt).filter(isAbsolute).map((h) => ({ rule: h.rule, at: h.index })));
+  return found;
+};
 
 // The fold-input rule, checked through the same functions the walk runs, over paths no file holds. The hashed cases
 // use the made-up planted names. The full-name and id cases reuse self-check samples above, so no name is spelled
 // again here.
 const sampleWanting = (pred: (want: string) => boolean): string => CLIENT_ID_SELF_CHECK.find((c) => c.want !== null && pred(c.want))!.sample;
-const FOLD_INPUT_SELF_CHECK: { path: string; txt: string; want: string | null }[] = [
+const FOLD_INPUT_SELF_CHECK: { path: string; txt: string; want: string | null; where?: 'path' }[] = [
   { path: 'docs/progress/pending/sc-fold.md', txt: `a stray ${PLANTED_WORD} in prose`, want: hashRule(PLANTED_HASH) },
   { path: 'packages/engine/changes/sc-fold.md', txt: `const ${CAMEL_WORD}Theme = {}`, want: hashRule(PLANTED_HASH) },
   { path: 'docs/progress/pending/sc-fold.md', txt: `the ${PLANTED_PAIR.join(' ')} rollout`, want: hashRule(PLANTED_PAIR_HASH) },
@@ -309,11 +318,14 @@ const FOLD_INPUT_SELF_CHECK: { path: string; txt: string; want: string | null }[
   { path: 'docs/progress/pending/sc-fold.md', txt: sampleWanting((w) => w.startsWith('client-name:')), want: 'client-name:*' },
   { path: 'docs/progress/pending/sc-fold.md', txt: sampleWanting((w) => w === 'client-id:nbds'), want: null },
   { path: 'packages/engine/changes/sc-fold.md', txt: sampleWanting((w) => w === 'client-id:wendys'), want: null },
+  // The file name alone, with clean contents: a pending entry named from a branch, and a camel-cased change note.
+  { path: `docs/progress/pending/feat-${PLANTED_PAIR.join('-')}-theme.md`, txt: 'clean prose', want: hashRule(PLANTED_PAIR_HASH), where: 'path' },
+  { path: `packages/engine/changes/feat-${PLANTED_PAIR[0]}${PLANTED_PAIR[1][0].toUpperCase()}${PLANTED_PAIR[1].slice(1)}Theme.md`, txt: 'clean prose', want: hashRule(PLANTED_PAIR_HASH), where: 'path' },
 ];
-for (const { path, txt, want } of FOLD_INPUT_SELF_CHECK) {
-  const rules = foldInputFailures(path, txt).map((h) => h.rule);
+for (const { path, txt, want, where } of FOLD_INPUT_SELF_CHECK) {
+  const rules = foldInputFailures(path, txt).filter((f) => !where || f.at === where).map((f) => f.rule);
   const ok = want === null ? rules.length === 0 : want.endsWith('*') ? rules.some((r) => r.startsWith(want.slice(0, -1))) : rules.includes(want);
-  if (!ok) fail(`SELF-CHECK  fold input ${path}: "${txt}" should ${want ? `fail outright as ${want}` : 'pass (ids are exempt there)'} (got: ${rules.join(', ') || 'nothing'})`);
+  if (!ok) fail(`SELF-CHECK  fold input ${path}: "${txt}" should ${want ? `fail outright as ${want}${where ? ' on its path' : ''}` : 'pass (ids are exempt there)'} (got: ${rules.join(', ') || 'nothing'})`);
 }
 
 // ---- the walk -----------------------------------------------------------------------------------------------
@@ -329,6 +341,7 @@ const surfaceCount = new Map(SURFACES.map((s) => [s, 0]));
 let scanned = 0;
 let binary = 0;
 let foldInputs = 0;
+let foldBinary = 0;
 let plantedSeen: string[] | null = null;
 /** A line finder for one text: the offsets of its line starts, searched by bisection. */
 const lineFinder = (txt: string): ((index: number) => number) => {
@@ -347,11 +360,12 @@ for (const path of tracked) {
   }
   const isBinary = buf.subarray(0, 8192).includes(0);
   if (idsOnly(path)) {
-    foldInputs++;
-    if (!isBinary) {
-      const txt = buf.toString('utf8'); const lineOf = lineFinder(txt);
-      for (const h of foldInputFailures(path, txt)) fail(`FOLD INPUT  ${h.rule} at ${path}:${lineOf(h.index)} — a full or hashed client name may not enter a fold input, which the fold copies verbatim into public history (Q-a A)`);
-    }
+    // A binary fold input has its path read and is counted apart, never as read.
+    if (isBinary) foldBinary++;
+    else foldInputs++;
+    const txt = isBinary ? null : buf.toString('utf8');
+    const lineOf = txt === null ? null : lineFinder(txt);
+    for (const f of foldInputFailures(path, txt)) fail(`FOLD INPUT  ${f.rule} at ${path}:${f.at === 'path' || !lineOf ? 'path' : lineOf(f.at)} — a full or hashed client name may not enter a fold input, which the fold copies verbatim into public history (Q-a A)`);
     continue;
   }
   if (isBinary) binary++;
@@ -417,7 +431,7 @@ for (const [path, counts] of Object.entries(baseline)) {
 }
 
 const totalHits = [...actual.values()].reduce((n, f) => n + Object.values(f.counts).reduce((a, b) => a + b, 0), 0);
-const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary - foldInputs} allowlisted by ${ALLOWLIST.length} entries, ${foldInputs} fold inputs read for names and hashes only; ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - PLANTED_COUNT} hashed names + ${PLANTED_COUNT} planted hashes; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
+const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary - foldInputs - foldBinary} allowlisted by ${ALLOWLIST.length} entries, ${foldInputs} fold inputs read for names and hashes only (${foldBinary} binary, path only); ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - PLANTED_COUNT} hashed names + ${PLANTED_COUNT} planted hashes; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
 if (failures.length) {
   console.error(`❌ ${TAG}: ${failures.length} failure(s)\n`);
   for (const f of failures) console.error(`  ✗ ${f}`);
