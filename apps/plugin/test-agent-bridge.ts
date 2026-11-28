@@ -1493,10 +1493,12 @@ section('instructions + resources — what a fresh agent reads on connecting (#3
   const bridgeBody = bridgeFile.replace(/^---\n[\s\S]*?\n---\n\n/, '');
   const servedNote = String(init.result?.instructions ?? '');
   const runDesc: string = ((await rpc('tools/list')).result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run')?.description ?? '';
+  // The approved long-run line (Q3 A), written here by hand: the skill's line must be exactly this, and figma_run must carry it.
+  const LONG_RUN = "A call that times out leaves the command running in the plugin: don't send it again. Its error names the run's id, and figma_result returns the result once it lands.";
   const longRun = bridgeBody.startsWith(`${servedNote}\n`) ? bridgeBody.slice(servedNote.length + 1).replace(/\n$/, '') : '';
   ok(servedNote.length > 0 && bridgeBody !== bridgeFile && bridgeBody === `${servedNote}\n${longRun}\n` && longRun.length > 0 && !longRun.includes('\n')
-    && longRun.includes('figma_result') && runDesc.includes(longRun),
-    `skills/bridge-note: skills/prism3-bridge/SKILL.md's body is the served note verbatim, then one line figma_run's description carries word for word (${longRun ? `line: ${longRun.slice(0, 60)}…; in figma_run: ${runDesc.includes(longRun)}` : 'the body does not start with the note'})`);
+    && longRun === LONG_RUN && runDesc.includes(longRun),
+    `skills/bridge-note: skills/prism3-bridge/SKILL.md's body is the served note verbatim, then the approved long-run line, which figma_run's description carries word for word (${longRun ? `line ${longRun === LONG_RUN ? 'is' : 'is not'} the approved one; in figma_run: ${runDesc.includes(longRun)}` : 'the body does not start with the note'})`);
   const bridgeSkill = (await rpc('skills/get', { uri: 'skill://prism3-bridge/SKILL.md' })).result?.skill;
   ok(bridgeSkill?.frontmatter?.name === 'prism3-bridge'
     && bridgeSkill?.frontmatter?.description === "How to work in a Figma file through the Prism3 bridge: the rules that keep the file safe, which command to run first, and how to get a long command's result without sending it again.",
