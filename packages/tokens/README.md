@@ -55,7 +55,8 @@ or subtree that sets `data-theme` keeps the theme it asked for. The high-contras
 
 **With the shadcn/ui theme.** The shadcn/ui theme the engine exports switches on the `.dark` class, not on
 `data-theme`, and doesn't follow the system setting. On a page that uses both, set `class="dark"` and
-`data-theme="dark"` together on the same element ([The shadcn/ui theme](../../apps/studio/README.md#the-shadcnui-theme)).
+`data-theme="dark"` together on the same element ([The shadcn/ui theme](https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme)).
+In light, set `data-theme="light"` (or remove both), so the token CSS doesn't follow a dark system.
 
 The CSS defines custom properties only, so it can't set `color-scheme`, which native form controls and scrollbars read.
 Add it beside the import:
@@ -400,7 +401,7 @@ compile, would not parse, or states the wrong number) or **lost** (absent).
 
 ### What it found
 
-The full tables are in [`sd-version-matrix.md`](sd-version-matrix.md). In short:
+The full tables are in [`sd-version-matrix.md`](https://github.com/prism-ds/prism3/blob/main/packages/tokens/sd-version-matrix.md). In short:
 
 - **Web is whole.** CSS, SCSS and JavaScript carry every type usably except gradient on CSS and
   SCSS, the known consumer gap above.

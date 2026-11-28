@@ -95,5 +95,5 @@
       }
     }
   },
-  "docs": "Focus rings draw at full strength. The theme names the brand's fonts but doesn't load them. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme"
+  "docs": "Focus rings draw at full strength. The theme names the brand's sans and mono fonts but doesn't load them. Three stock classes still draw text under 4.5:1; the one-class edit for each is in the Prism3 README: https://github.com/prism-ds/prism3/blob/main/apps/studio/README.md#the-shadcnui-theme"
 }

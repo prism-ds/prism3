@@ -198,12 +198,13 @@ surface.
 
 **Dark mode.** The theme switches to dark on the `.dark` class, the way shadcn/ui does. The token CSS
 (`@prism3/tokens`) switches on `data-theme="dark"`, and also follows the system setting when a page sets no
-`data-theme`; the shadcn/ui theme doesn't. On a page that uses both, set both on the same element, together:
+`data-theme`; the shadcn/ui theme doesn't. On a page that uses both, set both on the same element:
 
 ```html
 <html class="dark" data-theme="dark">
 ```
 
+In light, set `data-theme="light"` (or remove both), so the token CSS doesn't follow a dark system.
 A page that sets neither gets dark tokens and light components on a dark system.
 
 **Sizes.** The theme carries color, radius and font. Stock shadcn/ui components keep their own sizes, which differ
@@ -217,9 +218,9 @@ from the Prism3 spec. Measured at a 16px root, against the hosted brands' medium
 A brand's density moves the Prism3 values; its `<brand>.tokens.json` holds them. To match the spec, edit the size
 classes in your copy of the component.
 
-**Fonts.** The registry item and the Tailwind theme name the brand's fonts in `--font-sans` and `--font-mono`, but
-don't load them. Load each face yourself, with `@font-face` or from a font service, under the exact family name the
-variable starts with. Until a face loads, text falls back to the generic family at the end of the value.
+**Fonts.** The registry item and the Tailwind theme name the brand's sans and mono fonts in `--font-sans` and
+`--font-mono`, but don't load them. Load each face yourself, with `@font-face` or from a font service, under the exact
+family name the variable starts with. Until a face loads, text falls back to the generic family at the end of the value.
 
 The registry item carries two rules beyond the theme variables, both for focus. Stock shadcn/ui draws the focus outline
 (`outline-ring/50`) and every component's focus ring (`ring-ring/50`) at 50%, which is 2.0–2.8:1 against the page. The
