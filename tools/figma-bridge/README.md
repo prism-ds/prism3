@@ -198,6 +198,18 @@ more:
   Each file is under `skills/` or `docs/public/`, so it is text that is already public. Nothing is read
   live from the Figma file as a resource.
 
+- **Three skills over MCP** (#4646 step 2): `prism3-rebind` and `prism3-build-ui`, served through the MCP
+  Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) from the same checkout files as their
+  `prism3://skills/…` resources, and `prism3-bridge` (Q3 A, 2026-11-28), whose body is the note above
+  verbatim plus `figma_run`'s line on long runs, and which is not a `prism3://` resource. A client that speaks the extension finds them with `skills/list`, gets
+  one with `skills/get` (its frontmatter and the list of its files, each with a digest), and reads each
+  file at `skill://<name>/<path>`, for example `skill://prism3-rebind/consistency-audit.js`. They load
+  when the agent needs them. The bridge reads them from the checkout once, when it starts, so an edit
+  to a skill shows after a restart. A skill file it does not serve fails with -32002, as an unknown
+  `prism3://` URI does. The skill files are not listed in
+  `resources/list`, which stays the five resources above, and an older client keeps reading the
+  `prism3://` URIs. `prism3-build-screens` joins once its skill is on `main` (#4632).
+
 The bridge points at the engine MCP server (`prism3-engine`) rather than proxying its tools (Q3300.4 A).
 
 ## The adherence test's arms (#3440)
@@ -210,7 +222,8 @@ The bridge points at the engine MCP server (`prism3-engine`) rather than proxyin
 - `2`, the default: the bridge as described above.
 
 Every arm declares `tasks` and `logging` and lists `figma_result` (#4646 step 1): they are how the bridge works, not
-what an agent is shown. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
+what an agent is shown. The skills (#4646 step 2) are what an agent is shown, so only arm 2 serves them, like the
+resources. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
 `figma_run` call before it runs, and one `outcome` line after it ends, refused calls included. A plain
 call that times out ends `tool-error`, but its run goes on, so when that run ends a `late` line with the same
 `seq` records how (`ok`, `not-ok` or `tool-error`; #4656). It is its own kind, so the `outcome` line stays the

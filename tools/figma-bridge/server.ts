@@ -69,7 +69,7 @@ import { createServer } from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -166,6 +166,33 @@ export const negotiateBridgeHandshake = (want: unknown): string =>
 /** The first revision that defines Tasks (`2025-11-25`): only a session at it or later is offered them. */
 export const TASKS_SINCE = '2025-11-25';
 
+/**
+ * SKILLS OVER MCP (#4646 step 2). The skills the bridge serves as MCP skills (`skills/list`, `skills/get`, and each file
+ * at `skill://<name>/<path>`), from the same checkout files as the `prism3://skills/…` resources, read once at start.
+ * `prism3-bridge` (Q3 A, 2026-11-28) is `BRIDGE_INSTRUCTIONS` verbatim plus figma_run's long-run line, as a skill only:
+ * `instructions` and `readFirst` stay as they are, and it is not a resource.
+ * Arm 2 only, like the resources. They are not listed in `resources/list`, which stays the five approved resources
+ * (Q3300.3 A): a client that speaks the extension finds them through `skills/list`, and an older client keeps reading
+ * `prism3://skills/…`. `prism3-build-screens` joins once its skill is on `main` (#4632).
+ */
+export const BRIDGE_SKILLS = ['prism3-rebind', 'prism3-build-ui', 'prism3-bridge'] as const;
+/** The URI prefix every served skill file sits under (the SDK's default). */
+export const SKILL_BASE = 'skill://';
+type SkillFolder = { name: string; files: Record<string, string> } | { name: string; error: string };
+/** Every file in each served skill's folder, by path under the folder; a folder that cannot be read is kept as its error. */
+export const loadSkillFiles = (root = REPO_ROOT): SkillFolder[] => BRIDGE_SKILLS.map((name) => {
+  const dir = join(root, 'skills', name);
+  try {
+    const files: Record<string, string> = {};
+    for (const rel of (readdirSync(dir, { recursive: true }) as string[]).map((r) => r.split('\\').join('/')).sort()) {
+      const abs = join(dir, rel);
+      if (statSync(abs).isFile()) files[rel] = readFileSync(abs, 'utf8');
+    }
+    if (!files['SKILL.md']) return { name, error: `skills/${name} has no SKILL.md` };
+    return { name, files };
+  } catch (e) { return { name, error: `cannot read skills/${name} — ${(e as Error).message}` }; }
+});
+
 /** Server capabilities. `logging` is declared because the bridge streams the plugin's console lines as
  *  `notifications/message`, which MCP allows only from a server that declares it; the SDK refuses to send them otherwise
  *  (#4646). `tasks` (#4646 step 1): `figma_run` can run as a task, and `tasks/list` lists them. No `cancel`: the plugin
@@ -173,17 +200,22 @@ export const TASKS_SINCE = '2025-11-25';
 export const CAPABILITIES = {
   tools: { listChanged: false }, resources: { listChanged: false }, logging: {},
   tasks: { list: {}, requests: { tools: { call: {} } } },
+  // #4646 step 2: Skills over MCP (SEP-2640). The SDK declares it when the skills are attached; `createMcpServer` checks
+  // that what it declared is this, since `initialize` answers with this object.
+  extensions: { 'io.modelcontextprotocol/skills': {} },
 };
-/** What a session is offered, by arm and revision: below arm 2 there is no resources capability (#3440), and below
+/** What a session is offered, by arm and revision: below arm 2 there are no resources and no skills (#3440), and below
  *  `TASKS_SINCE` no tasks. `server/discover` asks with no revision and gets no tasks: on `2026-07-28` Tasks are an
- *  extension (SEP-2663), a different surface the bridge does not serve. */
+ *  extension (SEP-2663), a different surface the bridge does not serve. Skills are a custom-method extension, served at
+ *  any revision. */
 export const capabilitiesFor = (arm: BridgeArm, revision?: string) => {
-  const { tools, resources, logging, tasks } = CAPABILITIES;
+  const { tools, resources, logging, tasks, extensions } = CAPABILITIES;
   return {
     tools,
     ...(armView(arm).resources ? { resources } : {}),
     logging,
     ...(revision !== undefined && revision >= TASKS_SINCE ? { tasks } : {}),
+    ...(armView(arm).skills ? { extensions } : {}),
   };
 };
 
@@ -196,7 +228,7 @@ export const capabilitiesFor = (arm: BridgeArm, revision?: string) => {
  *     `figma_run context` refused here, before it reaches the plugin. `context` is also left out of the tools' command
  *     list and `figma_status`'s `commands`, so the arm does not advertise what it refuses.
  *   · 1 (F1) — arm 0 plus the note: `instructions` and `readFirst`. Still no resources and no `context`.
- *   · 2 (F2) — the note, the five resources and `context`.
+ *   · 2 (F2) — the note, the five resources, the skills (#4646 step 2) and `context`.
  * `test-agent-bridge.ts` (`arm/…`) reads arm 0's and arm 1's bodies for sentinels it writes itself, never read from
  * `BRIDGE_INSTRUCTIONS`.
  */
@@ -204,8 +236,8 @@ export type BridgeArm = 0 | 1 | 2;
 export const DEFAULT_ARM: BridgeArm = 2;
 /** `PRISM3_BRIDGE_ARM`'s value → an arm, or null for anything but `0`, `1` or `2` (the server then refuses to start). */
 export const parseArm = (v: string | undefined): BridgeArm | null => (v === undefined || v === '' ? DEFAULT_ARM : v === '0' ? 0 : v === '1' ? 1 : v === '2' ? 2 : null);
-/** The arm's view: whether it sends the note, serves the resources and answers `context`. */
-export const armView = (arm: BridgeArm) => ({ note: arm >= 1, resources: arm >= 2, context: arm >= 2 });
+/** The arm's view: whether it sends the note, serves the resources and the skills, and answers `context`. */
+export const armView = (arm: BridgeArm) => ({ note: arm >= 1, resources: arm >= 2, skills: arm >= 2, context: arm >= 2 });
 /** The command the arms below 2 refuse at the bridge. */
 const CONTEXT_CMD = 'context';
 /** The refusal arms 0 and 1 answer `figma_run context` with: the protocol's own code for a command a build lacks. */
@@ -868,7 +900,7 @@ type WireMessage = { jsonrpc?: string; id?: number | string | null; method?: str
  *   · `initialize` is served at the version the bridge's rule picks (`negotiateBridgeHandshake`, #4646 step 1; never
  *     `2026-07-28`, #3109), and one sent without `capabilities` or `clientInfo` is served with empty ones, not refused.
  *   · A read of a resource this bridge does not serve fails with -32002 and names a renamed URI (#3412). The SDK
- *     re-codes -32002 as -32602.
+ *     re-codes -32002 as -32602. A `skill://` file goes on to the SDK, and `bridgeTransport` sends its not-found as -32002.
  * Everything else goes to the SDK unchanged. Pure, so it is tested without a process.
  */
 export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown } | { forward: WireMessage } => {
@@ -887,7 +919,8 @@ export const compatAnswer = (m: WireMessage, arm: BridgeArm): { reply: unknown }
   }
   if (m.method === 'resources/read' && view.resources) {
     const uri = m.params?.uri;
-    if (!RESOURCES.some((r) => r.uri === uri)) {
+    // A `skill://` file is the skills extension's to answer (#4646 step 2).
+    if (!RESOURCES.some((r) => r.uri === uri) && !(typeof uri === 'string' && view.skills && uri.startsWith(SKILL_BASE))) {
       const now = typeof uri === 'string' ? RENAMED_RESOURCES[uri] : undefined;
       const message = now ? `Resource not found: ${uri} was renamed; read ${now}` : `Resource not found: ${uri}`;
       return { reply: { jsonrpc: '2.0', id, error: { code: RESOURCE_NOT_FOUND, message, data: now ? { uri, renamedTo: now } : { uri } } } };
@@ -908,14 +941,24 @@ export const methodNotFound = (method: string): string => `method not found: ${m
 export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => {
   /** The method of each request forwarded to the SDK and not yet answered, by id. */
   const asked = new Map<string | number, string>();
+  // A `skill://` file the skills extension does not serve: the SDK answers -32602 with `data: { uri }`, and the bridge
+  // sends it as -32002, the code an unknown `prism3://` URI gets (#4661 review). The message stays the SDK's. Such a read
+  // is in both maps; both are looked up and cleared before the one send.
+  const skillReads = new Map<number | string, string>();
   const outer: Transport = {
     start: () => inner.start(),
     send: (msg, options) => {
-      const m = msg as { id?: string | number | null; error?: { code?: number; message?: string } };
-      if (m.id !== undefined && m.id !== null && asked.has(m.id) && ('result' in m || 'error' in m)) {
-        const method = asked.get(m.id)!;
+      const m = msg as { id?: string | number | null; error?: { code?: number; message?: string; data?: { uri?: unknown } } };
+      if (m.id !== undefined && m.id !== null && ('result' in m || 'error' in m)) {
+        const method = asked.get(m.id);
+        const uri = skillReads.get(m.id);
         asked.delete(m.id);
-        if (m.error?.code === METHOD_NOT_FOUND) return inner.send({ ...m, error: { ...m.error, message: methodNotFound(method) } } as JSONRPCMessage, options);
+        skillReads.delete(m.id);
+        const e = m.error;
+        if (method !== undefined && e?.code === METHOD_NOT_FOUND) return inner.send({ ...m, error: { ...e, message: methodNotFound(method) } } as JSONRPCMessage, options);
+        if (uri !== undefined && e?.code === -32602 && e.data !== undefined && JSON.stringify(Object.keys(e.data)) === '["uri"]' && e.data.uri === uri) {
+          return inner.send({ ...m, error: { ...e, code: RESOURCE_NOT_FOUND } } as JSONRPCMessage, options);
+        }
       }
       return inner.send(msg, options);
     },
@@ -926,7 +969,10 @@ export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => 
     const c = compatAnswer(msg as WireMessage, arm);
     if ('reply' in c) { void inner.send(c.reply as JSONRPCMessage).catch((e: Error) => outer.onerror?.(e)); return; }
     const f = c.forward;
-    if (f && typeof f === 'object' && typeof f.method === 'string' && f.id !== undefined && f.id !== null) asked.set(f.id, f.method);
+    if (f && typeof f === 'object' && typeof f.method === 'string' && f.id !== undefined && f.id !== null) {
+      asked.set(f.id, f.method);
+      if (f.method === 'resources/read' && typeof f.params?.uri === 'string' && f.params.uri.startsWith(SKILL_BASE)) skillReads.set(f.id, f.params.uri);
+    }
     outer.onmessage?.(f as JSONRPCMessage, extra);
   };
   inner.onerror = (e) => outer.onerror?.(e);
@@ -939,21 +985,25 @@ export const bridgeTransport = (inner: Transport, arm: BridgeArm): Transport => 
 const MAX_STDIO_MESSAGE = MAX_MESSAGE;
 
 /**
- * The MCP server: the four tools, the five resources and the note, by arm, on the SDK's `Server`, and figma_run as a
- * task. Progress and console lines during a run go out as `notifications/progress` (with the caller's `progressToken`)
- * and `notifications/message`.
+ * The MCP server: the four tools, the five resources, the skills and the note, by arm, and figma_run as a task. Progress
+ * and console lines during a run go out as `notifications/progress` (with the caller's `progressToken`) and
+ * `notifications/message`. Built on the SDK's `McpServer` since #4646 step 2, because the skills extension attaches to
+ * one; the tools and the task methods are still set on its underlying `Server`, by hand, as before. Returns that `Server`.
  */
 export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Promise<Server> => {
-  const { Server, ProtocolError, ProtocolErrorCode } = await import('@modelcontextprotocol/server');
+  const { McpServer, ProtocolError, ProtocolErrorCode } = await import('@modelcontextprotocol/server');
   const arm = opts.arm ?? DEFAULT_ARM;
   const view = armView(arm);
-  const server = new Server(SERVER_INFO, {
-    // Everything a session can be offered; `initialize` answers with what its revision gets (below).
-    capabilities: capabilitiesFor(arm, TASKS_SINCE),
+  const { extensions: _declaredByAttach, ...constructed } = capabilitiesFor(arm, TASKS_SINCE);
+  const mcp = new McpServer(SERVER_INFO, {
+    // Everything a session can be offered but the skills extension, which `attach` declares; `initialize` answers with
+    // what its arm and revision get (below).
+    capabilities: constructed,
     ...(view.note ? { instructions: BRIDGE_INSTRUCTIONS } : {}),
     // `initialize` is answered at the version `compatAnswer` hands it, which this list must hold.
     supportedProtocolVersions: [...BRIDGE_PROTOCOL_VERSIONS],
   });
+  const server = mcp.server;
 
   /** The revision the last `initialize` on this connection answered with (#4656 item 3). Tasks, and figma_run's
    *  `execution`, are this session's only when it is `TASKS_SINCE` or later, as its capabilities say. Before any
@@ -1141,18 +1191,50 @@ export const createMcpServer = async (bridge: Bridge, opts: RpcOptions = {}): Pr
     return { ...runResult(o), _meta: { [RELATED_TASK_META_KEY]: { taskId: t.run.id } } };
   }));
 
-  // An arm below 2 has no resources capability, so it registers no resource methods and the SDK answers them -32601 (#3440).
+  // An arm below 2 has no resources and no skills, so it registers neither and the SDK answers their methods -32601 (#3440).
+  if (view.skills) {
+    // The skills first: `attach` refuses a server that already serves resources. A source of our own, not the SDK's
+    // catalog, so the skill files are not listed in `resources/list` (see `BRIDGE_SKILLS`).
+    const { SkillsExtension, skillEntry } = await import('@modelcontextprotocol/server/ext/skills');
+    // A skill that cannot be read or does not validate is left out and named on stderr; the bridge still starts.
+    const say = (line: string) => process.stderr.write(`[figma-bridge] skill ${line}\n`);
+    const served: { name: string; files: Record<string, string> }[] = [];
+    const entries: Awaited<ReturnType<typeof skillEntry>>[] = [];
+    for (const f of loadSkillFiles()) {
+      if ('error' in f) { say(`${f.name}: ${f.error}`); continue; }
+      try { entries.push(await skillEntry(f.name, f.files, { baseUri: SKILL_BASE })); served.push(f); }
+      catch (e) { say(`${f.name}: not served — ${(e as Error).message}`); }
+    }
+    const fileAt = (uri: string): string | undefined => {
+      if (!uri.startsWith(SKILL_BASE)) return undefined;
+      const [name, ...rest] = uri.slice(SKILL_BASE.length).split('/');
+      return served.find((f) => f.name === name)?.files[rest.join('/')];
+    };
+    new SkillsExtension({
+      source: {
+        list: async () => ({ skills: entries }),
+        get: async (uri) => entries.find((e) => e.uri === uri),
+        read: async (uri) => {
+          const text = fileAt(uri);
+          return text === undefined ? undefined : { text, mimeType: uri.endsWith('.md') ? 'text/markdown' : uri.endsWith('.js') ? 'text/javascript' : 'text/plain' };
+        },
+      },
+    }).attach(mcp);
+    const declared = JSON.stringify(server.getCapabilities().extensions);
+    if (declared !== JSON.stringify(CAPABILITIES.extensions)) {
+      throw new Error(`figma-bridge: the SDK declared the skills extension as ${declared}, but initialize answers ${JSON.stringify(CAPABILITIES.extensions)}`);
+    }
+  }
   if (view.resources) {
-    server.setRequestHandler('resources/list', () => ({ resources: RESOURCES.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) }));
-    server.setRequestHandler('resources/templates/list', () => ({ resourceTemplates: [] }));
-    server.setRequestHandler('resources/read', (req) => {
-      // An unknown URI never reaches here: `compatAnswer` answers it with -32002.
-      const r = RESOURCES.find((x) => x.uri === req.params.uri);
-      if (!r) throw new ProtocolError(ProtocolErrorCode.InvalidParams, `Resource not found: ${req.params.uri}`);
-      const got = loadResources().get(r.uri)!;
-      if ('error' in got) throw new ProtocolError(ProtocolErrorCode.InternalError, got.error);
-      return { contents: [{ uri: r.uri, mimeType: r.mimeType, text: got.text, _meta: { 'prism3/engineVersion': ENGINE_VERSION } }] };
-    });
+    // The five static resources, on the same registry as the skill files. An unknown URI never reaches here:
+    // `compatAnswer` answers it with -32002.
+    for (const r of RESOURCES) {
+      mcp.registerResource(r.name, r.uri, { description: r.description, mimeType: r.mimeType }, () => {
+        const got = loadResources().get(r.uri)!;
+        if ('error' in got) throw new ProtocolError(ProtocolErrorCode.InternalError, got.error);
+        return { contents: [{ uri: r.uri, mimeType: r.mimeType, text: got.text, _meta: { 'prism3/engineVersion': ENGINE_VERSION } }] };
+      });
+    }
   }
   return server;
 };

@@ -68,4 +68,5 @@ Task guides for designers, in task order. Every write to a Figma file goes throu
 - [prism3-build-ui](https://github.com/prism-ds/prism3/tree/main/skills/prism3-build-ui): build UI from generated tokens. Formerly `prism3-consume`.
 - [prism3-motion](https://github.com/prism-ds/prism3/tree/main/skills/prism3-motion): animate UI with the brand's motion tokens, reduced motion included.
 - [prism3-rebind](https://github.com/prism-ds/prism3/tree/main/skills/prism3-rebind): move an existing Figma file onto Prism3.
+- [prism3-bridge](https://github.com/prism-ds/prism3/tree/main/skills/prism3-bridge): work in a Figma file through the Prism3 bridge.
 - [prism3-build-component](https://github.com/prism-ds/prism3/tree/main/skills/prism3-build-component): author a new component definition in the engine.

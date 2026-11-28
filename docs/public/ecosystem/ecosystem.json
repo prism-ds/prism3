@@ -1411,6 +1411,7 @@
       "members": {
         "label": "Skills",
         "items": [
+          "prism3-bridge",
           "prism3-build-component",
           "prism3-build-ui",
           "prism3-motion",
