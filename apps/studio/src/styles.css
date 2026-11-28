@@ -346,7 +346,7 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:inherit}
 .dm-block .mo-toolbar:has(.p3-mo-preset){flex-wrap:wrap}
 .mo-toolbar .mo-slowmo{white-space:nowrap}
 .mo-usedby{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:6px 0 10px}
-.mo-usedby-lab{font-size:12px;color:var(--faint);margin-right:4px}
+.mo-usedby-lab{font-size:12px;color:var(--faint);margin-right:var(--p3-space-200)}
 .mo-usedby-none{font-size:12px;color:var(--muted)}
 .mo-usedby-chip[aria-pressed="true"]{box-shadow:inset 0 0 0 1px currentColor;font-weight:600}
 .mo-scene{position:relative;height:220px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -383,8 +383,10 @@ input[type=color]::-moz-color-swatch{border:none;border-radius:inherit}
 .mo-cardwin{position:absolute;left:15%;right:15%;top:calc(50% - 40px);height:80px;overflow:hidden}
 .mo-cards{left:0;top:0;width:133.33%;height:80px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .mo-card{border:1px solid;border-radius:var(--r-sm)}
-.mo-timeline{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-.mo-tl-row{display:grid;grid-template-columns:minmax(110px,max-content) 1fr minmax(60px,max-content);align-items:center;gap:10px;font-size:11.5px}
+/* One time axis for every lane (§3.2): the columns are the timeline's, and each row takes them as a subgrid, so every
+   lane starts at the same x and is the same width, and a bar's length and offset read across rows. */
+.mo-timeline{display:grid;grid-template-columns:minmax(110px,max-content) 1fr minmax(60px,max-content);gap:6px 10px;margin-top:12px}
+.mo-tl-row{display:grid;grid-column:1/-1;grid-template-columns:subgrid;align-items:center;font-size:11.5px}
 .mo-tl-name{color:var(--muted)}
 .mo-tl-lane{position:relative;height:14px;border-radius:var(--r-xs);background:var(--paper)}
 .mo-tl-bar{position:absolute;top:0;height:100%;min-width:2px;border-radius:var(--r-xs);background:var(--line2)}

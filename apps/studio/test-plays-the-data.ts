@@ -13,11 +13,20 @@
  * in the mode in view. The same for the plain specimens of the presets no pattern names (§3.1 item 2): every property
  * the specimen moves is on that preset. Each failure names the brand, the mode, the pattern and the track.
  *
+ * WHEN it is read: at rest, and again after the stage plays, because `play()` rewrites every mover's transition and
+ * that rewrite is what a person sees move. Each pattern is read after Play or Replay is pressed; once per mode, on its
+ * first pattern, after a Motion edit (the tempo moved and moved back, so the brand is unchanged and the stage plays by
+ * itself, D9 A), and then after Replay. A timing typed in the Play path alone fails the `after Play` / `after Replay`
+ * arms by name (#4665 review, mutation c).
+ *
  * It also holds, from the same emitted data:
  *   · REPRESENTED: every pattern the agent file lists is reached through the stage (its preset chosen, its "Used by" chip
  *     clicked), every track has its element and its CSS property in that element's transition list, and every track
  *     has a timeline bar naming its preset. A count floor per brand and mode, so a stage that drew nothing fails.
  *   · USED BY: each preset's chips are exactly the patterns whose tracks name it or its exit half.
+ *   · ONE TIME AXIS (§3.2): every timeline lane starts at the same x and is as wide, and two tracks whose emitted
+ *     duration and delay are equal draw bars of equal start and length, within 1px. A row sized to its own text fails
+ *     `the timeline's lanes share one time axis` and `tracks … draw equal bars`.
  *
  * ── independence (docs/34) ────────────────────────────────────────────────────────────────────────
  *
@@ -205,8 +214,14 @@ const movedOn = (page: Page, pattern: string) => page.evaluate((p) => {
   });
 }, pattern) as Promise<Moved[]>;
 
+/** Each timeline bar: its track, its preset, and where it and its lane sit on screen, in px. */
+type Bar = { track: string; preset: string; left: number; width: number; laneLeft: number; laneWidth: number };
 const timelineOf = (page: Page) => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-p3="motion-timeline-bar"]')]
-  .map((b) => ({ track: b.dataset.motionTrack ?? '', preset: b.dataset.preset ?? '' })));
+  .map((b) => {
+    const r = b.getBoundingClientRect();
+    const l = (b.parentElement ?? b).getBoundingClientRect();
+    return { track: b.dataset.motionTrack ?? '', preset: b.dataset.preset ?? '', left: r.left, width: r.width, laneLeft: l.left, laneWidth: l.width };
+  })) as Promise<Bar[]>;
 const usedByChips = (page: Page) => page.locator('[data-p3="motion-used-by-chip"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.pattern ?? ''));
 
 const choosePreset = async (page: Page, preset: string): Promise<void> => {
@@ -230,6 +245,58 @@ const compare = async (page: Page, where: string, got: Moved | undefined, cssPro
   ok(entry.duration === w.duration, `${where} (${cssProp}): duration ${w.duration}${entry.duration === w.duration ? '' : `, got ${entry.duration}`}`);
   ok(entry.easing === w.easing, `${where} (${cssProp}): easing ${w.easing.length > 60 ? `${w.easing.slice(0, 60)}…` : w.easing}${entry.easing === w.easing ? '' : `, got ${entry.easing.slice(0, 80)}`}`);
   ok(entry.delay === w.delay, `${where} (${cssProp}): delay ${w.delay}${entry.delay === w.delay ? '' : `, got ${entry.delay}`}`);
+};
+
+type Want = { duration: string; easing: string; delay: string };
+/** Every track of `pattern` against its preset, as the stage's elements compute it now. */
+const checkPattern = async (page: Page, at: string, pattern: string, tracks: { element: string; property: string }[], wants: Map<string, Want>, when: string): Promise<void> => {
+  const moved = await movedOn(page, pattern);
+  for (const t of tracks) {
+    const key = `${t.element}.${t.property}`;
+    const el = moved.find((m) => m.element === t.element);
+    for (const cssProp of CSS_OF[t.property] ?? []) await compare(page, `${at}: pattern '${pattern}' track '${key}' ${when}`, el, cssProp, wants.get(key)!);
+  }
+};
+/** Press the stage's Play or Replay, and say which it was. `play()` rewrites each mover's transition as it runs. */
+const press = async (page: Page): Promise<string> => {
+  const btn = page.locator('[data-p3="motion-stage-play"]');
+  const label = ((await btn.textContent()) ?? '').trim();
+  await hooks.click(btn);
+  return label;
+};
+/** How many CSS transitions are running on the stage's elements of `pattern`: more than none once it plays. */
+const runningOn = (page: Page, pattern: string) => page.evaluate((p) => [...document.querySelectorAll<HTMLElement>('[data-motion-pattern]')]
+  .filter((x) => x.dataset.motionPattern === p).flatMap((x) => x.getAnimations()).filter((a) => a.constructor.name === 'CSSTransition' && a.playState === 'running').length, pattern);
+/** A Motion edit that leaves the brand as it was: the tempo moved to another value, then back. The second edit changes
+ *  the data the stage drew, so the stage plays once by itself (D9 A), on the brand's own timings again. False where the
+ *  mode's controls are held (a derived mode, Q59). */
+const TEMPO_CHIPS: Record<string, string> = { snappy: '[data-p3="tempo-snappy"]', standard: '[data-p3="tempo-standard"]', relaxed: '[data-p3="tempo-relaxed"]' };
+const motionEdit = async (page: Page): Promise<boolean> => {
+  const now = await page.evaluate((chips) => Object.keys(chips).find((t) => {
+    const c = document.querySelector<HTMLButtonElement>(chips[t]!);
+    return c && !c.disabled && c.getAttribute('aria-checked') === 'true';
+  }) ?? null, TEMPO_CHIPS);
+  if (!now) return false;
+  const checked = (t: string) => page.waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-checked') === 'true', TEMPO_CHIPS[t]!, { timeout: 5000 });
+  const other = Object.keys(TEMPO_CHIPS).find((t) => t !== now)!;
+  await hooks.click(page.locator(TEMPO_CHIPS[other]!));
+  await checked(other);
+  await hooks.click(page.locator(TEMPO_CHIPS[now]!));
+  await checked(now);
+  return true;
+};
+/** One time axis (§3.2): every lane starts at the same x and is as wide, and two tracks on the same duration and delay
+ *  (by the emitted tree, not by the stage) draw bars of the same start and length, within 1px. */
+const timelineAxis = (at: string, bars: Bar[], wants: Map<string, Want>): void => {
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+  const lanes = bars.filter((x) => !near(x.laneLeft, bars[0]!.laneLeft) || !near(x.laneWidth, bars[0]!.laneWidth));
+  ok(bars.length > 0 && lanes.length === 0, `${at}: the timeline's lanes share one time axis (${bars.map((x) => `${x.track} ${x.laneLeft.toFixed(1)}+${x.laneWidth.toFixed(1)}`).join(', ')})`);
+  for (const [i, x] of bars.entries()) for (const y of bars.slice(i + 1)) {
+    const wx = wants.get(x.track), wy = wants.get(y.track);
+    if (!wx || !wy || wx.duration !== wy.duration || wx.delay !== wy.delay) continue;
+    const same = near(x.left, y.left) && near(x.width, y.width);
+    ok(same, `${at}: tracks '${x.track}' and '${y.track}' (${wx.duration}, delay ${wx.delay}) draw equal bars${same ? '' : `, got ${x.left.toFixed(1)}+${x.width.toFixed(1)} and ${y.left.toFixed(1)}+${y.width.toFixed(1)}`}`);
+  }
 };
 
 try {
@@ -276,44 +343,64 @@ try {
         return [...new Set([...fromSel, ...fromRadios])].filter(Boolean);
       });
       ok(modes.length >= 2, `${b.label}: the preview offers ${modes.length} modes (${modes.join(', ')})`);
+      const pressed = new Set<string>();
+      let edits = 0;
       for (const mode of modes) {
         await chooseMode(page, mode);
         let patternsSeen = 0;
         let tracksSeen = 0;
-        for (const pattern of patternNames) {
+        for (const [pi, pattern] of patternNames.entries()) {
           const tracks = e.patterns[pattern]!.tracks;
           const preset = tracks[0]!.preset.replace(/^motion\.preset\./, '').replace(/\.exit$/, '');
           await choosePreset(page, preset);
           await hooks.click(page.locator(`[data-p3="motion-used-by-chip"][data-pattern="${pattern}"]`));
           await page.waitForFunction((p) => document.querySelector('[data-p3="motion-scene"]')?.getAttribute('data-pattern') === p, pattern, { timeout: 5000 });
-          const moved = await movedOn(page, pattern);
           const bars = await timelineOf(page);
           ok(bars.length === tracks.length, `${b.label} ${mode}: pattern '${pattern}': the timeline has one bar per track (${bars.length} of ${tracks.length})`);
           patternsSeen++;
+          const wants = new Map<string, { duration: string; easing: string; delay: string }>();
+          for (const t of tracks) wants.set(`${t.element}.${t.property}`, await normalize(page, expectedOf(e, t.preset, mode)));
           for (const t of tracks) {
             const key = `${t.element}.${t.property}`;
-            const where = `${b.label} ${mode}: pattern '${pattern}' track '${key}'`;
             const bar = bars.find((x) => x.track === key);
-            ok(!!bar && `motion.preset.${bar.preset}` === t.preset, `${where}: its timeline bar names ${t.preset.replace(/^motion\.preset\./, '')}${bar ? (`motion.preset.${bar.preset}` === t.preset ? '' : `, got ${bar.preset}`) : ', no bar'}`);
-            const want = expectedOf(e, t.preset, mode);
-            const el = moved.find((m) => m.element === t.element);
-            for (const cssProp of CSS_OF[t.property] ?? []) await compare(page, where, el, cssProp, want);
+            ok(!!bar && `motion.preset.${bar.preset}` === t.preset, `${b.label} ${mode}: pattern '${pattern}' track '${key}': its timeline bar names ${t.preset.replace(/^motion\.preset\./, '')}${bar ? (`motion.preset.${bar.preset}` === t.preset ? '' : `, got ${bar.preset}`) : ', no bar'}`);
             tracksSeen++;
+          }
+          timelineAxis(`${b.label} ${mode}: pattern '${pattern}'`, bars, wants);
+          // At rest, then after Play or Replay: `play()` rewrites every mover's transition, and that is what plays.
+          await checkPattern(page, `${b.label} ${mode}`, pattern, tracks, wants, 'at rest');
+          const label = await press(page);
+          pressed.add(label);
+          await checkPattern(page, `${b.label} ${mode}`, pattern, tracks, wants, `after ${label}`);
+          // Once per mode, on its first pattern: a Motion edit plays the stage by itself (D9 A); then Replay.
+          if (pi === 0 && await motionEdit(page)) {
+            edits++;
+            ok(await runningOn(page, pattern) > 0, `${b.label} ${mode}: pattern '${pattern}': a Motion edit plays the stage (its transitions are running)`);
+            await checkPattern(page, `${b.label} ${mode}`, pattern, tracks, wants, 'after a Motion edit');
+            const again = await press(page);
+            ok(again === 'Replay', `${b.label} ${mode}: after a Motion edit the stage's button says Replay (says ${again})`);
+            await checkPattern(page, `${b.label} ${mode}`, pattern, tracks, wants, `after ${again}, after a Motion edit`);
           }
         }
         ok(patternsSeen === patternNames.length && tracksSeen > 0, `${b.label} ${mode}: every pattern reached through the stage (${patternsSeen} of ${patternNames.length}, ${tracksSeen} tracks)`);
 
-        // The specimens: the presets no pattern names, each on every property its specimen moves.
+        // The specimens: the presets no pattern names, each on every property its specimen moves, at rest and played.
         for (const preset of presets.filter((p) => usersOf(p).length === 0)) {
           await choosePreset(page, preset);
           await hooks.need(page, '[data-p3="motion-used-by-none"]');
-          const moved = await movedOn(page, `specimen:${preset}`);
-          const props = moved.flatMap((m) => Object.keys(m.entries).map((p) => [m, p] as const));
-          ok(props.length > 0, `${b.label} ${mode}: specimen '${preset}' moves something (${props.map(([m, p]) => `${m.element}.${p}`).join(', ') || 'nothing'})`);
           const want = expectedOf(e, `motion.preset.${preset}`, mode);
-          for (const [m, p] of props) await compare(page, `${b.label} ${mode}: specimen '${preset}' element '${m.element}'`, m, p, want);
+          for (const when of ['at rest', 'played'] as const) {
+            const label = when === 'played' ? await press(page) : '';
+            const moved = await movedOn(page, `specimen:${preset}`);
+            const props = moved.flatMap((m) => Object.keys(m.entries).map((p) => [m, p] as const));
+            const tag = when === 'played' ? `after ${label}` : 'at rest';
+            ok(props.length > 0, `${b.label} ${mode}: specimen '${preset}' ${tag}: moves something (${props.map(([m, p]) => `${m.element}.${p}`).join(', ') || 'nothing'})`);
+            for (const [m, p] of props) await compare(page, `${b.label} ${mode}: specimen '${preset}' element '${m.element}' ${tag}`, m, p, want);
+          }
         }
       }
+      ok(pressed.has('Play') && pressed.has('Replay'), `${b.label}: the stage was read after Play and after Replay (${[...pressed].join(', ') || 'neither'})`);
+      ok(edits > 0, `${b.label}: the stage was read after a Motion edit in ${edits} mode(s)`);
       ok(errors.length === 0, `${b.label}: no page errors${errors.length ? ` (${errors.slice(0, 3).join(' | ')})` : ''}`);
     } catch (x) {
       ok(false, `${b.label}: the run reached its end (${(x as Error).message.split('\n')[0]})`);
