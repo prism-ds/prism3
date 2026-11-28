@@ -46,7 +46,7 @@
  *   · what an element moves (its distance, its start scale): the track's own properties, drawn, not timed;
  *   · the Slow motion divisor, which is view state: the gate reads at its default, Off.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
@@ -135,7 +135,7 @@ const fixtureInput = (): BrandInput => {
   input.modeLevers = { ...ml, dark: { ...(ml.dark ?? {}), tempo: 'relaxed', easings: { enter: 'expressive' } } } as BrandInput['modeLevers'];
   return input;
 };
-const fixtureDir = mkdtempSync(join(tmpdir(), 'p3-plays-data-'));
+const fixtureDir = mkdtempSync(join(realpathSync(tmpdir()), 'p3-plays-data-'));
 const fixtureMd = toDesignMd(fixtureInput());
 writeFileSync(join(fixtureDir, 'fixture.design.md'), fixtureMd);
 const cli = spawnSync(process.execPath, ['--import', 'tsx', join(REPO, 'packages/engine/cli.ts'), join(fixtureDir, 'fixture.design.md'), '--out', fixtureDir, '--committed'], { encoding: 'utf8' });
