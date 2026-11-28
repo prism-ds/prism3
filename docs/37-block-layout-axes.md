@@ -8,10 +8,11 @@
 > color — ship levers, not swatches.
 >
 > **Status: second pass, 2026-11-28 (#693).** §2 is the first witness's hero pass, kept as
-> written. §6–§12 are the corpus survey: six witnesses, four families read across them (navigation,
-> footer, CTA, sign-up and log-in), commerce read from the one witness that ships it, and a family
-> priority offered to the owner as a recommendation, not a decision (§10). It is still a vocabulary
-> to argue with: three of the six witnesses are layout-only or names-only for every family, and §11
+> written. §6–§12 are the corpus survey: five witnesses and one demand signal, four families read
+> across them (navigation, footer, CTA, sign-up and log-in), commerce read from the one witness that
+> ships it, and a family priority the owner decided on 2026-11-28: option A, the shell first (§10). It
+> is still a vocabulary to argue with: three of the five witnesses are layout-only or names-only for
+> every family, and §11
 > lists the screenshots that would close each open axis. Do not build a gate against any count here.
 
 ---
@@ -175,25 +176,36 @@ Per family, the loop is:
 **Order families by our demand, not by the vendors' depth.** Hero and feature run deepest in the
 commercial libraries because they sell; that is a fact about their market, not about ours.
 
-## 6. The second pass: six witnesses, and what each one can answer (2026-11-28)
+## 6. The second pass: five witnesses, one demand signal, and what each can answer (2026-11-28)
 
 The survey reads what is agent-reachable and marks the rest. Each witness answers a different
 question, and none answers all of them:
 
-| Witness | What it gave this pass | What it cannot give |
+| Source | What it gave this pass | What it cannot give |
 |---|---|---|
 | Initium | The public registry index (`app.initium.sh/r/registry.json`): 23 section categories carrying 192 blocks and 9 page categories carrying 27 pages (`13` §8 counted 197 and 28 on 2026-08-10), each with a one-line description built from a **shared facet vocabulary** of about 40 terms (*"media"*, *"two-column layout"*, *"background contrast section"*, *"primary and secondary CTAs"*, *"reversed column order"*, *"sticky elements"*) | Markup: block items return 401 without a license. The descriptions are uniform enough to read as generated (logo sections are tagged *"video aspect media"*), so they are weak evidence for any single block and useful mainly in aggregate |
 | Relume | Category names and numbered counts, and per-category **filter facets** — the vendor's own statement of what varies (§7) | Per-variant layouts (previews return *"Component not found"*), markup, any description per variant |
 | daisyUI (free) | Descriptive example names and **full markup** for navbar (10), footer (11), hero (5), drawer (5), and two log-in form examples | Sections: it is a component library, so it has no CTA, no commerce and no auth page |
 | `adobe/aem-block-collection` | **Running source** for header, footer, cards, columns, carousel and the page decoration script; the membership rule; the Universal Editor model format | Marketing families: no CTA, pricing, testimonial or commerce block exists in it |
 | Tailwind Plus | Nothing new. Every catalog URL now serves the login page. The 2026-08-11 reads in §2 and §3 stand as recorded | Everything, until a human with an account reads it (§11) |
-| The practice's legacy template library | **Demand evidence**: which families the practice actually reached for, and how many sets each (below) | Layouts, until screenshots are taken (§11). The navigation, CTA and footer sets are component sets with `Breakpoint = Desktop \| Mobile` at 1440 and 375; the sign-up and log-in templates are desktop only |
+| The practice's legacy template library (**not a witness**: built from Relume's kit) | **Demand evidence**: which Relume families the practice kept, and how many variants of each (below) | Any evidence independent of Relume. Layouts, until screenshots are taken (§11), and those are Relume's layouts. The navigation, CTA and footer sets are component sets with `Breakpoint = Desktop \| Mobile` at 1440 and 375; the sign-up and log-in templates are desktop only |
 
-**The practice's legacy template library**, read by the owner and summarized here without its name:
-Navigation 22 sets (from a plain bar to mega-menu and drawer states; desktop heights 72–900), CTA 58
-(from banner bands to full sections; desktop heights 320–1442), Footer 11, Sign-up page templates 9 and
-Log-in page templates 8 (both desktop only), and one assembled log-in page. It has **no** hero,
-features, pricing, testimonials, logo wall, stats, FAQ, blog, team, contact or commerce.
+**The practice's legacy template library was built from Relume's kit** (the owner's statement,
+2026-11-28). So it is not a sixth witness: what it shows about layout, Relume already shows, and
+counting both would count Relume twice (`34`: a comparison is only as strong as the independence of
+the two things it compares). What it adds is **demand**: which of Relume's families the practice kept,
+and how many variants of each. Read by the owner and summarized here without its name:
+
+| Family | Kept by the practice | Relume ships |
+|---|---|---|
+| Navigation | 22 sets (a plain bar to mega-menu and drawer states; desktop heights 72–900) | 32 |
+| CTA | 58 sets (banner bands to full sections; desktop heights 320–1442) | 67 |
+| Footer | 11 sets | 17 |
+| Sign-up and log-in | 9 sign-up and 8 log-in page templates (desktop only), and one assembled log-in page | 9 and 8 |
+| Hero, commerce | none | hero not read here; 27 ecommerce entries |
+
+It has **no** hero, features, pricing, testimonials, logo wall, stats, FAQ, blog, team, contact or
+commerce.
 
 **One structural finding before any family: most axes are not per-family.** Initium's facet vocabulary
 and Relume's filter panel are two independent witnesses, and both describe every family with the
@@ -216,13 +228,14 @@ repeats them per family, and it keeps a contrast band meaning the same thing on 
 
 Each family lists its witnesses, the axes they support, and the **empty cells**: combinations no
 readable witness ships. "Layout-only" means the axis comes from names, facets or the owner's
-description, never from markup.
+description, never from markup. The practice library is listed as **demand**, not as a witness: an
+axis it shows is a Relume axis the practice kept (§6).
 
 ### 7.1 Navigation
 
 **Witnesses:** Relume Navbars 1–32, with Topbars and Sidebars as separate Application UI categories;
 Initium LP Navbars 1–10; daisyUI Navbar (10 examples), Megamenu and Drawer (5); the AEM header block
-(source); and the practice library's 22 sets.
+(source). **Demand:** the practice kept 22 of Relume's 32.
 
 | Axis | Values | Source |
 |---|---|---|
@@ -233,7 +246,7 @@ Initium LP Navbars 1–10; daisyUI Navbar (10 examples), Megamenu and Drawer (5)
 | Tools group | any of: search, account, cart with count, notifications, command palette, 0–2 actions | AEM names the group outright: the nav document's third section is `tools`, after `brand` and `sections`. daisyUI fills it with search plus avatar (5), and with a cart count plus a cart summary dropdown (6); Initium 9 adds a command palette |
 | Behavior | static · sticky | Initium (sticky on 9 of 10) |
 | Surface | shared axis | daisyUI *"Navbar with colors"* |
-| State | closed · open | The practice library: a 72-high bar and a 900-high open mega menu are separate sets |
+| State | closed · open | The practice library, so Relume's layouts: a 72-high bar and a 900-high open mega menu are separate sets |
 
 **Empty cells:** no logo-end variant in any witness; no two-tier bar (a utility or promo strip above
 the main bar) in any readable witness; the cart and account tools appear only in daisyUI's example 6.
@@ -241,14 +254,14 @@ the main bar) in any readable witness; the cart and account tools appear only in
 search or cart element, Initium is marketing-only, and Tailwind Plus's store navigation set is behind
 its login.
 
-**Open state is a state, not a variant.** The practice library draws an open mega menu as its own
+**Open state is a state, not a variant.** The practice library (from Relume) draws an open mega menu as its own
 900-high set. Treat open and closed as states of one recipe, the way a component carries hover, or
 the set count grows by one for every menu.
 
 ### 7.2 Footer
 
 **Witnesses:** Relume Footers 1–17; Initium Footers 1–9; daisyUI Footer (11, markup); the AEM footer
-block (source); and the practice library's 11 sets.
+block (source). **Demand:** the practice kept 11 of Relume's 17.
 
 | Axis | Values | Source |
 |---|---|---|
@@ -269,8 +282,8 @@ payment-method marks, or app-store badges. On a store footer those are ordinary 
 
 ### 7.3 CTA
 
-**Witnesses:** Relume CTA 1–67; Initium CTA 1–7; the
-practice library's 58 sets, its deepest family. daisyUI has no CTA, and **AEM has no CTA block**:
+**Witnesses:** Relume CTA 1–67; Initium CTA 1–7. **Demand:** the practice kept 58 of Relume's 67,
+its deepest family. daisyUI has no CTA, and **AEM has no CTA block**:
 on Edge Delivery a CTA is default content (a heading, text and buttons) in a section that a
 Section Metadata `Style` row styles.
 
@@ -281,12 +294,13 @@ Section Metadata `Style` row styles.
 | Columns | 1 · 2 | Relume *Columns 1/2* |
 | Content alignment | shared axis | Initium (*"centered content"* on 6 of 7) |
 | Surface | shared axis, contrast band by default | Initium tags all 7 *"background contrast section"* |
-| Scale | band · full section | The practice library: desktop heights from 320 to 1442 inside one family |
+| Scale | band · full section | The practice library, so Relume's layouts: desktop heights from 320 to 1442 inside one family |
 | Extras | logos · icons · cards | Relume *Element* |
 
-**The CTA and banner boundary is drawn differently by different witnesses.** Relume and Initium keep
-Banners (announcement strips, 16 and 6) separate from CTA. The practice library puts *"banner bands"*
-inside CTA. A recipe has to pick one; the scale axis is how the practice library already expresses it.
+**The CTA and banner boundary is drawn differently by the witnesses and by the practice.** Relume and
+Initium keep Banners (announcement strips, 16 and 6) separate from CTA. The practice library, though
+built from Relume, files *"banner bands"* inside CTA: that is the practice's own regrouping, not a third
+witness disagreeing. A recipe has to pick one; the scale axis is how the practice already expresses it.
 
 **Empty cells:** no CTA with a price, a product or a countdown in any readable witness; Tailwind Plus's
 ecommerce *Promo sections* group is the likely source and is behind its login.
@@ -294,8 +308,8 @@ ecommerce *Promo sections* group is the likely source and is behind its login.
 ### 7.4 Sign-up and log-in
 
 **Witnesses:** Relume *Sign Up and Log In Pages* (Log In 1–8, Sign Up 1–9), plus *Sign Up and Log In
-Modals*, *Onboarding Forms* and *Multi-step Forms*; the practice library's 9 sign-up and 8 log-in
-templates and one assembled page; daisyUI's two log-in examples (markup). Initium has none. AEM's
+Modals*, *Onboarding Forms* and *Multi-step Forms*; daisyUI's two log-in examples (markup).
+**Demand:** the practice kept all 9 sign-up and all 8 log-in templates, and assembled one log-in page. Initium has none. AEM's
 form block is marked deprecated, and its docs class a form as a **widget, not a block**.
 
 | Axis | Values | Source |
@@ -304,15 +318,15 @@ form block is marked deprecated, and its docs class a form as a **widget, not a 
 | Arrangement | form alone · form with media beside | Relume *Element: Image, Slider*; *Image/Video Right* |
 | Media kind | image · slider | Relume |
 | Logo position | start · center | Relume *Logo Left/Center* |
-| Purpose | log in · sign up | Both witnesses split it this way |
+| Purpose | log in · sign up | Relume splits it this way, and the practice kept the split |
 
-**The counts coincide.** The practice library's 8 log-in and 9 sign-up templates are the same numbers
-as Relume's Log In 1–8 and Sign Up 1–9. If the practice library descends from a commercial kit for
-this family, it is **not an independent witness** for it (`34`: a comparison is only as strong as the
-independence of the two things it compares). Screenshots settle it (§11).
+**The counts coincide because the source is the same.** The practice library's 8 log-in and 9
+sign-up templates match Relume's Log In 1–8 and Sign Up 1–9 because the library was built from
+Relume's kit (the owner's statement, 2026-11-28). For this family the readable witnesses are Relume
+and, for the form alone, daisyUI.
 
-**Empty cells:** no mobile variant in the practice library (desktop only, the one family without
-`Breakpoint = Mobile`); no passwordless or one-time-code variant in any readable witness, though
+**Empty cells:** no mobile variant in the practice library (desktop only, the one family it kept
+without `Breakpoint = Mobile`); no passwordless or one-time-code variant in any readable witness, though
 daisyUI ships an OTP component.
 
 ### 7.5 Commerce
@@ -405,14 +419,14 @@ Missed axes are counted separately.
 
 **Correction rate: nearly half of the decidable hypothesis was wrong in some way (8 of 17), and the missed
 axes (15) nearly match the hypothesis (19) in number.** That is lower than hero's five of six, and the cause is visible:
-hero's first pass had one witness, this one had up to five per family. Add the structural correction
+hero's first pass had one witness, this one had up to four independent ones per family. Add the structural correction
 in §6 (most axes are shared, not per-family), which no single family's tally shows. **The next family
 needs the survey as much as these did.**
 
 **And two corrections to the issue's own framing:**
 
 - **Demand.** #693 orders families by "our demand", and states PDP work as the practice's most common
-  surface. The practice's legacy library, the best record of what it reached for in templates, has
+  surface. The practice's legacy library, the best record of which Relume templates it kept, has
   **no commerce at all**: its demand is navigation, CTA, footer and auth. The two signals measure
   different things (engagement surfaces against a marketing template kit), and both are real. §10 has
   to weigh them; it cannot read one off the other.
@@ -420,20 +434,23 @@ needs the survey as much as these did.**
   any kind"*. Its registry index now gives one line per block. The 2026-08-10 reading was true then and
   is not now.
 
-## 10. Family priority — a recommendation for the owner
+## 10. Family priority
 
-**This is an owner decision.** What follows is a recommendation with its reasons, and two options.
+**Decided 2026-11-28: the owner chose option A**, the shell first. The recommendation and both options
+are kept below as the record of what was weighed.
 
-**Inputs.** Which witnesses ship each family (✓ readable, ○ named but not readable now, ✗ absent):
+**Inputs.** Which witnesses ship each family (✓ readable, ○ named but not readable now, ✗ absent),
+and, in a separate column because it is **demand, not a witness**, how many of Relume's variants the
+practice kept (§6):
 
-| Family | Initium | Relume | daisyUI | AEM | Tailwind Plus | Practice library |
-|---|---|---|---|---|---|---|
-| Navigation | ✓ 10 | ✓ 32 | ✓ | ✓ boilerplate | ○ | ✓ 22 |
-| Footer | ✓ 9 | ✓ 17 | ✓ 11 | ✓ boilerplate | ○ | ✓ 11 |
-| CTA | ✓ 7 | ✓ 67 | ✗ | ✗ default content | ○ | ✓ 58 |
-| Sign-up and log-in | ✗ | ✓ 17 + modals | partial | ✗ widget | ○ | ✓ 17 |
-| Hero | ✓ 22 | ○ | ✓ 5 | ✓ boilerplate | ✓ names (§2) | ✗ |
-| Commerce | ✗ | ✓ 27, layout-only | ✗ | ✗ | ○ 14 groups | ✗ |
+| Family | Initium | Relume | daisyUI | AEM | Tailwind Plus | Independent witnesses | Practice kept (demand) |
+|---|---|---|---|---|---|---|---|
+| Navigation | ✓ 10 | ✓ 32 | ✓ | ✓ boilerplate | ○ | 4 | 22 of 32 |
+| Footer | ✓ 9 | ✓ 17 | ✓ 11 | ✓ boilerplate | ○ | 4 | 11 of 17 |
+| CTA | ✓ 7 | ✓ 67 | ✗ | ✗ default content | ○ | 2 | 58 of 67 |
+| Sign-up and log-in | ✗ | ✓ 17 + modals | partial | ✗ widget | ○ | 1, plus daisyUI's form | 17 of 17 |
+| Hero | ✓ 22 | ○ | ✓ 5 | ✓ boilerplate | ✓ names (§2) | 4 | none |
+| Commerce | ✗ | ✓ 27, layout-only | ✗ | ✗ | ○ 14 groups | 1, layout-only | none |
 
 AEM puts header and footer in its **boilerplate**, the tier for blocks *"used by the vast majority of
 all AEM projects"* — a stricter bar than the collection's more-than-half rule. Navigation and footer
@@ -442,17 +459,17 @@ are the only families every readable witness ships.
 **Option A (recommended): the shell first, commerce through it.** Order: **navigation → footer → CTA →
 commerce (product header, product list, category filters) → sign-up and log-in → hero.**
 
-- Navigation and footer clear every witness and the AEM boilerplate bar, and the practice library
-  reached for both.
+- Navigation and footer clear every witness and the AEM boilerplate bar, and the practice kept both
+  from Relume's kit.
 - They own the page landmarks (`header`, `nav`, `footer`), so building them first forces the §8
   landmark model to be settled before any section-tier recipe depends on it.
 - They are where commerce enters first: the navigation tools group (search, account, cart with count)
   and the footer's region selector and payment marks are commerce cells (§7.1, §7.2), and they are on
   every PDP the practice builds.
-- CTA is the practice library's deepest family (58 sets) and Relume's deepest here (67), with two
-  readable witnesses.
+- CTA is the family the practice kept most of (58 of Relume's 67), with two independent readable
+  witnesses (Relume and Initium).
 - Commerce follows once the §11 screenshots exist, so its axes come from at least two witnesses.
-- Hero is last: every vendor ships it and the practice library does not, which is §5's rule — order
+- Hero is last: every vendor ships it and the practice kept none of it, which is §5's rule — order
   by our demand, not by vendor depth.
 
 **Option B: commerce first.** Order: **product header → product list → category filters → navigation
@@ -471,6 +488,17 @@ them now and add the commerce cells when the §11 screenshots arrive.
 **Why A over B:** A reaches commerce through the shell in its first deliverable and holds the PDP
 families until a second witness exists; B is faster to a PDP and slower to a correct one.
 
+**The ranking holds once the practice library stops counting as a witness** (re-checked 2026-11-28,
+after the owner's statement that it was built from Relume's kit). Taking it out lowers two families'
+witness counts: CTA from three to two, and sign-up and log-in from two to one plus daisyUI's form.
+Navigation and footer lose nothing, because they never depended on it: they still have four independent
+witnesses and the AEM boilerplate bar. CTA, at two, still outranks commerce, at one layout-only witness.
+Sign-up and log-in, at one, was already placed after commerce. Hero keeps four witnesses and stays last
+on demand. One reading points the other way and is recorded so the owner can weigh it: by **share
+kept**, sign-up and log-in (17 of 17) and CTA (58 of 67, 87%) lead navigation (69%) and footer (65%).
+A does not order by share kept. It orders by witness breadth and by who owns the page landmarks, and
+neither of those moved.
+
 **The component backlog the families imply.** Navigation needs a disclosure button, a menu panel
 (dropdown and mega), a drawer or sheet, and a cart indicator; footer needs a link group and a
 newsletter form; CTA needs a form row; commerce needs a gallery, variant selectors and a filter panel.
@@ -481,7 +509,9 @@ this decision.
 
 A screenshot answers layout and nothing else (§4), so each request below names the question it closes.
 
-**From the practice's legacy template library (owner):**
+**From the practice's legacy template library (owner).** These are screenshots of Relume layouts the
+practice kept, so they stand in for Relume's own previews (which return *"Component not found"*) and
+count as Relume, not as a second witness:
 
 1. **Navigation:** the shortest desktop set (72 high) and the tallest (900), plus one desktop set from
    each distinct height in between. This settles depth, disclosure kind and the tools group. Also the
@@ -493,8 +523,8 @@ A screenshot answers layout and nothing else (§4), so each request below names 
 3. **Footer:** all 11 desktop sets (they are short), and one Mobile. This settles link columns, brand
    block, newsletter, social, bands, and whether any has a region selector.
 4. **Sign-up and log-in:** one sign-up and one log-in template with media beside the form (if any),
-   one without, and the assembled log-in page. Compare them against Relume's Sign Up 1–9 and Log In
-   1–8 order, which settles whether this family is an independent witness (§7.4).
+   one without, and the assembled log-in page. This settles arrangement and media kind for Relume's
+   auth templates (§7.4).
 
 **From Relume (a session-holding human):** all 27 ecommerce entries — Product Header 1–9, Product 1–12,
 Filters 1–6 — at desktop and mobile. That moves §7.5 from facets to layouts. Also the mega-menu and
@@ -534,5 +564,5 @@ daisyUI and Cloudscape figures via `36` §2. Second pass, all read 2026-11-28: I
 `aem.live/developer/block-collection/{header,footer,modal,search,breadcrumbs}`, and source from
 `main--aem-block-collection--adobe.aem.live` (`blocks/{header,footer,hero,cards,columns,carousel}`,
 `scripts/aem.js`, `scripts/scripts.js`); Tailwind Plus `tailwindcss.com/plus/ui-blocks` (login page
-only); the practice's legacy template library, as summarized by the owner. Cross-refs: `13` §8, `14`, `27` Idea 2, `28`, `35`,
+only); the practice's legacy template library, built from Relume's kit, as summarized by the owner (origin stated by the owner, 2026-11-28). Cross-refs: `13` §8, `14`, `27` Idea 2, `28`, `35`,
 `36` §2 row 6, KB `09` §1.36, KB `components/section.md`, #693.*
