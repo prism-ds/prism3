@@ -487,7 +487,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -502,7 +502,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -519,7 +519,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -561,7 +561,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -575,7 +575,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -592,7 +592,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -608,7 +608,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -623,7 +623,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -783,7 +783,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -796,7 +796,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -813,7 +813,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -840,7 +840,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -854,7 +854,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1679,7 +1679,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1700,7 +1700,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1716,7 +1716,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1729,7 +1729,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1747,7 +1747,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1760,7 +1760,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1773,7 +1773,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -1999,7 +1999,7 @@
    "props": [
     "column-gap",
     "display",
-    "flex-direction",
+    "grid-template-columns",
     "margin-top",
     "row-gap"
    ],
@@ -2015,11 +2015,11 @@
    "conds": [],
    "props": [
     "align-items",
-    "column-gap",
     "display",
     "font-size",
-    "grid-template-columns",
-    "row-gap"
+    "grid-column-end",
+    "grid-column-start",
+    "grid-template-columns"
    ],
    "seen": {
     "suite": "test:chrome",
