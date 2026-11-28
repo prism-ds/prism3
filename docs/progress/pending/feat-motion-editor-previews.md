@@ -30,7 +30,7 @@ Mutations, each failing by name: `trackTiming` returning 300ms for `fade` (82 ch
 'toast/enter' track 'toast.opacity' (opacity): duration 0.2s, got 0.3s"); one element's duration written as a literal
 (the scrim at 240ms: passes where aurora's surface is 240ms, fails prism3, harbor, aurora's exits and the fixture); the
 stage reading the brand's duration ramp instead of the mode's (51 checks, all "fixture dark", which is why the fixture
-exists: no committed brand moves motion per mode); a 300ms duration written only in `play()` (967 checks, all after Play,
+exists: no committed brand moves motion per mode); a 300ms duration written only in `play()` (966 checks, all after Play,
 Replay or a Motion edit, none at rest); and the timeline's rows back on their own grids (520 checks, "the timeline's
 lanes share one time axis" and "tracks … draw equal bars").
 
