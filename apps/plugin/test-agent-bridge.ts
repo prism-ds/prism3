@@ -1752,7 +1752,7 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
       // #4646 step 3: arm 0 asks too (every arm, like tasks), and a declined overwrite is recorded as refused by the bridge.
       await s.ask('initialize', { protocolVersion: '2025-06-18', capabilities: { elicitation: {} }, clientInfo: { name: 'arm', version: '1' } });
       const before = pl.texts().filter((m) => m.type === 'command').length;
-      const ow = await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'update-components', args: { confirm: true, previewHash: 'h-arm0', choices: { handEdits: 'overwrite' } } } });
+      const ow = await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'update-components', args: { confirm: true, previewHash: 'h-arm0', choices: { handEdits: 'overwrite' } }, timeoutMs: 1000 } });
       ok(s.asked.some((m) => m.method === 'elicitation/create') && ow.result?.isError === true && /declined/.test(ow.result?.structuredContent?.error ?? '') && pl.texts().filter((m) => m.type === 'command').length === before,
         `arm/0-elicit: arm 0 asks before an overwrite, and a decline sends the plugin nothing (${JSON.stringify(ow.result?.structuredContent)})`);
       pl.sock.destroy();
