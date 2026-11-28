@@ -122,6 +122,16 @@ decision recorded there is correct prose forever and is not this file's subject 
 | plain HTML/CSS ships a written behavior contract per interactive component, and web components carry their own behavior (Q-BH1 A) | 2026-11-18 | `docs/41-internal-and-ejected.md` §7.2 | #2454 |
 | the scrim's steps are declared taste, not a derivation | 2026-11-18 | `docs/20-interactive-color-system.md` §8.3 | #1043 |
 | the export package — no Style Dictionary preset, no value-shape options, a ZIP, CSS from the Style Dictionary build | 2026-11-19 | `docs/12-token-press-monorepo-eval.md` §12 | #2425 |
+| brands as modes: one file holds several brands, and a new brand takes its colors, type, shape and motion from its design.md (B) | 2026-11-25 | `docs/47-brands-as-modes.md` §2.1 | #4472 |
+| a brand axis next to the appearance axis: color varies by brand × appearance, type, shape and motion by brand, in a new `brand` collection, and components are not rebound (Q1 A) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.2 | #4472 |
+| each brand gets every appearance the file has on, high contrast included (Q2 A) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.3 | #4472 |
+| colors, type, corners, shadow, density and motion vary per brand; spacing and breakpoints stay shared (Q3 A) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.4 | #4472 |
+| component style choices stay one per file until each is brought to the owner (Q4) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.5 | #4472 |
+| a field a brand can't hold is imported anyway, the file's value kept and the field named in the report (Q5 A) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.6 | #4472 |
+| a `brand` collection whose modes are brand names, and color modes named like "B · dark" (Q6 A) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.7 | #4472 |
+| Studio shows one brand at a time with a switcher; the compare view is #4616 (Q7) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.8 | #4472 |
+| the file's original brand stays the default brand (Q8 A) | 2026-11-26 | `docs/47-brands-as-modes.md` §2.9 | #4472 |
+| the contract version is settled by docs/30's policy when the build reaches it | 2026-11-26 | `docs/47-brands-as-modes.md` §2.10 | #4472 |
 
 ## Known gaps, named rather than silent
 
