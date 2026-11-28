@@ -2,10 +2,10 @@
  "file": "apps/studio/src/styles.css",
  "note": "Written only by `node apps/studio/lint-live-css.mjs --accept` (#2201). Never by regen, never by the gate.",
  "coverage": {
-  "web|light": 292,
-  "web|dark": 91,
-  "figma|light": 240,
-  "figma|dark": 90
+  "web|light": 405,
+  "web|dark": 137,
+  "figma|light": 354,
+  "figma|dark": 152
  },
  "live": {
   ":root #1": {
@@ -174,95 +174,6 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".barbtn #1": {
-   "sel": ".barbtn",
-   "conds": [],
-   "props": [
-    "align-items",
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "color",
-    "column-gap",
-    "cursor",
-    "display",
-    "font-family",
-    "font-feature-settings",
-    "font-kerning",
-    "font-language-override",
-    "font-optical-sizing",
-    "font-size",
-    "font-size-adjust",
-    "font-stretch",
-    "font-style",
-    "font-variant-alternates",
-    "font-variant-caps",
-    "font-variant-east-asian",
-    "font-variant-emoji",
-    "font-variant-ligatures",
-    "font-variant-numeric",
-    "font-variant-position",
-    "font-variation-settings",
-    "font-weight",
-    "line-height",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top",
-    "row-gap",
-    "text-wrap-mode",
-    "white-space-collapse"
-   ],
-   "seen": {
-    "suite": "test:smoke",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".barbtn:hover #1": {
-   "sel": ".barbtn:hover",
-   "conds": [],
-   "props": [
-    "border-bottom-color",
-    "border-left-color",
-    "border-right-color",
-    "border-top-color"
-   ],
-   "seen": {
-    "suite": "test:smoke",
     "host": "web",
     "scheme": "light",
     "url": "/index.html"
@@ -464,159 +375,6 @@
     "url": "/index.html"
    }
   },
-  ".seg #1": {
-   "sel": ".seg",
-   "conds": [],
-   "props": [
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "column-gap",
-    "display",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top",
-    "row-gap"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".seg-b #1": {
-   "sel": ".seg-b",
-   "conds": [],
-   "props": [
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "color",
-    "cursor",
-    "font-family",
-    "font-feature-settings",
-    "font-kerning",
-    "font-language-override",
-    "font-optical-sizing",
-    "font-size",
-    "font-size-adjust",
-    "font-stretch",
-    "font-style",
-    "font-variant-alternates",
-    "font-variant-caps",
-    "font-variant-east-asian",
-    "font-variant-emoji",
-    "font-variant-ligatures",
-    "font-variant-numeric",
-    "font-variant-position",
-    "font-variation-settings",
-    "font-weight",
-    "line-height",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".seg-b:hover #1": {
-   "sel": ".seg-b:hover",
-   "conds": [],
-   "props": [
-    "color"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".seg-b.on #1": {
-   "sel": ".seg-b.on",
-   "conds": [],
-   "props": [
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "box-shadow",
-    "color",
-    "font-weight"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
   "input[type=\"color\"]::-webkit-color-swatch-wrapper #1": {
    "sel": "input[type=\"color\"]::-webkit-color-swatch-wrapper",
    "conds": [],
@@ -658,87 +416,6 @@
     "border-top-right-radius",
     "border-top-style",
     "border-top-width"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".select #1": {
-   "sel": ".select",
-   "conds": [],
-   "props": [
-    "appearance",
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "color",
-    "cursor",
-    "font-family",
-    "font-feature-settings",
-    "font-kerning",
-    "font-language-override",
-    "font-optical-sizing",
-    "font-size",
-    "font-size-adjust",
-    "font-stretch",
-    "font-style",
-    "font-variant-alternates",
-    "font-variant-caps",
-    "font-variant-east-asian",
-    "font-variant-emoji",
-    "font-variant-ligatures",
-    "font-variant-numeric",
-    "font-variant-position",
-    "font-variation-settings",
-    "font-weight",
-    "line-height",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".select.cap #1": {
-   "sel": ".select.cap",
-   "conds": [],
-   "props": [
-    "max-width"
    ],
    "seen": {
     "suite": "test:chrome",
@@ -1020,7 +697,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "dark",
+    "scheme": "light",
     "url": "/index.html"
    }
   },
@@ -1042,7 +719,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "dark",
+    "scheme": "light",
     "url": "/index.html"
    }
   },
@@ -1662,73 +1339,6 @@
     "url": "/index.html"
    }
   },
-  ".mo-slowmo-sel #1": {
-   "sel": ".mo-slowmo-sel",
-   "conds": [],
-   "props": [
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "color",
-    "cursor",
-    "font-family",
-    "font-feature-settings",
-    "font-kerning",
-    "font-language-override",
-    "font-optical-sizing",
-    "font-size",
-    "font-size-adjust",
-    "font-stretch",
-    "font-style",
-    "font-variant-alternates",
-    "font-variant-caps",
-    "font-variant-east-asian",
-    "font-variant-emoji",
-    "font-variant-ligatures",
-    "font-variant-numeric",
-    "font-variant-position",
-    "font-variation-settings",
-    "font-weight",
-    "line-height",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
   ".mo-grid #1": {
    "sel": ".mo-grid",
    "conds": [],
@@ -1947,105 +1557,6 @@
    "props": [
     "color",
     "font-size"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".mo-coldesc #1": {
-   "sel": ".mo-coldesc",
-   "conds": [],
-   "props": [
-    "color",
-    "font-size"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".mo-replay #1": {
-   "sel": ".mo-replay",
-   "conds": [],
-   "props": [
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "color",
-    "cursor",
-    "font-family",
-    "font-feature-settings",
-    "font-kerning",
-    "font-language-override",
-    "font-optical-sizing",
-    "font-size",
-    "font-size-adjust",
-    "font-stretch",
-    "font-style",
-    "font-variant-alternates",
-    "font-variant-caps",
-    "font-variant-east-asian",
-    "font-variant-emoji",
-    "font-variant-ligatures",
-    "font-variant-numeric",
-    "font-variant-position",
-    "font-variation-settings",
-    "font-weight",
-    "line-height",
-    "margin-top",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".mo-replay:hover #1": {
-   "sel": ".mo-replay:hover",
-   "conds": [],
-   "props": [
-    "border-bottom-color",
-    "border-left-color",
-    "border-right-color",
-    "border-top-color",
-    "color"
    ],
    "seen": {
     "suite": "test:chrome",
@@ -2287,11 +1798,405 @@
     "url": "/index.html"
    }
   },
-  ".dm-block .mo-replay #1": {
-   "sel": ".dm-block .mo-replay",
+  ".mo-usedby #1": {
+   "sel": ".mo-usedby",
    "conds": [],
    "props": [
-    "margin-top"
+    "align-items",
+    "column-gap",
+    "display",
+    "flex-wrap",
+    "margin-bottom",
+    "margin-left",
+    "margin-right",
+    "margin-top",
+    "row-gap"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-chip[aria-pressed=\"true\"] #1": {
+   "sel": ".mo-chip[aria-pressed=\"true\"]",
+   "conds": [],
+   "props": [
+    "border-bottom-color",
+    "border-left-color",
+    "border-right-color",
+    "border-top-color"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-pstage #1": {
+   "sel": ".mo-pstage",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "margin-bottom",
+    "margin-left",
+    "margin-right",
+    "margin-top",
+    "overflow-x",
+    "overflow-y",
+    "position"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el #1": {
+   "sel": ".mo-el",
+   "conds": [],
+   "props": [
+    "position"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-scrim #1": {
+   "sel": ".mo-el-scrim",
+   "conds": [],
+   "props": [
+    "bottom",
+    "left",
+    "right",
+    "top"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-panel #1": {
+   "sel": ".mo-el-panel",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-element #1": {
+   "sel": ".mo-el-element",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-popover #1": {
+   "sel": ".mo-el-popover",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-content #1": {
+   "sel": ".mo-el-content",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "position",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-toast #1": {
+   "sel": ".mo-el-toast",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "bottom",
+    "height",
+    "right",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-tooltip #1": {
+   "sel": ".mo-el-tooltip",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-indicator #1": {
+   "sel": ".mo-el-indicator",
+   "conds": [],
+   "props": [
+    "clip-path",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-pill #1": {
+   "sel": ".mo-el-pill",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-label #1": {
+   "sel": ".mo-el-label",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-control #1": {
+   "sel": ".mo-el-control",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-el-specimen #1": {
+   "sel": ".mo-el-specimen",
+   "conds": [],
+   "props": [
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "height",
+    "left",
+    "top",
+    "transform-origin",
+    "width"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-timeline #1": {
+   "sel": ".mo-timeline",
+   "conds": [],
+   "props": [
+    "column-gap",
+    "display",
+    "row-gap"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-tl-row #1": {
+   "sel": ".mo-tl-row",
+   "conds": [],
+   "props": [
+    "align-items",
+    "column-gap",
+    "display",
+    "font-size",
+    "grid-template-columns",
+    "row-gap"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-tl-lane #1": {
+   "sel": ".mo-tl-lane",
+   "conds": [],
+   "props": [
+    "display",
+    "position"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-tl-bar #1": {
+   "sel": ".mo-tl-bar",
+   "conds": [],
+   "props": [
+    "background-attachment",
+    "background-clip",
+    "background-color",
+    "background-image",
+    "background-origin",
+    "background-position-x",
+    "background-position-y",
+    "background-repeat",
+    "background-size",
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "box-sizing",
+    "display",
+    "min-width",
+    "overflow-x",
+    "overflow-y",
+    "padding-bottom",
+    "padding-left",
+    "padding-right",
+    "padding-top",
+    "text-overflow",
+    "text-wrap-mode",
+    "white-space-collapse"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
+  ".mo-tl-ms #1": {
+   "sel": ".mo-tl-ms",
+   "conds": [],
+   "props": [
+    "font-variant-numeric",
+    "text-align"
    ],
    "seen": {
     "suite": "test:chrome",
@@ -2526,19 +2431,6 @@
     "url": "/index.html"
    }
   },
-  ".dm-block .mo-coldesc #1": {
-   "sel": ".dm-block .mo-coldesc",
-   "conds": [],
-   "props": [
-    "color"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
   ".dm-block .mo-ez-bez #1": {
    "sel": ".dm-block .mo-ez-bez",
    "conds": [],
@@ -2582,7 +2474,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2599,7 +2491,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2616,7 +2508,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2647,7 +2539,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2676,7 +2568,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2691,7 +2583,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2702,23 +2594,6 @@
     "position",
     "top",
     "transform"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "web",
-    "scheme": "light",
-    "url": "/index.html"
-   }
-  },
-  ".cset #1": {
-   "sel": ".cset",
-   "conds": [],
-   "props": [
-    "column-gap",
-    "display",
-    "flex-direction",
-    "margin-top",
-    "row-gap"
    ],
    "seen": {
     "suite": "test:chrome",
@@ -2753,7 +2628,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2772,7 +2647,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2791,41 +2666,8 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
-   }
-  },
-  "label.cset-head #1": {
-   "sel": "label.cset-head",
-   "conds": [],
-   "props": [
-    "cursor"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "light",
-    "url": "/plugin?figma=light"
-   }
-  },
-  ".cset-radio #1": {
-   "sel": ".cset-radio",
-   "conds": [],
-   "props": [
-    "accent-color",
-    "align-self",
-    "height",
-    "margin-bottom",
-    "margin-left",
-    "margin-right",
-    "margin-top",
-    "width"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "light",
-    "url": "/plugin?figma=light"
    }
   },
   ".cset-name #1": {
@@ -2837,7 +2679,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2851,35 +2693,8 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
-   }
-  },
-  ".cset-last #1": {
-   "sel": ".cset-last",
-   "conds": [],
-   "props": [
-    "color",
-    "font-size"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "light",
-    "url": "/plugin?figma=light"
-   }
-  },
-  ".cset-last #2": {
-   "sel": ".cset-last",
-   "conds": [],
-   "props": [
-    "margin-left"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "light",
-    "url": "/plugin?figma=light"
    }
   },
   ".cset-body #1": {
@@ -2895,7 +2710,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2914,7 +2729,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2933,7 +2748,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2952,7 +2767,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2971,7 +2786,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2984,7 +2799,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
    }
   },
@@ -2997,24 +2812,8 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "light",
+    "scheme": "dark",
     "url": "/index.html"
-   }
-  },
-  ".cset-radio:focus-visible #1": {
-   "sel": ".cset-radio:focus-visible",
-   "conds": [],
-   "props": [
-    "outline-color",
-    "outline-offset",
-    "outline-style",
-    "outline-width"
-   ],
-   "seen": {
-    "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "light",
-    "url": "/plugin?figma=light"
    }
   },
   ":is(.seg-b, .pvseg-b, .pv-tscroll, .mo-replay, .mo-slowmo-sel, .select):focus-visible #1": {
@@ -4317,6 +4116,42 @@
     "url": "/index.html"
    }
   },
+  ".tok-callout #1": {
+   "sel": ".tok-callout",
+   "conds": [],
+   "props": [
+    "background-attachment",
+    "background-clip",
+    "background-color",
+    "background-image",
+    "background-origin",
+    "background-position-x",
+    "background-position-y",
+    "background-repeat",
+    "background-size",
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "color",
+    "font-size",
+    "line-height",
+    "margin-bottom",
+    "margin-left",
+    "margin-right",
+    "margin-top",
+    "padding-bottom",
+    "padding-left",
+    "padding-right",
+    "padding-top"
+   ],
+   "seen": {
+    "suite": "test:chrome",
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
+   }
+  },
   ".dot #1": {
    "sel": ".dot",
    "conds": [],
@@ -4334,7 +4169,7 @@
    "seen": {
     "suite": "test:chrome",
     "host": "web",
-    "scheme": "dark",
+    "scheme": "light",
     "url": "/index.html"
    }
   },
@@ -4347,55 +4182,6 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "web",
-    "scheme": "dark",
-    "url": "/index.html"
-   }
-  },
-  ".errbar #1": {
-   "sel": ".errbar",
-   "conds": [],
-   "props": [
-    "background-attachment",
-    "background-clip",
-    "background-color",
-    "background-image",
-    "background-origin",
-    "background-position-x",
-    "background-position-y",
-    "background-repeat",
-    "background-size",
-    "border-bottom-color",
-    "border-bottom-left-radius",
-    "border-bottom-right-radius",
-    "border-bottom-style",
-    "border-bottom-width",
-    "border-image-outset",
-    "border-image-repeat",
-    "border-image-slice",
-    "border-image-source",
-    "border-image-width",
-    "border-left-color",
-    "border-left-style",
-    "border-left-width",
-    "border-right-color",
-    "border-right-style",
-    "border-right-width",
-    "border-top-color",
-    "border-top-left-radius",
-    "border-top-right-radius",
-    "border-top-style",
-    "border-top-width",
-    "color",
-    "font-size",
-    "margin-bottom",
-    "padding-bottom",
-    "padding-left",
-    "padding-right",
-    "padding-top"
-   ],
-   "seen": {
-    "suite": "test:smoke",
     "host": "web",
     "scheme": "light",
     "url": "/index.html"
@@ -5680,9 +5466,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-scroll #1": {
@@ -5714,9 +5500,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-tbl #1": {
@@ -5731,9 +5517,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-tbl th #1": {
@@ -5752,9 +5538,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-tbl td #1": {
@@ -5773,9 +5559,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-tbl thead th #1": {
@@ -5799,9 +5585,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-tbl tbody tr:last-child td #1": {
@@ -5814,9 +5600,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-stick #1": {
@@ -5843,9 +5629,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-tbl thead .mtbl-stick #1": {
@@ -5865,9 +5651,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-mode #1": {
@@ -5879,9 +5665,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-fill #1": {
@@ -5897,9 +5683,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-fill.mtbl-spec #1": {
@@ -5914,9 +5700,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".mtbl-spec-t #1": {
@@ -5934,9 +5720,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".mtbl-name #1": {
@@ -5949,9 +5735,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".tf-stat #1": {
@@ -5963,9 +5749,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".sl-note #1": {
@@ -6016,9 +5802,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".tpw-mark #1": {
@@ -6030,9 +5816,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".tpw-mark.yes #1": {
@@ -6043,9 +5829,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".tpw-mark.no #1": {
@@ -6056,9 +5842,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".tpw-samp #1": {
@@ -6070,9 +5856,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".ltbl-who #1": {
@@ -6087,9 +5873,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".ltbl-who.none #1": {
@@ -6101,9 +5887,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".ltbl-samp #1": {
@@ -6117,9 +5903,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   ".shp-who #1": {
@@ -6130,9 +5916,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-label #1": {
@@ -6144,9 +5930,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-sw #1": {
@@ -6175,9 +5961,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-hbar #1": {
@@ -6209,9 +5995,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-wbar #1": {
@@ -6243,9 +6029,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-wbar.zero #1": {
@@ -6273,9 +6059,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-line #1": {
@@ -6288,9 +6074,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-icon #1": {
@@ -6321,9 +6107,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-shapes #1": {
@@ -6338,9 +6124,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-shape #1": {
@@ -6380,9 +6166,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-shape.on #1": {
@@ -6397,9 +6183,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-bar #1": {
@@ -6427,9 +6213,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
+    "host": "web",
     "scheme": "light",
-    "url": "/plugin?figma=light"
+    "url": "/index.html"
    }
   },
   ".shp-panel #1": {
@@ -6660,9 +6446,9 @@
    ],
    "seen": {
     "suite": "test:chrome",
-    "host": "figma",
-    "scheme": "dark",
-    "url": "/plugin?figma=dark"
+    "host": "web",
+    "scheme": "light",
+    "url": "/index.html"
    }
   },
   "@media (max-width: 640px) » #app #1": {
@@ -7015,7 +6801,9 @@
   ".start-go #1",
   ".start-go:hover #1",
   ".chrome #1",
+  ".barbtn #1",
   ".barbtn.open #1",
+  ".barbtn:hover #1",
   ".barbtn .caret #1",
   ".barbtn.primary #1",
   ".barbtn.primary:hover #1",
@@ -7029,6 +6817,10 @@
   ".pfield.slider .psl-range #1",
   ".pfield.slider.ro #1",
   ".panel #1",
+  ".seg #1",
+  ".seg-b #1",
+  ".seg-b:hover #1",
+  ".seg-b.on #1",
   ".rx #1",
   ".rx:hover #1",
   ".band #1",
@@ -7038,20 +6830,37 @@
   ".sw.is-anchor::after #1",
   ".lab #1",
   "@container (max-width: 512px) » .lab #1",
+  ".select #1",
   ".select:disabled #1",
   ".select.sm #1",
   ".select.fill #1",
+  ".select.cap #1",
   ".chips #1",
   ".pv-tally.no #1",
   ".mo-ramp td:nth-child(4) #1",
+  ".mo-slowmo-sel #1",
+  ".mo-coldesc #1",
+  ".mo-replay #1",
+  ".mo-replay:hover #1",
+  ".mo-el-underline #1",
+  ".mo-el-thumb #1",
+  ".mo-el-track #1",
+  ".dm-block .mo-replay #1",
+  ".dm-block .mo-coldesc #1",
+  ".cset #1",
+  "label.cset-head #1",
+  ".cset-radio #1",
+  ".cset-last #1",
+  ".cset-last #2",
   ".cset-radio ~ .cset-name #1",
   ".cset-reason #1",
   ".cset-off .cset-name #1",
   ".cset-reason #2",
+  ".cset-radio:focus-visible #1",
   ".pair-path #1",
   ".pair-sub #1",
-  ".tok-callout #1",
   ".tok-empty #1",
+  ".errbar #1",
   ".sg-floor-lab + .sub-lab #1",
   ".mtbl-mode .select #1",
   ".mtbl-mode .select.set #1",
