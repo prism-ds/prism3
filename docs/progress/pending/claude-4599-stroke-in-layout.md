@@ -1,0 +1,16 @@
+## (2026-11-28) — Stroke in layout (#4599): held for two owner questions before the build
+
+#4599 asks the Figma builder to set `strokesIncludedInLayout` on bordered parts, so Figma lays out a border as CSS's `border-box` does. The Mac check of 2026-11-26 says yes, with two conditions: set `strokeAlign = INSIDE` with the flag, because CENTER and OUTSIDE ignore it, and set the flag only on auto-layout parts, because a `layoutMode: NONE` frame throws. The build lane stopped before changing the executor. The two conditions are clear, but the parts the issue targets raise two visual questions that neither the issue nor the Mac check settles.
+
+### What the scan found
+
+A scan of every def's Figma set (each plan node with a stroke paint or a bound stroke weight) found 32 bordered parts on auto-layout frames, read from the authored defs before any brand lever shapes them. Only `radio-control`, `popover` and `menu` paint the same stroke weight at every member. The rest fall into one or both of two groups.
+
+- **A bound weight with no paint at some members.** Button (all three families), icon button (all three), flush icon button (all three), wallet button, sign-in button, toggle button, toggle icon button, checkbox control, switch control, badge, pagination item, counter, the slider thumb's halos, and the step marker. The button's CSS in arm 1 gives every appearance a 1px transparent border (`border-color: transparent`), so its footprint doesn't change between `filled` and `outline`. Figma's members at `filled` and `text` bind the hairline weight but carry `strokes: []`. The Mac check didn't test whether Figma counts a stroke weight in layout when there is no paint. If it doesn't, setting the flag makes every `outline` member 2px wider than its `filled` sibling. That's #503's footprint defect, which the paste gate's `FOOTPRINT drift` mutant holds.
+- **A weight that changes with state or an axis.** The control of the text, password, search and card-number fields, the textarea, the select and the counter, and the code input cell, go from `border-width.hairline` to `focus.ring.width` at focus. Tag and toggle go from hairline to `border-width.thick`, and the banner drops its side strokes to `border-width.none` in one style. Arm 1's field CSS keeps the 1px border in layout at focus and draws the 2px edge as an inside `outline`, so nothing moves (#3399, Q22 A). With the flag on, Figma would move the content 1px inward at focus.
+
+Five parts have no auto layout, so the flag can't be set on them: `provider-logo`, `focus-ring`, and the divider's three rules. The Mac check's second condition says to name them as out of scope, not skip them silently.
+
+### The trap for whoever builds it
+
+The executor today sets `strokesIncludedInLayout = false` on purpose, at both of its sites (the paint branch and `claimDefaults`), and the paste path does the same in `anatomy-figma.ts`. `component-schema.ts` relies on it for its state-keyed `strokeWidth` and `strokeEdges` keys, and `test.ts` holds it by name in the field focus-edge check and the footprint-drift mutant. Flipping it is not a one-line change: those claims need to move with it, and the shim's layout model (`component-shim.ts`, "stroked = strokes.length > 0 && flag !== false") assumes that a stroke with no paint takes no space. That assumption is unverified on the host.
