@@ -186,9 +186,9 @@ export const motionStageSection = (
     b.dataset.preset = t.preset;
     b.style.left = `${(tm.delayMs / total) * 100}%`;
     b.style.width = `${(tm.ms / total) * 100}%`;
-    b.append(el('span', 'mo-tl-preset mono', t.preset));
     lane.append(b);
-    row.append(lane, el('span', 'mo-tl-ms mono', `${copy.ms(tm.ms)}${tm.delayMs ? ` · ${copy.delay(tm.delayMs)}` : ''}`));
+    // The preset's name sits beside the lane, not on the bar: on the page's own ink, at any bar's length.
+    row.append(lane, el('span', 'mo-tl-ms mono', `${t.preset} · ${copy.ms(tm.ms)}${tm.delayMs ? ` · ${copy.delay(tm.delayMs)}` : ''}`));
     tl.append(row);
   }
   wrap.append(tl);
