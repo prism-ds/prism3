@@ -8415,6 +8415,8 @@ for (const host of ['web', 'figma']) {
     const bp = await bctx.newPage();
     await bp.setContent('<p>busy</p>');
     bp[BOUND_MS] = 3000;
+    // #4647: opened while the page still answers, for the CDP arm below.
+    const bcdp = await bctx.newCDPSession(bp);
     await bp.evaluate(() => { setTimeout(() => { const end = Date.now() + 90000; while (Date.now() < end) { /* busy */ } }, 0); });
     await new Promise((r) => setTimeout(r, 300));
     const guard = (work) => Promise.race([
@@ -8472,6 +8474,29 @@ for (const host of ['web', 'figma']) {
           `#4649: on a busy page, a plain ${call} fails by name, with its call site and the last check, within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 200)})`);
       }
     } finally { await tctx.close(); }
+    // #4647: a CDP session's commands, the same way. One command per CDP domain this file sends, written plain on the
+    // same busy page, all at once: each is answered on the renderer's main thread, so with `send` left off the bound it
+    // reads the guard's words. The domains are typed here and held against the ones this file's code sends, so a new
+    // domain is added here too.
+    {
+      const sends = [
+        ['DOM.getDocument', { depth: 0 }],
+        ['Accessibility.getFullAXTree', {}],
+        ['Emulation.setEmulatedMedia', { media: 'print' }],
+        ['CSS.enable', {}],
+        ['Animation.setPlaybackRate', { playbackRate: 1 }],
+      ];
+      const typed = [...new Set(sends.map(([m]) => m.split('.')[0]))].sort().join(' ');
+      const used = [...new Set([...readFileSync(fileURLToPath(import.meta.url), 'utf8').matchAll(/\.send\('([A-Z]\w*)\./g)].map((m) => m[1]))].sort().join(' ');
+      ok(typed === used, `#4647: this self-check sends a command of every CDP domain this file sends, and no other (typed: ${typed}; sent: ${used})`);
+      const t1 = Date.now();
+      const heard = await Promise.all(sends.map(([m, a]) => guard(() => bcdp.send(m, a)).then((said) => [m, said])));
+      const took = Date.now() - t1;
+      for (const [m, said] of heard) {
+        ok(new RegExp(`^cdp\\.send\\('${m.replace('.', '\\.')}'\\) \\(([\\w$]+ )?test-chrome\\.mjs:\\d+`).test(said) && said.includes('; section 20, after "') && said.includes(') did not settle within 3s; the page renders no frame') && took < 20000,
+          `#4647: on a busy page, a plain cdp.send('${m}') fails by name, with its call site and the last check, within its bound, not at the 600s watchdog (${took}ms: ${said.slice(0, 200)})`);
+      }
+    }
     bp[BOUND_MS] = 1000;
     const t0 = Date.now();
     // 6s: longer than the call's own 1s bound plus its 3s page reading, so a `within` that did not take the bound over
@@ -8488,6 +8513,11 @@ for (const host of ['web', 'figma']) {
 // turned off. Each fails by name with its line. The patterns are built from parts, so this check does not
 // match itself. A planted line of each kind, added to the source as read, must be caught too, so a pattern that stopped
 // matching cannot pass as "none found".
+// Since #4647 the same lint reads every browser suite in the repo, not this file alone: each suite that launches its
+// own browser (test-smoke, test-site-headers, test-export-parity, lint-live-css, and the plugin's test-start-screen,
+// test-build-verdict, test-style-guides-page, test-agent-bridge) must install `boundEvaluates` on it before any page,
+// and pass every rule above. Which files launch a browser is read off the repo's code, not off the list, so a new suite
+// is caught by name until it is listed, or exempted with its reason.
 {
   const RULES = [
     ['a CDP Runtime evaluate (unbounded: use page.evaluate)', new RegExp(['Runtime', '(evaluate|callFunctionOn|awaitPromise)\\b'].join('\\.'))],
@@ -8515,6 +8545,39 @@ for (const host of ['web', 'figma']) {
   const SRC = readFileSync(fileURLToPath(import.meta.url), 'utf8');
   const found = lint(SRC);
   ok(found.length === 0, `#4342 lint-chrome-bounds: test-chrome.mjs makes no evaluate the bound cannot reach${found.length ? ` — ${found.slice(0, 4).join('; ')}` : ''}`);
+  // #4647: the other browser suites, by repo path. EXEMPT names each file that launches a browser and is not held, and why.
+  const SUITES = [
+    'apps/studio/test-smoke.mjs', 'apps/studio/test-site-headers.mjs', 'apps/studio/test-export-parity.mjs', 'apps/studio/lint-live-css.mjs',
+    'apps/plugin/test-start-screen.mjs', 'apps/plugin/test-build-verdict.mjs', 'apps/plugin/test-style-guides-page.mjs', 'apps/plugin/test-agent-bridge.ts',
+  ];
+  const EXEMPT = {
+    'apps/studio/test-chrome.mjs': 'this file, linted above',
+    'apps/studio/test-web-fonts-stub.mjs': 'the launcher the suites call; each caller installs the bound on the browser it returns',
+    'packages/engine/shadcn-browser.ts': 'the engine package does not import from apps/ (#4657)',
+    'packages/tokens/qa/render-qa.mjs': 'a manual QA render, not run by CI (#4657)',
+    'tools/agent-adherence/score-code.ts': 'a measurement harness, not run by CI (tools/CLAUDE.md)',
+    'tools/block-capture/capture.ts': 'a measurement harness, not run by CI (tools/CLAUDE.md)',
+  };
+  const LAUNCH = new RegExp(['\\b(chromium|firefox|webkit)\\.launch(PersistentContext)?\\(', '\\blaunchWithoutWebFonts\\('].join('|'));
+  const launches = (src) => codeOf(src).some((l) => LAUNCH.test(l) && !/^\s*export\b/.test(l));
+  const walk = (dir) => readdirSync(join(REPO, dir), { withFileTypes: true }).flatMap((e) => {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) return ['node_modules', 'dist', 'out', '.git'].includes(e.name) || e.name.startsWith('release') ? [] : walk(rel);
+    return /\.(mjs|js|ts)$/.test(e.name) && !e.name.endsWith('.d.ts') ? [rel] : [];
+  });
+  const FILES = Object.fromEntries(['apps', 'packages', 'tools'].flatMap(walk).map((f) => [f, readFileSync(join(REPO, f), 'utf8')]));
+  const scope = (files) => {
+    const launchers = Object.keys(files).filter((f) => launches(files[f])).sort();
+    return { launchers, unheld: launchers.filter((f) => !SUITES.includes(f) && !(f in EXEMPT)) };
+  };
+  const { launchers, unheld } = scope(FILES);
+  ok(unheld.length === 0, `#4647 lint-chrome-bounds: every file that launches a browser is a held suite or exempt with its reason${unheld.length ? ` — not listed: ${unheld.join(', ')}` : ''}`);
+  const stale = [...SUITES, ...Object.keys(EXEMPT)].filter((f) => !launchers.includes(f));
+  ok(stale.length === 0, `#4647 lint-chrome-bounds: every listed suite still launches a browser${stale.length ? ` — no launch found in: ${stale.join(', ')}` : ''}`);
+  for (const f of SUITES) {
+    const got = f in FILES ? lint(FILES[f]) : ['the file is missing'];
+    ok(got.length === 0, `#4647 lint-chrome-bounds: ${f} installs boundEvaluates before its first page and makes no call the bound cannot reach${got.length ? ` — ${got.slice(0, 4).join('; ')}` : ''}`);
+  }
   const PLANTS = [
     ['a CDP Runtime evaluate', `await cdp.send('${['Runtime', 'evaluate'].join('.')}', { expression: '1' });`],
     ["a Worker's evaluate", `await page.${'workers'}()[0].evaluate(() => 1);`],
@@ -8522,6 +8585,8 @@ for (const host of ['web', 'figma']) {
     ['the unbounded originals', `await ${'raw' + 'Evaluate'}(page, () => 1);`],
     ['a bound disarmed outside within', `page.evaluate(() => 1)${'[DIS' + 'ARM]'}();`],
     ['a CDP Input dispatch', `await cdp.send('${['Input', 'dispatchKeyEvent'].join('.')}', { type: 'keyDown', key: 'Tab' });`],
+    // #4647: a CDP command sent around the bound, through the original `send`.
+    ['the unbounded originals', `await Object.getPrototypeOf(cdp)[${'R' + 'AW'}].send.call(cdp, 'DOM.enable');`],
     ["an action's timeout turned off", `await page.locator('p').press('Tab', { ${'time' + 'out'}: 0 });`],
     ["an action's timeout turned off", `page.${'setDefault' + 'Timeout'}(0);`],
   ];
@@ -8535,6 +8600,18 @@ for (const host of ['web', 'figma']) {
     const caught = lint(`const early = await browser.${'new' + 'Context'}();\n${SRC}`);
     ok(caught.some((f) => f.startsWith('line 1: a page or context made before boundEvaluates is installed (line ')),
       `#4649 lint-chrome-bounds: a planted line making a page or context before boundEvaluates is installed fails it by name (${caught.slice(-1)[0] ?? 'nothing found'})`);
+  }
+  // #4647: the scope, planted. A suite with its install dropped is caught by name, and a new file that launches a browser
+  // and is neither held nor exempt is caught by the scope rule (planted as a file list, so nothing is written to disk).
+  {
+    const smoke = FILES['apps/studio/test-smoke.mjs'] ?? '';
+    const dropped = smoke.split('\n').filter((l) => !/\bawait boundEvaluates\(browser\b/.test(l)).join('\n');
+    const caught = lint(dropped);
+    ok(dropped !== smoke && caught.includes('boundEvaluates is never installed on the browser'),
+      `#4647 lint-chrome-bounds: test-smoke.mjs with its install dropped fails it by name (${caught.slice(-1)[0] ?? 'nothing found'})`);
+    const planted = scope({ ...FILES, 'apps/studio/test-planted-suite.mjs': `const browser = await chromium.${'lau' + 'nch'}();` }).unheld;
+    ok(planted.includes('apps/studio/test-planted-suite.mjs'),
+      `#4647 lint-chrome-bounds: a planted file that launches a browser and is not listed fails the scope rule by name (${planted.join(', ') || 'nothing found'})`);
   }
 }
 // Edits (Q22, Q62 option A): Light writes the brand value; previewing Dark, the same select writes

@@ -44,6 +44,7 @@
  * at the plugin's own sizes; its reasoning is at the section.
  */
 import { chromium } from 'playwright';
+import { boundEvaluates } from '../studio/test-bounded.mjs';
 import { launchWithoutWebFonts } from '../studio/test-web-fonts-stub.mjs';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -59,7 +60,10 @@ const UI = resolve(HERE, 'dist/ui.html');
 const REPO = resolve(HERE, '../..');
 
 let failed = 0;
+/** The label of the last check made, for a bounded call's failure (#4647). */
+let lastCheck = '';
 const ok = (cond, label) => {
+  lastCheck = label;
   if (cond) console.log(`  ✓ ${label}`);
   else { failed++; console.error(`  ✗ ${label}`); }
 };
@@ -97,6 +101,11 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 // #3138: Google Fonts answers every request with nothing here (`test-web-fonts-stub.mjs`), so a run never reaches it.
 const browser = await launchWithoutWebFonts(chromium);
+/** #4647: every evaluate, raw input and CDP command on every page this suite opens is bounded (`boundEvaluates`,
+ *  test-bounded.mjs, as in test-chrome), so a busy page fails the call by name, with its call site and the last check
+ *  reached, in 60 s, not at the job timeout. Installed before any page; `lint-chrome-bounds` holds it there. */
+const evalBounds = await boundEvaluates(browser, { ms: 60000, where: () => (lastCheck ? `after "${lastCheck.slice(0, 80)}"` : 'before the first check') });
+process.on('exit', () => console.log(`bounded calls (#4647): ${evalBounds.calls} settled; the slowest took ${(evalBounds.slowestMs / 1000).toFixed(1)}s of the 60s bound — ${evalBounds.slowestSite}`));
 
 /** Post a main-thread → UI message in the wire shape `bridge-main.ts` puts on the bus. */
 const post = (page, msg) => page.evaluate((m) => window.postMessage({ pluginMessage: m }, '*'), msg);

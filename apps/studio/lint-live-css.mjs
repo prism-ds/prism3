@@ -91,6 +91,7 @@ const SUITES = [
 ];
 
 const { chromium } = await import(join(REPO, 'node_modules/playwright/index.mjs'));
+const { boundEvaluates } = await import('./test-bounded.mjs');
 
 /**
  * Every style rule of `css`, as Chromium parses it: one entry per selector of each rule's list, keyed
@@ -100,6 +101,9 @@ const { chromium } = await import(join(REPO, 'node_modules/playwright/index.mjs'
 export const parse = async (css) => {
   const browser = await chromium.launch();
   try {
+    // #4647: the parse's evaluate is bounded like every browser suite's (`boundEvaluates`, test-bounded.mjs), so a busy
+    // page fails it by name in 60 s, not at the job timeout. `lint-chrome-bounds` holds it before the page.
+    await boundEvaluates(browser, { ms: 60000, where: () => 'the stylesheet parse' });
     const page = await browser.newPage();
     return await page.evaluate((text) => {
       const sheet = new CSSStyleSheet();

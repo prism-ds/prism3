@@ -49,7 +49,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { launchWithoutWebFonts } from './test-web-fonts-stub.mjs';
 import { hookGuard } from './test-hooks.mjs';
-import { INPUT_MS, makeBounded, rendersFrame, watchStalls } from './test-bounded.mjs';
+import { boundEvaluates, INPUT_MS, makeBounded, rendersFrame, watchStalls } from './test-bounded.mjs';
 import { assertBundleFresh, STUDIO_SOURCE_ROOTS } from './test-bundle-freshness.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -67,7 +67,10 @@ const hooks = hookGuard(import.meta.url);
 let failed = 0;
 let executed = 0;
 const failures = [];
+/** The label of the last check made, for a bounded call's failure (#4647). */
+let lastCheck = '';
 const ok = (cond, label) => {
+  lastCheck = label;
   executed++;
   if (cond) return;
   failed++;
@@ -816,6 +819,11 @@ const BRANDMENU_CONTROLS = ['[data-p3="import-text"]'].map(hooks.role);
 // ---- browser plumbing ------------------------------------------------------------------------
 // #3138: Google Fonts answers every request with nothing here (`test-web-fonts-stub.mjs`), so a run never reaches it.
 const browser = await launchWithoutWebFonts(chromium);
+/** #4647: every evaluate, raw input and CDP command on every page this suite opens is bounded (`boundEvaluates`,
+ *  test-bounded.mjs, as in test-chrome), so a busy page fails the call by name, with its call site and the last check
+ *  reached, in 60 s, not at the job timeout. Installed before any page; `lint-chrome-bounds` holds it there. */
+const evalBounds = await boundEvaluates(browser, { ms: 60000, where: () => (lastCheck ? `after "${lastCheck.slice(0, 80)}"` : 'before the first check') });
+process.on('exit', () => console.log(`bounded calls (#4647): ${evalBounds.calls} settled; the slowest took ${(evalBounds.slowestMs / 1000).toFixed(1)}s of the 60s bound — ${evalBounds.slowestSite}`));
 
 /** Console errors, uncaught exceptions, and failed requests, collected per page and drained per
  *  state — so a failure names the page × mode it happened on rather than a run-wide total. */

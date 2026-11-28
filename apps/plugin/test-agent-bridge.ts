@@ -105,6 +105,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname, join, normalize, isAbsolute } from 'node:path';
 import { chromium } from 'playwright';
+import { boundEvaluates } from '../studio/test-bounded.mjs';
 import { ENGINE_VERSION } from '@prism3/engine';
 import type { AgentResult, AgentLinkState } from './src/agent-protocol';
 import { createBridgeRelay, BRIDGE_PORT, BRIDGE_URL } from './src/agent-bridge-relay';
@@ -414,6 +415,9 @@ section('origin — only the plugin iframe may connect (#3147, Q3147.2 A revised
     const webPort = (web.address() as { port: number }).port;
     const browser = await chromium.launch();
     try {
+      // #4647: the tab's evaluates are bounded like every browser suite's (`boundEvaluates`, test-bounded.mjs), so a busy
+      // page fails the read by name in 60 s, not at the job timeout. `lint-chrome-bounds` holds it before the page.
+      await boundEvaluates(browser, { ms: 60000, where: () => 'origin/refused' });
       const tab = await browser.newPage();
       await tab.goto(`http://127.0.0.1:${webPort}/`);
       const seen = async (): Promise<{ k: string; v?: unknown }[]> => tab.evaluate(() => (window as unknown as { __seen: { k: string; v?: unknown }[] }).__seen);
