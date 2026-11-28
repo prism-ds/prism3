@@ -452,15 +452,16 @@ practice kept (§6):
 | Hero | ✓ 22 | ○ | ✓ 5 | ✓ boilerplate | ✓ names (§2) | 4 | none |
 | Commerce | ✗ | ✓ 27, layout-only | ✗ | ✗ | ○ 14 groups | 1, layout-only | none |
 
-AEM puts header and footer in its **boilerplate**, the tier for blocks *"used by the vast majority of
-all AEM projects"* — a stricter bar than the collection's more-than-half rule. Navigation and footer
-are the only families every readable witness ships.
+AEM puts header, footer and hero in its **boilerplate**, the tier for blocks *"used by the vast majority of
+all AEM projects"* — a stricter bar than the collection's more-than-half rule. Navigation, footer and hero
+are the families every readable witness ships and AEM's boilerplate carries. Hero is last on demand,
+because the practice kept none of it.
 
 **Option A (recommended): the shell first, commerce through it.** Order: **navigation → footer → CTA →
 commerce (product header, product list, category filters) → sign-up and log-in → hero.**
 
 - Navigation and footer clear every witness and the AEM boilerplate bar, and the practice kept both
-  from Relume's kit.
+  from Relume's kit. Hero clears both bars too; demand and landmarks are what separate it (below).
 - They own the page landmarks (`header`, `nav`, `footer`), so building them first forces the §8
   landmark model to be settled before any section-tier recipe depends on it.
 - They are where commerce enters first: the navigation tools group (search, account, cart with count)
@@ -468,7 +469,9 @@ commerce (product header, product list, category filters) → sign-up and log-in
   every PDP the practice builds.
 - CTA is the family the practice kept most of (58 of Relume's 67), with two independent readable
   witnesses (Relume and Initium).
-- Commerce follows once the §11 screenshots exist, so its axes come from at least two witnesses.
+- Commerce follows once the §11 screenshots and Tailwind Plus's names exist, so its axes come from two
+  witnesses (Relume's layouts and Tailwind Plus's names). Relume screenshots on top of Relume's facets
+  are still one witness.
 - Hero is last: every vendor ships it and the practice kept none of it, which is §5's rule — order
   by our demand, not by vendor depth.
 
@@ -496,8 +499,9 @@ witnesses and the AEM boilerplate bar. CTA, at two, still outranks commerce, at 
 Sign-up and log-in, at one, was already placed after commerce. Hero keeps four witnesses and stays last
 on demand. One reading points the other way and is recorded so the owner can weigh it: by **share
 kept**, sign-up and log-in (17 of 17) and CTA (58 of 67, 87%) lead navigation (69%) and footer (65%).
-A does not order by share kept. It orders by witness breadth and by who owns the page landmarks, and
-neither of those moved.
+A does not order by share kept. Witness breadth ties hero with navigation and footer (four each); what
+separates them is demand and landmarks: the practice kept no hero, and hero owns no page landmark.
+None of breadth, demand or landmarks moved in this re-check.
 
 **The component backlog the families imply.** Navigation needs a disclosure button, a menu panel
 (dropdown and mega), a drawer or sheet, and a cart indicator; footer needs a link group and a
