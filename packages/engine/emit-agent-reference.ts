@@ -46,7 +46,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toolDefs, PROTOCOL_VERSIONS, SERVER_INFO } from './mcp';
-import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO } from '../../tools/figma-bridge/server';
+import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES } from '../../tools/figma-bridge/server';
 import { AGENT_COMMANDS, AGENT_PROTOCOL_VERSION, MAILBOX } from '../../apps/plugin/src/agent-protocol';
 import { RUN_CODE } from '../../apps/plugin/src/dev-commands';
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
@@ -80,11 +80,13 @@ const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  *  object too and keeps only a description's first sentence. */
 const BRAND_SCHEMA_REF = { $ref: 'packages/engine/schema/theme-schema.json', description: 'A BrandInput, the shape in packages/engine/schema/theme-schema.json, which tools/list sends compacted: one-line summaries for each top-level field and beneath the required ones, the rest of the prose left to list_levers describe, every other keyword unchanged.' };
 
-type Tool = { name: string; title?: string; description: string; inputSchema: unknown; outputSchema?: unknown };
+type Tool = { name: string; title?: string; description: string; execution?: unknown; inputSchema: unknown; outputSchema?: unknown };
 const mcpTool = (file: string, t: Tool) => ({
   name: t.name,
   ...(t.title ? { title: t.title } : {}),
   description: t.description,
+  // #4646 step 1: a tool that may run as an MCP task says so (`execution.taskSupport`).
+  ...(t.execution ? { execution: t.execution } : {}),
   inputSchema: t.inputSchema,
   output: t.outputSchema
     ? { structuredContent: t.outputSchema, text: 'the same object as JSON in content[0].text' }
@@ -115,7 +117,9 @@ const mcp = () => [
     // #4646: the bridge runs on the official MCP SDK, so it needs the repo's `npm ci` first. Read from the root pin.
     requires: bridgeSdk(),
     transport: `stdio, newline-delimited JSON-RPC 2.0; drives the running plugin over a WebSocket on 127.0.0.1:${BRIDGE_PORT}`,
-    protocolVersions: [...PROTOCOL_VERSIONS],
+    // #4646 step 1: the bridge's own handshake list, which adds 2025-11-25 for Tasks, and what it declares at arm 2.
+    protocolVersions: [...BRIDGE_PROTOCOL_VERSIONS],
+    capabilities: BRIDGE_CAPABILITIES,
     source: at('tools/figma-bridge/server.ts', /^const isMain/, 'isMain'),
     tools: (BRIDGE_TOOLS as Tool[]).map((t) => mcpTool('tools/figma-bridge/server.ts', t)),
   },

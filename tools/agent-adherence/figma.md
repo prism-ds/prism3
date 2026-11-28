@@ -104,7 +104,7 @@ as raw counts per rule, plus the per-arm medians. There's no 0–100 score (Q344
 
 | Arm | The agent sees |
 |---|---|
-| F0, `0` | The three tools. No `instructions`, no `readFirst`, no resources. `context` is refused at the bridge (`unknown-command`) and isn't listed. |
+| F0, `0` | The four tools (`figma_result` since #4646). No `instructions`, no `readFirst`, no resources. `context` is refused at the bridge (`unknown-command`) and isn't listed. |
 | F1, `1` | F0 plus the note (`instructions` and `readFirst`). |
 | F2, `2` (the default) | Today's bridge: the note, five resources and `context`. |
 

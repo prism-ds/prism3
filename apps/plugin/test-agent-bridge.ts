@@ -23,6 +23,10 @@
  * arm/0-starts · arm/1-starts · arm/<n>-context · arm/<n>-resources · arm/no-leak · arm/1-note · record/calls · record/args · arm/bad-value (#3440;
  * mutation: one sentence of the note leaked into arm 0's figma_status description → `arm/no-leak: arm 0's tools/list …`;
  * one appended to the context refusal's message → `arm/no-leak: arm 0's context refusal …`)
+ * tasks/capability · tasks/tool · tasks/plugin · tasks/create · tasks/id · tasks/status · tasks/progress · tasks/result · tasks/notify ·
+ * tasks/list · tasks/same-run · tasks/once · tasks/unknown · tasks/reconnect · tasks/failed · tasks/order · timeout/run-id ·
+ * figma_result/working · figma_result/late · figma_result/once · figma_result/unknown · arm/<n>-tasks · handshake/<asked> (#4646 step 1: figma_run as a
+ * task against a fake slow plugin, a reconnect mid-task resuming the same task, and a run kept past its caller's timeout)
  *
  * #3147 Phase 2a: each read-only node command (inspect, component-keys, audit-frames, snapshot) through figma_run, against
  * the same `NodeShim` fixture and literal expectations as `test-agent-link.ts`; its shim write log must stay empty
@@ -163,6 +167,8 @@ const replies = new Map<number, any>();
 /** How many replies arrived per request id: a result delivered twice would show here, not in `replies`. */
 const replyCount = new Map<number, number>();
 const notes: any[] = [];
+/** #4646: every stdout message in arrival order, `reply:<id>` or `note:<method>:<taskId>`, for the arms that care which came first. */
+const arrivals: string[] = [];
 let out = '';
 // Decoded as a stream, not per chunk: a chunk boundary can fall inside a multi-byte character.
 child.stdout.setEncoding('utf8');
@@ -174,6 +180,7 @@ child.stdout.on('data', (d) => {
     const line = out.slice(0, nl); out = out.slice(nl + 1);
     if (!line.trim()) continue;
     const m = JSON.parse(line);
+    arrivals.push(m.id !== undefined && m.id !== null ? `reply:${m.id}` : `note:${m.method}:${m.params?.taskId ?? ''}`);
     if (m.id !== undefined && m.id !== null) { replies.set(m.id, m); replyCount.set(m.id, (replyCount.get(m.id) ?? 0) + 1); } else notes.push(m);
   }
 });
@@ -298,10 +305,11 @@ section('mcp — the stdio loop');
   // not know, so Claude Code (asking for 2025-11-25) refused to connect. Same probes as `mcp-test.ts`.
   for (const p of HANDSHAKE_PROBES) {
     const r = await rpc('initialize', { protocolVersion: p.asked, capabilities: {}, clientInfo: { name: 'probe', version: '1' } });
-    ok(r.result?.protocolVersion === p.answer, `#3109 initialize asking for ${p.asked} answers ${p.answer}, ${p.why} (got ${r.result?.protocolVersion})`);
+    // #4646 step 1: the bridge's own answers (`bridge`), which add 2025-11-25 for Tasks; never 2026-07-28 (#3109).
+    ok(r.result?.protocolVersion === p.bridge, `#3109 initialize asking for ${p.asked} answers ${p.bridge}, ${p.why} (got ${r.result?.protocolVersion})`);
   }
   const list = await rpc('tools/list');
-  ok(JSON.stringify(list.result?.tools?.map((t: { name: string }) => t.name)) === JSON.stringify(['figma_status', 'figma_run', 'figma_logs']), 'tools/list: figma_status, figma_run, figma_logs');
+  ok(JSON.stringify(list.result?.tools?.map((t: { name: string }) => t.name)) === JSON.stringify(['figma_status', 'figma_run', 'figma_logs', 'figma_result']), 'tools/list: figma_status, figma_run, figma_logs, figma_result');
   // #2639: figma_run's `args` description was hand-typed and named 4 of the commands, so an agent reading only tools/list
   // sent {} to commands that take arguments. Every command must be named with its args, and the shapes below are written
   // HERE, by hand, from `AgentArgs` (docs/34 shape 1): a check that re-read `AgentArgs` would pass on the server's own parse.
@@ -1203,6 +1211,126 @@ section('held — two paired instances, one bridge (#3297)');
   }
 }
 
+/* ── tasks: figma_run as a task, and a run kept past its caller's timeout (#4646 step 1) ─────────────────── */
+section('tasks — figma_run as a task, and figma_result after a timeout (#4646 step 1)');
+{
+  /** Send a request and wait for its reply later, for the methods that block (tasks/result). */
+  const rpcLater = (method: string, params: unknown) => {
+    const id = ++rpcId;
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    return { id, wait: async () => { if (!(await until(() => replies.has(id), 20000))) throw new Error(`no reply to ${method}`); return replies.get(id); } };
+  };
+  const RELATED = 'io.modelcontextprotocol/related-task';
+  const envelope = (id: string, cmd: string, data: unknown): AgentResult => ({
+    v: 1, id, cmd, ok: true, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+    engineVersion: ENGINE_VERSION, transport: 'bridge', result: { verdict: null, data, logs: [] },
+  });
+  const commandsFor = (c: { texts(): any[] }, id: string) => c.texts().filter((m) => m.type === 'command' && m.command.id === id).length;
+
+  // The capability, read at the revision Tasks need. The literals are written here, not read from `CAPABILITIES`.
+  const init = await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: { tasks: {} }, clientInfo: { name: 'tasks', version: '1' } });
+  const caps = init.result?.capabilities;
+  ok(init.result?.protocolVersion === '2025-11-25' && caps?.tasks?.requests?.tools?.call !== undefined && caps?.tasks?.list !== undefined && caps?.tasks?.cancel === undefined,
+    `tasks/capability: at 2025-11-25 initialize advertises tasks for tools/call and tasks/list, and no cancel, since the plugin cannot stop a command (${JSON.stringify(caps?.tasks)})`);
+  ok(caps?.logging !== undefined && JSON.stringify(Object.keys(caps ?? {})) === JSON.stringify(['tools', 'resources', 'logging', 'tasks']),
+    `tasks/capability: arm 2 declares tools, resources, logging and tasks, and nothing else (${JSON.stringify(Object.keys(caps ?? {}))})`);
+  // handshake/<asked>: the revision and capabilities each initialize gets (the owner's note on #4646, 2026-11-27). The
+  // bridge echoes a revision the SDK speaks, so an older client keeps its own; anything else gets the newest, never
+  // 2026-07-28 (#3109); tasks go only to 2025-11-25. Written here as literals, not read from the bridge's lists.
+  const TABLE: readonly [asked: string, answer: string, tasks: boolean][] = [
+    ['2024-10-07', '2024-10-07', false], ['2024-11-05', '2024-11-05', false], ['2025-03-26', '2025-03-26', false],
+    ['2025-06-18', '2025-06-18', false], ['2025-11-25', '2025-11-25', true], ['2026-07-28', '2025-11-25', true], ['1999-01-01', '2025-11-25', true],
+  ];
+  for (const [asked, answer, withTasks] of TABLE) {
+    const r = await rpc('initialize', { protocolVersion: asked, capabilities: {}, clientInfo: { name: 'version-probe', version: '1' } });
+    const keys = Object.keys(r.result?.capabilities ?? {});
+    const want = withTasks ? ['tools', 'resources', 'logging', 'tasks'] : ['tools', 'resources', 'logging'];
+    ok(r.result?.protocolVersion === answer && JSON.stringify(keys) === JSON.stringify(want),
+      `handshake/${asked}: answers ${answer} with ${want.join(', ')} (got ${r.result?.protocolVersion}; ${keys.join(', ')})`);
+  }
+  await rpc('initialize', { protocolVersion: '2025-11-25', capabilities: { tasks: {} }, clientInfo: { name: 'tasks', version: '1' } });
+  const tools = (await rpc('tools/list')).result?.tools ?? [];
+  const byName = (n: string) => tools.find((t: { name: string }) => t.name === n);
+  ok(byName('figma_run')?.execution?.taskSupport === 'optional' && byName('figma_status')?.execution === undefined && byName('figma_result')?.inputSchema?.required?.[0] === 'id',
+    `tasks/tool: figma_run may run as a task or a plain call, the other tools only as calls, and figma_result takes an id (${JSON.stringify(byName('figma_run')?.execution)})`);
+
+  // A fake slow plugin: it gets the command, streams progress, and answers only when the test says so.
+  const p = await openClient();
+  await p.hello();
+  ok(await untilAsync(async () => (await call('figma_status')).value?.connected === true), 'tasks/plugin: a fake slow plugin is connected');
+  const created = await rpc('tools/call', { name: 'figma_run', arguments: { cmd: 'build-components', args: {} }, task: { ttl: 600000 }, _meta: { progressToken: 'tok-task' } });
+  const task = created.result?.task;
+  const taskId: string = task?.taskId ?? '';
+  ok(/^b/.test(taskId) && task.status === 'working' && task.ttl === 600000 && typeof task.pollInterval === 'number' && created.result?.content === undefined,
+    `tasks/create: the call is answered at once with a working task, before the plugin answers (${JSON.stringify(created.result ?? created.error)})`);
+  ok(await until(() => commandsFor(p, taskId) === 1), 'tasks/id: the command the plugin gets carries the task id as its id');
+  p.sendJson({ type: 'progress', id: taskId, progress: { at: new Date().toISOString(), phase: 'build', done: 2, total: 5, chunkMs: 10 } });
+  ok(await untilAsync(async () => { const g = (await rpc('tasks/get', { taskId })).result; return g?.status === 'working' && g?.statusMessage === 'build 2/5'; }),
+    'tasks/status: tasks/get reports the task working, with the last progress reading as its statusMessage');
+  ok(await until(() => notes.some((n) => n.method === 'notifications/progress' && n.params?.progressToken === 'tok-task' && n.params?.message === 'build 2/5')),
+    'tasks/progress: progress keeps reaching the requester\'s token after the task reply');
+  const blocked = rpcLater('tasks/result', { taskId });
+  await sleep(300);
+  ok(!replies.has(blocked.id), 'tasks/result: waits while the run is working');
+  const verdict = envelope(taskId, 'build-components', { built: 3 });
+  p.sendJson({ type: 'result', result: verdict });
+  const res = await blocked.wait();
+  ok(JSON.stringify(res.result?.structuredContent) === JSON.stringify(verdict) && !res.result?.isError && res.result?._meta?.[RELATED]?.taskId === taskId,
+    `tasks/result: the result is the plugin's envelope, unchanged, tied to the task (${JSON.stringify(res.result?._meta ?? res.error)})`);
+  ok(await until(() => notes.some((n) => n.method === 'notifications/tasks/status' && n.params?.taskId === taskId && n.params?.status === 'completed')),
+    'tasks/notify: notifications/tasks/status says completed');
+  ok((await rpc('tasks/get', { taskId })).result?.status === 'completed', 'tasks/status: tasks/get reports completed');
+  ok((await rpc('tasks/list')).result?.tasks?.some((t: { taskId: string; status: string }) => t.taskId === taskId && t.status === 'completed'), 'tasks/list: lists the task, completed');
+  ok(JSON.stringify((await call('figma_result', { id: taskId })).value) === JSON.stringify(verdict), 'tasks/same-run: figma_result with the task id returns the same envelope');
+  ok(commandsFor(p, taskId) === 1, 'tasks/once: the command was sent once');
+  const unknown = await rpc('tasks/get', { taskId: 'b-no-such-task' });
+  ok(unknown.error?.code === -32602, `tasks/unknown: tasks/get of an unknown id is an invalid-params error (${JSON.stringify(unknown.error)})`);
+
+  // A reconnect mid-run (#2497's awaitingReconnect) resumes the same task: same id, sent once, the late result is its result.
+  const again = await rpc('tools/call', { name: 'figma_run', arguments: { cmd: 'update-components', args: { confirm: false } }, task: {} });
+  const againId: string = again.result?.task?.taskId ?? '';
+  ok(await until(() => commandsFor(p, againId) === 1), 'tasks/reconnect: the command reaches the plugin');
+  p.sock.destroy();
+  ok(await untilAsync(async () => (await call('figma_status')).value?.awaitingReconnect?.includes(againId)), 'tasks/reconnect: the socket drops and the run waits for the plugin');
+  ok((await rpc('tasks/get', { taskId: againId })).result?.status === 'working', 'tasks/reconnect: the task is still working while it waits');
+  const q = await openClient();
+  await q.hello({ held: [againId] });
+  ok(await untilAsync(async () => (await call('figma_status')).value?.awaitingReconnect?.length === 0), 'tasks/reconnect: the reconnected plugin holds the command');
+  const resumed = rpcLater('tasks/result', { taskId: againId });
+  const late = envelope(againId, 'update-components', { previewHash: 'h1' });
+  q.sendJson({ type: 'result', result: late });
+  const lateRes = await resumed.wait();
+  ok(JSON.stringify(lateRes.result?.structuredContent) === JSON.stringify(late) && lateRes.result?._meta?.[RELATED]?.taskId === againId,
+    'tasks/reconnect: the same task completes with the result sent after the reconnect');
+  ok(commandsFor(q, againId) === 0 && commandsFor(p, againId) === 1, 'tasks/reconnect: the command was not sent again to the new connection');
+
+  // A figma_run that times out keeps its run: the error names its id, figma_result reads it, and a late result lands there.
+  const timed = await call('figma_run', { cmd: 'readback', timeoutMs: 300 });
+  const runId: string = timed.value?.runId ?? '';
+  ok(timed.isError && /within 300 ms/.test(timed.value?.error ?? '') && /^b/.test(runId) && (timed.value?.error ?? '').includes(`figma_result {"id": "${runId}"}`),
+    `timeout/run-id: the timeout names a stable run id and figma_result (${String(timed.value?.error).slice(0, 120)})`);
+  const working = await call('figma_result', { id: runId });
+  ok(!working.isError && working.value?.status === 'working' && working.value?.runId === runId && working.value?.cmd === 'readback',
+    `figma_result/working: while the plugin still runs it, figma_result says so (${JSON.stringify(working.value)})`);
+  const landed = envelope(runId, 'readback', { nodes: 7 });
+  q.sendJson({ type: 'result', result: landed });
+  ok(await untilAsync(async () => JSON.stringify((await call('figma_result', { id: runId })).value) === JSON.stringify(landed)),
+    'figma_result/late: a result that lands after the timeout is the run\'s result');
+  ok(commandsFor(q, runId) === 1, 'figma_result/once: the timed-out command was sent once');
+  const none = await call('figma_result', { id: 'b-no-such-run' });
+  ok(none.isError && /no run/.test(none.value?.error ?? ''), 'figma_result/unknown: an id the bridge does not hold is an error that says so');
+
+  // No plugin: the task fails with the reason, and its status is announced after the reply that names it.
+  q.sock.destroy();
+  ok(await untilAsync(async () => (await call('figma_status')).value?.connected === false), 'tasks/failed: the plugin is gone');
+  const orphan = rpcLater('tools/call', { name: 'figma_run', arguments: { cmd: 'status' }, task: {} });
+  const orphanId: string = (await orphan.wait()).result?.task?.taskId ?? '';
+  ok(await untilAsync(async () => { const g = (await rpc('tasks/get', { taskId: orphanId })).result; return g?.status === 'failed' && /no plugin is connected/.test(g?.statusMessage ?? ''); }),
+    'tasks/failed: with no plugin the task fails, and its statusMessage says why');
+  ok(await until(() => arrivals.includes(`note:notifications/tasks/status:${orphanId}`)) && arrivals.indexOf(`reply:${orphan.id}`) < arrivals.indexOf(`note:notifications/tasks/status:${orphanId}`),
+    'tasks/order: a task that fails at once is announced after the reply that names it');
+}
+
 /* ── the self-describing bridge (#3300 A, the owner's Q3300.1–.3 A) ──────────────────────────────────────── */
 section('instructions + resources — what a fresh agent reads on connecting (#3300)');
 {
@@ -1321,6 +1449,15 @@ section('arms — what arm 0 and arm 1 show a fresh agent (#3440)');
     const cx = await s.ask('tools/call', { name: 'figma_run', arguments: { cmd: 'context' } });
     const cxv = cx.result?.structuredContent;
     const lg = await s.ask('tools/call', { name: 'figma_logs', arguments: { since: 0 } });
+    // #4646 step 1: tasks, logging and figma_result are how the bridge works, not what an agent is shown, so every arm has
+    // them; tasks only for a 2025-11-25 session, as at arm 2 (`handshake/<asked>`).
+    const toolNames: string[] = (tools.result?.tools ?? []).map((t: { name: string }) => t.name);
+    const armRun = (tools.result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run');
+    const init25 = await s.ask('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'arm', version: '1' } });
+    ok(init25.result?.protocolVersion === '2025-11-25' && init25.result?.capabilities?.tasks?.requests?.tools?.call !== undefined && init25.result?.capabilities?.logging !== undefined
+      && init.result?.capabilities?.tasks === undefined && init.result?.capabilities?.logging !== undefined
+      && armRun?.execution?.taskSupport === 'optional' && JSON.stringify(toolNames) === JSON.stringify(['figma_status', 'figma_run', 'figma_logs', 'figma_result']),
+      `arm/${arm}-tasks: a 2025-11-25 session is offered tasks and a 2024-11-05 one is not, both get logging, figma_run may run as a task, and figma_result is listed (${JSON.stringify(Object.keys(init25.result?.capabilities ?? {}))}; ${toolNames.join(', ')})`);
     const enumCmds: string[] = (tools.result?.tools ?? []).find((t: { name: string }) => t.name === 'figma_run')?.inputSchema?.properties?.cmd?.enum ?? [];
     const statusCmds: string[] = st.result?.structuredContent?.commands ?? [];
     // `context` is refused at the bridge, as the build's own code for a command it lacks, written here by hand.
