@@ -180,8 +180,9 @@
  * The repo is public, and some example briefs are real brands' briefs. Personality trait notes quoted
  * those briefs by name, and `resolveVocabulary` copied each quote into `theme.notes` — so a customer's
  * workspace would have shown another brand's name. The rule is a fixed list (`CLIENT_NAMES`), built from
- * the brands in `reference/` and the example briefs, and kept minimal: it is the one place those names are
- * written on purpose.
+ * the brands in `reference/` and the example briefs, and kept minimal. Since #4645 it lives in `client-ids.ts`,
+ * the one place those names are written on purpose, and `lint-client-ids.ts` reads the same constant over every
+ * tracked file.
  *
  * ITS SCOPE IS NOT THE VOICE RULES' SCOPE, on purpose, and the difference is the part to read:
  *
@@ -268,6 +269,7 @@ import { brandTheme } from './theme';
 import { voiceHits, enGb } from './prose-rules.ts';
 import type { RawHit } from './prose-rules.ts';
 import { printListing } from './files-listing.ts';
+import { CLIENT_DENY_LIST } from './client-ids.ts';
 // The MCP tools/list as served (#1806): acquisition only, see the block below `gatedHits`.
 import { servedToolsList, servedStrings, servedBridgeInstructions } from './mcp-served';
 
@@ -864,17 +866,15 @@ if (selfFails.length) {
 }
 
 // ---- CLIENT NAMES (#1824) — a rule of its own, over a scope of its own ------------------------------
-// See the header section of the same name. The list is the gate's, kept minimal, and the one place a
+// See the header section of the same name. The list is kept minimal, and `client-ids.ts` is the one place a
 // client name is written on purpose: every other line of this repo that names one is a finding for this
 // arm the moment it reaches a bundle. A pattern per name, each anchored at a word start so a longer word
 // cannot hide it; `New Balance` is matched in its brand casing (or as a slug), because the lower-case
 // phrase is ordinary English ("strike a new balance"), and a false positive is fixed by tightening the
 // NAME'S PATTERN with a self-check sample, never by dropping a surface.
-const CLIENT_NAMES: { name: string; re: RegExp }[] = [
-  { name: 'wendy', re: /\bwendy/gi }, // wendys, Wendy's, and the bundle's escaped `Wendy\u2019s`
-  { name: 'new balance', re: /\bNew[\s-]?Balance\b|\bNEW[\s-]?BALANCE\b|\bnew-?balance\b/g },
-  { name: 'nb-redesign', re: /\bnb-redesign\b/gi },
-];
+// The list itself lives in `client-ids.ts` (#4645), shared with `lint-client-ids.ts`, so the two gates cannot hold
+// different lists. This arm reads the full names only; that file's header says why the ids stay out of it.
+const CLIENT_NAMES = CLIENT_DENY_LIST.names;
 const clientHits = (txt: string): RawHit[] =>
   CLIENT_NAMES.flatMap(({ name, re }) => [...txt.matchAll(re)].map((m) => ({ rule: `client-name:${name}`, match: m[0], index: m.index! })));
 const CLIENT_SELF_CHECK: { sample: string; want: string | null }[] = [

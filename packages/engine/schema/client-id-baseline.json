@@ -1,0 +1,1086 @@
+{
+  "files": {
+    ".claude/commands/review-pr.md": {
+      "client-id:nb": 1,
+      "client-id:nbds": 1
+    },
+    ".claude/hooks/session-start-claude-md-freshness.sh": {
+      "client-name:new balance": 1
+    },
+    ".github/pull_request_template.md": {
+      "client-id:nb": 2
+    },
+    ".github/workflows/ci.yml": {
+      "client-id:nb": 4,
+      "client-name:new balance": 1
+    },
+    "CLAUDE.md": {
+      "client-id:nb": 1,
+      "client-id:nbds": 1,
+      "client-name:new balance": 4
+    },
+    "CONTRIBUTING.md": {
+      "client-id:nb": 2,
+      "client-name:new balance": 1
+    },
+    "README.md": {
+      "client-id:nb": 1,
+      "client-id:nbds": 1,
+      "client-name:new balance": 3
+    },
+    "apps/plugin/component-shim.ts": {
+      "client-id:nbds": 1
+    },
+    "apps/plugin/src/messages.ts": {
+      "client-id:nbds": 2
+    },
+    "apps/plugin/src/style-guide.ts": {
+      "client-id:nbds": 8
+    },
+    "apps/plugin/src/write-components.ts": {
+      "client-id:nbds": 1
+    },
+    "apps/plugin/test-agent-link.ts": {
+      "client-id:nbds": 5
+    },
+    "apps/plugin/test-cover-frame.ts": {
+      "client-id:nb": 2
+    },
+    "apps/plugin/test-mcp-paste.ts": {
+      "client-id:nb": 5
+    },
+    "apps/plugin/test-prune.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 30,
+      "client-id:wendys": 3
+    },
+    "apps/plugin/test-readback-parity.ts": {
+      "client-id:nb": 3,
+      "client-id:wendys": 2
+    },
+    "apps/plugin/test-readback.ts": {
+      "client-id:nb": 4
+    },
+    "apps/plugin/test-rename-parity.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 16
+    },
+    "apps/plugin/test-roundtrip.ts": {
+      "client-id:nb": 6
+    },
+    "apps/plugin/test-style-guide.ts": {
+      "client-id:nb": 1,
+      "client-id:nbds": 80,
+      "client-name:new balance": 1
+    },
+    "apps/plugin/test-update-components.ts": {
+      "client-id:nb": 1
+    },
+    "apps/plugin/test-write-components.ts": {
+      "client-id:nb": 27
+    },
+    "apps/plugin/test-write-preflight.ts": {
+      "client-id:nb": 1
+    },
+    "apps/plugin/test-write-typography.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 8
+    },
+    "apps/plugin/test-write.ts": {
+      "client-id:nbds": 2
+    },
+    "apps/studio/README.md": {
+      "client-id:nb": 1
+    },
+    "apps/studio/src/build-identity.ts": {
+      "client-name:new balance": 1
+    },
+    "apps/studio/src/export-settings.ts": {
+      "client-id:nbds": 1
+    },
+    "apps/studio/test-build-identity.ts": {
+      "client-name:new balance": 3
+    },
+    "apps/studio/test-chrome.mjs": {
+      "client-id:nb": 1
+    },
+    "apps/studio/test-export-parity.mjs": {
+      "client-id:nb": 5,
+      "client-id:wendys": 4
+    },
+    "apps/studio/test-glass-input.ts": {
+      "client-id:nb": 1
+    },
+    "apps/studio/test-start-input.ts": {
+      "client-id:wendys": 1
+    },
+    "apps/studio/vercel-ignore.sh": {
+      "client-id:nb": 2
+    },
+    "apps/tokenpress/README.md": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/docs/CHANGELOG.md": {
+      "client-id:nbds": 6
+    },
+    "apps/tokenpress/docs/known-issues/SD-PER-MODE-MERGE.md": {
+      "client-id:nbds": 13
+    },
+    "apps/tokenpress/docs/known-issues/sd-per-mode-merge-issue-draft.md": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/examples/style-dictionary/README.md": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/src/plugin/exporter.ts": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/src/utils/token-name-utils.ts": {
+      "client-id:nbds": 2
+    },
+    "apps/tokenpress/test-examples/tokens/tokens/desktop/font-fluid.json": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/test-examples/tokens/tokens/mobile/font-fluid.json": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/test-examples/tokens/tokens/shared/dimension.json": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/test-examples/tokens/tokens/shared/font.json": {
+      "client-id:nbds": 5
+    },
+    "apps/tokenpress/test-examples/tokens/tokens/shared/shadows.json": {
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/test-examples/tokens/tokens/shared/typography.json": {
+      "client-id:nbds": 110
+    },
+    "apps/tokenpress/tests/unit/motion-stagger-duration.test.ts": {
+      "client-id:nbds": 10
+    },
+    "apps/tokenpress/tests/unit/namespace-alias.test.ts": {
+      "client-id:nbds": 8
+    },
+    "apps/tokenpress/tests/unit/namespace-exporter-integration.test.ts": {
+      "client-id:nbds": 20
+    },
+    "apps/tokenpress/tests/unit/opacity-percent-to-fraction.test.ts": {
+      "client-id:nb": 3,
+      "client-id:nbds": 1
+    },
+    "apps/tokenpress/tests/unit/token-name-utils.test.ts": {
+      "client-id:nbds": 22
+    },
+    "docs/01-token-architecture.md": {
+      "client-id:nb": 2,
+      "client-id:nbds": 3,
+      "client-name:new balance": 3
+    },
+    "docs/02-nb-regression-pass.md": {
+      "client-id:nb": 7,
+      "client-id:nbds": 2,
+      "client-name:new balance": 4
+    },
+    "docs/03-open-questions.md": {
+      "client-id:nb": 2
+    },
+    "docs/05-token-coverage-roadmap.md": {
+      "client-name:new balance": 1
+    },
+    "docs/07-e2e-journey.md": {
+      "client-id:nb": 1,
+      "client-id:wendys": 4,
+      "client-name:wendy": 4
+    },
+    "docs/10-figma-materialization.md": {
+      "client-id:nb": 10,
+      "client-id:nbds": 4,
+      "client-id:wendys": 5
+    },
+    "docs/11-multi-brand-vision.md": {
+      "client-id:nbds": 3,
+      "client-name:new balance": 1
+    },
+    "docs/12-token-press-monorepo-eval.md": {
+      "client-id:nb": 1
+    },
+    "docs/13-inspirations.md": {
+      "client-id:nb": 1,
+      "client-name:new balance": 1
+    },
+    "docs/14-component-layer.md": {
+      "client-id:nb": 2
+    },
+    "docs/16-code-review-findings.md": {
+      "client-id:nb": 7,
+      "client-id:wendys": 1
+    },
+    "docs/19-code-library-and-dx.md": {
+      "client-id:nb": 1
+    },
+    "docs/20-interactive-color-system.md": {
+      "client-id:nb": 1,
+      "client-name:new balance": 1
+    },
+    "docs/21-semantic-role-rebasing.md": {
+      "client-id:nb": 1
+    },
+    "docs/27-future-ideas.md": {
+      "client-id:nb": 1
+    },
+    "docs/28-component-anatomy-schema.md": {
+      "client-id:wendys": 2
+    },
+    "docs/30-versioning-and-compatibility.md": {
+      "client-id:nb": 4,
+      "client-id:nbds": 4,
+      "client-id:wendys": 5,
+      "client-name:new balance": 1
+    },
+    "docs/31-descriptive-vocabulary.md": {
+      "client-id:wendys": 2
+    },
+    "docs/33-skills-adoption-plan.md": {
+      "client-id:wendys": 1,
+      "client-name:wendy": 1
+    },
+    "docs/34-gate-independence.md": {
+      "client-id:nb": 7
+    },
+    "docs/35-naming-and-packaging.md": {
+      "client-id:nb": 2
+    },
+    "docs/44-materialization-renames.md": {
+      "client-id:nbds": 3,
+      "client-id:wendys": 2
+    },
+    "docs/45-style-guide-generator.md": {
+      "client-id:nbds": 15,
+      "client-name:new balance": 3
+    },
+    "docs/inventory/surfaces.json": {
+      "client-id:nb": 17
+    },
+    "docs/inventory/surfaces.md": {
+      "client-id:nb": 17
+    },
+    "docs/superpowers/gate-sweep-2026-08-26.md": {
+      "client-id:nb": 3,
+      "client-id:wendys": 1
+    },
+    "docs/superpowers/plans/2026-08-04-figma-font-picker.md": {
+      "client-id:nb": 1
+    },
+    "docs/superpowers/qa-2026-09-18-autolayout-audit.md": {
+      "client-id:nb": 3
+    },
+    "docs/superpowers/specs/2026-09-26-ui-exploration-brief.md": {
+      "client-name:new balance": 1
+    },
+    "docs/superpowers/ui-redesign/concept-v6.html": {
+      "client-id:nb": 1,
+      "client-id:wendys": 3
+    },
+    "packages/engine/README.md": {
+      "client-id:nb": 9,
+      "client-id:nbds": 2,
+      "client-id:wendys": 8,
+      "client-name:wendy": 1
+    },
+    "packages/engine/anatomy-figma.ts": {
+      "client-id:wendys": 1,
+      "client-name:new balance": 2
+    },
+    "packages/engine/cli.ts": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/component-schema.ts": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/components/dialog.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/components/field-message.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/components/focus-ring.ts": {
+      "client-name:new balance": 1
+    },
+    "packages/engine/components/menu.ts": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/components/switch-control.ts": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/emit-agent-reference.ts": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/emit-dtcg.ts": {
+      "client-id:nb": 3,
+      "client-id:nbds": 1
+    },
+    "packages/engine/emit-figma-color.ts": {
+      "client-id:nbds": 3
+    },
+    "packages/engine/emit-figma-dims.ts": {
+      "client-id:nbds": 2
+    },
+    "packages/engine/emit-figma.ts": {
+      "client-id:nb": 6,
+      "client-id:nbds": 1,
+      "client-id:wendys": 3
+    },
+    "packages/engine/emit-levers.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/examples/aurora.design.md": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "packages/engine/examples/harbor.design.md": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "packages/engine/examples/nb-redesign.design.md": {
+      "client-id:nb": 3,
+      "client-id:nbds": 2,
+      "client-name:new balance": 7
+    },
+    "packages/engine/examples/prism3.design.md": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/examples/wendys.design.md": {
+      "client-id:nbds": 1,
+      "client-id:wendys": 52,
+      "client-name:new balance": 1,
+      "client-name:wendy": 34
+    },
+    "packages/engine/figma-names.ts": {
+      "client-id:nbds": 3,
+      "client-name:new balance": 1
+    },
+    "packages/engine/fixtures/a11y/readonly-field-border-1710.json": {
+      "client-id:nb": 4,
+      "client-id:wendys": 7
+    },
+    "packages/engine/fixtures/figma/nb/color.dark.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/color.hc-dark.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/color.hc-light.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/color.light.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/font-fluid.desktop.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/font-fluid.mobile.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/font.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/palette.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/fixtures/figma/nb/text-styles.json": {
+      "client-id:nb": 5
+    },
+    "packages/engine/index-harness.ts": {
+      "client-id:nb": 3
+    },
+    "packages/engine/levers.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/lint-absolute-inset.ts": {
+      "client-id:nbds": 1,
+      "client-id:wendys": 1
+    },
+    "packages/engine/lint-cut-binding.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "packages/engine/lint-description-claims.ts": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/lint-figma-destination.ts": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/lint-layout-claims.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/lint-lever-sweep.ts": {
+      "client-id:nb": 12
+    },
+    "packages/engine/lint-lineheight-bake.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "packages/engine/lint-materialization-renames.ts": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/lint-overlay-completeness.ts": {
+      "client-id:nb": 2
+    },
+    "packages/engine/lint-overlay-provenance.ts": {
+      "client-id:nbds": 2
+    },
+    "packages/engine/lint-ramp-steps.ts": {
+      "client-id:nb": 5
+    },
+    "packages/engine/lint-ramp-values.ts": {
+      "client-id:nb": 4
+    },
+    "packages/engine/lint-ratio-truth.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "packages/engine/lint-schema-classification.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/lint-shadcn-contrast.ts": {
+      "client-id:wendys": 6
+    },
+    "packages/engine/lint-shape-index.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/lint-size-override-coherence.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "packages/engine/lint-stranded-collections.ts": {
+      "client-id:nb": 3,
+      "client-id:wendys": 2
+    },
+    "packages/engine/lint-theme-split.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/lint-token-consumers.ts": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/lint-us-english.ts": {
+      "client-id:nb": 4
+    },
+    "packages/engine/materialise-to-figma.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 1
+    },
+    "packages/engine/materialization-renames.ts": {
+      "client-id:nbds": 2,
+      "client-name:new balance": 1
+    },
+    "packages/engine/modes-report.md": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/modes.ts": {
+      "client-id:nb": 3,
+      "client-id:wendys": 4,
+      "client-name:wendy": 1
+    },
+    "packages/engine/nb-fixture.ts": {
+      "client-id:nb": 7
+    },
+    "packages/engine/nb-regression-report.md": {
+      "client-id:nb": 2
+    },
+    "packages/engine/nb-regression.ts": {
+      "client-id:nb": 8,
+      "client-id:nbds": 3,
+      "client-name:new balance": 3
+    },
+    "packages/engine/out/figma/nb/blur.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 1
+    },
+    "packages/engine/out/figma/nb/border-width.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 10
+    },
+    "packages/engine/out/figma/nb/color.dark.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 603
+    },
+    "packages/engine/out/figma/nb/color.hc-dark.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 603
+    },
+    "packages/engine/out/figma/nb/color.hc-light.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 603
+    },
+    "packages/engine/out/figma/nb/color.light.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 603
+    },
+    "packages/engine/out/figma/nb/control.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 56
+    },
+    "packages/engine/out/figma/nb/core.dimension.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 42
+    },
+    "packages/engine/out/figma/nb/core.font.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 54
+    },
+    "packages/engine/out/figma/nb/core.palette.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 126
+    },
+    "packages/engine/out/figma/nb/focus.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 6
+    },
+    "packages/engine/out/figma/nb/gradient-styles.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/out/figma/nb/grid-styles.json": {
+      "client-id:nb": 1
+    },
+    "packages/engine/out/figma/nb/icon.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 12
+    },
+    "packages/engine/out/figma/nb/layout.2xl.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 13
+    },
+    "packages/engine/out/figma/nb/layout.lg.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 13
+    },
+    "packages/engine/out/figma/nb/layout.md.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 13
+    },
+    "packages/engine/out/figma/nb/layout.sm.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 13
+    },
+    "packages/engine/out/figma/nb/layout.xl.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 13
+    },
+    "packages/engine/out/figma/nb/motion.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 226
+    },
+    "packages/engine/out/figma/nb/opacity.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 12
+    },
+    "packages/engine/out/figma/nb/radius.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 19
+    },
+    "packages/engine/out/figma/nb/shadow-styles.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 1
+    },
+    "packages/engine/out/figma/nb/size.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 12
+    },
+    "packages/engine/out/figma/nb/space.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 38
+    },
+    "packages/engine/out/figma/nb/text-spacing.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 48
+    },
+    "packages/engine/out/figma/nb/text-styles.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 156
+    },
+    "packages/engine/out/figma/nb/type-sets.desktop.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 11
+    },
+    "packages/engine/out/figma/nb/type-sets.mobile.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 11
+    },
+    "packages/engine/out/figma/wendys/blur.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/border-width.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/color.dark.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/color.hc-dark.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/color.hc-light.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/color.light.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/control.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/core.dimension.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/core.font.json": {
+      "client-id:wendys": 9
+    },
+    "packages/engine/out/figma/wendys/core.palette.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/focus.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/gradient-styles.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/grid-styles.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/icon.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/layout.2xl.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/layout.lg.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/layout.md.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/layout.sm.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/layout.xl.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/motion.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/opacity.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/radius.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/shadow-styles.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/size.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/space.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/text-spacing.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/text-styles.json": {
+      "client-id:wendys": 28
+    },
+    "packages/engine/out/figma/wendys/type-sets.desktop.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/figma/wendys/type-sets.mobile.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/nb.ai.json": {
+      "client-id:nb": 3,
+      "client-id:nbds": 1725
+    },
+    "packages/engine/out/nb.base.tokens.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 766
+    },
+    "packages/engine/out/nb.css-only.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 1
+    },
+    "packages/engine/out/nb.dark.overlay.tokens.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 269
+    },
+    "packages/engine/out/nb.hc-dark.overlay.tokens.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 291
+    },
+    "packages/engine/out/nb.hc-light.overlay.tokens.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 208
+    },
+    "packages/engine/out/nb.tokens.json": {
+      "client-id:nb": 2,
+      "client-id:nbds": 3155
+    },
+    "packages/engine/out/nb.web.base.tokens.json": {
+      "client-id:nb": 1,
+      "client-id:nbds": 766
+    },
+    "packages/engine/out/shadcn/nb.css": {
+      "client-id:nb": 1
+    },
+    "packages/engine/out/shadcn/nb.registry-item.json": {
+      "client-id:nb": 3
+    },
+    "packages/engine/out/shadcn/wendys.css": {
+      "client-id:wendys": 2
+    },
+    "packages/engine/out/shadcn/wendys.registry-item.json": {
+      "client-id:wendys": 3
+    },
+    "packages/engine/out/tailwind/nb.theme.css": {
+      "client-id:nb": 1
+    },
+    "packages/engine/out/tailwind/wendys.theme.css": {
+      "client-id:wendys": 2
+    },
+    "packages/engine/out/wendys-fidelity-report.md": {
+      "client-id:wendys": 36,
+      "client-name:wendy": 1
+    },
+    "packages/engine/out/wendys.ai.json": {
+      "client-id:wendys": 41
+    },
+    "packages/engine/out/wendys.base.tokens.json": {
+      "client-id:wendys": 39
+    },
+    "packages/engine/out/wendys.css-only.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/wendys.dark.overlay.tokens.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/wendys.hc-dark.overlay.tokens.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/wendys.hc-light.overlay.tokens.json": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/out/wendys.tokens.json": {
+      "client-id:wendys": 52
+    },
+    "packages/engine/out/wendys.web.base.tokens.json": {
+      "client-id:wendys": 39
+    },
+    "packages/engine/package.json": {
+      "client-id:nb": 4
+    },
+    "packages/engine/prose-rules.ts": {
+      "client-id:nb": 1
+    },
+    "packages/engine/read-back.ts": {
+      "client-id:nbds": 3
+    },
+    "packages/engine/regen.ts": {
+      "client-id:nb": 5,
+      "client-id:wendys": 5
+    },
+    "packages/engine/resolve-preview.ts": {
+      "client-id:nbds": 1
+    },
+    "packages/engine/scale.ts": {
+      "client-id:wendys": 1,
+      "client-name:new balance": 1
+    },
+    "packages/engine/schema/nb-measured.json": {
+      "client-id:nb": 2,
+      "client-id:nbds": 2,
+      "client-name:new balance": 3
+    },
+    "packages/engine/schema/payload-manifest.json": {
+      "client-id:nb": 2,
+      "client-id:wendys": 1
+    },
+    "packages/engine/schema/theme-schema.json": {
+      "client-id:nb": 1,
+      "client-name:new balance": 1
+    },
+    "packages/engine/schema/token-contract.json": {
+      "client-id:nbds": 1,
+      "client-id:wendys": 2
+    },
+    "packages/engine/standard-design-md.ts": {
+      "client-id:wendys": 2,
+      "client-name:wendy": 1
+    },
+    "packages/engine/test.ts": {
+      "client-id:nb": 353,
+      "client-id:nbds": 39,
+      "client-id:wendys": 184,
+      "client-name:new balance": 2,
+      "client-name:wendy": 4
+    },
+    "packages/engine/theme-brand.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "packages/engine/theme-dims.ts": {
+      "client-id:wendys": 1
+    },
+    "packages/engine/theme-nb.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 2,
+      "client-name:new balance": 1
+    },
+    "packages/engine/theme-types.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 2,
+      "client-name:new balance": 1,
+      "client-name:wendy": 1
+    },
+    "packages/engine/theme.ts": {
+      "client-id:nb": 3,
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "packages/engine/token-contract.ts": {
+      "client-id:nb": 7,
+      "client-id:nbds": 3,
+      "client-id:wendys": 4
+    },
+    "packages/engine/version.ts": {
+      "client-id:nb": 2,
+      "client-id:nbds": 1
+    },
+    "packages/engine/visualize.ts": {
+      "client-id:nb": 4
+    },
+    "packages/tokens/README.md": {
+      "client-id:nb": 5,
+      "client-id:nbds": 2,
+      "client-id:wendys": 1
+    },
+    "packages/tokens/check-consumability.mjs": {
+      "client-id:nb": 4,
+      "client-id:nbds": 5,
+      "client-id:wendys": 3
+    },
+    "packages/tokens/check-platforms.mjs": {
+      "client-id:nbds": 1,
+      "client-id:wendys": 4
+    },
+    "packages/tokens/platform-outcomes.mjs": {
+      "client-id:nbds": 5
+    },
+    "reference/New Balance/tokens/raw-figma/color.json": {
+      "client-id:nbds": 291,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/core-breakpoint.json": {
+      "client-id:nbds": 3,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/core-color.json": {
+      "client-id:nbds": 82,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/core-dimension.json": {
+      "client-id:nbds": 37,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/core-motion.json": {
+      "client-id:nbds": 13,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/core-typography.json": {
+      "client-id:nbds": 40,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/focus.json": {
+      "client-id:nbds": 8,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/layout.json": {
+      "client-id:nbds": 18,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/motion.json": {
+      "client-id:nbds": 36,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/radius.json": {
+      "client-id:nbds": 10,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/space-size.json": {
+      "client-id:nbds": 53,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/typography-desktop.json": {
+      "client-id:nbds": 134,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/raw-figma/typography-mobile.json": {
+      "client-id:nbds": 134,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/desktop/typography.json": {
+      "client-id:nbds": 68,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/mobile/typography.json": {
+      "client-id:nbds": 68,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/color.json": {
+      "client-id:nbds": 152,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/core-breakpoint.json": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/core-color.json": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/core-dimension.json": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/core-motion.json": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/core-typography.json": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/focus.json": {
+      "client-id:nbds": 5,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/layout.json": {
+      "client-id:nbds": 9,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/motion.json": {
+      "client-id:nbds": 19,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/radius.json": {
+      "client-id:nbds": 6,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/shadows.json": {
+      "client-id:nbds": 1,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/space-size.json": {
+      "client-id:nbds": 25,
+      "client-name:new balance": 1
+    },
+    "reference/New Balance/tokens/tokens/shared/typography.json": {
+      "client-id:nbds": 68,
+      "client-name:new balance": 1
+    },
+    "reference/Prism2/tokens/tokens/dark/brand-theme.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/dark/motion.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/light/brand-theme.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/light/motion.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/shared/grids-layouts.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/shared/primitives.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/shared/shadows.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/shared/space-size.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/shared/typography.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/wireframe/brand-theme.json": {
+      "client-id:nbds": 1
+    },
+    "reference/Prism2/tokens/tokens/wireframe/motion.json": {
+      "client-id:nbds": 1
+    },
+    "skills/prism3-theme/SKILL.md": {
+      "client-id:nbds": 1
+    },
+    "tools/CLAUDE.md": {
+      "client-id:wendys": 1
+    },
+    "tools/binding-audit/reconcile.ts": {
+      "client-id:nbds": 1
+    },
+    "tools/conformance-scan/README.md": {
+      "client-id:nbds": 1,
+      "client-id:wendys": 1
+    },
+    "tools/conformance-scan/expected.ts": {
+      "client-id:nb": 6,
+      "client-id:wendys": 3,
+      "client-name:new balance": 1
+    },
+    "tools/conformance-scan/mutations.sh": {
+      "client-id:wendys": 2
+    },
+    "tools/conformance-scan/state.ts": {
+      "client-id:nbds": 1,
+      "client-id:wendys": 1
+    },
+    "tools/exporter-comparison/README.md": {
+      "client-id:wendys": 1
+    },
+    "tools/exporter-comparison/compare.ts": {
+      "client-id:nb": 1,
+      "client-id:nbds": 5,
+      "client-id:wendys": 2
+    },
+    "tools/exporter-comparison/gate.ts": {
+      "client-id:nbds": 2,
+      "client-id:wendys": 4
+    },
+    "tools/figma-mcp/README.md": {
+      "client-id:nb": 1,
+      "client-id:nbds": 2,
+      "client-id:wendys": 1
+    },
+    "tools/figma-mcp/agent-link.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "tools/figma-mcp/plan.ts": {
+      "client-id:nb": 1,
+      "client-id:wendys": 1
+    },
+    "tools/file-seed-comparison/answer-key.json": {
+      "client-id:nb": 2
+    },
+    "tools/file-seed-comparison/compare.ts": {
+      "client-name:new balance": 1
+    },
+    "tools/file-seed-comparison/snapshots.ts": {
+      "client-name:new balance": 1
+    },
+    "tools/forward-claim-check/issue-states.json": {
+      "client-id:wendys": 1
+    },
+    "verify.ts": {
+      "client-id:nb": 2
+    }
+  }
+}

@@ -1376,6 +1376,13 @@ export const GATES: Gate[] = [
     cmd: engine('lint-format-history.ts'),
   },
   {
+    // #4645 — reads every tracked file's path and contents, the deny-list in `client-ids.ts` and the authored
+    // baseline; needs no build and no `after`.
+    id: 'lint-client-ids',
+    ciStep: 'No client name or fixture id spreads further (#4645)',
+    cmd: engine('lint-client-ids.ts'),
+  },
+  {
     // #2997 gate 3 — reads the role map and the pinned shadcn variable set; needs no build and no `after`.
     id: 'shadcn-vars',
     ciStep: 'The shadcn map covers the pinned shadcn variable set (#2997)',

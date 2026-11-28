@@ -171,6 +171,15 @@ const EXEMPT: { file: string; why: string }[] = [
       'ever gains a $comment or a note, move it to class 2 rather than widening this reason.',
   },
   {
+    file: 'client-id-baseline.json',
+    why:
+      'The client-name and client-id baseline lint-client-ids.ts reads (#4645) — pure DATA: per tracked ' +
+      'file, per rule, a hit count, with no prose field. Written only by that gate\'s --accept and kept out ' +
+      'of regen, because a regenerated baseline would agree with a rise. Its keys name the deny-listed ids ' +
+      'by design, so it can never be prose-gated; it ships in no payload. If it ever gains a $comment or a ' +
+      'note, remove the field rather than widening this reason.',
+  },
+  {
     file: 'kb-briefs.json',
     why:
       'The knowledge base\'s component-brief catalogue as test.ts reads it (#2488) — pure DATA: per ' +

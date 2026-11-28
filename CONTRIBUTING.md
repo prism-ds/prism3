@@ -1404,6 +1404,13 @@ npx tsx packages/engine/lint-format-history.ts      # one version of a published
                                                     # conflict on the record; kept both, DUPLICATE; kept
                                                     # one, SHAPE. A raise: bump the constant and the $id,
                                                     # then --accept --note "<what it adds>" (appends).
+npx tsx packages/engine/lint-client-ids.ts          # no client name or fixture id spreads further (#4645):
+                                                    # every tracked path and file is matched against the
+                                                    # deny-list in client-ids.ts and held, per file and
+                                                    # rule, to schema/client-id-baseline.json. A rise or a
+                                                    # new file fails by path:line; a fall fails until
+                                                    # --accept lowers the baseline. A further client name
+                                                    # goes in only as a hash: --hash "<name>".
 npx tsx packages/engine/shadcn-vars.ts --check      # the shadcn map covers the pinned shadcn variable set
                                                     # (#2997): every pinned name mapped, every extra
                                                     # declared, the map version equal to the pin's; only
