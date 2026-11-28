@@ -918,6 +918,16 @@ export const GATES: Gate[] = [
     precondition: chromiumPrecondition,
   },
   {
+    // #4571 PR 3: each element the Motion stage moves plays the transition its track's preset resolves to in the
+    // emitted token tree, in every mode. It drives the built dist/main.js, so it runs after the web build.
+    id: 'plays-the-data',
+    ciStep: 'The motion stage plays the emitted presets (#4571)',
+    cmd: ws('@prism3/studio', 'test:plays-the-data'),
+    after: ['build-web'],
+    why: 'it drives the built dist/main.js in a browser',
+    precondition: chromiumPrecondition,
+  },
+  {
     // #2201: a live styles.css rule is not removed without an explicit accept. STATIC at check time — it
     // parses the current styles.css with Chromium's CSS parser (hence the precondition) and compares it to
     // apps/studio/live-css.json, the rules the browser suites' pages were seen to draw. It reads neither

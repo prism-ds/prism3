@@ -1590,6 +1590,13 @@ jobs:
       - name: "The web and plugin token exports agree, byte for byte (#2351)"
         run: npm run -w @prism3/studio test:export-parity
 
+      # #4571 PR 3: the motion stage plays the engine's data. Each element Motion's stage moves carries, as Chromium
+      # computes it, the duration, curve and delay its track's preset resolves to in the emitted token tree, in every
+      # mode, for the example brands (the committed out/) and a fixture brand the gate compiles with the engine's CLI.
+      # The preview's own timing helper is never read. AFTER THE WEB BUILD. The browser comes from the verdict step.
+      - name: "The motion stage plays the emitted presets (#4571)"
+        run: npm run -w @prism3/studio test:plays-the-data
+
       # TokenPress's own 263 assertions, ported from vitest onto tsx (the suite it arrived with). It
       # runs the exporter end to end against Figma-shaped fixtures, so it is the only thing here that
       # can catch a regression in the OUT direction (Figma -> DTCG). Its runner asserts a per-file

@@ -1519,6 +1519,13 @@ npm run test:export-parity -w @prism3/studio # #2351 gap 1: the web and plugin t
                                             #   it AFTER the web and plugin builds. The expected file is
                                             #   the engine's Node CLI emission, so a defect both bundles
                                             #   share still fails. Same one-off browser as test:smoke
+npm run test:plays-the-data -w @prism3/studio # #4571 PR 3: the motion stage plays the engine's data.
+                                            #   Each element Motion's stage moves has, as Chromium
+                                            #   computes it, the duration, curve and delay its track's
+                                            #   preset resolves to in the emitted token tree, in every
+                                            #   mode: the example brands against the committed out/, and
+                                            #   a fixture brand the gate compiles with the engine's CLI.
+                                            #   Run it AFTER the web build. Same one-off browser
 npm run lint:contrast -w @prism3/studio     # studio chrome clears its own contrast floors — STATIC, the
                                             #   token VALUES. Its complement is test:smoke above, which
                                             #   measures what RENDERS; neither subsumes the other (a
