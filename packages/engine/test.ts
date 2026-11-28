@@ -41,7 +41,7 @@ import { MOTION_FIGMA_COVERAGE, springBounce } from './emit-figma-dims';
 import { judgeBelowFloor, KNOWN_PENDING, parseFloors } from './lint-shadcn-contrast';
 import { handoffBrands, readHandoff } from './emit-shadcn';
 import { buildBase, buildOverlay, overlayModes, buildOverlaySet, leafCount, DTCG_TYPES, buildCssOnly, buildWebBase } from './emit-dtcg-overlay';
-import { presetSlotTargets, durationTargetsFor, slotPathsOf, easingSourceOf, presetSlotsSet, presetUsedBy, patternsReachedBy, trackTargets, presetAdvisories } from './motion-editor';
+import { presetSlotTargets, durationTargetsFor, slotPathsOf, easingSourceOf, presetSlotsSet, presetUsedBy, patternsReachedBy, trackTargets, presetAdvisories, patternPlayback } from './motion-editor';
 import { Spring, springPosition, springSettleMs, springLinearEasing, springEasingStops, SPRING_EASING_ERROR_BOUND, SPRING_SETTLE_EPSILON, SPRING_SAMPLE_MS, SPRING_MAX_STIFFNESS } from './spring';
 import { callTool as mcpCallTool, unsafeOutDir, EXPORT_SECTIONS } from './mcp';
 import { buildTree, validateBrandInput, readExampleBrand, contractReportRow, emitTheme, windowsInvalidName } from './emit-dtcg';
@@ -48311,6 +48311,29 @@ import { FILE_FACTS_FORMAT, type FileFactsReport } from './file-facts';
   // A spring's settle time is the length compared: gentle settles past moderate, so an exit on it is advised.
   ok(adv({ presets: { surface: { exit: { easing: 'spring.gentle' } } } }).includes('surface/exit/exit-not-shorter'),
     '#4571 an exit eased by a spring is compared by its settle time');
+}
+
+// #4571 (PR 3) — `patternPlayback`, what the motion stage plays. SUBJECT = the helper. ORACLE = values typed here: the
+// relaxed tempo is ×1.3 (moderate 300 → 390ms, normal 200 → 260ms), enter's default curve is decelerate (0, 0, 0.2, 1),
+// a mode's re-point to calm is (0.4, 0, 0.6, 1), and a delay step is its fixed ms (show 400).
+{
+  const relaxed = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { tempo: 'relaxed', presets: { fade: { delay: 'delay.show' } } },
+    modeLevers: { dark: { easings: { enter: 'calm' } } } } as BrandInput).motion;
+  const dlg = relaxed.patterns!.find((p) => p.name === 'dialog/enter')!;
+  const pb = patternPlayback(relaxed, dlg);
+  const row = (k: string) => pb.find((x) => `${x.track.element}.${x.track.property}` === k)!;
+  ok(row('panel.transform').ms === 390 && row('panel.transform').easing === 'cubic-bezier(0, 0, 0.2, 1)' && row('panel.transform').delayMs === 0,
+    `#4571 patternPlayback: the dialog's panel plays surface at the relaxed tempo, 390ms on decelerate (${JSON.stringify(row('panel.transform'))})`);
+  ok(row('content.opacity').ms === 260 && row('content.opacity').delayMs === 400,
+    `#4571 patternPlayback: the content plays fade, 260ms after its 400ms delay (${JSON.stringify(row('content.opacity'))})`);
+  ok(patternPlayback(relaxed, dlg, 'dark').every((x) => x.easing === 'cubic-bezier(0.4, 0, 0.6, 1)'),
+    '#4571 patternPlayback: in a mode that re-points enter to calm, every track on an enter-eased preset plays calm');
+  const toast = patternPlayback(relaxed, relaxed.patterns!.find((p) => p.name === 'toast/enter')!);
+  ok(toast.find((x) => x.track.property === 'transform')?.distancePx === 8, '#4571 patternPlayback: the toast slides distance.nudge, 8px');
+  const sprung = brandTheme({ ...MINIMAL_BRAND, motionPersonality: { presets: { pop: { easing: 'spring.snappy' } } } } as BrandInput).motion;
+  const pop = patternPlayback(sprung, sprung.patterns!.find((p) => p.name === 'popover/open')!);
+  ok(pop.every((x) => x.easing.startsWith('linear(') && x.ms === sprung.springSettle.snappy),
+    `#4571 patternPlayback: a spring-eased preset plays its linear() curve over its settle time (${pop[0]?.ms}ms)`);
 }
 
 // #4571 — THE MOTION-ISOLATION GATE (proposal §4.2's last row, §5 PR 1). A motion-only edit leaves every non-motion
