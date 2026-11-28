@@ -418,6 +418,76 @@
       "title": "no rename; the primitive placement is recorded, not changed",
       "doc": "docs/35-naming-and-packaging.md",
       "section": "10.1"
+    },
+    {
+      "date": "2026-11-25",
+      "issue": 4472,
+      "title": "brands as modes — a new mode can start from a design.md and take its colors, type, shape and motion",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.1"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "a brand axis next to the appearance axis, with a new `brand` collection, and components not rebound",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.2"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "each brand gets every appearance the file has on, high contrast included",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.3"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "colors, type, corners, shadow, density and motion vary per brand; spacing and breakpoints stay shared",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.4"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "component style choices stay one per file until each is brought to the owner",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.5"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "a field a brand can't hold is imported anyway, the file's value is kept, and the report names it",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.6"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "a collection named `brand` whose modes are brand names, and color modes named like \"B · dark\"",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.7"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "Studio shows one brand at a time with a switcher",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.8"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "the file's original brand stays the default brand",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.9"
+    },
+    {
+      "date": "2026-11-26",
+      "issue": 4472,
+      "title": "the contract version is settled by docs/30's policy when the build reaches it",
+      "doc": "docs/47-brands-as-modes.md",
+      "section": "2.10"
     }
   ]
 }
