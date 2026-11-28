@@ -763,6 +763,7 @@
       "capabilitiesByRevision": {
         "tasks": "Offered only to a session that negotiated 2025-11-25. An older session gets no tasks capability, no execution field on figma_run, and no tasks/* methods, and a figma_run sent with task runs as a plain call."
       },
+      "elicitation": "Before an update-components confirm that overwrites hand edits, the bridge asks the person with a form elicitation naming each set whose hand edits it replaces, from the check this bridge ran, and sends nothing unless they accept. Only a session that negotiated 2025-06-18 or later, whose client declares form elicitation, is asked; any other session gets the confirm unasked, as before.",
       "skills": [
         {
           "uri": "skill://prism3-rebind/SKILL.md",

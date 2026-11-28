@@ -46,7 +46,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { toolDefs, PROTOCOL_VERSIONS, SERVER_INFO } from './mcp';
-import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES, TASKS_SINCE as BRIDGE_TASKS_SINCE, BRIDGE_SKILLS, SKILL_BASE } from '../../tools/figma-bridge/server';
+import { TOOLS as BRIDGE_TOOLS, SERVER_INFO as BRIDGE_INFO, BRIDGE_PROTOCOL_VERSIONS, CAPABILITIES as BRIDGE_CAPABILITIES, TASKS_SINCE as BRIDGE_TASKS_SINCE, ELICITATION_SINCE as BRIDGE_ELICITATION_SINCE, BRIDGE_SKILLS, SKILL_BASE } from '../../tools/figma-bridge/server';
 import { AGENT_COMMANDS, AGENT_PROTOCOL_VERSION, MAILBOX } from '../../apps/plugin/src/agent-protocol';
 import { RUN_CODE } from '../../apps/plugin/src/dev-commands';
 import { BRIDGE_PORT } from '../../apps/plugin/src/agent-bridge-relay';
@@ -124,6 +124,8 @@ const mcp = () => [
     capabilitiesByRevision: {
       tasks: `Offered only to a session that negotiated ${BRIDGE_TASKS_SINCE}. An older session gets no tasks capability, no execution field on figma_run, and no tasks/* methods, and a figma_run sent with task runs as a plain call.`,
     },
+    // #4646 step 3: elicitation is the client's capability, so it is not in `capabilities`; when the bridge uses it.
+    elicitation: `Before an update-components confirm that overwrites hand edits, the bridge asks the person with a form elicitation naming each set whose hand edits it replaces, from the check this bridge ran, and sends nothing unless they accept. Only a session that negotiated ${BRIDGE_ELICITATION_SINCE} or later, whose client declares form elicitation, is asked; any other session gets the confirm unasked, as before.`,
     // #4646 step 2: the skills served over MCP, each with the checkout file it is read from.
     skills: BRIDGE_SKILLS.map((name) => ({ uri: `${SKILL_BASE}${name}/SKILL.md`, source: `skills/${name}/SKILL.md` })),
     source: at('tools/figma-bridge/server.ts', /^const isMain/, 'isMain'),
