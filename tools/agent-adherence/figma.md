@@ -108,6 +108,9 @@ as raw counts per rule, plus the per-arm medians. There's no 0–100 score (Q344
 | F1, `1` | F0 plus the note (`instructions` and `readFirst`). |
 | F2, `2` (the default) | Today's bridge: the note, five resources and `context`, and the three MCP skills since #4646 step 2. |
 
+Every arm asks the person before an `update-components` confirm that overwrites hand edits (#4646 step 3), when the
+client declares form elicitation. A declined one is logged `refused-by-bridge` and writes nothing. The scorer still counts it as a write (#4675).
+
 F2 runs from the #4646 step 2 merge on (#4661) aren't comparable to earlier F2 runs: a client that auto-loads skills shows
 the agent their text without a resource read (Q1 A, 2026-11-28).
 

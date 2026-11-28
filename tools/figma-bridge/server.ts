@@ -12,7 +12,8 @@
  * TWO SIDES, ONE PROCESS:
  *   · stdio MCP on the official SDK (`@modelcontextprotocol/server`, #4646; the engine's handshake rule and protocol
  *     constants are imported from `packages/engine/mcp.ts`) with four tools — `figma_status`,
- *     `figma_run {cmd, args, timeoutMs}` (a plain call, or a task when the client asks for one, #4646 step 1),
+ *     `figma_run {cmd, args, timeoutMs}` (a plain call, or a task when the client asks for one, #4646 step 1; an
+ *     `update-components` confirm that overwrites hand edits asks the person first, by elicitation, #4646 step 3),
  *     `figma_logs {since, limit}` and `figma_result {id}`;
  *   · a WebSocket server on 127.0.0.1 (RFC 6455, hand-rolled on `node:http` + `node:crypto` — no `ws`
  *     package). The plugin's UI iframe connects to it while the owner has the agent link switched on, and
@@ -171,7 +172,7 @@ export const TASKS_SINCE = '2025-11-25';
  * Elicitation is a CLIENT capability: the server declares nothing for it, so `capabilitiesFor` is unchanged and an
  * `initialize` answer looks the same with or without it. The bridge asks only a session that negotiated
  * `ELICITATION_SINCE` or later AND whose client declared form elicitation (`elicitation: {}`, the `2025-06-18` form, or
- * `elicitation: { form: {} }`). Any other session gets today's behaviour: the preview, then a confirm that echoes its
+ * `elicitation: { form: {} }`). Any other session gets today's behavior: the preview, then a confirm that echoes its
  * `previewHash`. Every arm asks, like tasks (the owner's Q1 A on #4654): it is how a write is gated, not what an agent is
  * shown.
  */

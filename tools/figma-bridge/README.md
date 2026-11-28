@@ -171,6 +171,36 @@ that reason. Progress and log lines streamed while the socket was down are not r
 result the plugin still keeps logs "a result for a command this bridge is not waiting on"; that is
 harmless.
 
+## Asking before an overwrite: elicitation (#4646 step 3)
+
+An `update-components` confirm with `handEdits: "overwrite"`, for the whole run or for one set under
+`choices.sets`, replaces hand edits with the plan. Before the bridge sends one, it asks the person
+through the client with a form `elicitation/create` that has no fields, just accept, decline or cancel:
+
+- **What it says.** The command, and each set whose hand edits the overwrite replaces, with how many
+  members are hand-edited. The counts come from the check: the newest `update-components` check this
+  bridge ran whose `previewHash` the confirm echoes, each set's choice resolved as the plugin resolves it
+  (its own `choices.sets[name]`, else the run's). A check that ran on another bridge, or before this one
+  started, can't be read, and the question says so. It also says the plugin saves a named version first,
+  which it does before every update.
+- **What happens.** Accept, and the confirm is sent as usual. Decline or cancel, and nothing is sent:
+  `figma_run` returns an error that says the person declined, and `--record` logs `refused-by-bridge`.
+  An answer the client can't give (an error, no answer within 10 minutes, a malformed one) writes nothing
+  too. A confirm that overwrites no hand edits, by its check's counts, isn't asked about.
+- **As a task.** The question comes before the task. A decline is a plain result, and no task is made.
+- **Tied to the file.** The question doesn't change what the confirm is: it still has to echo the
+  check's `previewHash`, and the plugin still refuses it if the file no longer hashes the same. So
+  switching files between the question and the answer can't redirect the write.
+
+**Who is asked.** Elicitation is the client's capability, not the server's, so the bridge declares
+nothing for it and `initialize` answers the same either way. It asks only a session that negotiated
+`2025-06-18` or later, the first revision with elicitation, and whose client declared form elicitation
+(`elicitation: {}` or `elicitation: { form: {} }`). Any other session gets the confirm as before, unasked:
+the preview, then a confirm that echoes its `previewHash`. Every arm asks, like tasks. The suite's
+`handshake/<version>-elicitation` and `elicit/…` arms hold this per revision.
+
+`prune`, `panels-clean` and any other write that removes nodes aren't asked about yet.
+
 ## What an agent reads on connecting (#3300)
 
 A fresh agent with no checkout arrives knowing the rules that matter in a Figma file, and where to read
@@ -222,7 +252,7 @@ The bridge points at the engine MCP server (`prism3-engine`) rather than proxyin
 - `2`, the default: the bridge as described above.
 
 Every arm declares `tasks` and `logging` and lists `figma_result` (#4646 step 1): they are how the bridge works, not
-what an agent is shown. The skills (#4646 step 2) are what an agent is shown, so only arm 2 serves them, like the
+what an agent is shown. So does the question before an overwrite (#4646 step 3), since it gates a write. The skills (#4646 step 2) are what an agent is shown, so only arm 2 serves them, like the
 resources. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
 `figma_run` call before it runs, and one `outcome` line after it ends, refused calls included. A plain
 call that times out ends `tool-error`, but its run goes on, so when that run ends a `late` line with the same

@@ -37,6 +37,15 @@
  * task against a fake slow plugin, a reconnect mid-task resuming the same task, and a run kept past its caller's timeout)
  * mcp/method-not-found · arm/<n>-method-not-found (#4652: a -32601 names its method) · tasks/revision (#4656 item 3: below
  * 2025-11-25 no execution, a task field ignored, no tasks/*) · record/late (#4656 item 2) · resources/tasks-scope (#4656 item 4)
+ * elicit/plugin · elicit/check · handshake/<asked>-elicitation · elicit/ask · elicit/counts · elicit/decline · elicit/cancel · elicit/accept ·
+ * elicit/per-set · elicit/no-check · elicit/keep · elicit/nothing-lost · elicit/bad-answer · elicit/task · elicit/no-capability · elicit/url-only ·
+ * arm/0-elicit · skills/request-id (#4646 step 3: the person is asked before update-components overwrites hand edits, only at
+ * 2025-06-18 or later with a form-elicitation client. MUTATIONS, each failing by name: the revision check dropped →
+ * `handshake/2024-11-05-elicitation`, `…/2025-03-26-elicitation`; the client check dropped → `elicit/no-capability`, `elicit/url-only`;
+ * any non-decline taken as accept → `elicit/cancel`; per-set choices ignored → `elicit/per-set`; the nothing-lost skip dropped →
+ * `elicit/nothing-lost`; the task path unasked → `elicit/task`; `bridgeTransport` clearing records on any message with an id →
+ * `skills/request-id`; the refusal unrecorded → `record/calls`; any kept check matched regardless of hash → `elicit/no-check`;
+ * arm 2 only → `arm/0-elicit`, `record/calls`)
  *
  * #3147 Phase 2a: each read-only node command (inspect, component-keys, audit-frames, snapshot) through figma_run, against
  * the same `NodeShim` fixture and literal expectations as `test-agent-link.ts`; its shim write log must stay empty
