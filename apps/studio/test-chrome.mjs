@@ -10545,6 +10545,108 @@ if (runs('4571')) for (const host of ['web', 'figma']) {
 }
 
 // =============================================================================================
+// 4571-play. The plays-the-data gate (#4571 PR 3; the proposal's §5): the motion stage plays the engine's resolved
+// data and nothing of its own. For every preset, on every pattern that names it (and on the plain specimen for a preset
+// no pattern names), each moving element's COMPUTED transition (property, duration, timing function, delay) equals the
+// value its track's preset resolves to in the committed emission.
+//
+//     Independence (docs/34): SUBJECT = the browser's computed style on the stage's elements after Play. ORACLE = the
+//     committed `out/prism3.tokens.json` (each `motion.preset.<path>.{duration,easing,delay}` alias followed to its
+//     milliseconds and curve) and `out/prism3.ai.json`'s `motion_patterns` (which tracks each pattern has and which preset
+//     each names). Neither is the preview's helper (`patternPlayback`) nor the theme the page holds.
+//
+//     Mutation this fails by name: a duration typed into the stage (`pb.ms` replaced by 250 for the content element) →
+//     `#4571 plays the data: dialog/enter content.opacity plays 250ms, the emission's motion.preset.fade.duration is 200ms`.
+// =============================================================================================
+if (runs('4571-play')) console.log(`\nMotion stage plays the data (#4571)\n${'='.repeat(78)}`);
+const MO_TREE = OUT[OUT_ROOT]?.motion;
+const MO_AI = JSON.parse(readFileSync(join(REPO, 'packages/engine/out/prism3.ai.json'), 'utf8')).motion_patterns ?? {};
+/** Follow a `{root.motion.…}` alias to its leaf in the emitted motion group. */
+const moLeaf = (v, depth = 0) => {
+  const m = /^\{[^.]+\.motion\.(.+)\}$/.exec(String(v));
+  if (!m || depth > 8) return v;
+  const leaf = m[1].split('.').reduce((n, k) => n?.[k], MO_TREE);
+  return moLeaf(leaf?.$value, depth + 1);
+};
+const msOf = (v) => { const x = moLeaf(v); const n = /^(\d+(?:\.\d+)?)ms$/.exec(String(x)); return n ? Number(n[1]) : typeof x === 'number' ? x : NaN; };
+/** The oracle for one preset path (`surface`, `surface.exit`): its duration and delay in ms and its easing as CSS. */
+const presetOracle = (path) => {
+  const node = path.split('.').reduce((n, k) => n?.[k], MO_TREE?.preset);
+  const e = moLeaf(node?.easing?.$value);
+  const easing = Array.isArray(e) ? `cubic-bezier(${e.join(', ')})` : String(e);
+  return { ms: msOf(node?.duration?.$value), delay: msOf(node?.delay?.$value), easing };
+};
+const CSS_PROP = { opacity: 'opacity', transform: 'transform', color: 'background-color', size: 'height' };
+/** The tracks of a pattern, from the agent file; for a specimen, the preset's own tracks on the one element. */
+const oracleTracks = (pattern, preset) => {
+  if (pattern.startsWith('specimen/')) return null;
+  return (MO_AI[pattern]?.tracks ?? []).map((t) => ({ key: `${t.element}.${t.property}`, element: t.element, prop: CSS_PROP[t.property], preset: String(t.preset).replace(/^motion\.preset\./, '') }));
+};
+const sameEasing = (a, b) => a.replace(/\s+/g, '') === b.replace(/\s+/g, '') || (a === 'linear' && /^cubic-bezier\(0,0,1,1\)$/.test(b.replace(/\s+/g, '')));
+const readStage = (page) => page.evaluate(() => {
+  const s = document.querySelector('[data-p3="motion-stage"]');
+  return { pattern: s?.dataset.pattern ?? null, els: [...(s?.querySelectorAll('[data-p3="motion-stage-element"]') ?? [])].map((n) => {
+    const cs = getComputedStyle(n);
+    const split = (v) => v.split(/,(?![^(]*\))/).map((x) => x.trim());
+    return { element: n.dataset.element, tracks: (n.dataset.tracks ?? '').split(' ').filter(Boolean), props: split(cs.transitionProperty), dur: split(cs.transitionDuration),
+      ease: split(cs.transitionTimingFunction), delay: split(cs.transitionDelay) };
+  }) };
+});
+const secs = (v) => (/ms$/.test(v) ? Number(v.slice(0, -2)) : Number(v.replace(/s$/, '')) * 1000);
+if (runs('4571-play')) {
+  const { ctx, page, errors } = await open({ host: 'web', theme: 'light', w: 1280, h: 900 });
+  const playedPatterns = new Set();
+  const wrong = [];
+  try {
+    await openMotion(page);
+    const presets = await page.locator('[data-p3="motion-stage-preset"] option').evaluateAll((os) => os.map((o) => o.value));
+    ok(presets.length === 12, `#4571 plays the data: the stage offers every preset (${presets.join(', ')})`);
+    for (const preset of presets) {
+      await page.locator('[data-p3="motion-stage-preset"]').selectOption(preset);
+      await page.waitForFunction((p) => document.querySelector('[data-p3="motion-stage-preset"]')?.value === p, preset);
+      const pats = await page.locator('[data-p3="motion-used-by-pattern"]').evaluateAll((cs) => cs.map((c) => c.dataset.pattern));
+      for (const pat of pats.length ? pats : [null]) {
+        if (pat) {
+          await hooks.click(page.locator(`[data-p3="motion-used-by-pattern"][data-pattern="${pat}"]`));
+          await page.waitForFunction((p) => document.querySelector('[data-p3="motion-stage"]')?.dataset.pattern === p, pat);
+        }
+        await hooks.click(page.locator('[data-p3="motion-stage-play"]'));
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-p3="motion-stage-element"]')].every((n) => n.dataset.tracks), null, { timeout: 5000 }).catch(() => {});
+        const st = await readStage(page);
+        playedPatterns.add(st.pattern);
+        const want = oracleTracks(st.pattern, preset)
+          ?? st.els.flatMap((e) => e.tracks.map((k) => ({ key: k, element: e.element, prop: CSS_PROP[k.split('.')[1]], preset })));
+        const seen = new Set();
+        for (const t of want) {
+          const e = st.els.find((x) => x.element === t.element);
+          const i = e ? e.tracks.indexOf(t.key) : -1;
+          const o = presetOracle(t.preset);
+          const at = `${st.pattern} ${t.key}`;
+          seen.add(t.key);
+          if (!e || i < 0) { wrong.push(`${at} is not on the stage`); continue; }
+          if (e.props[i] !== t.prop) wrong.push(`${at} moves ${e.props[i]}, want ${t.prop}`);
+          if (secs(e.dur[i]) !== o.ms) wrong.push(`${at} plays ${secs(e.dur[i])}ms, the emission's motion.preset.${t.preset}.duration is ${o.ms}ms`);
+          if (secs(e.delay[i]) !== o.delay) wrong.push(`${at} waits ${secs(e.delay[i])}ms, the emission's motion.preset.${t.preset}.delay is ${o.delay}ms`);
+          if (!sameEasing(e.ease[i], o.easing)) wrong.push(`${at} eases ${e.ease[i]}, the emission's motion.preset.${t.preset}.easing is ${o.easing}`);
+        }
+        const extra = st.els.flatMap((e) => e.tracks).filter((k) => !seen.has(k));
+        if (extra.length) wrong.push(`${st.pattern} plays tracks the emission does not have: ${extra.join(', ')}`);
+      }
+    }
+    // Represented: every pattern in the agent file is played at least once, so a pattern the stage drops fails here.
+    const unplayed = Object.keys(MO_AI).filter((p) => !playedPatterns.has(p));
+    const specimens = [...playedPatterns].filter((p) => p.startsWith('specimen/')).sort();
+    ok(Object.keys(MO_AI).length >= 20 && unplayed.length === 0 && JSON.stringify(specimens) === '["specimen/draw","specimen/reveal","specimen/settle","specimen/step"]',
+      `#4571 plays the data: every pattern in the agent file (${Object.keys(MO_AI).length}) and the four specimens are played${unplayed.length ? ` — not played: ${unplayed.join(', ')}` : ''} (specimens ${specimens.join(', ')})`);
+    ok(wrong.length === 0, `#4571 plays the data: every track the stage plays is the emission's duration, easing and delay${wrong.length ? ` — ${wrong.slice(0, 6).join(' | ')}` : ''}`);
+    ok(errors.length === 0, `#4571 plays the data: 0 console errors${errors.length ? ` — ${errors.slice(0, 2).join(' | ')}` : ''}`);
+  } catch (e) {
+    ok(false, `#4571 plays the data: the case stopped at a step that threw — ${stopped(e)}`);
+  } finally { await ctx.close(); }
+}
+
+
+// =============================================================================================
 // 25. S10: Layout — moved to the two panes. Specimens on the page color, its levers represented with no Show
 //     advanced (FIRST_CLASS), the Q23 pairs, the approved copy, the first breakpoint fixed at 0, D13's re-keying and
 //     its one line, the 2–7 limits, every control read-only in a derived mode (Q59), the preview ink on the tints

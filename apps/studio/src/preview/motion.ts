@@ -22,8 +22,8 @@ import { h, hook } from '../shell/dom';
 import { DOMAINS, type PageData } from '../shell/pages';
 import { modeLabel } from '../shell/preview';
 import {
-  durationRampSection, motionCurvesSection, motionTransitionsSection, presetCurveOf, springsSection,
-  type DurationsCopy, type TransitionsCopy,
+  durationRampSection, motionCurvesSection, motionStageSection, motionTransitionsSection, presetCurveOf, springsSection,
+  type DurationsCopy, type StageCopy, type TransitionsCopy,
 } from './sections/index';
 import { SG_SURFACES, ground, oppositeOf, palSection, sgContext, type SgRole } from './sections/kit';
 import { must } from '../must';
@@ -56,6 +56,13 @@ export const MOTION_PREVIEW_COPY = {
     play: 'Play', replay: 'Replay', slow: 'Slow motion', off: 'Off',
     reduced: 'Reduced motion is on: playing once on request.',
   } satisfies TransitionsCopy,
+  /** #4571 (PR 3): the stage. DRAFT, every string. */
+  stage: {
+    title: 'Stage',
+    desc: 'The chosen preset playing on a component motion that uses it, at this tempo, with each moving part on the timeline.',
+    preset: 'Preset', play: 'Play', usedBy: 'Used by', specimen: 'No component motion uses this preset yet, so it plays on a plain shape.',
+    timeline: 'Timeline', track: (element: string, property: string) => `${element} · ${property}`,
+  } satisfies StageCopy,
 } as const;
 
 /** Whether the viewer asked for reduced motion. Read on every paint, so a change applies at the next one. */
@@ -63,6 +70,9 @@ const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMe
 
 /** The Slow motion divisor: view state, kept for the session (a page visit never resets it), never a token. */
 let slowmo = 1;
+/** #4571: the stage's preset and pattern, view state kept for the session, never written to the brand. */
+let stagePreset = 'surface';
+let stagePattern: string | null = null;
 
 /** Mount the Motion preview into `host`. Subscriptions are released through `cleanups`. */
 export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]): void => {
@@ -77,6 +87,7 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
   let lastDrawn: string | null = null;
   let lastMode: string | null = null;
   let play: () => void = () => {};
+  let playStage: () => void = () => {};
 
   const paint = (why: 'mount' | 'brand' | 'mode'): void => {
     const all = resolvedModes(theme);
@@ -99,7 +110,13 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
       onPlay: () => { played = true; },
     }, C.transitions);
     play = traces.play;
-    m.append(motionCurvesSection(mo, cur, C.curves), durationRampSection(mo, cur, C.durations), springsSection(mo.spring, C.springs), traces.node);
+    const stage = motionStageSection(mo, cur, {
+      preset: stagePreset, pattern: stagePattern, slowmo,
+      onPreset: (p) => { stagePreset = p; stagePattern = null; paint('mode'); },
+      onPattern: (p) => { stagePattern = p; paint('mode'); },
+    }, (role) => c.paint(cur, role), C.stage);
+    playStage = stage.play;
+    m.append(stage.node, motionCurvesSection(mo, cur, C.curves), durationRampSection(mo, cur, C.durations), springsSection(mo.spring, C.springs), traces.node);
 
     const secs = [m];
     // Q24: each section's container on the levers panel's gray, as the other previews' are.
@@ -111,6 +128,7 @@ export const mountMotionPreview = (host: HTMLElement, cleanups: (() => void)[]):
     if (why === 'brand' && lastDrawn !== null && lastMode === cur && drawn !== lastDrawn && !reduced) {
       played = true;
       play();
+      playStage();
       card.querySelector<HTMLElement>('[data-p3="motion-play"]')!.textContent = C.transitions.replay;
     }
     lastDrawn = drawn;

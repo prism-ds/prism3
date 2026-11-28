@@ -17,6 +17,8 @@
  *   - `presetUsedBy`, `patternsReachedBy`: each preset path's tracks, in pattern order, read from the patterns the engine resolved, so a
  *     brand's track override that moves a track to another preset moves it here too.
  *   - `trackTargets`: what a track override may set: a preset path, a distance and a reduced kind.
+ *   - `patternPlayback`: how each track of a pattern plays in the mode in view: its milliseconds, CSS easing and delay,
+ *     resolved through the preset it names, for a stage that plays the engine's own data (the proposal's §3).
  *   - `presetAdvisories`: where a preset's slots would draw an objection, as codes (Q-ME1 A: warn, never block).
  *
  * Copy is not here: a label or a sentence the editor shows is the surface's, and the owner's (#4571).
@@ -28,6 +30,8 @@ import type { MotionAxis, MotionPersonality, MotionPresetHalf } from './theme-mo
 import { presetPaths, trackKey, REDUCED_KINDS } from './motion-patterns';
 import type { MotionPattern, ReducedKind } from './motion-patterns';
 import { spaceScale } from './scale';
+import { springLinearEasing } from './spring';
+import type { MotionTrack } from './motion-patterns';
 
 /** A target's group, the heading a picker lists it under. */
 export type SlotTargetGroup = 'step' | 'spring-duration' | 'role' | 'curve' | 'spring' | 'delay';
@@ -120,4 +124,42 @@ export const presetAdvisories = (m: MotionAxis, mode?: string): PresetAdvisory[]
     if (p.exit.delay !== null) out.push({ preset: p.preset, half: 'exit', code: 'delay' });
   }
   return out;
+};
+
+/** One track as a stage plays it: the track itself, and its preset half resolved in the mode in view. */
+export type TrackPlayback = {
+  track: MotionTrack;
+  /** The preset path the track names (`surface`, `surface.exit`). */
+  preset: string;
+  ms: number;
+  /** A CSS easing: `cubic-bezier(…)` for a role or curve, the spring's `linear()` for a spring. */
+  easing: string;
+  delayMs: number;
+  /** A slide's distance in px, or null for none and for a self-sized slide (`self`). */
+  distancePx: number | null;
+};
+/** How each track of `pattern` plays in `mode` (#4571, the proposal's §3): its preset half's duration (the mode's
+ *  tempo applied), its easing (a role followed to the mode's curve), and its delay. Read by Studio's stage, which plays
+ *  these values and holds none of its own; the plays-the-data gate checks the stage against the emitted tokens, never
+ *  against this function. */
+export const patternPlayback = (m: MotionAxis, pattern: MotionPattern, mode?: string): TrackPlayback[] => {
+  const dur = (mode !== undefined ? m.motionByMode?.[mode]?.duration : undefined) ?? m.duration;
+  const roleCurve = (role: string): string =>
+    (mode !== undefined ? m.easingRolesByMode?.[mode]?.[role] : undefined) ?? m.easingRoles.find((r) => r.role === role)?.curve ?? 'standard';
+  const bez = (curve: string): string => `cubic-bezier(${(m.easing[curve] ?? m.easing.standard!).join(', ')})`;
+  const space = new Map(spaceScale().map((s) => [`space.${s.key}`, s.px]));
+  return pattern.tracks.map((track) => {
+    const [name, exit] = track.preset.split('.');
+    const p = m.presets.find((x) => x.preset === name);
+    const h: MotionPresetHalf | undefined = exit === 'exit' ? p?.exit : p;
+    if (!h) throw new Error(`patternPlayback: pattern '${pattern.name}' track '${trackKey(track)}' names '${track.preset}', which this motion does not resolve`);
+    const ms = 'step' in h.duration ? dur[h.duration.step] ?? 0 : m.springSettle[h.duration.spring] ?? 0;
+    const easing = 'role' in h.easing ? bez(roleCurve(h.easing.role)) : 'curve' in h.easing ? bez(h.easing.curve)
+      : springLinearEasing(m.spring[h.easing.spring]!);
+    const d = track.distance;
+    const distancePx = !d || 'self' in d ? null : 'px' in d ? d.px
+      : d.token.startsWith('space.') ? space.get(d.token) ?? null
+      : d.token === 'distance.nudge' ? space.get('space.100') ?? null : null;
+    return { track, preset: track.preset, ms, easing, delayMs: h.delay === null ? 0 : m.delay[h.delay] ?? 0, distancePx };
+  });
 };
