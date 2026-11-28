@@ -137,7 +137,9 @@ any call should wait. Two things keep the result:
   names the run's id (`runId`), and the command goes on in the plugin. Don't send it again:
   `figma_result {id}` returns the result envelope once it lands, or the run's status and last
   progress while it is still running. A result that lands late is kept as the run's result. The
-  bridge keeps the last 200 runs that ended, and every run still working.
+  bridge keeps the last 200 runs that ended, and every run still working. A run whose plugin stays
+  connected but never answers stays `working` until the plugin drops and the grace runs out, or the
+  bridge restarts.
 
 A reconnect mid-run (#2497, `awaitingReconnect`) keeps the same run, so a task goes on being the same
 task, and `figma_result` reads the result the plugin re-sends.
@@ -189,6 +191,15 @@ more:
   Each file is under `skills/` or `docs/public/`, so it is text that is already public. Nothing is read
   live from the Figma file as a resource.
 
+- **Two skills over MCP** (#4646 step 2): `prism3-rebind` and `prism3-build-ui`, served through the MCP
+  Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) from the same checkout files as their
+  `prism3://skills/…` resources. A client that speaks the extension finds them with `skills/list`, gets
+  one with `skills/get` (its frontmatter and the list of its files, each with a digest), and reads each
+  file at `skill://<name>/<path>`, for example `skill://prism3-rebind/consistency-audit.js`. They load
+  when the agent needs them, and update with the checkout. The skill files are not listed in
+  `resources/list`, which stays the five resources above, and an older client keeps reading the
+  `prism3://` URIs. `prism3-build-screens` joins once its skill is on `main` (#4632).
+
 The bridge points at the engine MCP server (`prism3-engine`) rather than proxying its tools (Q3300.4 A).
 
 ## The adherence test's arms (#3440)
@@ -201,7 +212,8 @@ The bridge points at the engine MCP server (`prism3-engine`) rather than proxyin
 - `2`, the default: the bridge as described above.
 
 Every arm declares `tasks` and `logging` and lists `figma_result` (#4646 step 1): they are how the bridge works, not
-what an agent is shown. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
+what an agent is shown. The skills (#4646 step 2) are what an agent is shown, so only arm 2 serves them, like the
+resources. A value other than these three stops the server from starting. `--record <file>` appends one `attempt` line per
 `figma_run` call before it runs, and one `outcome` line after it ends, refused calls included.
 `apps/plugin/test-agent-bridge.ts` (`arm/…`, `record/…`) checks both. Its sentinels are written in the test, not read
 from `BRIDGE_INSTRUCTIONS`.

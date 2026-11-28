@@ -755,8 +755,21 @@
               "call": {}
             }
           }
+        },
+        "extensions": {
+          "io.modelcontextprotocol/skills": {}
         }
       },
+      "skills": [
+        {
+          "uri": "skill://prism3-rebind/SKILL.md",
+          "source": "skills/prism3-rebind/SKILL.md"
+        },
+        {
+          "uri": "skill://prism3-build-ui/SKILL.md",
+          "source": "skills/prism3-build-ui/SKILL.md"
+        }
+      ],
       "source": "tools/figma-bridge/server.ts#isMain",
       "tools": [
         {
