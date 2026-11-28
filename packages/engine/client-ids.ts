@@ -23,6 +23,8 @@
  * which phrase lengths to hash. A name of two or more words also carries `joined`, the SHA-256 of its words run
  * together with no space, so a run-together identifier (`foobar`, `FOOBAR`, `foobarTheme`) is found too. The gate
  * fails a multi-word entry whose `joined` is missing or equal to `sha256`, so paste the whole line `--hash` prints.
+ * Type each name in its brand casing when running `--hash` (`FooBar`, not `foobar`): a capital inside the name
+ * becomes a word boundary, so the entry matches the brand's spelling phrase by phrase, not only through a rejoin.
  */
 
 export type DenyPattern = { name: string; re: RegExp };

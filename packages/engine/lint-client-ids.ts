@@ -53,6 +53,11 @@
  * Each entry is a path or a glob (`*` within a segment, `**` across them) and must match at least one tracked file,
  * so an entry left behind by a rename fails instead of quietly widening.
  *
+ * Two entries, the fold's inputs (`docs/progress/pending/**`, `packages/engine/changes/**`), are exempt from the id
+ * ratchet only (owner decision Q-a A, 2026-11-28). Progress prose legitimately names the fixture ids, and the fold
+ * can't run `--accept`. But the fold copies both verbatim into public history, so their contents are still read, and a
+ * full client name or a hashed name there fails outright (`FOLD INPUT`), with no baseline to absorb it.
+ *
  * ── PROOF THE GATE CAN SEE ──────────────────────────────────────────────────────────────────────
  *
  *   - `CLIENT_ID_SELF_CHECK` runs `hitsOf`, the function the scan runs, over planted strings that must and must not
@@ -76,7 +81,10 @@
  * or run together as one whole word; run together INSIDE a longer word (`foobartheme`, all one case) it is missed, and
  * so is a spelling the normalization does not fold (an apostrophe dropped, a digit-to-letter boundary). An acronym
  * with a lower-case suffix splits in the wrong place (`APIs` → `AP` + `Is`), so a hashed name in capitals with a
- * lower-case suffix (`FOOs` → `fo` + `os`) is missed. Runs are rejoined across at most `MAX_RUN` parts of one token.
+ * lower-case suffix (`FOOs` → `fo` + `os`) is missed. Runs are rejoined across at most `MAX_RUN` parts of one token,
+ * so a name cut into more case parts than that is missed. So type each name in its brand casing when running `--hash`:
+ * each capital inside the name becomes a word boundary, and the entry then matches the brand's spelling phrase by
+ * phrase instead of relying on a rejoin.
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -125,6 +133,8 @@ const PLANTED_HASH: DenyHash = { sha256: 'c608275db08efdc338de13951301f91952032f
 // A made-up two-word name, so the case-boundary split and the run-together digest are tested too. Self-check only:
 // it is in no tracked file outside this gate.
 const CAMEL_WORD = `${PLANTED_WORD[0].toUpperCase()}${PLANTED_WORD.slice(1, 4)}${PLANTED_WORD[4].toUpperCase()}${PLANTED_WORD.slice(5)}`;
+const RUN_AT_LIMIT = 'QuOrVaLiNtH'; // Qu|Or|Va|Li|Nt|H: 6 parts
+const RUN_PAST_LIMIT = 'qUoRVaLiNtH'; // q|Uo|R|Va|Li|Nt|H: 7 parts
 const PLANTED_PAIR = ['zentrava', 'morquil'];
 const PLANTED_PAIR_HASH: DenyHash = { sha256: '5d9afaf19495721a285a02c16b9323733ac2d15b2ad89a42bda33567d5b5b86c', words: 2, joined: '5245e04d9045ed5baaf598a2cc87cd733d64b7df753375fc9bf9f9e5289e3cb5' };
 const PLANTED_ARM = 'packages/engine/fixtures/client-id-arm.txt';
@@ -212,6 +222,10 @@ const CLIENT_ID_SELF_CHECK: { sample: string; want: string | null }[] = [
   // The one-word planted name in a camel casing, which the case split cuts in two.
   { sample: `brand: '${CAMEL_WORD}'`, want: hashRule(PLANTED_HASH) },
   { sample: `const ${CAMEL_WORD}Theme = {}`, want: hashRule(PLANTED_HASH) },
+  // The planted word cut into exactly MAX_RUN case parts is found; cut into one more, it is not (the recorded limit).
+  // Spelled literally, so lowering MAX_RUN fails the first and raising it fails the second.
+  { sample: `brand: '${RUN_AT_LIMIT}'`, want: hashRule(PLANTED_HASH) },
+  { sample: `brand: '${RUN_PAST_LIMIT}'`, want: null },
   { sample: 'const nb = box(x)', want: null },
   { sample: 'a snb-redesigned layout', want: null },
   { sample: 'a&nbsp;b and &nbsp;', want: null },
@@ -224,6 +238,10 @@ for (const { sample, want } of CLIENT_ID_SELF_CHECK) {
   if (want === null ? rules.length > 0 : !rules.includes(want)) {
     fail(`SELF-CHECK  "${sample}" should ${want ? `be flagged as ${want}` : 'not be flagged'} (got: ${rules.join(', ') || 'nothing'})`);
   }
+}
+for (const [spelling, parts] of [[RUN_AT_LIMIT, MAX_RUN], [RUN_PAST_LIMIT, MAX_RUN + 1]] as const) {
+  const got = normalizeWords(spelling);
+  if (got.length !== parts || got.map((w) => w.word).join('') !== PLANTED_WORD) fail(`SELF-CHECK  "${spelling}" should be the planted word in ${parts} case parts (MAX_RUN ${MAX_RUN}${parts > MAX_RUN ? ' + 1' : ''}), got ${got.length}: re-spell the sample with MAX_RUN`);
 }
 if (sha256(PLANTED_WORD) !== PLANTED_HASH.sha256) fail(`SELF-CHECK  PLANTED_HASH is not the SHA-256 of the planted word, so the hash path is untested`);
 if (sha256(PLANTED_PAIR.join(' ')) !== PLANTED_PAIR_HASH.sha256 || sha256(PLANTED_PAIR.join('')) !== PLANTED_PAIR_HASH.joined) fail(`SELF-CHECK  PLANTED_PAIR_HASH is not the SHA-256 of the planted pair (spaced and joined), so the multi-word hash path is untested`);
@@ -256,12 +274,14 @@ for (const h of CLIENT_DENY_LIST.hashes) {
 }
 
 // ---- the allowlist ------------------------------------------------------------------------------------------
-const ALLOWLIST: { glob: string; why: string }[] = [
+// `scope: 'ids'` exempts a path from the id ratchet only: its contents are still read, and any full or hashed name in
+// them fails outright (Q-a A). Every other entry is exempt from everything.
+const ALLOWLIST: { glob: string; why: string; scope?: 'ids' }[] = [
   { glob: 'docs/00-progress.md', why: 'fold-owned history (Q3 A)' },
   { glob: 'docs/progress/archive/**', why: 'fold-owned history (Q3 A)' },
-  { glob: 'docs/progress/pending/**', why: 'the fold carries each entry verbatim into docs/00-progress.md' },
+  { glob: 'docs/progress/pending/**', scope: 'ids', why: 'the fold carries each entry verbatim into docs/00-progress.md' },
   { glob: 'packages/engine/CHANGELOG.md', why: 'fold-owned history (Q3 A)' },
-  { glob: 'packages/engine/changes/**', why: 'the fold carries each note verbatim into the CHANGELOG and a release page' },
+  { glob: 'packages/engine/changes/**', scope: 'ids', why: 'the fold carries each note verbatim into the CHANGELOG and a release page' },
   { glob: 'docs/public/releases/**', why: 'fold-owned history (Q3 A)' },
   { glob: 'packages/engine/client-ids.ts', why: 'the deny-list itself' },
   { glob: 'packages/engine/lint-client-ids.ts', why: 'this gate: its self-check spells the cases' },
@@ -271,7 +291,30 @@ const ALLOWLIST: { glob: string; why: string }[] = [
 ];
 const globRe = (g: string): RegExp => new RegExp(`^${g.split('**').map((p) => p.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*')}$`);
 const ALLOW_RES = ALLOWLIST.map((a) => ({ ...a, re: globRe(a.glob) }));
-const allowed = (path: string): boolean => ALLOW_RES.some((a) => a.re.test(path));
+const allowed = (path: string): boolean => ALLOW_RES.some((a) => !a.scope && a.re.test(path));
+const idsOnly = (path: string): boolean => !allowed(path) && ALLOW_RES.some((a) => a.scope === 'ids' && a.re.test(path));
+/** In a path exempt from the id ratchet only, every hit that is not a plain id fails outright: full names and hashes. */
+const foldInputFailures = (path: string, txt: string): Hit[] =>
+  idsOnly(path) ? hitsOf(txt).filter((h) => h.rule.startsWith('client-name:') || h.rule.startsWith('client-id:sha256:')) : [];
+
+// The fold-input rule, checked through the same functions the walk runs, over paths no file holds. The hashed cases
+// use the made-up planted names. The full-name and id cases reuse self-check samples above, so no name is spelled
+// again here.
+const sampleWanting = (pred: (want: string) => boolean): string => CLIENT_ID_SELF_CHECK.find((c) => c.want !== null && pred(c.want))!.sample;
+const FOLD_INPUT_SELF_CHECK: { path: string; txt: string; want: string | null }[] = [
+  { path: 'docs/progress/pending/sc-fold.md', txt: `a stray ${PLANTED_WORD} in prose`, want: hashRule(PLANTED_HASH) },
+  { path: 'packages/engine/changes/sc-fold.md', txt: `const ${CAMEL_WORD}Theme = {}`, want: hashRule(PLANTED_HASH) },
+  { path: 'docs/progress/pending/sc-fold.md', txt: `the ${PLANTED_PAIR.join(' ')} rollout`, want: hashRule(PLANTED_PAIR_HASH) },
+  { path: 'packages/engine/changes/sc-fold.md', txt: sampleWanting((w) => w.startsWith('client-name:')), want: 'client-name:*' },
+  { path: 'docs/progress/pending/sc-fold.md', txt: sampleWanting((w) => w.startsWith('client-name:')), want: 'client-name:*' },
+  { path: 'docs/progress/pending/sc-fold.md', txt: sampleWanting((w) => w === 'client-id:nbds'), want: null },
+  { path: 'packages/engine/changes/sc-fold.md', txt: sampleWanting((w) => w === 'client-id:wendys'), want: null },
+];
+for (const { path, txt, want } of FOLD_INPUT_SELF_CHECK) {
+  const rules = foldInputFailures(path, txt).map((h) => h.rule);
+  const ok = want === null ? rules.length === 0 : want.endsWith('*') ? rules.some((r) => r.startsWith(want.slice(0, -1))) : rules.includes(want);
+  if (!ok) fail(`SELF-CHECK  fold input ${path}: "${txt}" should ${want ? `fail outright as ${want}` : 'pass (ids are exempt there)'} (got: ${rules.join(', ') || 'nothing'})`);
+}
 
 // ---- the walk -----------------------------------------------------------------------------------------------
 const SURFACES = ['packages/', 'apps/', 'docs/', 'tools/', 'reference/', '.github/'];
@@ -285,6 +328,7 @@ const actual = new Map<string, FileHits>();
 const surfaceCount = new Map(SURFACES.map((s) => [s, 0]));
 let scanned = 0;
 let binary = 0;
+let foldInputs = 0;
 let plantedSeen: string[] | null = null;
 /** A line finder for one text: the offsets of its line starts, searched by bisection. */
 const lineFinder = (txt: string): ((index: number) => number) => {
@@ -302,6 +346,14 @@ for (const path of tracked) {
     continue;
   }
   const isBinary = buf.subarray(0, 8192).includes(0);
+  if (idsOnly(path)) {
+    foldInputs++;
+    if (!isBinary) {
+      const txt = buf.toString('utf8'); const lineOf = lineFinder(txt);
+      for (const h of foldInputFailures(path, txt)) fail(`FOLD INPUT  ${h.rule} at ${path}:${lineOf(h.index)} — a full or hashed client name may not enter a fold input, which the fold copies verbatim into public history (Q-a A)`);
+    }
+    continue;
+  }
   if (isBinary) binary++;
   else scanned++;
   for (const s of SURFACES) if (path.startsWith(s) && !isBinary) surfaceCount.set(s, surfaceCount.get(s)! + 1);
@@ -365,7 +417,7 @@ for (const [path, counts] of Object.entries(baseline)) {
 }
 
 const totalHits = [...actual.values()].reduce((n, f) => n + Object.values(f.counts).reduce((a, b) => a + b, 0), 0);
-const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary} allowlisted by ${ALLOWLIST.length} entries; ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - PLANTED_COUNT} hashed names + ${PLANTED_COUNT} planted hashes; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
+const summary = `${tracked.length} tracked paths, ${scanned} text files read, ${binary} binary (path only), ${tracked.length - scanned - binary - foldInputs} allowlisted by ${ALLOWLIST.length} entries, ${foldInputs} fold inputs read for names and hashes only; ${totalHits} hits in ${actual.size} files, held to the baseline; ${HASHES.length - PLANTED_COUNT} hashed names + ${PLANTED_COUNT} planted hashes; ${CLIENT_ID_SELF_CHECK.length} self-check samples; ${SURFACES.length} surfaces represented`;
 if (failures.length) {
   console.error(`❌ ${TAG}: ${failures.length} failure(s)\n`);
   for (const f of failures) console.error(`  ✗ ${f}`);
