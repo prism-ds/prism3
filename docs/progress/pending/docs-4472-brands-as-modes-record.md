@@ -8,4 +8,4 @@
 
 **Trap for the next phase.** The owner's decision comment numbers the questions one higher than the proposal (architecture became Q1). docs/47 uses the owner's numbering; the proposal's "Q2" is the owner's "Q3".
 
-**Held by.** `lint-decisions-index.ts`: deleting a docs/47 table row in docs/42 fails as DOCS/42 ROW MISSING, retitling a docs/47 heading fails as UNINDEXED DECISION, and dropping docs/47 from `REQUIRED_DECISION_DOCS` fails as an unlisted doc.
+**Held by.** `lint-decisions-index.ts`: deleting a docs/47 table row in docs/42 fails as DOCS/42 ROW MISSING, retitling a docs/47 heading fails as ROW NOT FOUND and UNINDEXED DECISION, and dropping docs/47 from `REQUIRED_DECISION_DOCS` fails as DECISION DOC NOT LISTED.
